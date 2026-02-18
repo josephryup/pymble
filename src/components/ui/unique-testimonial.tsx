@@ -52,7 +52,7 @@ export function TestimonialsCarousel() {
             {/* Quote Container */}
             <div className="relative px-8">
                 <span className="absolute -left-2 -top-6 text-7xl font-sans text-white/[0.06] select-none pointer-events-none">
-                    "
+                    &quot;
                 </span>
 
                 <p
@@ -65,7 +65,7 @@ export function TestimonialsCarousel() {
                 </p>
 
                 <span className="absolute -right-2 -bottom-8 text-7xl font-sans text-white/[0.06] select-none pointer-events-none">
-                    "
+                    &quot;
                 </span>
             </div>
 
