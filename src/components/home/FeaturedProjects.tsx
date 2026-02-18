@@ -51,8 +51,19 @@ const ProjectCard = ({ project, index }: { project: any; index: number }) => {
         >
             <div className="relative h-full w-full flex flex-col md:block">
                 {/* Image Container */}
-                <div className="relative aspect-[4/3] md:h-full w-full overflow-hidden">
-                    <motion.div style={{ y }} className="absolute inset-0 scale-110">
+                <div className="relative aspect-[4/3] md:h-full w-full overflow-hidden bg-neutral-200">
+                    {/* Mobile: Static Image (No Parallax) */}
+                    <div className="md:hidden absolute inset-0">
+                        <Image
+                            src={project.image}
+                            alt={project.title}
+                            fill
+                            className="object-cover"
+                        />
+                    </div>
+
+                    {/* Desktop: Parallax Image */}
+                    <motion.div style={{ y }} className="hidden md:block absolute inset-0 scale-110">
                         <Image
                             src={project.image}
                             alt={project.title}
