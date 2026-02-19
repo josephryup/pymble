@@ -47,10 +47,10 @@ export function Services() {
 
     return (
         <Section className="bg-white border-t border-black/5 overflow-hidden min-h-0 md:min-h-screen flex flex-col justify-center">
-            <Container className="max-w-none px-12 lg:px-20">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-start mb-12">
+            <Container>
+                <div className="flex flex-col lg:flex-row gap-12 lg:gap-24 items-start mb-12">
                     {/* Text Column (Versatility / Core Expertise) */}
-                    <div className="flex flex-col gap-12 pt-0 lg:pt-0">
+                    <div className="w-full lg:w-1/2 flex flex-col gap-12 pt-0 lg:pt-0">
                         <motion.div
                             initial={{ opacity: 0, y: 30 }}
                             whileInView={{ opacity: 1, y: 0 }}
@@ -84,7 +84,7 @@ export function Services() {
                     </div>
 
                     {/* Image + List Column */}
-                    <div className="flex flex-col gap-16">
+                    <div className="w-full lg:w-1/2 flex flex-col gap-16">
                         <motion.div
                             key={activeService.id}
                             initial={{ opacity: 0, scale: 0.98 }}

@@ -29,7 +29,7 @@ export function AboutPhilosophy() {
                         <div className="relative aspect-[4/5] w-full max-w-lg mx-auto overflow-hidden rounded-2xl shadow-2xl">
                             <motion.div style={{ y }} className="absolute inset-0 scale-110">
                                 <Image
-                                    src="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070&auto=format&fit=crop"
+                                    src="/images/work is workship.jpg"
                                     alt="Technical Excellence"
                                     fill
                                     className="object-cover"

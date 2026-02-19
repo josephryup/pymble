@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
-import { Mail, Phone, MapPin, Send, CheckCircle2 } from "lucide-react";
+import { Mail, Phone, MapPin, Send, CheckCircle2, ArrowRight } from "lucide-react";
 import { useState } from "react";
 
 export default function ContactPage() {
@@ -17,159 +17,188 @@ export default function ContactPage() {
     };
 
     return (
-        <main className="min-h-screen bg-white">
-            <Section className="pt-32 pb-20 md:pt-48 md:pb-32">
-                <Container>
-                    <div className="max-w-4xl">
-                        <motion.span
-                            className="label-uppercase mb-8 block opacity-60"
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                        >
-                            Inquiry / Connection
-                        </motion.span>
-                        <motion.h1
-                            className="font-heading text-5xl md:text-8xl lg:text-[7.5rem] font-bold leading-[0.85] tracking-tighter text-primary-dark mb-16"
-                            initial={{ opacity: 0, y: 30 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                        >
-                            Let&apos;s Build <br /> Together.
-                        </motion.h1>
-                    </div>
-                </Container>
-            </Section>
+        <main className="min-h-screen bg-primary-dark text-white">
+            <Section className="pt-32 pb-20 md:pt-48 md:pb-32 min-h-screen flex flex-col justify-center relative overflow-hidden">
+                {/* Background Pattern/Texture (Optional) */}
+                <div className="absolute inset-0 opacity-5 pointer-events-none">
+                    <div className="absolute right-0 top-0 w-[500px] h-[500px] bg-accent-orange/20 blur-[100px] rounded-full mix-blend-screen" />
+                    <div className="absolute left-0 bottom-0 w-[500px] h-[500px] bg-white/10 blur-[100px] rounded-full mix-blend-overlay" />
+                </div>
 
-            <Section>
-                <Container>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
-                        {/* Contact Form */}
+                <Container className="relative z-10">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-start">
+                        {/* Left Column: Heading & Info */}
+                        <div className="flex flex-col justify-between h-full space-y-12 lg:space-y-24">
+                            <div>
+                                <motion.span
+                                    className="label-uppercase mb-8 block text-accent-orange"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                >
+                                    Inquiry / Connection
+                                </motion.span>
+                                <motion.h1
+                                    className="font-heading text-5xl md:text-7xl lg:text-8xl font-bold leading-[0.9] tracking-tighter text-white mb-8"
+                                    initial={{ opacity: 0, y: 30 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.1 }}
+                                >
+                                    Let&apos;s Build <br /> Together.
+                                </motion.h1>
+                                <motion.p
+                                    className="text-white/60 text-lg md:text-xl max-w-md leading-relaxed"
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.2 }}
+                                >
+                                    Ready to start your next project? We are here to help you bring your vision to life.
+                                </motion.p>
+                            </div>
+
+                            <motion.div
+                                className="space-y-10"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 0.4 }}
+                            >
+                                <a href="tel:+260211123456" className="flex items-center gap-6 group">
+                                    <div className="w-14 h-14 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-accent-orange group-hover:border-accent-orange group-hover:text-primary-dark transition-all duration-300">
+                                        <Phone className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <span className="label-uppercase text-white/40 mb-1 block">Call Us</span>
+                                        <span className="text-xl font-medium tracking-tight group-hover:text-accent-orange transition-colors">+260 211 123 456</span>
+                                    </div>
+                                </a>
+
+                                <a href="mailto:hello@pymble.com" className="flex items-center gap-6 group">
+                                    <div className="w-14 h-14 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-accent-orange group-hover:border-accent-orange group-hover:text-primary-dark transition-all duration-300">
+                                        <Mail className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <span className="label-uppercase text-white/40 mb-1 block">Email Us</span>
+                                        <span className="text-xl font-medium tracking-tight group-hover:text-accent-orange transition-colors">hello@pymble.com</span>
+                                    </div>
+                                </a>
+
+                                <div className="flex items-center gap-6 group">
+                                    <div className="w-14 h-14 rounded-full border border-white/10 flex items-center justify-center">
+                                        <MapPin className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <span className="label-uppercase text-white/40 mb-1 block">Visit Us</span>
+                                        <span className="text-xl font-medium tracking-tight">Pymble Office Complex, <br /> Lusaka, Zambia</span>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+
+                        {/* Right Column: High-Contrast Form Card */}
                         <motion.div
-                            initial={{ opacity: 0, x: -20 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.3 }}
+                            className="bg-white rounded-3xl p-8 md:p-12 text-primary-dark shadow-2xl relative"
                         >
                             {isSubmitted ? (
                                 <motion.div
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    className="bg-neutral-50 border border-black/5 rounded-3xl p-16 text-center"
+                                    className="text-center py-20"
                                 >
-                                    <div className="w-20 h-20 bg-primary-dark text-white rounded-full flex items-center justify-center mx-auto mb-8">
+                                    <div className="w-20 h-20 bg-green-500/10 text-green-600 rounded-full flex items-center justify-center mx-auto mb-8">
                                         <CheckCircle2 className="w-10 h-10" strokeWidth={2} />
                                     </div>
-                                    <h3 className="text-3xl font-bold text-primary-dark mb-4">Message Sent.</h3>
-                                    <p className="label-uppercase opacity-40">We will respond within 24 hours.</p>
+                                    <h3 className="text-3xl font-bold mb-4">Message Sent.</h3>
+                                    <p className="opacity-60">We will be in touch shortly.</p>
+                                    <Button
+                                        variant="ghost"
+                                        className="mt-8 mx-auto"
+                                        onClick={() => setIsSubmitted(false)}
+                                    >
+                                        Send another
+                                    </Button>
                                 </motion.div>
                             ) : (
-                                <form className="space-y-8" onSubmit={handleSubmit}>
-                                    <div className="space-y-8">
-                                        <div className="space-y-4">
-                                            <label className="label-uppercase mb-4 block">Full Name</label>
-                                            <input
-                                                type="text"
-                                                placeholder="Enter your name"
-                                                className="w-full bg-neutral-50 border border-black/5 rounded-xl px-6 py-6 focus:outline-none focus:ring-1 focus:ring-primary-dark/10 focus:border-primary-dark/20 focus:bg-white transition-all"
+                                <form className="space-y-6" onSubmit={handleSubmit}>
+                                    <div className="flex items-center justify-between mb-8">
+                                        <h3 className="font-heading text-2xl font-bold">Send a Message</h3>
+                                        <ArrowRight className="w-5 h-5 opacity-20" />
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-wider opacity-40">Full Name</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="John Doe"
+                                                    className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 placeholder:text-primary-dark/20 transition-all"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase tracking-wider opacity-40">Email</label>
+                                                <input
+                                                    type="email"
+                                                    placeholder="john@example.com"
+                                                    className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 placeholder:text-primary-dark/20 transition-all"
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider opacity-40">Subject</label>
+                                            <div className="relative">
+                                                <select className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 cursor-pointer appearance-none">
+                                                    <option>I have a Residential Project</option>
+                                                    <option>I have a Commercial Project</option>
+                                                    <option>I have an Industrial Project</option>
+                                                    <option>General Inquiry</option>
+                                                </select>
+                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
+                                                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 1L5 5L9 1" /></svg>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase tracking-wider opacity-40">Message</label>
+                                            <textarea
+                                                rows={4}
+                                                placeholder="Tell us a bit about your project goals..."
+                                                className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 placeholder:text-primary-dark/20 transition-all resize-none"
                                                 required
-                                            />
-                                        </div>
-                                        <div className="space-y-4">
-                                            <label className="label-uppercase mb-4 block">Email Address</label>
-                                            <input
-                                                type="email"
-                                                placeholder="Enter your email"
-                                                className="w-full bg-neutral-50 border border-black/5 rounded-xl px-6 py-6 focus:outline-none focus:ring-1 focus:ring-primary-dark/10 focus:border-primary-dark/20 focus:bg-white transition-all"
-                                                required
-                                            />
+                                            ></textarea>
                                         </div>
                                     </div>
-                                    <div className="space-y-4">
-                                        <label className="label-uppercase mb-4 block">Subject</label>
-                                        <div className="relative">
-                                            <select className="w-full bg-neutral-50 border border-black/5 rounded-xl px-6 py-6 focus:outline-none focus:ring-1 focus:ring-primary-dark/10 focus:border-primary-dark/20 focus:bg-white transition-all appearance-none cursor-pointer">
-                                                <option>Residential Inquiry</option>
-                                                <option>Commercial Inquiry</option>
-                                                <option>General Support</option>
-                                                <option>Other</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4">
-                                        <label className="label-uppercase mb-4 block">Your Message</label>
-                                        <textarea
-                                            rows={8}
-                                            placeholder="Tell us about your project"
-                                            className="w-full bg-neutral-50 border border-black/5 rounded-xl px-6 py-6 focus:outline-none focus:ring-1 focus:ring-primary-dark/10 focus:border-primary-dark/20 focus:bg-white transition-all resize-none"
-                                            required
-                                        ></textarea>
-                                    </div>
-                                    <Button className="w-full flex items-center justify-center gap-2 py-5" type="submit">
+
+                                    <Button className="w-full py-4 text-base bg-primary-dark text-white hover:bg-black mt-4 flex items-center justify-center gap-2 group" type="submit">
                                         Send Message
-                                        <Send className="w-5 h-5" strokeWidth={2} />
+                                        <Send className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                     </Button>
                                 </form>
                             )}
-                        </motion.div>
-
-                        {/* Contact Info */}
-                        <motion.div
-                            initial={{ opacity: 0, x: 20 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: 0.2 }}
-                            className="bg-primary-dark text-white rounded-3xl p-10 md:p-16 flex flex-col justify-between"
-                        >
-                            <div className="space-y-12">
-                                <div>
-                                    <h3 className="text-3xl font-bold mb-12">Office / Info</h3>
-                                    <div className="space-y-10">
-                                        <a href="tel:+61234567890" className="flex items-center gap-6 text-white/50 hover:text-white transition-all group">
-                                            <div className="w-16 h-16 rounded-full border border-white/5 flex items-center justify-center group-hover:bg-white group-hover:text-primary-dark transition-all duration-500">
-                                                <Phone className="w-6 h-6" strokeWidth={2} />
-                                            </div>
-                                            <span className="label-uppercase opacity-100">+260 211 123 456</span>
-                                        </a>
-                                        <a href="mailto:hello@pymbleconstruction.com" className="flex items-center gap-6 text-white/50 hover:text-white transition-all group">
-                                            <div className="w-16 h-16 rounded-full border border-white/5 flex items-center justify-center group-hover:bg-white group-hover:text-primary-dark transition-all duration-500">
-                                                <Mail className="w-6 h-6" strokeWidth={2} />
-                                            </div>
-                                            <span className="label-uppercase opacity-100 text-sm">hello@pymbleconstruction.com</span>
-                                        </a>
-                                        <div className="flex items-center gap-6 text-white/50 group">
-                                            <div className="w-16 h-16 rounded-full border border-white/5 flex items-center justify-center">
-                                                <MapPin className="w-6 h-6" strokeWidth={2} />
-                                            </div>
-                                            <span className="label-uppercase opacity-100 text-sm leading-relaxed">Pymble Office Complex, <br /> Lusaka, Zambia</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <h3 className="text-xl font-bold mb-6">Social</h3>
-                                    <div className="flex gap-4">
-                                        {["Instagram", "LinkedIn", "Facebook"].map((social) => (
-                                            <a
-                                                key={social}
-                                                href="#"
-                                                className="px-4 py-2 rounded-full border border-white/10 text-caption hover:bg-white hover:text-primary-dark transition-all"
-                                            >
-                                                {social}
-                                            </a>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
                         </motion.div>
                     </div>
                 </Container>
             </Section>
 
-            {/* Map Placeholder */}
-            <Section className="pb-0">
-                <div className="h-[400px] bg-neutral-100 flex items-center justify-center">
-                    <p className="text-primary-dark/40 font-mono text-caption tracking-widest uppercase">Interactive Map Coming Soon</p>
+            {/* Simple footer map strip */}
+            <div className="h-[300px] w-full bg-neutral-900 flex items-center justify-center relative overflow-hidden group">
+                <iframe
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d123088.32860381732!2d28.2877427!3d-15.402986799999999!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x1940f5a671cfdee3%3A0x7290edbb3b5b4608!2sPymble%20construction%20limited!5e0!3m2!1sen!2szm!4v1771544197598!5m2!1sen!2szm"
+                    className="absolute inset-0 w-full h-full object-cover opacity-30 grayscale group-hover:grayscale-0 transition-all duration-700 mixture-blend-overlay"
+                    style={{ border: 0 }}
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                />
+                <div className="relative z-10 bg-primary-dark/80 backdrop-blur-sm px-8 py-4 rounded-full border border-white/10 transform translate-y-8 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500">
+                    <span className="label-uppercase text-white tracking-widest text-xs">View on Google Maps</span>
                 </div>
-            </Section>
+            </div>
         </main>
     );
 }

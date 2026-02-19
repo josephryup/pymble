@@ -52,10 +52,10 @@ export function Process() {
 
     return (
         <Section className="bg-white border-t border-black/5 overflow-hidden min-h-0 md:min-h-screen flex flex-col justify-center">
-            <Container className="max-w-none px-12 lg:px-20">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-start">
+            <Container>
+                <div className="flex flex-col lg:flex-row gap-12 lg:gap-24 items-start">
                     {/* Left Column: Image + List */}
-                    <div className="flex flex-col gap-10 order-2 lg:order-1">
+                    <div className="w-full lg:w-1/2 flex flex-col gap-10 order-2 lg:order-1">
                         <motion.div
                             key={activeStep.id}
                             initial={{ opacity: 0, scale: 0.98 }}
@@ -93,7 +93,7 @@ export function Process() {
                     </div>
 
                     {/* Right Column: Statement Typography */}
-                    <div className="flex flex-col gap-8 pt-0 order-1 lg:order-2">
+                    <div className="w-full lg:w-1/2 flex flex-col gap-8 pt-0 order-1 lg:order-2">
                         <motion.div
                             initial={{ opacity: 0, y: 30 }}
                             whileInView={{ opacity: 1, y: 0 }}

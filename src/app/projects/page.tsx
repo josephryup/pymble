@@ -63,7 +63,7 @@ export default function ProjectsPage() {
 
     return (
         <main className="min-h-screen bg-white">
-            <Section className="pt-32 pb-0 md:pt-48 md:pb-0">
+            <Section className="pt-32 pb-0 md:pt-48 md:pb-0 lg:pb-0">
                 <Container>
                     <motion.span
                         className="label-uppercase mb-8 block text-accent-orange"
@@ -81,7 +81,7 @@ export default function ProjectsPage() {
                     </motion.h1>
 
                     {/* Category Filter */}
-                    <div className="flex flex-wrap gap-4 md:gap-8 border-b border-black/5 pb-1">
+                    <div className="flex flex-wrap gap-4 md:gap-8 border-b border-black/5 pb-1 mb-8 md:mb-12">
                         {categories.map((cat) => (
                             <button
                                 key={cat}
@@ -93,11 +93,7 @@ export default function ProjectsPage() {
                             </button>
                         ))}
                     </div>
-                </Container>
-            </Section>
 
-            <Section className="pt-0">
-                <Container>
                     <motion.div
                         layout
                         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8 md:gap-12"
