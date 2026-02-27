@@ -9,8 +9,8 @@ import Image from "next/image";
 const teamMembers = [
     {
         id: 1,
-        name: "Johnny Hyde",
-        role: "Director",
+        name: "Matimba Dominic Hatimbula",
+        role: "CEO",
         credentials: "M. Arch (QUT), B.Be Arch (QUT)\nBOA Queensland No. 4787.\nNSW Architects Registration Board\nNo. 10589",
         image: "https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=1974&auto=format&fit=crop", // Professional man in suit
     },

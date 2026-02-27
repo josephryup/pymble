@@ -3,6 +3,9 @@ import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { SEO } from "@/lib/constants";
+import { WhatsAppButton } from "@/components/ui/WhatsAppButton";
+import { QuoteCTA } from "@/components/ui/QuoteCTA";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -14,9 +17,14 @@ const manrope = Manrope({
   subsets: ["latin"],
 });
 
+/**
+ * Root metadata — SEO defaults for the entire site.
+ * Values sourced from lib/constants.ts for consistency.
+ */
 export const metadata: Metadata = {
-  title: "Pymble Construction | Building Excellence Together",
-  description: "Crafting superior construction solutions with quality, integrity, and client satisfaction.",
+  title: SEO.defaultTitle,
+  description: SEO.defaultDescription,
+  keywords: [...SEO.keywords],
 };
 
 export default function RootLayout({
@@ -32,6 +40,10 @@ export default function RootLayout({
         <Header />
         {children}
         <Footer />
+        {/* WhatsApp floating CTA — visible on all pages */}
+        <WhatsAppButton />
+        {/* "Request a Quote" floating bar — appears after scrolling */}
+        <QuoteCTA />
       </body>
     </html>
   );

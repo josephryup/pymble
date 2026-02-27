@@ -6,20 +6,52 @@ import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
 import { Mail, Phone, MapPin, Send, CheckCircle2, ArrowRight } from "lucide-react";
 import { useState } from "react";
+import { CONTACT, GOOGLE_MAPS_EMBED_URL } from "@/lib/constants";
 
 export default function ContactPage() {
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    /**
+     * Form submission handler — sends data to Web3Forms API.
+     * Web3Forms is a free service that forwards form submissions to email.
+     * No backend or server-side code required.
+     *
+     * To activate: Replace YOUR_WEB3FORMS_ACCESS_KEY in the form with
+     * a real key from https://web3forms.com (free tier, ~250 submissions/month).
+     */
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        setIsSubmitted(true);
-        setTimeout(() => setIsSubmitted(false), 5000);
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const formData = new FormData(e.currentTarget);
+            const response = await fetch("https://api.web3forms.com/submit", {
+                method: "POST",
+                body: formData,
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setIsSubmitted(true);
+                (e.target as HTMLFormElement).reset();
+            } else {
+                setError("Something went wrong. Please try again or contact us directly.");
+            }
+        } catch {
+            setError("Network error. Please check your connection and try again.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
         <main className="min-h-screen bg-primary-dark text-white">
             <Section className="pt-32 pb-20 md:pt-48 md:pb-32 min-h-screen flex flex-col justify-center relative overflow-hidden">
-                {/* Background Pattern/Texture (Optional) */}
+                {/* Background Pattern/Texture — Ambient glow effects */}
                 <div className="absolute inset-0 opacity-5 pointer-events-none">
                     <div className="absolute right-0 top-0 w-[500px] h-[500px] bg-accent-orange/20 blur-[100px] rounded-full mix-blend-screen" />
                     <div className="absolute left-0 bottom-0 w-[500px] h-[500px] bg-white/10 blur-[100px] rounded-full mix-blend-overlay" />
@@ -27,7 +59,7 @@ export default function ContactPage() {
 
                 <Container className="relative z-10">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-start">
-                        {/* Left Column: Heading & Info */}
+                        {/* Left Column: Heading & Contact Info */}
                         <div className="flex flex-col justify-between h-full space-y-12 lg:space-y-24">
                             <div>
                                 <motion.span
@@ -55,39 +87,43 @@ export default function ContactPage() {
                                 </motion.p>
                             </div>
 
+                            {/* Contact Details — Sourced from centralized constants */}
                             <motion.div
                                 className="space-y-10"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: 0.4 }}
                             >
-                                <a href="tel:+260211123456" className="flex items-center gap-6 group">
+                                {/* Primary Phone */}
+                                <a href={CONTACT.phoneHref.primary} className="flex items-center gap-6 group">
                                     <div className="w-14 h-14 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-accent-orange group-hover:border-accent-orange group-hover:text-primary-dark transition-all duration-300">
                                         <Phone className="w-5 h-5" />
                                     </div>
                                     <div>
                                         <span className="label-uppercase text-white/40 mb-1 block">Call Us</span>
-                                        <span className="text-xl font-medium tracking-tight group-hover:text-accent-orange transition-colors">+260 211 123 456</span>
+                                        <span className="text-xl font-medium tracking-tight group-hover:text-accent-orange transition-colors">{CONTACT.phone.primary}</span>
                                     </div>
                                 </a>
 
-                                <a href="mailto:hello@pymble.com" className="flex items-center gap-6 group">
+                                {/* Email */}
+                                <a href={`mailto:${CONTACT.email}`} className="flex items-center gap-6 group">
                                     <div className="w-14 h-14 rounded-full border border-white/10 flex items-center justify-center group-hover:bg-accent-orange group-hover:border-accent-orange group-hover:text-primary-dark transition-all duration-300">
                                         <Mail className="w-5 h-5" />
                                     </div>
                                     <div>
                                         <span className="label-uppercase text-white/40 mb-1 block">Email Us</span>
-                                        <span className="text-xl font-medium tracking-tight group-hover:text-accent-orange transition-colors">hello@pymble.com</span>
+                                        <span className="text-xl font-medium tracking-tight group-hover:text-accent-orange transition-colors">{CONTACT.email}</span>
                                     </div>
                                 </a>
 
+                                {/* Location */}
                                 <div className="flex items-center gap-6 group">
                                     <div className="w-14 h-14 rounded-full border border-white/10 flex items-center justify-center">
                                         <MapPin className="w-5 h-5" />
                                     </div>
                                     <div>
                                         <span className="label-uppercase text-white/40 mb-1 block">Visit Us</span>
-                                        <span className="text-xl font-medium tracking-tight">Pymble Office Complex, <br /> Lusaka, Zambia</span>
+                                        <span className="text-xl font-medium tracking-tight">{CONTACT.address.full}</span>
                                     </div>
                                 </div>
                             </motion.div>
@@ -101,6 +137,7 @@ export default function ContactPage() {
                             className="bg-white rounded-3xl p-8 md:p-12 text-primary-dark shadow-2xl relative"
                         >
                             {isSubmitted ? (
+                                /* ── Success State ── */
                                 <motion.div
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
@@ -120,28 +157,49 @@ export default function ContactPage() {
                                     </Button>
                                 </motion.div>
                             ) : (
+                                /* ── Contact Form ──
+                                 * Submits via Web3Forms API (free tier, no backend needed).
+                                 * TODO: Replace access_key with your real Web3Forms key from https://web3forms.com
+                                 * The form sends: name, email, subject, message to your configured email.
+                                 */
                                 <form className="space-y-6" onSubmit={handleSubmit}>
+                                    {/* Web3Forms hidden fields */}
+                                    <input type="hidden" name="access_key" value="YOUR_WEB3FORMS_ACCESS_KEY" />
+                                    <input type="hidden" name="subject" value="New Inquiry — Pymble Construction Website" />
+                                    <input type="hidden" name="from_name" value="Pymble Construction Website" />
+
                                     <div className="flex items-center justify-between mb-8">
                                         <h3 className="font-heading text-2xl font-bold">Send a Message</h3>
                                         <ArrowRight className="w-5 h-5 opacity-20" />
                                     </div>
 
+                                    {/* Error message */}
+                                    {error && (
+                                        <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">
+                                            {error}
+                                        </div>
+                                    )}
+
                                     <div className="space-y-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase tracking-wider opacity-40">Full Name</label>
+                                                <label htmlFor="contact-name" className="text-xs font-bold uppercase tracking-wider opacity-40">Full Name</label>
                                                 <input
+                                                    id="contact-name"
                                                     type="text"
-                                                    placeholder="John Doe"
+                                                    name="name"
+                                                    placeholder="Your full name"
                                                     className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 placeholder:text-primary-dark/20 transition-all"
                                                     required
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-bold uppercase tracking-wider opacity-40">Email</label>
+                                                <label htmlFor="contact-email" className="text-xs font-bold uppercase tracking-wider opacity-40">Email</label>
                                                 <input
+                                                    id="contact-email"
                                                     type="email"
-                                                    placeholder="john@example.com"
+                                                    name="email"
+                                                    placeholder="you@example.com"
                                                     className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 placeholder:text-primary-dark/20 transition-all"
                                                     required
                                                 />
@@ -149,12 +207,28 @@ export default function ContactPage() {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-wider opacity-40">Subject</label>
+                                            <label htmlFor="contact-phone" className="text-xs font-bold uppercase tracking-wider opacity-40">Phone Number</label>
+                                            <input
+                                                id="contact-phone"
+                                                type="tel"
+                                                name="phone"
+                                                placeholder="+260 9XX XXX XXX"
+                                                className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 placeholder:text-primary-dark/20 transition-all"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label htmlFor="contact-subject" className="text-xs font-bold uppercase tracking-wider opacity-40">Subject</label>
                                             <div className="relative">
-                                                <select className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 cursor-pointer appearance-none">
-                                                    <option>I have a Residential Project</option>
-                                                    <option>I have a Commercial Project</option>
-                                                    <option>I have an Industrial Project</option>
+                                                <select
+                                                    id="contact-subject"
+                                                    name="project_type"
+                                                    className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 cursor-pointer appearance-none"
+                                                >
+                                                    <option>Building Construction Inquiry</option>
+                                                    <option>Renovation Project</option>
+                                                    <option>Civil Works Inquiry</option>
+                                                    <option>Infrastructure Development</option>
                                                     <option>General Inquiry</option>
                                                 </select>
                                                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">
@@ -164,18 +238,24 @@ export default function ContactPage() {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase tracking-wider opacity-40">Message</label>
+                                            <label htmlFor="contact-message" className="text-xs font-bold uppercase tracking-wider opacity-40">Message</label>
                                             <textarea
+                                                id="contact-message"
+                                                name="message"
                                                 rows={4}
-                                                placeholder="Tell us a bit about your project goals..."
+                                                placeholder="Tell us about your project goals..."
                                                 className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 placeholder:text-primary-dark/20 transition-all resize-none"
                                                 required
                                             ></textarea>
                                         </div>
                                     </div>
 
-                                    <Button className="w-full py-4 text-base bg-primary-dark text-white hover:bg-black mt-4 flex items-center justify-center gap-2 group" type="submit">
-                                        Send Message
+                                    <Button
+                                        className="w-full py-4 text-base bg-primary-dark text-white hover:bg-black mt-4 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
+                                        type="submit"
+                                        disabled={isSubmitting}
+                                    >
+                                        {isSubmitting ? "Sending..." : "Send Message"}
                                         <Send className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                     </Button>
                                 </form>
@@ -185,10 +265,10 @@ export default function ContactPage() {
                 </Container>
             </Section>
 
-            {/* Simple footer map strip */}
+            {/* Google Maps — Embed URL from centralized constants */}
             <div className="h-[300px] w-full bg-neutral-900 flex items-center justify-center relative overflow-hidden group">
                 <iframe
-                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d123088.32860381732!2d28.2877427!3d-15.402986799999999!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x1940f5a671cfdee3%3A0x7290edbb3b5b4608!2sPymble%20construction%20limited!5e0!3m2!1sen!2szm!4v1771544197598!5m2!1sen!2szm"
+                    src={GOOGLE_MAPS_EMBED_URL}
                     className="absolute inset-0 w-full h-full object-cover opacity-30 grayscale group-hover:grayscale-0 transition-all duration-700 mixture-blend-overlay"
                     style={{ border: 0 }}
                     allowFullScreen

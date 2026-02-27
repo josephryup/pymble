@@ -51,7 +51,7 @@ export function CTA() {
                         </Link>
                         <Link href="/contact">
                             <Button className="w-full sm:w-auto text-base px-10 py-4 h-auto flex items-center gap-2 bg-primary-dark hover:bg-black lowercase tracking-tight">
-                                start your project
+                                Start your Project
                                 <ArrowRight className="w-4 h-4" />
                             </Button>
                         </Link>

@@ -7,11 +7,12 @@ import { Section } from "@/components/ui/Section";
 import Image from "next/image";
 import { Team } from "@/components/about/Team";
 import { CTA } from "@/components/home/CTA";
+import { VISION_MISSION } from "@/lib/constants";
 
 export default function AboutPage() {
     return (
         <main className="min-h-screen bg-white">
-            {/* 1. Mission Statement / Intro (Matches 'At OH Architecture...' style) */}
+            {/* 1. Mission Statement / Intro — uses official brochure copy */}
             <Section className="pt-32 pb-20 md:pt-48 md:pb-32 bg-white">
                 <Container>
                     <div className="max-w-5xl">
@@ -29,8 +30,8 @@ export default function AboutPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6, delay: 0.1 }}
                         >
-                            At Pymble Construction, we create architectural solutions that are a unique expression of structure and functionality,
-                            <span className="text-primary-dark/40"> vision and craftsmanship.</span>
+                            We deliver high-quality construction services that meet client expectations through{" "}
+                            <span className="text-primary-dark/40">professionalism, integrity, and excellence.</span>
                         </motion.h1>
 
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-12 mt-24">
@@ -43,8 +44,8 @@ export default function AboutPage() {
                             >
                                 <div className="aspect-[3/4] relative overflow-hidden rounded-sm grayscale hover:grayscale-0 transition-all duration-700">
                                     <Image
-                                        src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop"
-                                        alt="Modern Architecture Detail"
+                                        src="/images/pymble_office.webp"
+                                        alt="Pymble Constructions office"
                                         fill
                                         className="object-cover"
                                     />
@@ -58,8 +59,7 @@ export default function AboutPage() {
                                     viewport={{ once: true }}
                                     transition={{ duration: 0.6, delay: 0.2 }}
                                 >
-                                    Pymble Construction Limited was founded on simple yet powerful principles: quality, integrity, and client satisfaction.
-                                    We believe that every project is an opportunity to shape the skyline and improve the way people live and work.
+                                    {VISION_MISSION.servicesStatement}
                                 </motion.p>
                                 <motion.p
                                     className="text-lg md:text-xl text-primary-dark/70 leading-relaxed font-light"
@@ -68,8 +68,10 @@ export default function AboutPage() {
                                     viewport={{ once: true }}
                                     transition={{ duration: 0.6, delay: 0.3 }}
                                 >
-                                    Through expert craftsmanship and innovative solutions, we&apos;ve built a reputation as one of the region&apos;s most trusted
-                                    construction partners — delivering complex bespoke projects that stand the test of time.
+                                    Pymble Construction Limited was founded on simple yet powerful principles: quality,
+                                    integrity, and client satisfaction. Through expert craftsmanship and innovative
+                                    solutions, we&apos;ve built a reputation as one of Zambia&apos;s most trusted
+                                    construction partners — delivering complex projects that stand the test of time.
                                 </motion.p>
                             </div>
                         </div>
@@ -77,25 +79,74 @@ export default function AboutPage() {
                 </Container>
             </Section>
 
-            {/* 2. Team Section (Existing Component) */}
+            {/* 2. Vision & Mission — official statements from PCL brochure */}
+            <Section className="py-20 md:py-28 bg-primary-dark text-white relative overflow-hidden">
+                {/* Ambient glow */}
+                <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute left-0 top-0 w-[400px] h-[400px] bg-accent-orange/5 blur-[150px] rounded-full" />
+                </div>
+
+                <Container className="relative z-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-20">
+                        {/* Vision */}
+                        <motion.div
+                            className="space-y-6"
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                        >
+                            <span className="label-uppercase text-accent-orange block">
+                                Our Vision
+                            </span>
+                            <h2 className="font-heading text-3xl md:text-4xl font-bold tracking-tight leading-tight">
+                                The preferred construction firm in Zambia and beyond.
+                            </h2>
+                            <p className="text-white/50 text-lg leading-relaxed">
+                                {VISION_MISSION.vision}
+                            </p>
+                        </motion.div>
+
+                        {/* Mission */}
+                        <motion.div
+                            className="space-y-6"
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: 0.15 }}
+                        >
+                            <span className="label-uppercase text-accent-orange block">
+                                Our Mission
+                            </span>
+                            <h2 className="font-heading text-3xl md:text-4xl font-bold tracking-tight leading-tight">
+                                Delivering excellence through professionalism.
+                            </h2>
+                            <p className="text-white/50 text-lg leading-relaxed">
+                                {VISION_MISSION.mission}
+                            </p>
+                        </motion.div>
+                    </div>
+                </Container>
+            </Section>
+
+            {/* 3. Team Section */}
             <Team />
 
-            {/* 3. Philosophy / Legacy (Text-Driven) */}
+            {/* 4. Philosophy / Values */}
             <Section className="py-24 md:py-32 bg-neutral-50/50">
                 <Container>
                     <div className="flex flex-col md:flex-row gap-16 md:gap-24">
                         <div className="md:w-1/3">
-                            <span className="label-uppercase text-accent-orange mb-6 block">(Our Philosophy)</span>
+                            <span className="label-uppercase text-accent-orange mb-6 block">(Our Values)</span>
                             <h2 className="font-heading text-4xl md:text-5xl font-bold text-primary-dark">
                                 Focused on Quality, <br /> Driven by Integrity.
                             </h2>
                         </div>
                         <div className="md:w-2/3 grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-16">
                             {[
-                                { title: "Transparent Process", desc: "We believe trust is earned through openness. From costs to timelines, you'll never be in the dark." },
-                                { title: "Precision Detail", desc: "Our obsessive attention to detail ensures that the final result isn't just a building, but a crafted experience." },
-                                { title: "Safety First", desc: "Uncompromising commitment to the well-being of our team, clients, and the community in every phase." },
-                                { title: "Future-Ready", desc: "Integrating sustainable practices and modern technologies to build for tomorrow, not just today." },
+                                { title: "Professionalism", desc: "Structured project management and skilled workmanship ensure every project is executed to the highest professional standards." },
+                                { title: "Quality & Safety", desc: "Strict adherence to quality and safety standards across all project phases — we never compromise on the integrity of our work." },
+                                { title: "Client Commitment", desc: "We deliver construction services and products that meet client expectations, building trust through transparency and results." },
+                                { title: "Reliable Execution", desc: "From planning to handover, we ensure reliable and efficient project execution — on time, on budget, and built to last." },
                             ].map((item, i) => (
                                 <motion.div
                                     key={i}

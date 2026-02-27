@@ -34,12 +34,16 @@ const services = [
 import { useState } from "react";
 import Image from "next/image";
 
+/** Additional capabilities shown beneath the core services grid */
 const capabilities = [
     "Project management",
     "Surveying services",
     "Maintenance and renovations",
     "Warehouses and industrial facilities",
     "Drainage and foundations",
+    "Prefab & PEB buildings",
+    "Steel structure fabrication",
+    "Weighbridge construction",
 ];
 
 export function Services() {

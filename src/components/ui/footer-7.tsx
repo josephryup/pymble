@@ -1,6 +1,7 @@
 import React from "react";
 import Image from "next/image";
-import { FaFacebook, FaInstagram, FaLinkedin, FaTwitter } from "react-icons/fa";
+import { FaFacebook, FaInstagram, FaLinkedin } from "react-icons/fa";
+import { SOCIAL } from "@/lib/constants";
 
 interface Footer7Props {
     logo?: {
@@ -19,6 +20,8 @@ interface Footer7Props {
         href: string;
         label: string;
     }>;
+    /** Optional slot for extra content (e.g. newsletter signup) */
+    children?: React.ReactNode;
 }
 
 const defaultSections = [
@@ -52,15 +55,14 @@ const defaultSections = [
 ];
 
 const defaultSocialLinks = [
-    { icon: <FaInstagram className="size-5" />, href: "#", label: "Instagram" },
-    { icon: <FaFacebook className="size-5" />, href: "#", label: "Facebook" },
-    { icon: <FaTwitter className="size-5" />, href: "#", label: "Twitter" },
-    { icon: <FaLinkedin className="size-5" />, href: "#", label: "LinkedIn" },
+    { icon: <FaInstagram className="size-5" />, href: SOCIAL.instagram, label: "Instagram" },
+    { icon: <FaFacebook className="size-5" />, href: SOCIAL.facebook, label: "Facebook" },
+    { icon: <FaLinkedin className="size-5" />, href: SOCIAL.linkedin, label: "LinkedIn" },
 ];
 
 const defaultLegalLinks = [
-    { name: "Terms and Conditions", href: "#" },
-    { name: "Privacy Policy", href: "#" },
+    { name: "Terms and Conditions", href: "/terms" },
+    { name: "Privacy Policy", href: "/privacy" },
 ];
 
 export const Footer7 = ({
@@ -73,6 +75,7 @@ export const Footer7 = ({
     sections = defaultSections,
     description = "Crafting superior construction solutions with quality, integrity, and client satisfaction Across Zambia.",
     socialLinks = defaultSocialLinks,
+    children,
     copyright = `© ${new Date().getFullYear()} Pymble Construction. All rights reserved.`,
     legalLinks = defaultLegalLinks,
 }: Footer7Props & { copyright?: string; legalLinks?: typeof defaultLegalLinks }) => {
@@ -123,7 +126,15 @@ export const Footer7 = ({
                             </div>
                         ))}
                     </div>
+
                 </div>
+                {/* Optional extra content slot (newsletter, etc.) */}
+                {children && (
+                    <div className="mt-12 pt-10 border-t border-white/10">
+                        {children}
+                    </div>
+                )}
+
                 <div className="mt-16 flex flex-col justify-between gap-4 border-t border-white/10 py-8 text-xs font-medium text-white/40 md:flex-row md:items-center md:text-left">
                     <p className="order-2 lg:order-1">{copyright}</p>
                     <ul className="order-1 flex flex-col gap-2 md:order-2 md:flex-row">
@@ -133,6 +144,18 @@ export const Footer7 = ({
                             </li>
                         ))}
                     </ul>
+                </div>
+                {/* PluggedIn Digital credit */}
+                <div className="text-xs text-white/30">
+                    <span>Designed & maintained by </span>
+                    <a
+                        href="https://pluggedin-digital.vercel.app/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-white/50 hover:text-accent-orange transition-colors underline underline-offset-2"
+                    >
+                        PluggedIn Digital
+                    </a>
                 </div>
             </div>
         </section>

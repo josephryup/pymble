@@ -7,51 +7,57 @@ import Image from "next/image";
 import { useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 
-const categories = ["All", "Residential", "Commercial", "Healthcare", "Industrial"];
+/**
+ * Project categories — matches Pymble's core service areas
+ * from the client questionnaire
+ */
+const categories = ["All", "Commercial", "Healthcare", "Hospitality", "Infrastructure", "Civil Works"];
 
+/**
+ * Project portfolio data
+ * These are real Pymble Construction projects in Zambia.
+ * TODO: Replace Unsplash images with actual project photos from client.
+ */
 const projects = [
     {
         id: 1,
-        title: "Gordon Residential Complex",
-        category: "Residential",
-        year: "2024",
-        image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=2053&auto=format&fit=crop", // Modern luxury facade
+        title: "Nandos (Rubis) — Kitwe",
+        category: "Commercial",
+        year: "2026",
+        image: "/images/projects/Rubis-gas-station.jpg",
     },
     {
         id: 2,
-        title: "North Sydney Office Hub",
-        category: "Commercial",
-        year: "2023",
-        image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop", // Corporate glass architecture
+        title: "BeitCure Hospital — Lusaka",
+        category: "Healthcare",
+        year: "2025",
+        image: "/images/projects/beitcure.jpg",
     },
     {
         id: 3,
-        title: "Chatswood Medical Centre",
-        category: "Healthcare",
-        year: "2023",
-        image: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=2053&auto=format&fit=crop", // Clean modern medical/white architecture
+        title: "Longacres Matebeto — Lusaka",
+        category: "Hospitality",
+        year: "2025",
+        image: "/images/projects/matebeto-lusaka.jpg",
     },
     {
         id: 4,
-        title: "Pymble Luxury Estate",
-        category: "Residential",
+        title: "SolidarMed Zambia — Livingstone",
+        category: "Infrastructure",
         year: "2024",
-        image: "https://images.unsplash.com/photo-1600596542815-3ad19c6f98d7?q=80&w=2075&auto=format&fit=crop", // Stately luxury home
+        image: "/images/projects/solidarmed.jpg",
     },
     {
         id: 5,
-        title: "Western Industrial Park",
-        category: "Industrial",
-        year: "2022",
-        image: "https://images.unsplash.com/photo-1581094794329-cd1096a7a2a8?q=80&w=2070&auto=format&fit=crop", // Construction detail / Industrial vibe
+        title: "Coca-Cola Zambia — Lusaka",
+        category: "Commercial",
+        year: "2024",
+        // Compressed with FFmpeg: CRF 28, original 720x1280 portrait format
+        video: "/images/projects/coca-cola-compressed.mp4",
+        // Poster prevents blank card while video loads
+        poster: "/images/projects/coca-cola-poster.jpg",
     },
-    {
-        id: 6,
-        title: "Crows Nest Apartments",
-        category: "Residential",
-        year: "2023",
-        image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=2070&auto=format&fit=crop", // Modern apartment interior/exterior
-    },
+
 ];
 
 export default function ProjectsPage() {
@@ -109,12 +115,25 @@ export default function ProjectsPage() {
                                 transition={{ duration: 0.5 }}
                             >
                                 <div className="relative aspect-[3/2] overflow-hidden rounded-2xl mb-6">
-                                    <Image
-                                        src={project.image}
-                                        alt={project.title}
-                                        fill
-                                        className="object-cover transition-transform duration-700 group-hover:scale-105"
-                                    />
+                                    {"video" in project && project.video ? (
+                                        <video
+                                            src={project.video}
+                                            autoPlay
+                                            loop
+                                            muted
+                                            playsInline
+                                            preload="none"
+                                            poster={"poster" in project ? project.poster : undefined}
+                                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                        />
+                                    ) : project.image ? (
+                                        <Image
+                                            src={project.image}
+                                            alt={project.title}
+                                            fill
+                                            className="object-cover transition-transform duration-700 group-hover:scale-105"
+                                        />
+                                    ) : null}
                                     <div className="absolute inset-0 bg-primary-dark/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                                         <div className="bg-white text-primary-dark p-4 rounded-full transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
                                             <ArrowUpRight className="w-6 h-6" />

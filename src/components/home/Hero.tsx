@@ -27,9 +27,12 @@ export function Hero() {
                     muted
                     loop
                     playsInline
+                    preload="none"
+                    poster="/video/hero-poster.jpg"
                     className="h-full w-full object-cover"
                 >
-                    <source src="/video/hero-bg-video.mp4" type="video/mp4" />
+                    {/* Compressed version: 1280px wide, CRF 28, ~12 MB (down from 24 MB) */}
+                    <source src="/video/hero-bg-video-compressed.mp4" type="video/mp4" />
                 </video>
                 {/* Visual Overlay - Darkening and Backdrop Blur for readability */}
                 <div className="absolute inset-0 bg-primary-dark/50 backdrop-blur-[2px] z-10" />

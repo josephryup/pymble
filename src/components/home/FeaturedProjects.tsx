@@ -6,6 +6,7 @@ import { ArrowUpRight } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
 import Image from "next/image";
+import { link } from "fs";
 
 const projects = [
     {
@@ -14,6 +15,7 @@ const projects = [
         category: "Commercial",
         year: "2026",
         image: "/images/projects/Rubis-gas-station.jpg", //  construction of Nandos (Rubis) in Kitwe Zambia
+        
     },
     {
         id: 2,

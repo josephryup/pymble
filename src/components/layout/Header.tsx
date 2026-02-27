@@ -7,6 +7,7 @@ import { Container } from "@/components/ui/Container";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { NAV_LINKS, CONTACT } from "@/lib/constants";
 
 export function Header() {
     const [isScrolled, setIsScrolled] = useState(false);
@@ -41,12 +42,8 @@ export function Header() {
     // Hamburger color: Dark if menu is open (on white bg), otherwise White
     const hamburgerColor = isMenuOpen ? "text-primary-dark" : "text-white";
 
-    const navLinks = [
-        { name: "Home", href: "/" },
-        { name: "About", href: "/about" },
-        { name: "Projects", href: "/projects" },
-        { name: "Contact", href: "/contact" },
-    ];
+    // Navigation links from centralized constants
+    const navLinks = NAV_LINKS;
 
     return (
         <header
@@ -148,7 +145,7 @@ export function Header() {
                                 ))}
                             </nav>
 
-                            {/* Menu Footer */}
+                            {/* Menu Footer — Contact details from centralized constants */}
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
@@ -157,12 +154,16 @@ export function Header() {
                             >
                                 <div>
                                     <p className="label-uppercase text-accent-orange mb-2">Get in Touch</p>
-                                    <p className="text-primary-dark/80 text-lg">info@pymbleconstruction.com</p>
-                                    <p className="text-primary-dark/80 text-lg">+260 977 123 456</p>
+                                    <a href={`mailto:${CONTACT.email}`} className="text-primary-dark/80 text-lg block hover:text-accent-orange transition-colors">
+                                        {CONTACT.email}
+                                    </a>
+                                    <a href={CONTACT.phoneHref.primary} className="text-primary-dark/80 text-lg block hover:text-accent-orange transition-colors">
+                                        {CONTACT.phone.primary}
+                                    </a>
                                 </div>
                                 <div>
                                     <p className="label-uppercase text-accent-orange mb-2">Location</p>
-                                    <p className="text-primary-dark/80 text-lg">Lusaka, Zambia</p>
+                                    <p className="text-primary-dark/80 text-lg">{CONTACT.address.full}</p>
                                 </div>
                             </motion.div>
                         </div>
