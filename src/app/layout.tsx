@@ -7,6 +7,7 @@ import { SEO, SITE_URL, COMPANY } from "@/lib/constants";
 import { WhatsAppButton } from "@/components/ui/WhatsAppButton";
 import { QuoteCTA } from "@/components/ui/QuoteCTA";
 import { SchemaOrg } from "@/components/seo/SchemaOrg";
+import Script from "next/script";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -88,6 +89,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {/* Ahrefs Web Analytics */}
+        <Script
+          src="https://analytics.ahrefs.com/analytics.js"
+          data-key="yoxMRxpcS5OCp4crqDkMpw"
+          strategy="afterInteractive"
+        />
+      </head>
       <body
         className={`${inter.variable} ${manrope.variable} antialiased bg-white text-primary-dark font-sans selection:bg-primary-blue selection:text-white`}
       >
