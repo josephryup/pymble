@@ -18,7 +18,7 @@
  */
 
 import { Footer7 } from "@/components/ui/footer-7";
-import { COMPANY, CONTACT } from "@/lib/constants";
+import { COMPANY, CONTACT, REGIONS } from "@/lib/constants";
 import { NewsletterSignup } from "@/components/ui/NewsletterSignup";
 
 const sections = [
@@ -40,6 +40,10 @@ const sections = [
             { name: "Resources", href: "/resources" },
             { name: "Contact", href: "/contact" },
         ],
+    },
+    {
+        title: "Regions",
+        links: REGIONS.map(r => ({ name: r.name, href: `/locations/${r.slug}` })),
     },
     {
         title: "Connect",
@@ -67,7 +71,7 @@ export function Footer() {
                     />
                 </div>
 
-               
+
             </div>
         </Footer7>
     );

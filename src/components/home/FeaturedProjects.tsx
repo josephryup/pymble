@@ -6,30 +6,32 @@ import { ArrowUpRight } from "lucide-react";
 import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
 import Image from "next/image";
-import { link } from "fs";
+import Link from "next/link";
 
 const projects = [
     {
         id: 1,
+        slug: "nandos-rubis-kitwe",
         title: "Nandos (Rubis) - Kitwe",
         category: "Commercial",
         year: "2026",
-        image: "/images/projects/Rubis-gas-station.jpg", //  construction of Nandos (Rubis) in Kitwe Zambia
-        
+        image: "/images/projects/Rubis-gas-station.jpg",
     },
     {
         id: 2,
+        slug: "beitcure-hospital-lusaka",
         title: "BeitCure Hospital - Lusaka ",
         category: "Healthcare",
         year: "2025",
-        image: "/images/projects/beitcure.jpg", // BeitCure Hospital
+        image: "/images/projects/beitcure.jpg",
     },
     {
         id: 3,
-        title: "Longacres Matebeto  ",
-        category: "Hospitality  ",
+        slug: "longacres-matebeto-lusaka",
+        title: "Longacres Matebeto",
+        category: "Hospitality",
         year: "2025",
-        image: "/images/projects/matebeto-lusaka.jpg", // Clean modern medical/white architecture
+        image: "/images/projects/matebeto-lusaka.jpg",
     },
 ];
 
@@ -43,58 +45,62 @@ const ProjectCard = ({ project, index }: { project: any; index: number }) => {
     const y = useTransform(scrollYProgress, [0, 1], ["-10%", "10%"]);
 
     return (
-        <motion.div
-            ref={containerRef}
-            className="group cursor-pointer relative overflow-hidden bg-white md:bg-neutral-100 h-auto md:h-full w-full border-b md:border-b-0 border-black/5 last:border-b-0 pb-12 md:pb-0"
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, delay: index * 0.1 }}
-        >
-            <div className="relative h-full w-full flex flex-col md:block">
-                {/* Image Container */}
-                <div className="relative aspect-[4/3] md:h-full w-full overflow-hidden bg-neutral-200">
-                    {/* Mobile: Static Image (No Parallax) */}
-                    <div className="md:hidden absolute inset-0">
-                        <Image
-                            src={project.image}
-                            alt={project.title}
-                            fill
-                            className="object-cover"
-                        />
+        <Link href={`/projects/${project.slug}`} className="block h-full">
+            <motion.div
+                ref={containerRef}
+                className="group cursor-pointer relative overflow-hidden bg-white md:bg-neutral-100 h-auto md:h-full w-full border-b md:border-b-0 border-black/5 last:border-b-0 pb-12 md:pb-0"
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8, delay: index * 0.1 }}
+            >
+                <div className="relative h-full w-full flex flex-col md:block">
+                    {/* Image Container */}
+                    <div className="relative aspect-[4/3] md:h-full w-full overflow-hidden bg-neutral-200">
+                        {/* Mobile: Static Image (No Parallax) */}
+                        <div className="md:hidden absolute inset-0">
+                            <Image
+                                src={project.image}
+                                alt={project.title}
+                                fill
+                                className="object-cover"
+                                sizes="(max-width: 768px) 100vw, 33vw"
+                            />
+                        </div>
+
+                        {/* Desktop: Parallax Image */}
+                        <motion.div style={{ y }} className="hidden md:block absolute inset-0 scale-110">
+                            <Image
+                                src={project.image}
+                                alt={project.title}
+                                fill
+                                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                                sizes="(max-width: 1024px) 100vw, 33vw"
+                            />
+                        </motion.div>
+
+                        {/* Desktop Overlay Gradient */}
+                        <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-primary-dark/90 via-primary-dark/20 to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-700" />
                     </div>
 
-                    {/* Desktop: Parallax Image */}
-                    <motion.div style={{ y }} className="hidden md:block absolute inset-0 scale-110">
-                        <Image
-                            src={project.image}
-                            alt={project.title}
-                            fill
-                            className="object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
-                    </motion.div>
-
-                    {/* Desktop Overlay Gradient */}
-                    <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-primary-dark/90 via-primary-dark/20 to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-700" />
-                </div>
-
-                {/* Content - Below on Mobile, Overlay on Desktop */}
-                <div className="relative md:absolute md:inset-0 p-6 md:p-12 flex flex-col justify-end bg-white md:bg-transparent">
-                    <div className="md:translate-y-4 md:group-hover:translate-y-0 transition-transform duration-700 ease-out">
-                        <span className="label-uppercase text-accent-orange mb-2 md:mb-3 block text-[10px] md:text-white/60">
-                            {project.category} / {project.year}
-                        </span>
-                        <h3 className="font-heading text-2xl md:text-3xl xl:text-4xl text-primary-dark md:text-white font-bold tracking-tight mb-4">
-                            {project.title}
-                        </h3>
-                        <div className="flex items-center gap-2 text-primary-dark/40 md:text-white/40 md:group-hover:text-white transition-colors duration-500">
-                            <span className="label-uppercase text-accent-orange text-[9px] uppercase tracking-[0.3em]">View Project</span>
-                            <ArrowUpRight className="w-4 h-4" strokeWidth={2} />
+                    {/* Content - Below on Mobile, Overlay on Desktop */}
+                    <div className="relative md:absolute md:inset-0 p-6 md:p-12 flex flex-col justify-end bg-white md:bg-transparent">
+                        <div className="md:translate-y-4 md:group-hover:translate-y-0 transition-transform duration-700 ease-out">
+                            <span className="label-uppercase text-accent-orange mb-2 md:mb-3 block text-[10px] md:text-white/60">
+                                {project.category} / {project.year}
+                            </span>
+                            <h3 className="font-heading text-2xl md:text-3xl xl:text-4xl text-primary-dark md:text-white font-bold tracking-tight mb-4">
+                                {project.title}
+                            </h3>
+                            <div className="flex items-center gap-2 text-primary-dark/40 md:text-white/40 md:group-hover:text-white transition-colors duration-500">
+                                <span className="label-uppercase text-accent-orange text-[9px] uppercase tracking-[0.3em]">View Project</span>
+                                <ArrowUpRight className="w-4 h-4" strokeWidth={2} />
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </motion.div>
+            </motion.div>
+        </Link>
     );
 };
 

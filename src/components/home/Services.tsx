@@ -101,6 +101,7 @@ export function Services() {
                                 alt={activeService.title}
                                 fill
                                 className="object-cover"
+                                sizes="(max-width: 1024px) 100vw, 600px"
                             />
                         </motion.div>
 

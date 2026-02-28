@@ -47,7 +47,7 @@ export function NewsletterSignup({
      * Sends to Web3Forms with a distinct subject line so
      * submissions can be filtered from regular contact inquiries.
      *
-     * TODO: Replace YOUR_WEB3FORMS_ACCESS_KEY with real key.
+     * Set NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY in your .env file.
      * Alternatively, integrate with Mailchimp/ConvertKit API.
      */
     const handleSubmit = async (e: React.FormEvent) => {
@@ -64,7 +64,7 @@ export function NewsletterSignup({
 
         try {
             const formData = new FormData();
-            formData.append("access_key", "YOUR_WEB3FORMS_ACCESS_KEY");
+            formData.append("access_key", process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || "");
             formData.append("subject", "Newsletter Subscription — Pymble Construction");
             formData.append("from_name", "Pymble Newsletter");
             formData.append("email", email);

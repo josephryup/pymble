@@ -157,7 +157,7 @@ export function QuoteModal({ isOpen, onClose, serviceName }: QuoteModalProps) {
                                 /* ── Quote Form ── */
                                 <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
                                     {/* Web3Forms hidden fields */}
-                                    <input type="hidden" name="access_key" value="YOUR_WEB3FORMS_ACCESS_KEY" />
+                                    <input type="hidden" name="access_key" value={process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || ""} />
                                     <input type="hidden" name="subject" value={`Quote Request: ${serviceName} — Pymble Construction`} />
                                     <input type="hidden" name="from_name" value="Pymble Construction Quote" />
                                     <input type="hidden" name="service" value={serviceName} />

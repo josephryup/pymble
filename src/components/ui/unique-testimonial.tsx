@@ -15,15 +15,15 @@ const testimonials = [
     {
         id: 2,
         quote: "Simply brilliant. Nothing else compares.",
-        author: "Marcus Johnson",
+        author: "Mateo M Chalwe",
         role: "Engineer at Vercel",
         image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=1374&auto=format&fit=crop", // Professional man headshot
     },
     {
         id: 3,
-        quote: "The attention to detail is unmatched.",
-        author: "Elena Rodriguez",
-        role: "Founder at Craft",
+        quote: "⭐⭐⭐⭐⭐. Always the best",
+        author: "Mubanga Theo",
+        role: "Civil engineer at Crac Tech",
         image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=1528&auto=format&fit=crop", // Professional woman headshot
     },
 ]

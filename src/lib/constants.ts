@@ -47,7 +47,6 @@ export const CONTACT = {
 } as const;
 
 // ─── Social Media Links ────────────────────────────────────
-// TODO: Get actual social media URLs from client
 export const SOCIAL = {
     facebook: "https://web.facebook.com/pymblecltd",
     instagram: "https://www.instagram.com/pymblecltd/",
@@ -171,10 +170,23 @@ export const TARGET_AUDIENCE = [
     "Private institutional clients",
 ] as const;
 
+// ─── Service Regions (Local SEO) ───────────────────────────
+export const REGIONS = [
+    { name: "Lusaka (HQ)", slug: "lusaka" },
+    { name: "Kitwe (Copperbelt)", slug: "kitwe" },
+    { name: "Solwezi (North-Western)", slug: "solwezi" },
+    { name: "Ndola (Copperbelt)", slug: "ndola" },
+    { name: "Livingstone (Southern)", slug: "livingstone" },
+] as const;
+
+export const SITE_URL = "https://pymbleconstruction.com";
+
 // ─── SEO Defaults ──────────────────────────────────────────
 export const SEO = {
     defaultTitle: `${COMPANY.name} | ${COMPANY.tagline}`,
+    titleTemplate: `%s | ${COMPANY.name}`,
     defaultDescription: COMPANY.shortDescription,
+    siteName: COMPANY.name,
     keywords: [
         "construction company Zambia",
         "building contractors Lusaka",
@@ -184,9 +196,14 @@ export const SEO = {
         "renovation services Zambia",
         "Pymble Construction",
         "construction company Lusaka",
+        "industrial construction Zambia",
+        "prefab buildings Zambia",
+        "steel structures Lusaka",
     ],
     locale: "en_ZM",
     type: "website",
+    author: "Pymble Construction Limited",
+    twitterHandle: "@pymblecltd",
 } as const;
 
 // ─── Google Maps Embed ─────────────────────────────────────
