@@ -11,43 +11,22 @@ const teamMembers = [
         id: 1,
         name: "Matimba Dominic Hatimbula",
         role: "CEO",
-        credentials: "M. Arch (QUT), B.Be Arch (QUT)\nBOA Queensland No. 4787.\nNSW Architects Registration Board\nNo. 10589",
-        image: "https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=1974&auto=format&fit=crop", // Professional man in suit
+        credentials: "M.TECH (QUT), B.Be Arch (QUT)\nCEO of the Year (ZMOY).\n Engineering Registration Board\nNo. 10589",
+        image: "/images/team/matimba.jpg", // Professional man in suit
     },
     {
         id: 2,
-        name: "Poppie Kenneally",
-        role: "Director - Interior Designer",
+        name: "Mukuka Ngulube",
+        role: "FPC",
         credentials: "B.Int Arch (Hons) (UNSW)\nSpecializing in high-end residential\nand commercial hospitality spaces.",
-        image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=1976&auto=format&fit=crop", // Professional woman
+        image: "/logo.png", // Professional woman
     },
     {
         id: 3,
-        name: "Daniel Hickey",
+        name: "Daniel Mwansa",
         role: "Associate Architect",
         credentials: "M. Arch (USyd), B.Des Arch (USyd)\nRegistered Architect NSW No. 11245.\nLead Project Manager.",
-        image: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=2070&auto=format&fit=crop", // Professional smiling man
-    },
-    {
-        id: 4,
-        name: "Nick Tan",
-        role: "Architect",
-        credentials: "M. Arch (Melb), B.Enviro Des (UWA)\nExpert in sustainable urban design\nand technical implementation.",
-        image: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=1974&auto=format&fit=crop", // Professional man
-    },
-    {
-        id: 5,
-        name: "Rachael Mellick",
-        role: "Architect",
-        credentials: "M. Arch (QUT), B.Des (QUT)\nSpecialist in heritage conservation\nand modern adaptive reuse.",
-        image: "https://images.unsplash.com/photo-1580489944761-15a19d654956?q=80&w=1961&auto=format&fit=crop", // Professional woman
-    },
-    {
-        id: 6,
-        name: "Laura Sherriff",
-        role: "Architect",
-        credentials: "M. Arch (USyd), B.Des Arch (USyd)\nFocused on project feasibility\nand computational design workflows.",
-        image: "https://images.unsplash.com/photo-1598550874175-4d7112ee7f43?q=80&w=2070&auto=format&fit=crop", // Professional woman
+        image: "/logo.png", // Professional smiling man
     },
 ];
 
