@@ -1,8 +1,4 @@
-"use client";
-
 import Image from "next/image";
-import { motion } from "framer-motion";
-import { useState } from "react";
 
 const logos = [
     { name: "ZRA", src: "/logos/ZRA-logo-01.png" },
@@ -15,43 +11,23 @@ const logos = [
     { name: "ZPPA", src: "/logos/zppa_logo.jpeg" },
 ];
 
+const duplicatedLogos = [...logos, ...logos, ...logos];
+
 export function LogoCarousel() {
-    const [isPaused, setIsPaused] = useState(false);
-
-    // Double the logos to create a seamless loop
-    const duplicatedLogos = [...logos, ...logos, ...logos];
-
     return (
-        <div className="w-full py-12 border-t border-black/5 mt-20 overflow-hidden">
-            <div className="text-center mb-10">
-                <p className="text-sm font-medium text-primary-dark/40">
-                    Certification Bodies <span className    ="text-primary-dark font-bold"></span>
-                </p>
+        <div className="mt-20 w-full overflow-hidden border-t border-black/5 py-12">
+            <div className="mb-10 text-center">
+                <p className="text-sm font-medium text-primary-dark/40">Certification Bodies</p>
             </div>
 
-            <div
-                className="relative flex overflow-hidden group"
-                onMouseEnter={() => setIsPaused(true)}
-                onMouseLeave={() => setIsPaused(false)}
-            >
-                <motion.div
-                    className="flex whitespace-nowrap gap-16 md:gap-24 items-center px-8"
-                    animate={{ x: isPaused ? undefined : ["0%", "-33.33%"] }}
-                    transition={{
-                        x: {
-                            repeat: Infinity,
-                            repeatType: "loop",
-                            duration: 30,
-                            ease: "linear",
-                        },
-                    }}
-                >
-                    {duplicatedLogos.map((logo, idx) => (
+            <div className="relative overflow-hidden marquee-pause">
+                <div className="marquee-track-reverse flex items-center gap-16 whitespace-nowrap px-8 md:gap-24">
+                    {duplicatedLogos.map((logo, index) => (
                         <div
-                            key={`${logo.name}-${idx}`}
-                            className="flex items-center justify-center opacity-30 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-500 hover:scale-110 shrink-0"
+                            key={`${logo.name}-${index}`}
+                            className="shrink-0 opacity-30 grayscale transition-all duration-500 hover:scale-110 hover:opacity-100 hover:grayscale-0"
                         >
-                            <div className="relative h-12 w-32 md:h-16 md:w-40 flex items-center justify-center">
+                            <div className="relative flex h-12 w-32 items-center justify-center md:h-16 md:w-40">
                                 <Image
                                     src={logo.src}
                                     alt={`${logo.name} logo`}
@@ -62,11 +38,10 @@ export function LogoCarousel() {
                             </div>
                         </div>
                     ))}
-                </motion.div>
+                </div>
 
-                {/* Gradient Masks */}
-                <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
-                <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-32 bg-gradient-to-r from-white to-transparent" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-32 bg-gradient-to-l from-white to-transparent" />
             </div>
         </div>
     );

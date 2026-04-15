@@ -1,70 +1,41 @@
-"use client";
-
-import { motion } from "framer-motion";
+import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
-import { Button } from "@/components/ui/Button";
 import { LogoCarousel } from "@/components/ui/LogoCarousel";
-import Link from "next/link";
 import { ArrowRight, Phone } from "lucide-react";
 
 export function CTA() {
     return (
         <Section className="section-spacing-lg bg-white">
             <Container>
-                <div className="max-w-4xl mx-auto text-center">
-                    <motion.h2
-                        className="text-5xl md:text-7xl lg:text-8xl font-heading font-bold text-primary-dark mb-8 tracking-tighter leading-[0.9]"
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                    >
+                <div className="mx-auto max-w-4xl text-center">
+                    <h2 className="mb-8 font-heading text-5xl font-bold leading-[0.9] tracking-tighter text-primary-dark md:text-7xl lg:text-8xl">
                         Let&apos;s build something extraordinary.
-                    </motion.h2>
+                    </h2>
 
-                    <motion.p
-                        className="text-lg md:text-xl text-primary-dark/60 max-w-2xl mx-auto mb-12"
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.1 }}
-                    >
+                    <p className="mx-auto mb-12 max-w-2xl text-lg text-primary-dark/60 md:text-xl">
                         Connecting you with world-class craftsmanship <br className="hidden md:block" />
                         to scale, innovate and lead.
-                    </motion.p>
+                    </p>
 
-                    <motion.div
-                        className="flex flex-col sm:flex-row gap-4 justify-center items-center"
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.2 }}
-                    >
-                        <Link href="/contact">
-                            <Button
-                                variant="ghost"
-                                className="w-full sm:w-auto text-base px-8 py-4 h-auto flex items-center gap-2 bg-neutral-100/50 hover:bg-neutral-100 border-none lowercase"
-                            >
-                                <Phone className="w-4 h-4" />
-                                Book a Call
-                            </Button>
+                    <div className="flex items-center justify-center gap-4 flex-col sm:flex-row">
+                        <Link
+                            href="/contact"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-neutral-100/50 px-8 py-4 text-base font-semibold lowercase text-primary-dark transition-all duration-300 hover:bg-neutral-100 sm:w-auto"
+                        >
+                            <Phone className="h-4 w-4" />
+                            Book a Call
                         </Link>
-                        <Link href="/contact">
-                            <Button className="w-full sm:w-auto text-base px-10 py-4 h-auto flex items-center gap-2 bg-primary-dark hover:bg-black lowercase tracking-tight">
-                                Start your Project
-                                <ArrowRight className="w-4 h-4" />
-                            </Button>
+                        <Link
+                            href="/contact"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary-dark px-10 py-4 text-base font-semibold lowercase tracking-tight text-white transition-all duration-300 hover:bg-black sm:w-auto"
+                        >
+                            Start your Project
+                            <ArrowRight className="h-4 w-4" />
                         </Link>
-                    </motion.div>
+                    </div>
 
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        whileInView={{ opacity: 1, scale: 1 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.4 }}
-                    >
-                        <LogoCarousel />
-                    </motion.div>
+                    <LogoCarousel />
                 </div>
             </Container>
         </Section>

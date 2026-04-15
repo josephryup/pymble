@@ -1,13 +1,27 @@
+import dynamic from "next/dynamic";
 import { Hero } from "@/components/home/Hero";
 import { Intro } from "@/components/home/Intro";
-import { FeaturedProjects } from "@/components/home/FeaturedProjects";
 import { TrustedBy } from "@/components/home/TrustedBy";
-import { AboutPhilosophy } from "@/components/home/AboutPhilosophy";
-import { Stats } from "@/components/home/Stats";
-import { Services } from "@/components/home/Services";
-import { Process } from "@/components/home/Process";
-import { Testimonials } from "@/components/home/Testimonials";
 import { CTA } from "@/components/home/CTA";
+
+const FeaturedProjects = dynamic(
+  () => import("@/components/home/FeaturedProjects").then((mod) => mod.FeaturedProjects)
+);
+const Stats = dynamic(
+  () => import("@/components/home/Stats").then((mod) => mod.Stats)
+);
+const AboutPhilosophy = dynamic(
+  () => import("@/components/home/AboutPhilosophy").then((mod) => mod.AboutPhilosophy)
+);
+const Services = dynamic(
+  () => import("@/components/home/Services").then((mod) => mod.Services)
+);
+const Process = dynamic(
+  () => import("@/components/home/Process").then((mod) => mod.Process)
+);
+const Testimonials = dynamic(
+  () => import("@/components/home/Testimonials").then((mod) => mod.Testimonials)
+);
 
 export default function Home() {
   return (

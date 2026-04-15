@@ -63,7 +63,7 @@ export function Hero() {
                 {mediaMode === "rich" && (
                     <>
                         <Image
-                            src="/video/hero-poster.jpg"
+                            src="/video/hero-poster.webp"
                             alt="Pymble Construction project showcase"
                             fill
                             priority
@@ -76,7 +76,7 @@ export function Hero() {
                             loop
                             playsInline
                             preload="metadata"
-                            poster="/video/hero-poster.jpg"
+                            poster="/video/hero-poster.webp"
                             className={`h-full w-full object-cover transition-opacity duration-700 ${isVideoReady ? "opacity-100" : "opacity-0"}`}
                             onLoadedData={() => setIsVideoReady(true)}
                         >

@@ -1,55 +1,33 @@
-"use client";
-
-import { motion } from "framer-motion";
+import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
-import { Button } from "@/components/ui/Button";
 
 export function Intro() {
     return (
         <Section className="bg-white">
             <Container>
-                <div className="flex flex-col lg:flex-row gap-16 lg:gap-32 items-start">
+                <div className="flex flex-col items-start gap-16 lg:flex-row lg:gap-32">
                     <div className="lg:w-1/2">
-                        <motion.span
-                            className="label-uppercase mb-8 block text-accent-orange"
-                            initial={{ opacity: 0, y: 10 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                        >
+                        <span className="label-uppercase mb-8 block text-accent-orange">
                             Client Partnership / Trust
-                        </motion.span>
-                        <motion.h2
-                            className="font-heading text-4xl sm:text-5xl md:text-6xl leading-[1.08] text-primary-dark"
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.6 }}
-                        >
+                        </span>
+                        <h2 className="font-heading text-4xl sm:text-5xl md:text-6xl leading-[1.08] text-primary-dark">
                             We build together, combining your vision with our expertise to craft spaces that inspire.
-                        </motion.h2>
+                        </h2>
                     </div>
-                    <div className="lg:w-1/2 space-y-8">
-                        <motion.p
-                            className="text-base leading-relaxed text-primary-dark/70 md:text-body"
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.6, delay: 0.2 }}
-                        >
+                    <div className="space-y-8 lg:w-1/2">
+                        <p className="text-base leading-relaxed text-primary-dark/70 md:text-body">
                             At Pymble Construction, we believe that the best projects are born from collaboration.
                             We guide you through every step of the journey with transparent communication,
                             ensuring that our decades of combined expertise are focused on delivering your specific goals.
-                        </motion.p>
+                        </p>
 
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.6, delay: 0.4 }}
+                        <Link
+                            href="/about"
+                            className="inline-flex rounded-full border border-primary-dark px-5 py-2.5 text-sm font-semibold uppercase tracking-wider text-primary-dark transition-all duration-300 hover:bg-primary-dark hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-blue focus:ring-offset-2"
                         >
-                            <Button variant="secondary">Learn More About Us</Button>
-                        </motion.div>
+                            Learn More About Us
+                        </Link>
                     </div>
                 </div>
             </Container>
