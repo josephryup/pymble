@@ -1,49 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { ArrowDown } from "lucide-react";
-import { Container } from "@/components/ui/Container";
 import Image from "next/image";
-
-type HeroMediaMode = "rich" | "solid";
-type ConnectionInfo = {
-    saveData?: boolean;
-    effectiveType?: string;
-    addEventListener?: (event: "change", listener: () => void) => void;
-    removeEventListener?: (event: "change", listener: () => void) => void;
-};
+import { Container } from "@/components/ui/Container";
 
 export function Hero() {
     const containerRef = useRef(null);
-    const [isVideoReady, setIsVideoReady] = useState(false);
-    const [mediaMode, setMediaMode] = useState<HeroMediaMode>("rich");
-
-    useEffect(() => {
-        const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-        const connection = (navigator as Navigator & {
-            connection?: ConnectionInfo;
-        }).connection;
-
-        const updateMediaMode = () => {
-            const saveData = Boolean(connection?.saveData);
-            const slowConnection = connection?.effectiveType
-                ? /(slow-2g|2g|3g)/.test(connection.effectiveType)
-                : false;
-            const prefersReducedMotion = reducedMotionQuery.matches;
-
-            setMediaMode(saveData || slowConnection || prefersReducedMotion ? "solid" : "rich");
-        };
-
-        updateMediaMode();
-        reducedMotionQuery.addEventListener("change", updateMediaMode);
-        connection?.addEventListener?.("change", updateMediaMode);
-
-        return () => {
-            reducedMotionQuery.removeEventListener("change", updateMediaMode);
-            connection?.removeEventListener?.("change", updateMediaMode);
-        };
-    }, []);
 
     const { scrollYProgress } = useScroll({
         target: containerRef,
@@ -55,40 +19,19 @@ export function Hero() {
 
     return (
         <section ref={containerRef} className="relative min-h-[100svh] w-full overflow-hidden bg-primary-dark text-white">
-            {/* Cinematic Video Background */}
             <motion.div
                 className="absolute inset-0 z-0 scale-105"
                 style={{ y }}
             >
-                {mediaMode === "rich" && (
-                    <>
-                        <Image
-                            src="/video/hero-poster.webp"
-                            alt="Pymble Construction project showcase"
-                            fill
-                            priority
-                            className={`object-cover transition-opacity duration-700 ${isVideoReady ? "opacity-0" : "opacity-100"}`}
-                            sizes="100vw"
-                        />
-                        <video
-                            autoPlay
-                            muted
-                            loop
-                            playsInline
-                            preload="metadata"
-                            poster="/video/hero-poster.webp"
-                            className={`h-full w-full object-cover transition-opacity duration-700 ${isVideoReady ? "opacity-100" : "opacity-0"}`}
-                            onLoadedData={() => setIsVideoReady(true)}
-                        >
-                            <source src="/video/hero-bg-video-optimized.mp4" type="video/mp4" />
-                        </video>
-                    </>
-                )}
-                {mediaMode === "solid" && (
-                    <div className="absolute inset-0 bg-primary-dark" />
-                )}
-                {/* Visual Overlay - Darkening and Backdrop Blur for readability */}
-                <div className={`absolute inset-0 z-10 ${mediaMode === "rich" ? "bg-primary-dark/50 backdrop-blur-[2px]" : "bg-primary-dark"}`} />
+                <Image
+                    src="/images/hero/herobg.jpg"
+                    alt="Pymble Construction hero section"
+                    fill
+                    priority
+                    className="object-cover"
+                    sizes="100vw"
+                />
+                <div className="absolute inset-0 z-10 bg-primary-dark/70" />
                 <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_top_right,rgba(255,165,0,0.18),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(34,53,221,0.16),transparent_30%)]" />
             </motion.div>
 
