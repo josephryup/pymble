@@ -1,12 +1,50 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { ArrowDown } from "lucide-react";
 import { Container } from "@/components/ui/Container";
+import Image from "next/image";
+
+type HeroMediaMode = "rich" | "solid";
+type ConnectionInfo = {
+    saveData?: boolean;
+    effectiveType?: string;
+    addEventListener?: (event: "change", listener: () => void) => void;
+    removeEventListener?: (event: "change", listener: () => void) => void;
+};
 
 export function Hero() {
     const containerRef = useRef(null);
+    const [isVideoReady, setIsVideoReady] = useState(false);
+    const [mediaMode, setMediaMode] = useState<HeroMediaMode>("rich");
+
+    useEffect(() => {
+        const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const connection = (navigator as Navigator & {
+            connection?: ConnectionInfo;
+        }).connection;
+
+        const updateMediaMode = () => {
+            const saveData = Boolean(connection?.saveData);
+            const slowConnection = connection?.effectiveType
+                ? /(slow-2g|2g|3g)/.test(connection.effectiveType)
+                : false;
+            const prefersReducedMotion = reducedMotionQuery.matches;
+
+            setMediaMode(saveData || slowConnection || prefersReducedMotion ? "solid" : "rich");
+        };
+
+        updateMediaMode();
+        reducedMotionQuery.addEventListener("change", updateMediaMode);
+        connection?.addEventListener?.("change", updateMediaMode);
+
+        return () => {
+            reducedMotionQuery.removeEventListener("change", updateMediaMode);
+            connection?.removeEventListener?.("change", updateMediaMode);
+        };
+    }, []);
+
     const { scrollYProgress } = useScroll({
         target: containerRef,
         offset: ["start start", "end start"],
@@ -16,31 +54,47 @@ export function Hero() {
     const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
 
     return (
-        <section ref={containerRef} className="relative h-screen w-full overflow-hidden bg-primary-dark text-white">
+        <section ref={containerRef} className="relative min-h-[100svh] w-full overflow-hidden bg-primary-dark text-white">
             {/* Cinematic Video Background */}
             <motion.div
                 className="absolute inset-0 z-0 scale-105"
                 style={{ y }}
             >
-                <video
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="none"
-                    poster="/video/hero-poster.jpg"
-                    className="h-full w-full object-cover"
-                >
-                    {/* Compressed version: 1280px wide, CRF 28, ~12 MB (down from 24 MB) */}
-                    <source src="/video/hero-bg-video-compressed.mp4" type="video/mp4" />
-                </video>
+                {mediaMode === "rich" && (
+                    <>
+                        <Image
+                            src="/video/hero-poster.jpg"
+                            alt="Pymble Construction project showcase"
+                            fill
+                            priority
+                            className={`object-cover transition-opacity duration-700 ${isVideoReady ? "opacity-0" : "opacity-100"}`}
+                            sizes="100vw"
+                        />
+                        <video
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            preload="metadata"
+                            poster="/video/hero-poster.jpg"
+                            className={`h-full w-full object-cover transition-opacity duration-700 ${isVideoReady ? "opacity-100" : "opacity-0"}`}
+                            onLoadedData={() => setIsVideoReady(true)}
+                        >
+                            <source src="/video/hero-bg-video-optimized.mp4" type="video/mp4" />
+                        </video>
+                    </>
+                )}
+                {mediaMode === "solid" && (
+                    <div className="absolute inset-0 bg-primary-dark" />
+                )}
                 {/* Visual Overlay - Darkening and Backdrop Blur for readability */}
-                <div className="absolute inset-0 bg-primary-dark/50 backdrop-blur-[2px] z-10" />
+                <div className={`absolute inset-0 z-10 ${mediaMode === "rich" ? "bg-primary-dark/50 backdrop-blur-[2px]" : "bg-primary-dark"}`} />
+                <div className="absolute inset-0 z-10 bg-[radial-gradient(circle_at_top_right,rgba(255,165,0,0.18),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(34,53,221,0.16),transparent_30%)]" />
             </motion.div>
 
-            <Container className="relative z-20 h-full flex flex-col justify-between py-12 md:py-20">
-                <div className="flex-1 flex items-center">
-                    <div className="max-w-4xl space-y-6">
+            <Container className="relative z-20 flex min-h-[100svh] flex-col justify-between py-24 md:py-20">
+                <div className="flex flex-1 items-center pt-16 md:pt-0">
+                    <div className="max-w-4xl space-y-5 md:space-y-6">
                         <motion.div
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -53,7 +107,7 @@ export function Hero() {
 
                         <motion.div style={{ opacity }}>
                             <motion.h1
-                                className="font-heading text-5xl md:text-8xl lg:text-[7rem] leading-[0.9] font-bold tracking-tighter"
+                                className="font-heading text-4xl sm:text-5xl md:text-7xl lg:text-[7rem] leading-[0.92] font-bold tracking-tighter text-balance"
                                 initial={{ opacity: 0, y: 40 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
@@ -62,7 +116,7 @@ export function Hero() {
                             </motion.h1>
 
                             <motion.p
-                                className="text-white/70 max-w-xl text-body pt-8"
+                                className="max-w-xl pt-6 text-base leading-relaxed text-white/70 md:pt-8 md:text-body"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ duration: 1.2, delay: 0.6 }}

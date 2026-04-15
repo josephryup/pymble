@@ -65,16 +65,15 @@ export default function ProjectsClient() {
                                 <Link href={`/projects/${project.slug}`} className="block">
                                     <div className="relative aspect-[3/2] overflow-hidden rounded-2xl mb-6 bg-neutral-100">
                                         {project.video ? (
-                                            <video
-                                                src={project.video}
-                                                autoPlay
-                                                loop
-                                                muted
-                                                playsInline
-                                                preload="none"
-                                                poster={project.poster}
-                                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                            />
+                                            project.poster ? (
+                                                <Image
+                                                    src={project.poster}
+                                                    alt={project.title}
+                                                    fill
+                                                    className="object-cover transition-transform duration-700 group-hover:scale-105"
+                                                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 600px"
+                                                />
+                                            ) : null
                                         ) : project.image ? (
                                             <Image
                                                 src={project.image}
@@ -98,6 +97,9 @@ export default function ProjectsClient() {
                                             <h2 className="font-heading text-2xl md:text-3xl font-bold tracking-tight text-primary-dark group-hover:text-accent-orange transition-all leading-tight">
                                                 {project.title}
                                             </h2>
+                                            <p className="mt-2 text-sm text-primary-dark/50">
+                                                {project.location}
+                                            </p>
                                         </div>
                                         <span className="label-uppercase opacity-20 whitespace-nowrap mb-1 text-[10px]">
                                             EST / {project.year}

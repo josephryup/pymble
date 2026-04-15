@@ -28,7 +28,7 @@ const clientsWithLogos = TRUSTED_CLIENTS.filter(
 
 export function TrustedBy() {
     return (
-        <Section className="py-14 md:py-20 bg-neutral-50 border-y border-black/5 overflow-hidden">
+        <Section className="section-spacing-sm bg-neutral-50 border-y border-black/5 overflow-hidden">
             {/* Section label */}
             <motion.p
                 className="label-uppercase text-primary-dark/30 text-center mb-12"

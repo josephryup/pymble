@@ -20,7 +20,7 @@ export function Intro() {
                             Client Partnership / Trust
                         </motion.span>
                         <motion.h2
-                            className="font-heading text-5xl md:text-6xl leading-[1.1] text-primary-dark"
+                            className="font-heading text-4xl sm:text-5xl md:text-6xl leading-[1.08] text-primary-dark"
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
@@ -31,7 +31,7 @@ export function Intro() {
                     </div>
                     <div className="lg:w-1/2 space-y-8">
                         <motion.p
-                            className="text-primary-dark/70 text-body"
+                            className="text-base leading-relaxed text-primary-dark/70 md:text-body"
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}

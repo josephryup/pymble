@@ -13,7 +13,7 @@ export default function BlogClient() {
     return (
         <main className="min-h-screen bg-white">
             {/* ── Hero Section ── */}
-            <Section className="pt-32 pb-16 md:pt-48 md:pb-24 bg-white">
+            <Section className="page-header-spacing bg-white">
                 <Container>
                     <motion.span
                         className="label-uppercase mb-8 block text-accent-orange"
@@ -38,7 +38,7 @@ export default function BlogClient() {
             </Section>
 
             {/* ── Blog Posts Grid ── */}
-            <Section className="pb-20 md:pb-32 bg-white">
+            <Section className="section-spacing-sm pt-0 bg-white">
                 <Container>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10">
                         {blogPosts.map((post, index) => (

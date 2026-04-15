@@ -12,7 +12,7 @@ export default function AboutClient() {
     return (
         <main className="min-h-screen bg-white">
             {/* 1. Mission Statement / Intro — uses official brochure copy */}
-            <Section className="pt-32 pb-20 md:pt-48 md:pb-32 bg-white">
+            <Section className="page-header-spacing bg-white">
                 <Container>
                     <div className="max-w-5xl">
                         <motion.span
@@ -65,7 +65,7 @@ export default function AboutClient() {
                                 >
                                     Pymble Construction Limited was founded on simple yet powerful principles: quality,
                                     integrity, and client satisfaction. Through expert craftsmanship and innovative
-                                    solutions, we've built a reputation as one of Zambia's most trusted
+                                    solutions, we&apos;ve built a reputation as one of Zambia&apos;s most trusted
                                     construction partners — delivering complex projects that stand the test of time.
                                 </motion.p>
                             </div>
@@ -75,7 +75,7 @@ export default function AboutClient() {
             </Section>
 
             {/* 2. Vision & Mission — official statements from PCL brochure */}
-            <Section className="py-20 md:py-28 bg-primary-dark text-white relative overflow-hidden">
+            <Section className="bg-primary-dark text-white relative overflow-hidden">
                 <div className="absolute inset-0 pointer-events-none">
                     <div className="absolute left-0 top-0 w-[400px] h-[400px] bg-accent-orange/5 blur-[150px] rounded-full" />
                 </div>
@@ -123,7 +123,7 @@ export default function AboutClient() {
             <Team />
 
             {/* 3. Regional Presence — Local SEO targeting */}
-            <Section className="py-24 md:py-32 bg-white overflow-hidden">
+            <Section className="bg-white overflow-hidden">
                 <Container>
                     <div className="flex flex-col lg:flex-row gap-16 lg:items-center">
                         <div className="lg:w-1/2">
@@ -178,7 +178,7 @@ export default function AboutClient() {
                 </Container>
             </Section>
 
-            <Section className="py-24 md:py-32 bg-neutral-50/50">
+            <Section className="bg-neutral-50/50">
                 <Container>
                     <div className="flex flex-col md:flex-row gap-16 md:gap-24">
                         <div className="md:w-1/3">

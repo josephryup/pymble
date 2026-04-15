@@ -45,7 +45,7 @@ export function QuoteCTA() {
         return (
             /* Minimized state — small floating icon to re-open */
             <motion.button
-                className="fixed bottom-6 left-6 z-40 w-12 h-12 bg-accent-orange text-primary-dark rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                className="fixed bottom-6 left-6 z-40 hidden h-12 w-12 items-center justify-center rounded-full bg-accent-orange text-primary-dark shadow-lg transition-transform hover:scale-110 md:flex"
                 onClick={() => setIsDismissed(false)}
                 initial={{ opacity: 0, scale: 0 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -61,7 +61,7 @@ export function QuoteCTA() {
         <AnimatePresence>
             {isVisible && (
                 <motion.div
-                    className="fixed bottom-0 left-0 right-0 z-40"
+                    className="fixed bottom-0 left-0 right-0 z-40 hidden md:block"
                     initial={{ y: "100%" }}
                     animate={{ y: 0 }}
                     exit={{ y: "100%" }}

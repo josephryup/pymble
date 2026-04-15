@@ -20,18 +20,30 @@ export default function ContactClient() {
 
         try {
             const formData = new FormData(e.currentTarget);
-            const response = await fetch("https://api.web3forms.com/submit", {
+            const payload = {
+                name: formData.get("name"),
+                email: formData.get("email"),
+                phone: formData.get("phone"),
+                projectType: formData.get("project_type"),
+                message: formData.get("message"),
+                company: formData.get("company"),
+                website: formData.get("website"),
+            };
+
+            const response = await fetch("/api/contact", {
                 method: "POST",
-                body: formData,
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
             });
 
-            const data = await response.json();
-
-            if (data.success) {
+            if (response.ok) {
                 setIsSubmitted(true);
                 (e.target as HTMLFormElement).reset();
             } else {
-                setError("Something went wrong. Please try again or contact us directly.");
+                const data = await response.json().catch(() => null);
+                setError(data?.error || "Something went wrong. Please try again or contact us directly.");
             }
         } catch {
             setError("Network error. Please check your connection and try again.");
@@ -42,7 +54,7 @@ export default function ContactClient() {
 
     return (
         <main className="min-h-screen bg-primary-dark text-white">
-            <Section className="pt-32 pb-20 md:pt-48 md:pb-32 min-h-screen flex flex-col justify-center relative overflow-hidden">
+            <Section className="page-header-spacing min-h-screen flex flex-col justify-center relative overflow-hidden">
                 {/* Background Pattern/Texture — Ambient glow effects */}
                 <div className="absolute inset-0 opacity-5 pointer-events-none">
                     <div className="absolute right-0 top-0 w-[500px] h-[500px] bg-accent-orange/20 blur-[100px] rounded-full mix-blend-screen" />
@@ -144,9 +156,14 @@ export default function ContactClient() {
                                 </motion.div>
                             ) : (
                                 <form className="space-y-6" onSubmit={handleSubmit}>
-                                    <input type="hidden" name="access_key" value={process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || ""} />
-                                    <input type="hidden" name="subject" value="New Inquiry — Pymble Construction Website" />
-                                    <input type="hidden" name="from_name" value="Pymble Construction Website" />
+                                    <input
+                                        type="text"
+                                        name="website"
+                                        tabIndex={-1}
+                                        autoComplete="off"
+                                        className="hidden"
+                                        aria-hidden="true"
+                                    />
 
                                     <div className="flex items-center justify-between mb-8">
                                         <h3 className="font-heading text-2xl font-bold">Send a Message</h3>
@@ -192,6 +209,17 @@ export default function ContactClient() {
                                                 type="tel"
                                                 name="phone"
                                                 placeholder="+260 9XX XXX XXX"
+                                                className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 placeholder:text-primary-dark/20 transition-all text-primary-dark"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label htmlFor="contact-company" className="text-xs font-bold uppercase tracking-wider opacity-40">Company</label>
+                                            <input
+                                                id="contact-company"
+                                                type="text"
+                                                name="company"
+                                                placeholder="Your company or organization"
                                                 className="w-full bg-neutral-100 border-none rounded-lg px-4 py-4 font-medium focus:ring-2 focus:ring-primary-dark/5 placeholder:text-primary-dark/20 transition-all text-primary-dark"
                                             />
                                         </div>

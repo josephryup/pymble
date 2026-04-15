@@ -51,7 +51,7 @@ export function AboutPhilosophy() {
                         </motion.span>
 
                         <motion.h2
-                            className="font-heading text-4xl md:text-5xl lg:text-6xl font-bold leading-tight"
+                            className="font-heading text-4xl sm:text-5xl lg:text-6xl font-bold leading-[0.98]"
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}

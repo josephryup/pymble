@@ -16,7 +16,7 @@ export default function LocationLandingClient({ location }: { location: Location
     return (
         <main className="min-h-screen bg-white">
             {/* Hero Section */}
-            <Section className="pt-32 pb-20 md:pt-48 md:pb-32 bg-primary-dark text-white relative overflow-hidden">
+            <Section className="page-header-spacing bg-primary-dark text-white relative overflow-hidden">
                 <div className="absolute inset-0 opacity-20 transition-opacity duration-1000">
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent to-primary-dark" />
                 </div>
@@ -41,7 +41,7 @@ export default function LocationLandingClient({ location }: { location: Location
             </Section>
 
             {/* Key Capabilities in City */}
-            <Section className="py-20 md:py-32 bg-white">
+            <Section className="bg-white">
                 <Container>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
                         <div>
@@ -74,7 +74,7 @@ export default function LocationLandingClient({ location }: { location: Location
 
             {/* local projects if any */}
             {cityProjects.length > 0 && (
-                <Section className="py-20 bg-neutral-50">
+                <Section className="section-spacing-sm bg-neutral-50">
                     <Container>
                         <div className="flex items-center justify-between mb-12">
                             <h2 className="font-heading text-3xl md:text-4xl font-bold">Recent Projects in {location.cityName}</h2>
@@ -104,7 +104,7 @@ export default function LocationLandingClient({ location }: { location: Location
             )}
 
             {/* CTA */}
-            <Section className="py-20 md:py-32 bg-primary-dark text-white text-center">
+            <Section className="section-spacing-lg bg-primary-dark text-white text-center">
                 <Container>
                     <h2 className="font-heading text-4xl md:text-6xl font-bold mb-8">Ready to build in {location.cityName}?</h2>
                     <Link href="/contact">

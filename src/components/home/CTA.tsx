@@ -10,7 +10,7 @@ import { ArrowRight, Phone } from "lucide-react";
 
 export function CTA() {
     return (
-        <Section className="bg-white py-20 md:py-32">
+        <Section className="section-spacing-lg bg-white">
             <Container>
                 <div className="max-w-4xl mx-auto text-center">
                     <motion.h2

@@ -21,6 +21,7 @@ import {
     FileText,
 } from "lucide-react";
 import { SERVICES, ADDITIONAL_SERVICES } from "@/lib/constants";
+import { projects } from "@/lib/project-data";
 
 /** Map icon strings from constants to Lucide components */
 const iconMap: Record<string, React.ElementType> = {
@@ -102,6 +103,12 @@ const faqItems = [
 
 export default function ServicesClient() {
     const [quoteService, setQuoteService] = useState<string | null>(null);
+    const featuredServiceProjects = {
+        "building-construction": projects.filter((project) => ["Commercial", "Residential"].includes(project.category)).slice(0, 2),
+        renovations: projects.filter((project) => ["Healthcare", "Hospitality"].includes(project.category)).slice(0, 2),
+        "civil-works": projects.filter((project) => ["Civil Works", "Infrastructure"].includes(project.category)).slice(0, 2),
+        infrastructure: projects.filter((project) => ["Infrastructure", "Commercial"].includes(project.category)).slice(0, 2),
+    };
 
     return (
         <main className="min-h-screen bg-white">
@@ -112,7 +119,7 @@ export default function ServicesClient() {
                 serviceName={quoteService || ""}
             />
             {/* ── Hero Section ── */}
-            <Section className="pt-32 pb-16 md:pt-48 md:pb-24 bg-primary-dark text-white relative overflow-hidden">
+            <Section className="page-header-spacing bg-primary-dark text-white relative overflow-hidden">
                 {/* Ambient background glow */}
                 <div className="absolute inset-0 pointer-events-none">
                     <div className="absolute right-0 top-0 w-[600px] h-[600px] bg-accent-orange/10 blur-[150px] rounded-full" />
@@ -204,6 +211,30 @@ export default function ServicesClient() {
                                         ))}
                                     </ul>
 
+                                    {featuredServiceProjects[service.id]?.length > 0 && (
+                                        <div className="mb-10">
+                                            <p className="label-uppercase mb-4 block text-primary-dark/40">
+                                                Related Project Examples
+                                            </p>
+                                            <div className="space-y-3">
+                                                {featuredServiceProjects[service.id].map((project) => (
+                                                    <Link
+                                                        key={project.slug}
+                                                        href={`/projects/${project.slug}`}
+                                                        className="block rounded-2xl border border-black/5 px-5 py-4 transition-colors hover:border-accent-orange/40 hover:bg-neutral-50"
+                                                    >
+                                                        <span className="text-sm font-semibold text-primary-dark">
+                                                            {project.title}
+                                                        </span>
+                                                        <p className="mt-1 text-sm leading-relaxed text-primary-dark/50">
+                                                            {project.location}
+                                                        </p>
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <Button
                                         className="bg-primary-dark hover:bg-black text-white px-8 py-4 h-auto flex items-center gap-2 group"
                                         onClick={() => setQuoteService(service.title)}
@@ -249,7 +280,7 @@ export default function ServicesClient() {
             })}
 
             {/* ── Additional Capabilities Section ── */}
-            <Section className="py-20 md:py-28 bg-primary-dark text-white relative overflow-hidden">
+            <Section className="bg-primary-dark text-white relative overflow-hidden">
                 {/* Ambient glow */}
                 <div className="absolute inset-0 pointer-events-none">
                     <div className="absolute right-0 bottom-0 w-[500px] h-[500px] bg-accent-orange/5 blur-[150px] rounded-full" />
@@ -310,7 +341,7 @@ export default function ServicesClient() {
             </Section>
 
             {/* ── Brochure Download CTA ── */}
-            <Section className="py-16 md:py-20 bg-neutral-50">
+            <Section className="section-spacing-sm bg-neutral-50">
                 <Container>
                     <motion.div
                         className="bg-white rounded-3xl border border-black/5 p-8 md:p-12 flex flex-col md:flex-row items-center gap-8 md:gap-12 shadow-sm"
@@ -351,7 +382,7 @@ export default function ServicesClient() {
             <FAQ items={faqItems} />
 
             {/* ── CTA Section ── */}
-            <Section className="py-20 md:py-32 bg-primary-dark text-white text-center">
+            <Section className="section-spacing-lg bg-primary-dark text-white text-center">
                 <Container>
                     <motion.h2
                         className="font-heading text-4xl md:text-6xl lg:text-7xl font-bold tracking-tighter mb-6"
@@ -369,7 +400,7 @@ export default function ServicesClient() {
                         transition={{ delay: 0.1 }}
                     >
                         Contact us today for a free consultation and project quote.
-                        We're ready to build your vision.
+                        We&apos;re ready to build your vision.
                     </motion.p>
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}

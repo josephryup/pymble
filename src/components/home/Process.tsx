@@ -73,11 +73,13 @@ export function Process() {
 
                         <div className="space-y-0 max-w-lg">
                             {steps.map((step) => (
-                                <div
+                                <button
                                     key={step.id}
+                                    type="button"
+                                    onClick={() => setActiveStep(step)}
                                     onMouseEnter={() => setActiveStep(step)}
                                     className={cn(
-                                        "group flex items-center gap-6 py-3 border-b border-black/5 cursor-pointer transition-all duration-300",
+                                        "group flex w-full items-center gap-6 border-b border-black/5 py-3 text-left transition-all duration-300",
                                         activeStep.id === step.id ? "opacity-100" : "opacity-30 hover:opacity-100"
                                     )}
                                 >
@@ -87,7 +89,7 @@ export function Process() {
                                     <h3 className="text-sm md:text-base font-bold tracking-tight text-primary-dark uppercase">
                                         {step.title}
                                     </h3>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     </div>

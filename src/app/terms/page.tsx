@@ -1,15 +1,29 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
-import { COMPANY, CONTACT } from "@/lib/constants";
+import { COMPANY, CONTACT, LEGAL_LAST_UPDATED, SITE_URL } from "@/lib/constants";
 import Link from "next/link";
 
 export const metadata: Metadata = {
     title: `Terms & Conditions | ${COMPANY.name}`,
     description: `Terms and conditions for using the ${COMPANY.name} website and engaging our construction services.`,
+    alternates: {
+        canonical: "/terms",
+    },
+    openGraph: {
+        title: `Terms & Conditions | ${COMPANY.name}`,
+        description: `Terms and conditions for using the ${COMPANY.name} website and engaging our construction services.`,
+        url: `${SITE_URL}/terms`,
+        siteName: COMPANY.name,
+        type: "website",
+    },
 };
 
-const LAST_UPDATED = "27 February 2026";
+const LAST_UPDATED = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+}).format(new Date(LEGAL_LAST_UPDATED));
 
 export default function TermsPage() {
     return (

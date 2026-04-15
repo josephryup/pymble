@@ -4,6 +4,7 @@ import { getProjectBySlug, projects } from "@/lib/project-data";
 import ProjectDetailClient from "./ProjectDetailClient";
 import { SITE_URL } from "@/lib/constants";
 import { BreadcrumbSchema } from "@/components/seo/BreadcrumbSchema";
+import { ProjectSchema } from "@/components/seo/ProjectSchema";
 
 type Props = {
     params: Promise<{ slug: string }>;
@@ -28,6 +29,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
         title: `${project.title} | Pymble Construction Zambia`,
         description: description,
+        keywords: [
+            project.title,
+            project.category,
+            project.location,
+            "construction projects Zambia",
+            "Pymble Construction portfolio",
+        ],
         alternates: {
             canonical: `/projects/${slug}`,
         },
@@ -36,7 +44,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             description: description,
             url: `${SITE_URL}/projects/${slug}`,
             siteName: "Pymble Construction",
-            type: "article",
+            type: "website",
             images: [
                 {
                     url: project.image?.startsWith('http') ? project.image : `${SITE_URL}${project.image || '/images/og-image.png'}`,
@@ -51,7 +59,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             title: project.title,
             description: description,
             images: [project.image?.startsWith('http') ? project.image : `${SITE_URL}${project.image || '/images/og-image.png'}`],
-        }
+        },
     };
 }
 
@@ -72,6 +80,7 @@ export default async function ProjectPage({ params }: Props) {
                     { name: project.title, item: `/projects/${slug}` }
                 ]}
             />
+            <ProjectSchema project={project} />
             <ProjectDetailClient project={project} />
         </>
     );

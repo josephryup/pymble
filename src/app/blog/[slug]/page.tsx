@@ -4,6 +4,7 @@ import { getBlogPost, blogPosts } from "@/lib/blog-data";
 import BlogPostClient from "./BlogPostClient";
 import { BlogSchema } from "@/components/seo/BlogSchema";
 import { BreadcrumbSchema } from "@/components/seo/BreadcrumbSchema";
+import { SITE_URL } from "@/lib/constants";
 
 type Props = {
     params: Promise<{ slug: string }>;
@@ -24,6 +25,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
         title: post.title,
         description: post.excerpt,
+        authors: [{ name: post.author.name }],
+        keywords: [post.category, "construction blog", "Zambia construction", post.title],
         alternates: {
             canonical: `/blog/${slug}`,
         },
@@ -31,7 +34,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             title: post.title,
             description: post.excerpt,
             type: "article",
+            url: `${SITE_URL}/blog/${slug}`,
+            siteName: "Pymble Construction",
             publishedTime: post.publishDate,
+            authors: [post.author.name],
             images: [
                 {
                     url: post.image,
@@ -40,6 +46,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
                     alt: post.title,
                 },
             ],
+        },
+        twitter: {
+            card: "summary_large_image",
+            title: post.title,
+            description: post.excerpt,
+            images: [post.image],
         },
     };
 }

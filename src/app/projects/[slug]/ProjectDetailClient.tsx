@@ -6,13 +6,18 @@ import { Section } from "@/components/ui/Section";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, MapPin, Calendar, User, CheckCircle2, Building2 } from "lucide-react";
-import type { Project } from "@/lib/project-data";
+import { projects, type Project } from "@/lib/project-data";
 
 export default function ProjectDetailClient({ project }: { project: Project }) {
+    const galleryItems = project.gallery ?? [];
+    const relatedProjects = projects
+        .filter((item) => item.slug !== project.slug && item.category === project.category)
+        .slice(0, 2);
+
     return (
         <main className="min-h-screen bg-white">
             {/* ── Project Hero ── */}
-            <Section className="pt-32 pb-16 md:pt-48 md:pb-24 bg-primary-dark text-white relative overflow-hidden">
+            <Section className="page-header-spacing bg-primary-dark text-white relative overflow-hidden">
                 <div className="absolute inset-0 opacity-10 pointer-events-none">
                     <div className="absolute right-0 top-0 w-[600px] h-[600px] bg-accent-orange/20 blur-[150px] rounded-full" />
                 </div>
@@ -101,6 +106,7 @@ export default function ProjectDetailClient({ project }: { project: Project }) {
                                 loop
                                 muted
                                 playsInline
+                                preload="metadata"
                                 poster={project.poster}
                                 className="absolute inset-0 w-full h-full object-cover"
                             />
@@ -119,7 +125,7 @@ export default function ProjectDetailClient({ project }: { project: Project }) {
             </Section>
 
             {/* ── Content Section ── */}
-            <Section className="py-20 md:py-32">
+            <Section>
                 <Container>
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 md:gap-24">
                         {/* Description */}
@@ -151,6 +157,37 @@ export default function ProjectDetailClient({ project }: { project: Project }) {
                                     </p>
                                 </motion.div>
                             )}
+
+                            {relatedProjects.length > 0 && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    whileInView={{ opacity: 1, y: 0 }}
+                                    viewport={{ once: true }}
+                                >
+                                    <h3 className="font-heading text-2xl font-bold text-primary-dark mb-5">
+                                        Related Projects
+                                    </h3>
+                                    <div className="space-y-4">
+                                        {relatedProjects.map((item) => (
+                                            <Link
+                                                key={item.slug}
+                                                href={`/projects/${item.slug}`}
+                                                className="block rounded-2xl border border-black/5 p-5 transition-colors hover:border-accent-orange/40 hover:bg-neutral-50"
+                                            >
+                                                <span className="label-uppercase mb-2 block text-accent-orange">
+                                                    {item.category}
+                                                </span>
+                                                <p className="font-heading text-xl font-bold text-primary-dark">
+                                                    {item.title}
+                                                </p>
+                                                <p className="mt-2 text-sm leading-relaxed text-primary-dark/60">
+                                                    {item.description}
+                                                </p>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
                         </div>
 
                         {/* Project Scope/Checklist */}
@@ -177,26 +214,33 @@ export default function ProjectDetailClient({ project }: { project: Project }) {
             </Section>
 
             {/* ── Gallery Loop (If multiple images) ── */}
-            {project.gallery && project.gallery.length > 1 && (
-                <Section className="pb-20 md:pb-32">
+            {galleryItems.length > 0 && (
+                <Section className="section-spacing-sm pt-0">
                     <Container>
                         <h2 className="font-heading text-3xl font-bold text-primary-dark mb-12 tracking-tight">Project Gallery</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            {project.gallery.map((img, i) => (
+                        <div className={`grid grid-cols-1 gap-8 ${galleryItems.length > 1 ? "md:grid-cols-2" : "max-w-3xl"}`}>
+                            {galleryItems.map((item, i) => (
                                 <motion.div
                                     key={i}
-                                    className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-neutral-100"
+                                    className="overflow-hidden rounded-2xl bg-neutral-100"
                                     initial={{ opacity: 0, y: 20 }}
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true }}
                                 >
-                                    <Image
-                                        src={img}
-                                        alt={`${project.title} - Gallary ${i + 1}`}
-                                        fill
-                                        className="object-cover hover:scale-105 transition-transform duration-700"
-                                        sizes="(max-width: 768px) 100vw, 600px"
-                                    />
+                                    <div className="relative aspect-[4/3]">
+                                        <Image
+                                            src={item.src}
+                                            alt={item.alt}
+                                            fill
+                                            className="object-cover hover:scale-105 transition-transform duration-700"
+                                            sizes="(max-width: 768px) 100vw, 600px"
+                                        />
+                                    </div>
+                                    {item.caption && (
+                                        <div className="border-t border-black/5 bg-white px-5 py-4">
+                                            <p className="text-sm leading-relaxed text-primary-dark/60">{item.caption}</p>
+                                        </div>
+                                    )}
                                 </motion.div>
                             ))}
                         </div>
@@ -205,7 +249,7 @@ export default function ProjectDetailClient({ project }: { project: Project }) {
             )}
 
             {/* ── Project CTA ── */}
-            <Section className="py-20 md:py-32 bg-primary-dark text-white text-center">
+            <Section className="section-spacing-lg bg-primary-dark text-white text-center">
                 <Container>
                     <h2 className="font-heading text-4xl md:text-6xl font-bold tracking-tighter mb-8">
                         Inspired by this vision?

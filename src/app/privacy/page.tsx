@@ -1,15 +1,29 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
-import { COMPANY, CONTACT } from "@/lib/constants";
+import { COMPANY, CONTACT, LEGAL_LAST_UPDATED, SITE_URL } from "@/lib/constants";
 import Link from "next/link";
 
 export const metadata: Metadata = {
     title: `Privacy Policy | ${COMPANY.name}`,
     description: `Read the privacy policy for ${COMPANY.name}. Learn how we collect, use, and protect your personal information.`,
+    alternates: {
+        canonical: "/privacy",
+    },
+    openGraph: {
+        title: `Privacy Policy | ${COMPANY.name}`,
+        description: `Read the privacy policy for ${COMPANY.name}. Learn how we collect, use, and protect your personal information.`,
+        url: `${SITE_URL}/privacy`,
+        siteName: COMPANY.name,
+        type: "website",
+    },
 };
 
-const LAST_UPDATED = "27 February 2026";
+const LAST_UPDATED = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+}).format(new Date(LEGAL_LAST_UPDATED));
 
 export default function PrivacyPage() {
     return (

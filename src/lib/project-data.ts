@@ -1,3 +1,9 @@
+export type ProjectGalleryItem = {
+    src: string;
+    alt: string;
+    caption?: string;
+};
+
 export type Project = {
     id: number;
     slug: string;
@@ -13,7 +19,7 @@ export type Project = {
     scope: string[];
     challenges?: string;
     solution?: string;
-    gallery?: string[];
+    gallery?: ProjectGalleryItem[];
 };
 
 export const projectCategories = [
@@ -33,7 +39,7 @@ export const projects: Project[] = [
         title: "Nandos (Rubis) — Kitwe",
         category: "Commercial",
         year: "2026",
-        image: "/images/projects/Rubis-gas-station.jpg",
+        image: "/images/projects/Rubis-gas-station/01-front.jpg",
         location: "Kitwe, Zambia",
         client: "Rubis Energy / Nandos Zambia",
         description: "Full construction and fit-out of a flagship Nandos outlet integrated with a Rubis service station in Kitwe. The project required high-specification interior finishes and specialized equipment installation while maintaining the fast-paced timeline of a retail environment.",
@@ -45,7 +51,11 @@ export const projects: Project[] = [
             "Branding and external signage installation"
         ],
         gallery: [
-            "/images/projects/Rubis-gas-station.jpg"
+            {
+                src: "/images/projects/Rubis-gas-station/01-front.jpg",
+                alt: "Exterior view of the Nandos at Rubis project in Kitwe",
+                caption: "Completed exterior frontage integrating the restaurant and forecourt environment."
+            }
         ]
     },
     {
@@ -54,7 +64,7 @@ export const projects: Project[] = [
         title: "BeitCure Hospital — Lusaka",
         category: "Healthcare",
         year: "2025",
-        image: "/images/projects/beitcure.jpg",
+        image: "/images/projects/beitcure/beitcure.jpg",
         location: "Lusaka, Zambia",
         client: "BeitCure International",
         description: "Expansion and modernization of specialized healthcare facilities. This medical project demanded strict adherence to hygienic standards and precise electrical/mechanical installations for hospital departments.",
@@ -66,7 +76,11 @@ export const projects: Project[] = [
             "Hygienic plumbing and sanitation works"
         ],
         gallery: [
-            "/images/projects/beitcure.jpg"
+            {
+                src: "/images/projects/beitcure/beitcure.jpg",
+                alt: "BeitCure Hospital expansion project in Lusaka",
+                caption: "Hospital expansion works delivered to specialized healthcare facility standards."
+            }
         ]
     },
     {
@@ -75,7 +89,7 @@ export const projects: Project[] = [
         title: "Longacres Matebeto — Lusaka",
         category: "Hospitality",
         year: "2025",
-        image: "/images/projects/matebeto-lusaka.jpg",
+        image: "/images/projects/mateboto-lusaka/matebeto-lusaka.jpg",
         location: "Lusaka, Zambia",
         client: "Matebeto Restaurants",
         description: "A premium hospitality project in the heart of Lusaka. We delivered a modern take on traditional Zambian dining environments, focusing on open-plan spaces and durable, high-traffic finishes.",
@@ -87,7 +101,11 @@ export const projects: Project[] = [
             "Landscaping and parking infrastructure"
         ],
         gallery: [
-            "/images/projects/matebeto-lusaka.jpg"
+            {
+                src: "/images/projects/mateboto-lusaka/matebeto-lusaka.jpg",
+                alt: "Longacres Matebeto hospitality project in Lusaka",
+                caption: "A hospitality environment designed for durability, flow, and warm customer experience."
+            }
         ]
     },
     {
@@ -108,7 +126,11 @@ export const projects: Project[] = [
             "Secure storage facilities for medical supplies"
         ],
         gallery: [
-            "/images/projects/solidarmed.jpg"
+            {
+                src: "/images/projects/solidarmed.jpg",
+                alt: "SolidarMed Zambia infrastructure project in Livingstone",
+                caption: "Clinical and administrative infrastructure tailored to tropical operating conditions."
+            }
         ]
     },
     {
@@ -117,7 +139,7 @@ export const projects: Project[] = [
         title: "Coca-Cola Zambia — Lusaka",
         category: "Commercial",
         year: "2024",
-        video: "/images/projects/coca-cola-compressed.mp4",
+        video: "/images/projects/coca-cola/coca-cola-compressed.mp4",
         poster: "/images/projects/coca-cola-poster.jpg",
         location: "Lusaka, Zambia",
         client: "Coca-Cola Beverages Zambia",
@@ -130,7 +152,11 @@ export const projects: Project[] = [
             "Project management within active manufacturing zones"
         ],
         gallery: [
-            "/images/projects/coca-cola-poster.jpg"
+            {
+                src: "/images/projects/coca-cola-poster.jpg",
+                alt: "Coca-Cola Zambia industrial works in Lusaka",
+                caption: "Industrial upgrade works delivered within an active production environment."
+            }
         ]
     },
     {
@@ -151,8 +177,16 @@ export const projects: Project[] = [
             "Quality assurance for international standards"
         ],
         gallery: [
-            "/images/projects/accomodation.jpg",
-            "/images/projects/accomodation1.jpg"
+            {
+                src: "/images/projects/accomodation.jpg",
+                alt: "UNHCR accommodation units exterior view",
+                caption: "Durable accommodation units built for remote operational contexts."
+            },
+            {
+                src: "/images/projects/accomodation1.jpg",
+                alt: "UNHCR accommodation units from an alternate angle",
+                caption: "Additional site view showing the completed residential deployment."
+            }
         ]
     }
 ];

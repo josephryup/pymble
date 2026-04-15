@@ -4,9 +4,10 @@ import "./globals.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { SEO, SITE_URL, COMPANY } from "@/lib/constants";
-import { WhatsAppButton } from "@/components/ui/WhatsAppButton";
-import { QuoteCTA } from "@/components/ui/QuoteCTA";
 import { SchemaOrg } from "@/components/seo/SchemaOrg";
+import { GlobalFloatingWidgets } from "@/components/layout/GlobalFloatingWidgets";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import Script from "next/script";
 
 const inter = Inter({
@@ -90,12 +91,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Ahrefs Web Analytics */}
-        <Script
-          src="https://analytics.ahrefs.com/analytics.js"
-          data-key="yoxMRxpcS5OCp4crqDkMpw"
-          strategy="afterInteractive"
-        />
+        {process.env.NODE_ENV === "production" && (
+          <Script
+            src="https://analytics.ahrefs.com/analytics.js"
+            data-key="yoxMRxpcS5OCp4crqDkMpw"
+            strategy="lazyOnload"
+          />
+        )}
       </head>
       <body
         className={`${inter.variable} ${manrope.variable} antialiased bg-white text-primary-dark font-sans selection:bg-primary-blue selection:text-white`}
@@ -104,10 +106,9 @@ export default function RootLayout({
         <Header />
         {children}
         <Footer />
-        {/* WhatsApp floating CTA — visible on all pages */}
-        <WhatsAppButton />
-        {/* "Request a Quote" floating bar — appears after scrolling */}
-        <QuoteCTA />
+        <GlobalFloatingWidgets />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

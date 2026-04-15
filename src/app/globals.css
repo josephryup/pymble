@@ -125,14 +125,50 @@
   }
 
   .section-spacing {
-    padding-top: 4rem;
-    padding-bottom: 4rem;
+    padding-top: 5rem;
+    padding-bottom: 5rem;
   }
 
   @media (min-width: 1024px) {
     .section-spacing {
+      padding-top: 7rem;
+      padding-bottom: 7rem;
+    }
+  }
+
+  .section-spacing-sm {
+    padding-top: 3.5rem;
+    padding-bottom: 3.5rem;
+  }
+
+  @media (min-width: 1024px) {
+    .section-spacing-sm {
+      padding-top: 5rem;
+      padding-bottom: 5rem;
+    }
+  }
+
+  .section-spacing-lg {
+    padding-top: 6rem;
+    padding-bottom: 6rem;
+  }
+
+  @media (min-width: 1024px) {
+    .section-spacing-lg {
+      padding-top: 8rem;
+      padding-bottom: 8rem;
+    }
+  }
+
+  .page-header-spacing {
+    padding-top: 8rem;
+    padding-bottom: 5rem;
+  }
+
+  @media (min-width: 1024px) {
+    .page-header-spacing {
       padding-top: 12rem;
-      padding-bottom: 12rem;
+      padding-bottom: 7rem;
     }
   }
 }

@@ -180,6 +180,8 @@ export const REGIONS = [
 ] as const;
 
 export const SITE_URL = "https://pymbleconstruction.com";
+export const SITE_UPDATED_AT = "2026-04-15T00:00:00+02:00";
+export const LEGAL_LAST_UPDATED = "2026-02-27T00:00:00+02:00";
 
 // ─── SEO Defaults ──────────────────────────────────────────
 export const SEO = {

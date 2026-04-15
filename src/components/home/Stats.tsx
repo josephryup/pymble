@@ -60,7 +60,7 @@ export function Stats() {
     const isInView = useInView(ref, { once: true, margin: "-100px" });
 
     return (
-        <Section className="py-20 md:py-28 bg-primary-dark text-white relative overflow-hidden">
+        <Section className="bg-primary-dark text-white relative overflow-hidden">
             {/* Ambient background glow */}
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent-orange/5 blur-[200px] rounded-full" />

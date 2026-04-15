@@ -6,8 +6,36 @@ import { SERVICES, SITE_URL } from "@/lib/constants";
 export const metadata: Metadata = {
     title: "Our Services | Pymble Construction Zambia",
     description: "Explore our comprehensive construction services in Zambia: building construction, civil engineering, renovations, and infrastructure development. Quality-driven results for every project.",
+    keywords: [
+        "construction services Zambia",
+        "building construction Lusaka",
+        "civil works Zambia",
+        "infrastructure development Zambia",
+        "renovation services Zambia",
+    ],
     alternates: {
         canonical: "/services",
+    },
+    openGraph: {
+        title: "Our Services | Pymble Construction Zambia",
+        description: "Explore our comprehensive construction services in Zambia: building construction, civil engineering, renovations, and infrastructure development. Quality-driven results for every project.",
+        url: `${SITE_URL}/services`,
+        siteName: "Pymble Construction",
+        type: "website",
+        images: [
+            {
+                url: `${SITE_URL}/images/og-image.png`,
+                width: 1200,
+                height: 630,
+                alt: "Pymble Construction services",
+            },
+        ],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "Our Services | Pymble Construction Zambia",
+        description: "Explore our comprehensive construction services in Zambia: building construction, civil engineering, renovations, and infrastructure development. Quality-driven results for every project.",
+        images: [`${SITE_URL}/images/og-image.png`],
     },
 };
 
@@ -25,7 +53,7 @@ export default function ServicesPage() {
         "hasOfferCatalog": {
             "@type": "OfferCatalog",
             "name": "Construction Services Catalog",
-            "itemListElement": SERVICES.map((service, index) => ({
+            "itemListElement": SERVICES.map((service) => ({
                 "@type": "Offer",
                 "itemOffered": {
                     "@type": "Service",

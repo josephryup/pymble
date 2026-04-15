@@ -107,11 +107,13 @@ export function Services() {
 
                         <div className="space-y-0">
                             {services.map((service) => (
-                                <div
+                                <button
                                     key={service.id}
+                                    type="button"
+                                    onClick={() => setActiveService(service)}
                                     onMouseEnter={() => setActiveService(service)}
                                     className={cn(
-                                        "group flex items-center justify-between py-6 border-b border-black/5 cursor-pointer transition-all duration-300",
+                                        "group flex w-full items-center justify-between py-6 border-b border-black/5 text-left transition-all duration-300",
                                         activeService.id === service.id ? "opacity-100" : "opacity-30 hover:opacity-100"
                                     )}
                                 >
@@ -132,7 +134,7 @@ export function Services() {
                                             <polyline points="7 7 17 7 17 17"></polyline>
                                         </svg>
                                     </motion.div>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     </div>

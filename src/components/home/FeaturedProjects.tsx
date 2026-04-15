@@ -3,19 +3,27 @@
 import { useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
-import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
 import Image from "next/image";
 import Link from "next/link";
 
-const projects = [
+type FeaturedProject = {
+    id: number;
+    slug: string;
+    title: string;
+    category: string;
+    year: string;
+    image: string;
+};
+
+const projects: FeaturedProject[] = [
     {
         id: 1,
         slug: "nandos-rubis-kitwe",
         title: "Nandos (Rubis) - Kitwe",
         category: "Commercial",
         year: "2026",
-        image: "/images/projects/Rubis-gas-station.jpg",
+        image: "/images/projects/Rubis-gas-station/01-front.jpg",
     },
     {
         id: 2,
@@ -23,7 +31,7 @@ const projects = [
         title: "BeitCure Hospital - Lusaka ",
         category: "Healthcare",
         year: "2025",
-        image: "/images/projects/beitcure.jpg",
+        image: "/images/projects/beitcure/beitcure.jpg",
     },
     {
         id: 3,
@@ -31,11 +39,11 @@ const projects = [
         title: "Longacres Matebeto",
         category: "Hospitality",
         year: "2025",
-        image: "/images/projects/matebeto-lusaka.jpg",
+        image: "/images/projects/mateboto-lusaka/matebeto-lusaka.jpg",
     },
 ];
 
-const ProjectCard = ({ project, index }: { project: any; index: number }) => {
+const ProjectCard = ({ project, index }: { project: FeaturedProject; index: number }) => {
     const containerRef = useRef(null);
     const { scrollYProgress } = useScroll({
         target: containerRef,
@@ -106,46 +114,38 @@ const ProjectCard = ({ project, index }: { project: any; index: number }) => {
 
 export function FeaturedProjects() {
     return (
-        <Section className="bg-white border-t border-black/5 overflow-hidden min-h-0 md:min-h-screen flex flex-col justify-center relative">
-            {/* Header Overlays */}
-            <div className="relative md:absolute md:top-24 md:left-12 z-20 pointer-events-none px-6 py-12 md:p-0">
-                <motion.span
-                    className="label-uppercase mb-4 block text-accent-orange"
-                    initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                >
-                    Curated Selection
-                </motion.span>
-                <motion.h2
-                    className="font-heading text-4xl md:text-5xl xl:text-6xl font-bold tracking-tighter text-primary-dark leading-[0.9]"
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 1 }}
-                >
-                    Selected Works
-                </motion.h2>
-            </div>
+        <Section className="bg-white border-t border-black/5 overflow-hidden">
+            <div className="px-6 pb-10 md:px-12 md:pb-14">
+                <div className="flex items-center justify-between gap-6 border-b border-black/5 pb-6 md:pb-8">
+                    <motion.span
+                        className="label-uppercase block text-accent-orange"
+                        initial={{ opacity: 0, y: 10 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                    >
+                        Curated Selection
+                    </motion.span>
 
-            <div className="relative md:absolute md:top-24 md:right-12 z-20 px-6 pb-12 md:p-0">
-                <motion.a
-                    href="/projects"
-                    className="group"
-                    initial={{ opacity: 0, x: 20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }}
-                >
-                    <div className="flex items-center gap-4">
-                        <span className="label-uppercase text-accent-orange group-hover:opacity-60 transition-opacity">Explore Portfolio</span>
-                        <div className="w-10 h-10 rounded-full border border-black/10 flex items-center justify-center group-hover:bg-primary-dark group-hover:text-white transition-all duration-500">
-                            <ArrowUpRight className="w-5 h-5" strokeWidth={2} />
+                    <motion.a
+                        href="/projects"
+                        className="group"
+                        initial={{ opacity: 0, x: 20 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                    >
+                        <div className="flex items-center gap-3 md:gap-4">
+                            <span className="label-uppercase text-accent-orange group-hover:opacity-60 transition-opacity">
+                                Explore Portfolio
+                            </span>
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 transition-all duration-500 group-hover:bg-primary-dark group-hover:text-white md:h-10 md:w-10">
+                                <ArrowUpRight className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2} />
+                            </div>
                         </div>
-                    </div>
-                </motion.a>
+                    </motion.a>
+                </div>
             </div>
 
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 h-full w-full">
+            <div className="grid grid-cols-1 md:grid-cols-3 w-full">
                 {projects.map((project, index) => (
                     <ProjectCard key={project.id} project={project} index={index} />
                 ))}
