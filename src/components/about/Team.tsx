@@ -9,24 +9,45 @@ import Image from "next/image";
 const teamMembers = [
     {
         id: 1,
-        name: "Matimba Dominic Hatimbula",
+        name: "Matimba D. Hatimbula",
         role: "CEO",
-        credentials: "M.TECH (QUT), B.Be Arch (QUT)\nCEO of the Year (ZMOY).\n Engineering Registration Board\nNo. 10589",
-        image: "/images/team/matimba.jpg", // Professional man in suit
+        credentials: "CEO of the Year (ZMOY).\n Diploma Business Admin, B.Tech Civil Eng\nM.Eng Structural Eng, MBA Finance",
+        image: "/images/team/matimba.jpg", // Plymble Construction Director 
     },
     {
         id: 2,
-        name: "Mukuka Ngulube",
-        role: "FPC",
+        name: "Muyongo Syamupa",
+        role: "Engineering Director",
         credentials: "B.Int Arch (Hons) (UNSW)\nSpecializing in high-end residential\nand commercial hospitality spaces.",
         image: "/logo.png", // Professional woman
     },
     {
         id: 3,
-        name: "Daniel Mwansa",
-        role: "Associate Architect",
-        credentials: "M. Arch (USyd), B.Des Arch (USyd)\nRegistered Architect NSW No. 11245.\nLead Project Manager.",
-        image: "/logo.png", // Professional smiling man
+        name: "Henda Juma",
+        role: "Accountant",
+        credentials: "ZICA part qualified ,ACCA Diploma in Accounting and Business\nACCA Diploma in Financial and Management Accounting",
+        image: "/images/team/henda-juma.jpeg", // Accountant
+    },
+    {
+        id: 4,
+        name: " Mukuka Ngulube",
+        role: "Human Resource and Procurement",
+        credentials: "Bachelor of arts in Business Admin, Diploma Human resource, Certificate Occupational Health and Safety, Certificate Project Management, Certificate Monitoring and Evaluation.",
+        image: "/images/team/Nikiwe.jpeg", // HR & Procurement Officer
+    },
+    {
+        id: 5,
+        name: "Rose Chipili",
+        role: "Safety Officer",
+        credentials: "Diploma in Occupational Health and Safety Management",
+        image: "/images/team/rose-chipili.jpg", // Professional smiling man
+    },
+    {
+        id: 6,
+        name: "Victor M. Nyalazi ",
+        role: "Procurement and Planning Assistant",
+        credentials: "Diploma in Project Management",
+        image: "/images/team/victor-nyalazi.jpg", // Professional smiling man
     },
 ];
 
@@ -43,8 +64,7 @@ export function Team() {
                             (Our Team)
                         </span>
                         <h2 className="font-heading text-5xl md:text-7xl lg:text-8xl font-bold leading-[0.8] tracking-tighter text-primary-dark uppercase">
-                            Meet the Team <br />
-                            <span className="opacity-100">Behind the Designs</span>
+                            Meet the Team
                         </h2>
                     </div>
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Container } from "@/components/ui/Container";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import { NAV_LINKS, CONTACT } from "@/lib/constants";
 
@@ -14,6 +14,7 @@ export function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const pathname = usePathname();
     const isHome = pathname === "/";
+    const prefersReducedMotion = useReducedMotion();
 
     useEffect(() => {
         const handleScroll = () => {
@@ -60,16 +61,35 @@ export function Header() {
                     className="relative z-50 w-40 h-12 transition-all duration-300"
                     onClick={() => setIsMenuOpen(false)}
                 >
-                    <Image
-                        src="/logo.png"
-                        alt="Pymble Construction"
-                        fill
-                        className={cn(
-                            "object-contain transition-all duration-300",
-                            isMenuOpen && "invert brightness-0" // Make logo black/dark when menu is open (assuming logo is white)
-                        )}
-                        priority
-                    />
+                    <motion.div
+                        className="relative h-full w-full origin-center"
+                        animate={
+                            prefersReducedMotion
+                                ? undefined
+                                : { scale: [1, 1.025, 1, 1.014, 1] }
+                        }
+                        transition={
+                            prefersReducedMotion
+                                ? undefined
+                                : {
+                                    duration: 3.6,
+                                    ease: "easeInOut",
+                                    repeat: Infinity,
+                                    repeatDelay: 0.6,
+                                }
+                        }
+                    >
+                        <Image
+                            src="/logo.png"
+                            alt="Pymble Construction"
+                            fill
+                            className={cn(
+                                "object-contain transition-all duration-300",
+                                isMenuOpen && "invert brightness-0" // Make logo black/dark when menu is open (assuming logo is white)
+                            )}
+                            priority
+                        />
+                    </motion.div>
                 </Link>
 
                 {/* Desktop Nav */}

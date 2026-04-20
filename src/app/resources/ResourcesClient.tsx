@@ -5,16 +5,12 @@ import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
 import { CONTACT } from "@/lib/constants";
 import {
-    FileText,
     Download,
-    Building2,
     Phone,
     Palette,
     Scale,
     BookOpen,
     ExternalLink,
-    Shield,
-    FileCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -43,28 +39,55 @@ const resourceGroups: ResourceGroup[] = [
                 title: "Company Profile & Brochure",
                 description:
                     "Our comprehensive company profile with the full project portfolio, service capabilities, client references, and full contract history. Ideal for procurement teams.",
-                icon: FileText,
-                action: "download",
-                href: "/PCL-Brochure-1.pdf",
-                badge: "PDF · ~2 MB",
-            },
-            {
-                title: "Project Portfolio Overview",
-                description:
-                    "A curated overview of our key completed projects across commercial, healthcare, hospitality, infrastructure, and civil works sectors.",
-                icon: Building2,
-                action: "download",
-                href: "/PCL-Brochure-1.pdf",
-                badge: "PDF · ~2 MB",
-            },
-            {
-                title: "Services Capability Statement",
-                description:
-                    "A concise one-page summary of Pymble Construction's core service offerings, team credentials, and project delivery approach - suitable for tender submissions.",
                 icon: BookOpen,
                 action: "download",
                 href: "/PCL-Brochure-1.pdf",
-                badge: "PDF · ~2 MB",
+                badge: "PDF · ~2.5 MB",
+            },
+            {
+                title: "ZPPA Supplier Registration Confirmation",
+                description:
+                    "Zambia Public Procurement Authority e-Tendering Platform registration confirming Pymble Construction Limited as an approved local supplier for public institutions under the Public Procurement Act No. 12 of 2008. ZPPA Registration No: 35065, covering categories including building and construction, electrical systems, power generation, and earthmoving machinery. Valid until 1 September 2026",
+                icon: BookOpen,
+                action: "download",
+                href: "/resources/ZPPA-Supplier-Registration-Confirmation.pdf",
+                badge: "PDF · ~2.5 MB",
+            },
+            {
+                title: "NAPSA Compliance Certificate",
+                description:
+                    "A statutory certificate issued by the National Pension Scheme Authority confirming that Pymble Construction Limited is fully compliant with employee pension contribution obligations and regulatory requirements.",
+                icon: BookOpen,
+                action: "download",
+                href: "/resources/NAPSA-COMPLIANCE CERTIFICATE.pdf",
+                badge: "PDF · ~2.5 MB",
+            },
+            {
+                title: "ZRA General Tax Clearance Certificate",
+                description:
+                    "General Tax Clearance Certificate issued by the Zambia Revenue Authority confirming Pymble Construction Limited is duly registered for tax purposes under Section 81B of the Income Tax Act (CAP 323). TPIN: 2596001511, issued 27 March 2026, valid until 31 December 2026.",
+                icon: BookOpen,
+                action: "download",
+                href: "/resources/ZRA-TAX-CLEARANCE.pdf",
+                badge: "PDF · ~2.5 MB",
+            },
+            {
+                title: "EIZ-Corporate Practice License",
+                description:
+                    "An official certification from the Engineering Registration Board of Zambia authorizing Pymble Construction Limited to practice civil engineering, validating its professional credentials and technical compliance.",
+                icon: BookOpen,
+                action: "download",
+                href: "/resources/EIZ-CORPORATE_PRACTICE_LICENSE.pdf",
+                badge: "PDF · ~2.5 MB",
+            },
+            {
+                title: "Lusaka Business Levy",
+                description:
+                    "A Lusaka City Council-issued permit confirming Pymble Construction Limited’s authorization to operate within designated professional categories, demonstrating compliance with local regulatory and municipal requirements. ",
+                icon: BookOpen,
+                action: "download",
+                href: "/resources/LUSAKA BUSINESS LEVY.pdf",
+                badge: "PDF · ~2.5 MB",
             },
         ],
     },
@@ -104,35 +127,47 @@ const resourceGroups: ResourceGroup[] = [
         ],
     },
     {
-        category: "Legal Documents",
-        description: "Policies and legal terms governing our website and services.",
+        category: "Contractor Registration",
+        description: "National Council for Construction certificate confirming Pymble Construction Limited's registration",
         items: [
             {
-                title: "Privacy Policy",
+                title: "Grade 1 - Category R",
                 description:
-                    "How we collect, use, and protect your personal information when you engage with our website and services.",
-                icon: Shield,
-                action: "link",
-                href: "/privacy",
-                badge: "View Page",
-            },
-            {
-                title: "Terms & Conditions",
-                description:
-                    "The terms governing use of our website and engagement with Pymble Construction for construction and related services.",
-                icon: FileCheck,
-                action: "link",
-                href: "/terms",
-                badge: "View Page",
-            },
-            {
-                title: "Contractor Prequalification",
-                description:
-                    "For subcontractors and suppliers interested in working with Pymble Construction - contact us to receive our prequalification questionnaire.",
+                    "General Roads and Earth Works.",
                 icon: Scale,
-                action: "link",
-                href: "/contact",
-                badge: "Request",
+                action: "download",
+                href: "/resources/ncc-certificate-of-contractor-registration-grade-4.pdf",
+                badge: "PDF",
+                badgeColor: "orange",
+            },
+            {
+                title: "Grade 2 - Category B",
+                description:
+                    "General Building and Housing.",
+                icon: Scale,
+                action: "download",
+                href: "/resources/ncc-certificate-of-contractor-registration-grade-2.pdf",
+                badge: "PDF",
+                badgeColor: "orange",
+            },
+            {
+                title: "Grade 3 - Category C",
+                description:
+                    "General Civil Engineering Works",
+                icon: Scale,
+                action: "download",
+                href: "/resources/ncc-certificate-of-contractor-registration-grade-3.pdf",
+                badge: "PDF",
+                badgeColor: "orange",
+            },
+            {
+                title: "Grade 4 - Category E",
+                description:
+                    "General Electrical and Telecommunications",
+                icon: Scale,
+                action: "download",
+                href: "/resources/ncc-certificate-of-contractor-registration-grade-4.pdf",
+                badge: "PDF",
                 badgeColor: "orange",
             },
         ],
@@ -229,11 +264,10 @@ export default function ResourcesClient() {
                                         <div className="mt-8 flex items-center justify-between">
                                             {item.badge && (
                                                 <span
-                                                    className={`text-xs font-mono px-2.5 py-1 rounded-full ${
-                                                        isOrangeBadge
-                                                            ? "bg-accent-orange/10 text-accent-orange"
-                                                            : "bg-primary-dark/5 text-primary-dark/50"
-                                                    }`}
+                                                    className={`text-xs font-mono px-2.5 py-1 rounded-full ${isOrangeBadge
+                                                        ? "bg-accent-orange/10 text-accent-orange"
+                                                        : "bg-primary-dark/5 text-primary-dark/50"
+                                                        }`}
                                                 >
                                                     {item.badge}
                                                 </span>
