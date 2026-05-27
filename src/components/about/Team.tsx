@@ -6,53 +6,133 @@ import { Container } from "@/components/ui/Container";
 import { Section } from "@/components/ui/Section";
 import Image from "next/image";
 
+const COMPANY_LOGO = "/logo.png";
+
 const teamMembers = [
     {
         id: 1,
         name: "Matimba D. Hatimbula",
-        role: "CEO",
+        role: "Managing Director",
         credentials: "CEO of the Year (ZMOY).\n Diploma Business Admin, B.Tech Civil Eng\nM.Eng Structural Eng, MBA Finance",
-        image: "/images/team/matimba.jpg", // Plymble Construction Director 
+        image: "/images/team/matimba.jpg",
     },
     {
         id: 2,
-        name: "Muyongo Syamupa",
-        role: "Engineering Director",
+        name: "Alex Hatimbula",
+        role: "General Manager",
         credentials: "B.Int Arch (Hons) (UNSW)\nSpecializing in high-end residential\nand commercial hospitality spaces.",
-        image: "/logo.png", // Professional woman
+        image: COMPANY_LOGO,
     },
     {
         id: 3,
-        name: "Henda Juma",
-        role: "Accountant",
-        credentials: "ZICA part qualified ,ACCA Diploma in Accounting and Business\nACCA Diploma in Financial and Management Accounting",
-        image: "/images/team/henda-juma.jpeg", // Accountant
+        name: "John Mulilo",
+        role: "Operations Manager",
+        credentials: "",
+        image: COMPANY_LOGO,
     },
     {
         id: 4,
-        name: " Mukuka Ngulube",
-        role: "Human Resource and Procurement",
-        credentials: "Bachelor of arts in Business Admin, Diploma Human resource, Certificate Occupational Health and Safety, Certificate Project Management, Certificate Monitoring and Evaluation.",
-        image: "/images/team/Nikiwe.jpeg", // HR & Procurement Officer
+        name: "Bupe Mwasaga",
+        role: "Project Manager",
+        credentials: "",
+        image: COMPANY_LOGO,
     },
     {
         id: 5,
-        name: "Rose Chipili",
-        role: "Safety Officer",
+        name: "Carol Sinkala",
+        role: "Procurement Manager",
         credentials: "Diploma in Occupational Health and Safety Management",
-        image: "/images/team/rose-chipili.jpg", // Professional smiling man
+        image: COMPANY_LOGO,
     },
     {
         id: 6,
-        name: "Victor M. Nyalazi ",
+        name: "Asher Mulenga",
+        role: "Quality Surveyor",
+        credentials: "",
+        image: COMPANY_LOGO,
+    },
+    {
+        id: 7,
+        name: "Mukuka Ngulube",
+        role: "Human Resource and Procurement",
+        credentials: "Bachelor of arts in Business Admin, Diploma Human resource, Certificate Occupational Health and Safety, Certificate Project Management, Certificate Monitoring and Evaluation.",
+        image: "/images/team/Nikiwe.jpeg",
+    },
+    {
+        id: 8,
+        name: "Victor M. Nyalazi",
         role: "Procurement and Planning Assistant",
         credentials: "Diploma in Project Management",
-        image: "/images/team/victor-nyalazi.jpg", // Professional smiling man
+        image: "/images/team/victor-nyalazi.jpeg",
+    },
+    {
+        id: 9,
+        name: "Lameck Nyirongo",
+        role: "Finance Manager",
+        credentials: "",
+        image: COMPANY_LOGO,
+    },
+    {
+        id: 10,
+        name: "Henda Juma",
+        role: "Accountant",
+        credentials: "ZICA part qualified ,ACCA Diploma in Accounting and Business\nACCA Diploma in Financial and Management Accounting",
+        image: "/images/team/henda-juma.jpeg",
+    },
+    {
+        id: 11,
+        name: "Mateo Chalwe",
+        role: "Engineer",
+        credentials: "",
+        image: COMPANY_LOGO,
+    },
+    {
+        id: 12,
+        name: "Ishmael Mutale",
+        role: "Engineer",
+        credentials: "",
+        image: COMPANY_LOGO,
+    },
+    {
+        id: 13,
+        name: "Thandiwe Mulenga",
+        role: "Engineer",
+        credentials: "",
+        image: COMPANY_LOGO,
+    },
+    {
+        id: 14,
+        name: "Cassim Musolo",
+        role: "HSE Officer",
+        credentials: "",
+        image: COMPANY_LOGO,
+    },
+    {
+        id: 15,
+        name: "Rose Chipili",
+        role: "HSE Assistant Officer",
+        credentials: "Diploma in Occupational Health and Safety Management",
+        image: "/images/team/rose-chipili.jpeg",
+    },
+    {
+        id: 16,
+        name: "Lulamba Mulenga",
+        role: "Admin Officer",
+        credentials: "",
+        image: COMPANY_LOGO,
+    },
+    {
+        id: 17,
+        name: "Jonathan",
+        role: "Caretaker",
+        credentials: "",
+        image: COMPANY_LOGO,
     },
 ];
 
 export function Team() {
     const [activeMember, setActiveMember] = useState(teamMembers[0]);
+    const isCompanyLogo = activeMember.image === COMPANY_LOGO;
 
     return (
         <Section className="min-h-screen w-full bg-white py-24 m-0 max-w-none">
@@ -81,6 +161,9 @@ export function Team() {
                                         {member.role}
                                     </span>
                                     <button
+                                        type="button"
+                                        onClick={() => setActiveMember(member)}
+                                        onFocus={() => setActiveMember(member)}
                                         className={`font-heading text-3xl md:text-5xl lg:text-6xl font-bold tracking-tighter transition-all duration-500 text-left ${activeMember.id === member.id
                                             ? "text-primary-dark translate-x-4 md:translate-x-40"
                                             : "text-primary-dark/20 hover:text-primary-dark hover:translate-x-2"
@@ -94,7 +177,7 @@ export function Team() {
 
                         {/* Display Area - Sticky & Contained (Desktop) / Static (Mobile) */}
                         <div className="lg:w-1/2 flex flex-col order-first lg:order-last mb-12 lg:mb-0 lg:sticky lg:top-24 h-fit">
-                            <div className="relative aspect-[3/4] w-full max-w-sm lg:max-w-md mx-auto rounded-sm overflow-hidden bg-neutral-100 mb-8 grayscale hover:grayscale-0 transition-all duration-700 shadow-2xl">
+                            <div className={`relative aspect-[3/4] w-full max-w-sm lg:max-w-md mx-auto rounded-sm overflow-hidden mb-8 grayscale hover:grayscale-0 transition-all duration-700 shadow-2xl ${isCompanyLogo ? "bg-white" : "bg-neutral-100"}`}>
                                 <AnimatePresence mode="wait">
                                     <motion.div
                                         key={activeMember.id}
@@ -108,7 +191,7 @@ export function Team() {
                                             src={activeMember.image}
                                             alt={activeMember.name}
                                             fill
-                                            className="object-cover"
+                                            className={isCompanyLogo ? "object-contain p-10" : "object-cover"}
                                         />
                                     </motion.div>
                                 </AnimatePresence>

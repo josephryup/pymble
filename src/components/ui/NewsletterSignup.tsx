@@ -1,232 +1,168 @@
-/**
- * Newsletter Signup Component
- * ================================================
- * Reusable email capture component for newsletter signups.
- * Can be placed in the footer, blog pages, or as a
- * standalone section.
- *
- * Submission: Uses Web3Forms API (same as contact form).
- * The hidden "subject" field differentiates newsletter
- * signups from regular contact submissions.
- *
- * Variants:
- * - "inline" (default): Compact horizontal layout for footer
- * - "section": Full-width standalone section with more copy
- *
- * Brand: Dark background with accent orange submit button.
- * ================================================
- */
-
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Mail, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
+import { type FormEvent, useId, useState } from "react";
+import { AlertCircle, CheckCircle2, Mail, Send } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Container } from "@/components/ui/Container";
+import { Section } from "@/components/ui/Section";
 
-interface NewsletterSignupProps {
-    /** Layout variant */
+type NewsletterSignupProps = {
     variant?: "inline" | "section";
-    /** Optional heading override */
     heading?: string;
-    /** Optional description override */
     description?: string;
-}
+    className?: string;
+};
+
+type SubmitState = "idle" | "loading" | "success" | "error";
 
 export function NewsletterSignup({
-    variant = "inline",
-    heading,
-    description,
+    variant = "section",
+    heading = "Stay Updated",
+    description = "Get project updates and construction insights delivered to your inbox.",
+    className,
 }: NewsletterSignupProps) {
     const [email, setEmail] = useState("");
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isSubscribed, setIsSubscribed] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [website, setWebsite] = useState("");
+    const [status, setStatus] = useState<SubmitState>("idle");
+    const [message, setMessage] = useState("");
+    const emailId = useId();
 
-    /**
-     * Newsletter submission handler
-     * Sends to Web3Forms with a distinct subject line so
-     * submissions can be filtered from regular contact inquiries.
-     *
-     * Set NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY in your .env file.
-     * Alternatively, integrate with Mailchimp/ConvertKit API.
-     */
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        setError(null);
+    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
 
-        // Basic email validation
-        if (!email || !email.includes("@")) {
-            setError("Please enter a valid email address.");
-            setIsSubmitting(false);
+        const trimmedEmail = email.trim();
+
+        if (!trimmedEmail) {
+            setStatus("error");
+            setMessage("Please enter your email address.");
             return;
         }
 
-        try {
-            const formData = new FormData();
-            formData.append("access_key", process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY || "");
-            formData.append("subject", "Newsletter Subscription — Pymble Construction");
-            formData.append("from_name", "Pymble Newsletter");
-            formData.append("email", email);
-            formData.append("message", `New newsletter subscription from: ${email}`);
+        setStatus("loading");
+        setMessage("");
 
-            const response = await fetch("https://api.web3forms.com/submit", {
+        try {
+            const response = await fetch("/api/newsletter", {
                 method: "POST",
-                body: formData,
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ email: trimmedEmail, website }),
             });
 
-            const data = await response.json();
+            const result = (await response.json()) as { error?: string };
 
-            if (data.success) {
-                setIsSubscribed(true);
-                setEmail("");
-            } else {
-                setError("Something went wrong. Please try again.");
+            if (!response.ok) {
+                throw new Error(result.error || "We could not add you right now.");
             }
-        } catch {
-            setError("Network error. Please check your connection.");
-        } finally {
-            setIsSubmitting(false);
+
+            setStatus("success");
+            setMessage("Thanks. You are on the list.");
+            setEmail("");
+            setWebsite("");
+        } catch (error) {
+            setStatus("error");
+            setMessage(error instanceof Error ? error.message : "We could not add you right now.");
         }
-    };
+    }
 
-    // ── Section variant: Full-width standalone section ──
-    if (variant === "section") {
-        return (
-            <motion.section
-                className="py-20 md:py-28 bg-primary-dark relative overflow-hidden"
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
+    const form = (
+        <form
+            onSubmit={handleSubmit}
+            className={cn(
+                "w-full",
+                variant === "inline" ? "space-y-3" : "mx-auto max-w-2xl space-y-4",
+                className
+            )}
+        >
+            <input
+                className="hidden"
+                tabIndex={-1}
+                autoComplete="off"
+                value={website}
+                onChange={(event) => setWebsite(event.target.value)}
+                aria-hidden="true"
+            />
+
+            <div
+                className={cn(
+                    "flex w-full flex-col gap-3 sm:flex-row",
+                    variant === "inline" && "sm:flex-col lg:flex-row"
+                )}
             >
-                {/* Ambient glow */}
-                <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute right-1/4 top-0 w-[400px] h-[400px] bg-accent-orange/5 blur-[120px] rounded-full" />
-                    <div className="absolute left-1/4 bottom-0 w-[300px] h-[300px] bg-primary-blue/5 blur-[100px] rounded-full" />
+                <label className="sr-only" htmlFor={emailId}>
+                    Email address
+                </label>
+                <div className="relative flex-1">
+                    <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-current opacity-40" />
+                    <input
+                        id={emailId}
+                        type="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="Email address"
+                        autoComplete="email"
+                        disabled={status === "loading"}
+                        className={cn(
+                            "h-12 w-full rounded-full border bg-white pl-11 pr-4 text-sm font-medium text-primary-dark outline-none transition-all placeholder:text-primary-dark/30 focus:ring-2",
+                            variant === "inline"
+                                ? "border-white/10 focus:border-accent-orange focus:ring-accent-orange/20"
+                                : "border-black/10 focus:border-primary-dark focus:ring-primary-dark/10"
+                        )}
+                    />
                 </div>
 
-                <div className="container mx-auto px-4 md:px-8 relative z-10 text-center">
-                    {/* Icon */}
-                    <div className="w-16 h-16 rounded-2xl bg-accent-orange/10 flex items-center justify-center mx-auto mb-8">
-                        <Mail className="w-8 h-8 text-accent-orange" />
-                    </div>
-
-                    <h2 className="font-heading text-3xl md:text-5xl font-bold text-white tracking-tight mb-4">
-                        {heading || "Stay In The Loop"}
-                    </h2>
-                    <p className="text-white/50 text-lg max-w-lg mx-auto mb-10">
-                        {description ||
-                            "Get construction insights, project updates, and industry news delivered to your inbox."}
-                    </p>
-
-                    {isSubscribed ? (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="flex items-center justify-center gap-3 text-green-400"
-                        >
-                            <CheckCircle2 className="w-6 h-6" />
-                            <span className="text-lg font-medium">You&apos;re subscribed! Thank you.</span>
-                        </motion.div>
-                    ) : (
-                        <form
-                            onSubmit={handleSubmit}
-                            className="flex flex-col sm:flex-row items-center gap-3 max-w-md mx-auto"
-                        >
-                            <div className="relative flex-1 w-full">
-                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="your@email.com"
-                                    className="w-full bg-white/5 border border-white/10 rounded-full pl-12 pr-4 py-4 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-accent-orange/50 focus:border-accent-orange/50 transition-all"
-                                    required
-                                    aria-label="Email address"
-                                />
-                            </div>
-                            <button
-                                type="submit"
-                                disabled={isSubmitting}
-                                className="bg-accent-orange hover:bg-amber-500 text-primary-dark font-bold px-8 py-4 rounded-full transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed group w-full sm:w-auto justify-center"
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Subscribing...
-                                    </>
-                                ) : (
-                                    <>
-                                        Subscribe
-                                        <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                                    </>
-                                )}
-                            </button>
-                        </form>
+                <button
+                    type="submit"
+                    disabled={status === "loading"}
+                    className={cn(
+                        "inline-flex h-12 items-center justify-center gap-2 rounded-full px-6 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+                        "bg-accent-orange text-primary-dark hover:bg-amber-500"
                     )}
+                >
+                    {status === "loading" ? "Joining" : "Join"}
+                    <Send className="h-4 w-4" />
+                </button>
+            </div>
 
-                    {error && (
-                        <p className="text-red-400 text-sm mt-4">{error}</p>
-                    )}
+            <p
+                className={cn(
+                    "flex min-h-5 items-center gap-2 text-sm",
+                    status === "success" && "text-emerald-400",
+                    status === "error" && "text-red-300",
+                    status === "idle" && "text-white/40"
+                )}
+                aria-live="polite"
+            >
+                {status === "success" && <CheckCircle2 className="h-4 w-4" />}
+                {status === "error" && <AlertCircle className="h-4 w-4" />}
+                {message || "No spam. Just useful updates from our team."}
+            </p>
+        </form>
+    );
 
-                    <p className="text-white/20 text-xs mt-6">
-                        No spam, ever. Unsubscribe anytime.
-                    </p>
-                </div>
-            </motion.section>
+    if (variant === "inline") {
+        return (
+            <div className="text-white">
+                <p className="label-uppercase mb-3 text-accent-orange">{heading}</p>
+                <p className="mb-5 text-sm leading-relaxed text-white/60">{description}</p>
+                {form}
+            </div>
         );
     }
 
-    // ── Inline variant: Compact layout for footer ──
     return (
-        <div className="w-full">
-            <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-accent-orange mb-4">
-                {heading || "Newsletter"}
-            </h3>
-            <p className="text-white/40 text-sm mb-4 leading-relaxed">
-                {description || "Get project updates and industry insights."}
-            </p>
-
-            {isSubscribed ? (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex items-center gap-2 text-green-400 text-sm"
-                >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Subscribed!</span>
-                </motion.div>
-            ) : (
-                <form onSubmit={handleSubmit} className="flex gap-2">
-                    <input
-                        type="email"
-                        name="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="your@email.com"
-                        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-accent-orange/50 transition-all min-w-0"
-                        required
-                        aria-label="Email address for newsletter"
-                    />
-                    <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="bg-accent-orange hover:bg-amber-500 text-primary-dark font-bold px-4 py-2.5 rounded-lg transition-colors flex items-center gap-1.5 text-sm disabled:opacity-50 flex-shrink-0"
-                        aria-label="Subscribe to newsletter"
-                    >
-                        {isSubmitting ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <ArrowRight className="w-4 h-4" />
-                        )}
-                    </button>
-                </form>
-            )}
-
-            {error && (
-                <p className="text-red-400 text-xs mt-2">{error}</p>
-            )}
-        </div>
+        <Section className="bg-primary-dark text-white">
+            <Container className="text-center">
+                <p className="label-uppercase mb-4 block text-accent-orange">Newsletter</p>
+                <h2 className="mx-auto mb-5 max-w-3xl font-heading text-3xl font-bold tracking-tight text-white md:text-5xl">
+                    {heading}
+                </h2>
+                <p className="mx-auto mb-10 max-w-2xl text-base leading-relaxed text-white/60 md:text-lg">
+                    {description}
+                </p>
+                {form}
+            </Container>
+        </Section>
     );
 }
