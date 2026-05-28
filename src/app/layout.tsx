@@ -1,24 +1,12 @@
 import type { Metadata } from "next";
-import { Inter, Manrope } from "next/font/google";
 import "./globals.css";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
+import "leaflet/dist/leaflet.css";
 import { SEO, SITE_URL, COMPANY } from "@/lib/constants";
-import { SchemaOrg } from "@/components/seo/SchemaOrg";
-import { GlobalFloatingWidgets } from "@/components/layout/GlobalFloatingWidgets";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import Script from "next/script";
+import { AppChrome } from "@/components/layout/AppChrome";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
-
-const manrope = Manrope({
-  variable: "--font-manrope",
-  subsets: ["latin"],
-});
 /**
  * Root metadata — SEO defaults for the entire site.
  * Values sourced from lib/constants.ts for consistency.
@@ -100,13 +88,9 @@ export default function RootLayout({
         )}
       </head>
       <body
-        className={`${inter.variable} ${manrope.variable} antialiased bg-white text-primary-dark font-sans selection:bg-primary-blue selection:text-white`}
+        className="antialiased bg-white text-primary-dark font-sans selection:bg-primary-blue selection:text-white"
       >
-        <SchemaOrg />
-        <Header />
-        {children}
-        <Footer />
-        <GlobalFloatingWidgets />
+        <AppChrome>{children}</AppChrome>
         <Analytics />
         <SpeedInsights />
       </body>

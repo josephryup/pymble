@@ -1,0 +1,283 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import Link from "next/link";
+import { BadgeDollarSign, Camera, ClipboardCheck, MapPin, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import type { OpsSiteMapProps } from "@/components/ops/OpsSiteMapClient";
+import type {
+  OpsOverviewAttendancePing,
+  OpsOverviewSite,
+  OpsOverviewWorker,
+} from "@/lib/ops/overview";
+import { formatZmw, OPS_INPUT_CLASS, OPS_SECONDARY_BUTTON_CLASS } from "@/lib/ops/ui";
+
+const OpsSiteMap = dynamic<OpsSiteMapProps>(
+  () =>
+    import("@/components/ops/OpsSiteMapClient").then((module) => ({
+      default: module.OpsSiteMapClient,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="flex min-h-96 items-center justify-center gap-3 rounded-md border border-primary-dark/10 bg-white p-8 text-sm text-primary-dark/60"
+        role="status"
+      >
+        <div className="size-4 animate-spin rounded-full border-2 border-primary-blue border-t-transparent" />
+        <span>Loading Pymble site map...</span>
+      </div>
+    ),
+  },
+);
+
+type OpsOverviewMapPanelProps = {
+  activeDate: string;
+  attendancePings: OpsOverviewAttendancePing[];
+  headquarters: {
+    addressLine: string | null;
+    city: string | null;
+    country: string;
+    latitude: number | null;
+    longitude: number | null;
+    name: string;
+  };
+  openCashAdvances: number;
+  sitePhotos: Array<{ id: string; site_id: string }>;
+  sites: OpsOverviewSite[];
+  workers: OpsOverviewWorker[];
+};
+
+function statusClass(status: OpsOverviewSite["status"]) {
+  if (status === "active") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "mobilizing") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+
+  return "border-orange-200 bg-orange-50 text-orange-700";
+}
+
+function DetailStat({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Users;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3">
+      <div className="flex items-center gap-2 text-primary-blue">
+        <Icon className="size-4" aria-hidden="true" />
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+          {label}
+        </p>
+      </div>
+      <p className="mt-2 font-heading text-xl font-bold text-primary-dark">{value}</p>
+    </div>
+  );
+}
+
+export function OpsOverviewMapPanel({
+  activeDate,
+  attendancePings,
+  headquarters,
+  openCashAdvances,
+  sitePhotos,
+  sites,
+  workers,
+}: OpsOverviewMapPanelProps) {
+  const [selectedSiteId, setSelectedSiteId] = useState(
+    sites.find((site) => site.latitude !== null && site.longitude !== null)?.id ??
+      sites[0]?.id ??
+      "",
+  );
+  const selectedSite = useMemo(
+    () => sites.find((site) => site.id === selectedSiteId) ?? sites[0],
+    [selectedSiteId, sites],
+  );
+  const siteStats = useMemo(() => {
+    if (!selectedSite) {
+      return {
+        approvedAttendance: 0,
+        attendance: 0,
+        photos: 0,
+        workers: 0,
+      };
+    }
+
+    let approvedAttendance = 0;
+    let attendance = 0;
+    let photos = 0;
+    let workersOnSite = 0;
+
+    for (const worker of workers) {
+      if (worker.site_id === selectedSite.id) {
+        workersOnSite += 1;
+      }
+    }
+
+    for (const record of attendancePings) {
+      if (record.site_id === selectedSite.id) {
+        attendance += 1;
+
+        if (record.approved_at) {
+          approvedAttendance += 1;
+        }
+      }
+    }
+
+    for (const photo of sitePhotos) {
+      if (photo.site_id === selectedSite.id) {
+        photos += 1;
+      }
+    }
+
+    return {
+      approvedAttendance,
+      attendance,
+      photos,
+      workers: workersOnSite,
+    };
+  }, [attendancePings, selectedSite, sitePhotos, workers]);
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+      <section
+        aria-labelledby="ops-map-title"
+        className="rounded-lg border border-primary-dark/10 bg-white p-5"
+      >
+        <div className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+            Site Locations
+          </p>
+          <h2
+            className="mt-1 font-heading text-xl font-bold text-primary-dark"
+            id="ops-map-title"
+          >
+            Pymble operating map
+          </h2>
+        </div>
+        {sites.length > 0 ? (
+          <label className="mb-4 block text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/52">
+            Select site
+            <select
+              className={OPS_INPUT_CLASS}
+              onChange={(event) => setSelectedSiteId(event.target.value)}
+              value={selectedSite?.id ?? ""}
+            >
+              {sites.map((site) => (
+                <option key={site.id} value={site.id}>
+                  {site.code} - {site.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <OpsSiteMap
+          activeDate={activeDate}
+          attendancePings={attendancePings}
+          headquarters={headquarters}
+          onSelectSite={setSelectedSiteId}
+          selectedSiteId={selectedSite?.id ?? ""}
+          sites={sites}
+          workers={workers}
+        />
+      </section>
+
+      <section
+        aria-labelledby="ops-map-details-title"
+        className="rounded-lg border border-primary-dark/10 bg-white p-5"
+      >
+        <div className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+            Focused Site
+          </p>
+          <h2
+            className="mt-1 font-heading text-xl font-bold text-primary-dark"
+            id="ops-map-details-title"
+          >
+            {selectedSite?.name ?? "Pymble site details"}
+          </h2>
+        </div>
+
+        {selectedSite ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-primary-dark/10 bg-primary-dark/[0.03] p-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-primary-dark">{selectedSite.name}</p>
+                  <p className="mt-1.5 text-xs text-primary-dark/55">
+                    {selectedSite.code} - {selectedSite.location}
+                  </p>
+                </div>
+                <span
+                  className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
+                    selectedSite.status,
+                  )}`}
+                >
+                  {selectedSite.status}
+                </span>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full border border-primary-dark/10 bg-white px-3 py-1 text-xs font-semibold text-primary-dark/70">
+                  {formatZmw(selectedSite.budget_zmw)} budget
+                </span>
+                <span className="rounded-full border border-primary-dark/10 bg-white px-3 py-1 text-xs font-semibold text-primary-dark/70">
+                  {selectedSite.client_name || "Client not recorded"}
+                </span>
+                <span className="rounded-full border border-primary-dark/10 bg-white px-3 py-1 text-xs font-semibold text-primary-dark/70">
+                  {selectedSite.supervisor_name || "Supervisor not assigned"}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <DetailStat icon={Users} label="Crew" value={String(siteStats.workers)} />
+              <DetailStat
+                icon={ClipboardCheck}
+                label="Today"
+                value={`${siteStats.approvedAttendance}/${siteStats.attendance} approved`}
+              />
+              <DetailStat icon={Camera} label="Photos" value={String(siteStats.photos)} />
+              <DetailStat
+                icon={BadgeDollarSign}
+                label="Advances"
+                value={String(openCashAdvances)}
+              />
+            </div>
+
+            <div className="rounded-md border border-primary-dark/10 bg-white p-4">
+              <div className="flex items-center gap-2 text-primary-blue">
+                <MapPin className="size-4" aria-hidden="true" />
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+                  Site GPS
+                </p>
+              </div>
+              <p className="mt-2 text-sm font-semibold text-primary-dark">
+                {selectedSite.latitude !== null && selectedSite.longitude !== null
+                  ? `${selectedSite.latitude.toFixed(6)}, ${selectedSite.longitude.toFixed(6)}`
+                  : "Coordinates not set"}
+              </p>
+            </div>
+
+            <Link
+              className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`}
+              href="/ops/sites"
+            >
+              Manage site records
+            </Link>
+          </div>
+        ) : (
+          <div className="flex min-h-72 items-center justify-center rounded-md border border-dashed border-primary-dark/15 bg-primary-dark/[0.03] p-8 text-center text-sm leading-6 text-primary-dark/60">
+            Create a Pymble site to populate the map and focused site panel.
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
