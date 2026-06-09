@@ -77,7 +77,21 @@ export function formatOpsProfileName(name?: string | null, role?: OpsUserRole | 
     return "Developer";
   }
 
-  return normalizedName || "Pymble user";
+  return normalizedName || "Unnamed Staff";
+}
+
+export function formatOpsUserName(name?: string | null, userId?: string | null) {
+  const normalizedName = name?.trim();
+
+  if (normalizedName) {
+    return normalizedName;
+  }
+
+  if (userId) {
+    return `Staff ${userId.slice(0, 8)}`;
+  }
+
+  return "Staff account unavailable";
 }
 
 export function isDeveloperRole(role?: string | null) {

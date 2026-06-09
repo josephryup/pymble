@@ -1,4 +1,10 @@
 import { createOpsServerSessionClient } from "@/lib/ops/auth";
+import {
+  opsIlikeOrFilter,
+  toOpsPaginatedResult,
+  type OpsListState,
+  type OpsPaginatedResult,
+} from "@/lib/ops/listing";
 import type { OpsSiteStatus } from "@/lib/ops/types";
 
 export type OpsSite = {
@@ -22,6 +28,15 @@ export type OpsSiteOption = {
   name: string;
 };
 
+export type FetchOpsSitesOptions = {
+  query?: string;
+  status?: OpsSiteStatus;
+};
+
+export type FetchPaginatedOpsSitesOptions = FetchOpsSitesOptions & {
+  listState: OpsListState;
+};
+
 function normalizeMoney(value: number | string | null) {
   return Number(value ?? 0);
 }
@@ -30,21 +45,39 @@ function normalizeCoordinate(value: number | string | null) {
   return value === null ? null : Number(value);
 }
 
-export async function fetchOpsSites() {
+async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?: OpsListState) {
   const supabase = await createOpsServerSessionClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("sites")
     .select(
       "id, code, name, location, supervisor_name, client_name, budget_zmw, latitude, longitude, status, is_active, created_at",
+      listState ? { count: "exact" } : undefined,
     )
     .eq("is_active", true)
     .order("created_at", { ascending: false });
+
+  if (options.status) {
+    query = query.eq("status", options.status);
+  }
+
+  const searchFilter = opsIlikeOrFilter(
+    ["code", "name", "location", "supervisor_name", "client_name"],
+    options.query ?? "",
+  );
+
+  if (searchFilter) {
+    query = query.or(searchFilter);
+  }
+
+  const { data, error, count } = await (listState
+    ? query.range(listState.from, listState.to)
+    : query);
 
   if (error) {
     throw error;
   }
 
-  return (
+  const items = (
     (data ?? []) as Array<
       Omit<OpsSite, "budget_zmw" | "latitude" | "longitude"> & {
         budget_zmw: number | string;
@@ -58,6 +91,23 @@ export async function fetchOpsSites() {
     latitude: normalizeCoordinate(site.latitude),
     longitude: normalizeCoordinate(site.longitude),
   }));
+
+  return {
+    count,
+    items,
+  };
+}
+
+export async function fetchOpsSites(options: FetchOpsSitesOptions = {}) {
+  const result = await fetchOpsSiteItems(options);
+  return result.items;
+}
+
+export async function fetchPaginatedOpsSites(
+  options: FetchPaginatedOpsSitesOptions,
+): Promise<OpsPaginatedResult<OpsSite>> {
+  const result = await fetchOpsSiteItems(options, options.listState);
+  return toOpsPaginatedResult(result.items, result.count, options.listState);
 }
 
 export async function fetchActiveSiteOptions() {

@@ -1,0 +1,851 @@
+import {
+  Archive,
+  Boxes,
+  Building2,
+  CalendarDays,
+  Mail,
+  PauseCircle,
+  Phone,
+  Plus,
+  ShieldCheck,
+  Star,
+  UserPlus,
+} from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
+import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { requireOpsUser } from "@/lib/ops/auth";
+import { parseOpsListState } from "@/lib/ops/listing";
+import { canAccessOpsHref } from "@/lib/ops/permissions";
+import {
+  addSupplierPerformanceEventAction,
+  addSupplierContactAction,
+  archiveSupplierAction,
+  createSupplierAction,
+  updateSupplierStatusAction,
+} from "@/lib/ops/supplier-actions";
+import {
+  canCreateOpsSupplier,
+  canCreateOpsSupplierPerformanceEvent,
+  canManageOpsSupplier,
+} from "@/lib/ops/supplier-permissions";
+import { fetchActiveSiteOptions, type OpsSiteOption } from "@/lib/ops/sites";
+import {
+  fetchOpsSupplierStats,
+  fetchPaginatedOpsSuppliers,
+  type OpsSupplierPerformanceEventSummary,
+  type OpsSupplierSummary,
+} from "@/lib/ops/suppliers";
+import type { OpsSupplierPerformanceEventType, OpsSupplierStatus } from "@/lib/ops/types";
+import {
+  firstParam,
+  noticeFromParams,
+  OPS_DANGER_BUTTON_CLASS,
+  OPS_INPUT_CLASS,
+  OPS_LABEL_CLASS,
+  OPS_PRIMARY_BUTTON_CLASS,
+  OPS_SECONDARY_BUTTON_CLASS,
+  type OpsSearchParams,
+} from "@/lib/ops/ui";
+
+type PageProps = {
+  searchParams?: Promise<OpsSearchParams>;
+};
+
+const SUPPLIER_STATUS_OPTIONS: Array<{
+  label: string;
+  value: OpsSupplierStatus | "";
+}> = [
+  { label: "All statuses", value: "" },
+  { label: "Active", value: "active" },
+  { label: "On hold", value: "on_hold" },
+  { label: "Archived", value: "archived" },
+];
+
+const SUPPLIER_CATEGORY_OPTIONS = [
+  { label: "General", value: "general" },
+  { label: "Building materials", value: "building_materials" },
+  { label: "Plant and equipment", value: "plant_equipment" },
+  { label: "Fuel", value: "fuel" },
+  { label: "Subcontractor", value: "subcontractor" },
+  { label: "Transport", value: "transport" },
+  { label: "Safety", value: "safety" },
+  { label: "Office and admin", value: "office_admin" },
+];
+
+const SUPPLIER_PERFORMANCE_EVENT_TYPE_OPTIONS: Array<{
+  label: string;
+  value: OpsSupplierPerformanceEventType;
+}> = [
+  { label: "Delivery", value: "delivery" },
+  { label: "Quality", value: "quality" },
+  { label: "Commercial", value: "commercial" },
+  { label: "Safety", value: "safety" },
+  { label: "Communication", value: "communication" },
+  { label: "Compliance", value: "compliance" },
+  { label: "General", value: "general" },
+];
+
+function supplierStatusFromParam(value: string | undefined) {
+  return SUPPLIER_STATUS_OPTIONS.some((status) => status.value === value)
+    ? (value as OpsSupplierStatus | "")
+    : "";
+}
+
+function supplierNotice(params: OpsSearchParams) {
+  const created = noticeFromParams(params, "supplier", "Supplier added to the register.");
+
+  if (created) {
+    return created;
+  }
+
+  if (firstParam(params.updated) === "contact_added") {
+    return {
+      message: "Supplier contact added.",
+      tone: "success" as const,
+    };
+  }
+
+  if (firstParam(params.updated) === "status") {
+    return {
+      message: "Supplier status updated.",
+      tone: "success" as const,
+    };
+  }
+
+  if (firstParam(params.updated) === "archived") {
+    return {
+      message: "Supplier archived.",
+      tone: "success" as const,
+    };
+  }
+
+  if (firstParam(params.updated) === "attachment") {
+    return {
+      message: "Supplier attachment uploaded.",
+      tone: "success" as const,
+    };
+  }
+
+  if (firstParam(params.updated) === "comment") {
+    return {
+      message: "Supplier comment added.",
+      tone: "success" as const,
+    };
+  }
+
+  if (firstParam(params.updated) === "performance_event") {
+    return {
+      message: "Supplier performance event logged.",
+      tone: "success" as const,
+    };
+  }
+
+  return null;
+}
+
+function formatLabel(value: string) {
+  return value.replace(/_/g, " ");
+}
+
+function statusClass(status: OpsSupplierStatus) {
+  if (status === "active") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "on_hold") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55";
+}
+
+function performanceClass(rating: number) {
+  if (rating >= 4) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (rating === 3) {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+
+  return "border-orange-200 bg-orange-50 text-orange-700";
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-ZM", {
+    dateStyle: "medium",
+    timeZone: "Africa/Lusaka",
+  }).format(new Date(`${value}T00:00:00+02:00`));
+}
+
+function primaryContact(supplier: OpsSupplierSummary) {
+  return supplier.contacts.find((contact) => contact.is_primary) ?? supplier.contacts[0] ?? null;
+}
+
+function SupplierContactList({ supplier }: { supplier: OpsSupplierSummary }) {
+  if (supplier.contacts.length === 0) {
+    return (
+      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+        No contacts recorded.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+      {supplier.contacts.map((contact) => (
+        <li className="grid gap-2 px-3 py-3 min-[640px]:grid-cols-[1fr_auto]" key={contact.id}>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-bold text-primary-dark">{contact.full_name}</p>
+              {contact.is_primary ? (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-700">
+                  Primary
+                </span>
+              ) : null}
+            </div>
+            {contact.role_title ? (
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-primary-dark/45">
+                {contact.role_title}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2 text-sm text-primary-dark/65 min-[640px]:justify-end">
+            {contact.email ? (
+              <a className="inline-flex items-center gap-1 hover:text-primary-blue" href={`mailto:${contact.email}`}>
+                <Mail className="size-4" aria-hidden="true" />
+                {contact.email}
+              </a>
+            ) : null}
+            {contact.phone ? (
+              <a className="inline-flex items-center gap-1 hover:text-primary-blue" href={`tel:${contact.phone}`}>
+                <Phone className="size-4" aria-hidden="true" />
+                {contact.phone}
+              </a>
+            ) : null}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SupplierPerformanceList({
+  events,
+}: {
+  events: OpsSupplierPerformanceEventSummary[];
+}) {
+  if (events.length === 0) {
+    return (
+      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+        No performance events logged yet.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+      {events.slice(0, 5).map((event) => (
+        <li className="grid gap-2 px-3 py-3" key={event.id}>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-bold text-primary-dark">{event.title}</p>
+                <span
+                  className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${performanceClass(
+                    event.rating,
+                  )}`}
+                >
+                  {event.rating}/5
+                </span>
+              </div>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-primary-dark/45">
+                {formatLabel(event.event_type)}
+                {event.site ? ` / ${event.site.code}` : ""}
+              </p>
+            </div>
+            <p className="inline-flex items-center gap-1 text-xs font-semibold text-primary-dark/52">
+              <CalendarDays className="size-3.5" aria-hidden="true" />
+              {formatDate(event.event_date)}
+            </p>
+          </div>
+          {event.description ? (
+            <p className="text-sm leading-6 text-primary-dark/65">{event.description}</p>
+          ) : null}
+          {event.author ? (
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-primary-dark/40">
+              Logged by {event.author.full_name}
+            </p>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AddSupplierPerformanceEventForm({
+  siteOptions,
+  supplierId,
+}: {
+  siteOptions: OpsSiteOption[];
+  supplierId: string;
+}) {
+  return (
+    <details className="rounded-md border border-primary-dark/10">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+        <Star className="size-4" aria-hidden="true" />
+        Log performance
+      </summary>
+      <form
+        action={addSupplierPerformanceEventAction}
+        className="grid gap-3 border-t border-primary-dark/10 p-3"
+      >
+        <input name="supplier_id" type="hidden" value={supplierId} />
+        <label className={OPS_LABEL_CLASS}>
+          Type
+          <select className={OPS_INPUT_CLASS} defaultValue="general" name="event_type">
+            {SUPPLIER_PERFORMANCE_EVENT_TYPE_OPTIONS.map((eventType) => (
+              <option key={eventType.value} value={eventType.value}>
+                {eventType.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="grid gap-3 min-[520px]:grid-cols-2 lg:grid-cols-1">
+          <label className={OPS_LABEL_CLASS}>
+            Rating
+            <select className={OPS_INPUT_CLASS} defaultValue="" name="rating" required>
+              <option value="">Select rating</option>
+              <option value="5">5 - Excellent</option>
+              <option value="4">4 - Good</option>
+              <option value="3">3 - Acceptable</option>
+              <option value="2">2 - Needs attention</option>
+              <option value="1">1 - Serious concern</option>
+            </select>
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Date
+            <input
+              className={OPS_INPUT_CLASS}
+              defaultValue={new Date().toISOString().slice(0, 10)}
+              name="event_date"
+              type="date"
+            />
+          </label>
+        </div>
+        <label className={OPS_LABEL_CLASS}>
+          Site
+          <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id">
+            <option value="">No site</option>
+            {siteOptions.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.code} - {site.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Title
+          <input className={OPS_INPUT_CLASS} name="title" required />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Notes
+          <textarea className={`${OPS_INPUT_CLASS} min-h-24 resize-y`} name="description" />
+        </label>
+        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+          <Plus className="size-4" aria-hidden="true" />
+          Save event
+        </button>
+      </form>
+    </details>
+  );
+}
+
+function AddSupplierContactForm({ supplierId }: { supplierId: string }) {
+  return (
+    <details className="rounded-md border border-primary-dark/10">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+        <UserPlus className="size-4" aria-hidden="true" />
+        Add contact
+      </summary>
+      <form
+        action={addSupplierContactAction}
+        className="grid gap-3 border-t border-primary-dark/10 p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+      >
+        <input name="supplier_id" type="hidden" value={supplierId} />
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Name
+          <input className={OPS_INPUT_CLASS} name="full_name" required />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Role
+          <input className={OPS_INPUT_CLASS} name="role_title" />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Email
+          <input className={OPS_INPUT_CLASS} name="email" type="email" />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Phone
+          <input className={OPS_INPUT_CLASS} name="phone" />
+        </label>
+        <label className="flex min-h-11 items-center gap-2 rounded-md border border-primary-dark/10 px-3 py-2 text-sm font-bold text-primary-dark lg:col-span-2">
+          <input className="size-4 accent-primary-blue" name="is_primary" type="checkbox" />
+          Set primary contact
+        </label>
+        <div className="flex items-end lg:col-span-2">
+          <button className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} type="submit">
+            <Plus className="size-4" aria-hidden="true" />
+            Add
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
+export default async function OpsSuppliersPage({ searchParams }: PageProps) {
+  const [params, auth] = await Promise.all([
+    searchParams ?? Promise.resolve({} as OpsSearchParams),
+    requireOpsUser(),
+  ]);
+
+  if (!canAccessOpsHref(auth.profile.role, "/ops/suppliers")) {
+    notFound();
+  }
+
+  const listState = parseOpsListState(params, { defaultPageSize: 8 });
+  const status = supplierStatusFromParam(firstParam(params.status));
+  const canCreate = canCreateOpsSupplier(auth.profile.role);
+  const canManage = canManageOpsSupplier(auth.profile.role);
+  const canLogPerformance = canCreateOpsSupplierPerformanceEvent(auth.profile.role);
+  const [supplierPage, supplierStats, siteOptions] = await Promise.all([
+    fetchPaginatedOpsSuppliers({
+      listState,
+      query: listState.query,
+      status: status || undefined,
+    }),
+    fetchOpsSupplierStats(),
+    canLogPerformance ? fetchActiveSiteOptions() : Promise.resolve([]),
+  ]);
+  const suppliers = supplierPage.items;
+  const notice = supplierNotice(params);
+  const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
+
+  return (
+    <div className="w-full max-w-none space-y-5">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+            Procurement master data
+          </p>
+          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark md:text-4xl">
+            Supplier register
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/62 md:text-base">
+            Approved supplier records, contacts, status control, performance evidence, and linked
+            documents for RFQ, purchase order, delivery, and payment workflows.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/rfq-po">
+            <Boxes className="size-4" aria-hidden="true" />
+            RFQ / PO
+          </Link>
+          {canCreate ? (
+            <a className={OPS_PRIMARY_BUTTON_CLASS} href="#supplier-create-panel">
+              <Plus className="size-4" aria-hidden="true" />
+              Add supplier
+            </a>
+          ) : null}
+        </div>
+      </section>
+
+      {notice ? (
+        <div
+          className={`rounded-md border px-4 py-3 text-sm font-semibold ${
+            notice.tone === "error"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+          role={notice.tone === "error" ? "alert" : "status"}
+        >
+          {notice.message}
+        </div>
+      ) : null}
+
+      <section className="grid gap-4 min-[720px]:grid-cols-3">
+        <OpsKpiCard
+          href="/ops/suppliers?status=active"
+          icon={ShieldCheck}
+          label="Active suppliers"
+          tone="good"
+          trend="Approved"
+          value={supplierStats.active.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
+          href="/ops/suppliers?status=on_hold"
+          icon={PauseCircle}
+          label="On hold"
+          tone={supplierStats.on_hold > 0 ? "warn" : "default"}
+          trend={supplierStats.on_hold > 0 ? "Review" : "Clear"}
+          value={supplierStats.on_hold.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
+          href="/ops/suppliers"
+          icon={Boxes}
+          label="Total suppliers"
+          trend="Register"
+          value={supplierStats.total.toLocaleString("en-ZM")}
+        />
+      </section>
+
+      {canCreate ? (
+        <details
+          className="rounded-lg border border-primary-dark/10 bg-white"
+          id="supplier-create-panel"
+        >
+          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-primary-dark/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
+                <Building2 className="size-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-heading text-lg font-bold text-primary-dark">
+                  Add supplier
+                </span>
+                <span className="mt-1 block text-sm text-primary-dark/60">
+                  Expand when a new approved supplier must be added to procurement master data.
+                </span>
+              </span>
+            </span>
+            <Plus className="size-5 shrink-0 text-primary-blue" aria-hidden="true" />
+          </summary>
+          <form
+            action={createSupplierAction}
+            className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+          >
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Legal name
+              <input className={OPS_INPUT_CLASS} name="legal_name" required />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Trading name
+              <input className={OPS_INPUT_CLASS} name="trading_name" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Category
+              <select className={OPS_INPUT_CLASS} defaultValue="general" name="category">
+                {SUPPLIER_CATEGORY_OPTIONS.map((category) => (
+                  <option key={category.value} value={category.value}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              TPIN
+              <input className={OPS_INPUT_CLASS} name="tpin" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Supplier email
+              <input className={OPS_INPUT_CLASS} name="email" type="email" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Supplier phone
+              <input className={OPS_INPUT_CLASS} name="phone" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+              Address
+              <input className={OPS_INPUT_CLASS} name="address_line" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              City
+              <input className={OPS_INPUT_CLASS} name="city" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Country
+              <input className={OPS_INPUT_CLASS} defaultValue="Zambia" name="country" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Rating
+              <select className={OPS_INPUT_CLASS} defaultValue="" name="rating">
+                <option value="">Not rated</option>
+                <option value="5">5 - Preferred</option>
+                <option value="4">4 - Strong</option>
+                <option value="3">3 - Acceptable</option>
+                <option value="2">2 - Watch</option>
+                <option value="1">1 - Concern</option>
+              </select>
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
+              Notes
+              <input className={OPS_INPUT_CLASS} name="notes" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Primary contact
+              <input className={OPS_INPUT_CLASS} name="contact_full_name" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Contact role
+              <input className={OPS_INPUT_CLASS} name="contact_role" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Contact email
+              <input className={OPS_INPUT_CLASS} name="contact_email" type="email" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Contact phone
+              <input className={OPS_INPUT_CLASS} name="contact_phone" />
+            </label>
+            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4 lg:justify-end">
+              <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit">
+                <Plus className="size-4" aria-hidden="true" />
+                Add supplier
+              </button>
+            </div>
+          </form>
+        </details>
+      ) : null}
+
+      <OpsDashboardPanel
+        actions={<ShieldCheck className="size-6 shrink-0 text-primary-blue" aria-hidden="true" />}
+        eyebrow="Supplier records"
+        title="Register"
+      >
+        <div className="-mx-5 -mb-5">
+        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+          <div>
+            <p className="mt-1 text-sm text-primary-dark/60">
+              {supplierPage.pagination.total} matching supplier records.
+            </p>
+          </div>
+        </div>
+        <OpsListControls
+          action="/ops/suppliers"
+          filters={[
+            {
+              label: "Status",
+              name: "status",
+              options: SUPPLIER_STATUS_OPTIONS,
+              value: status,
+            },
+          ]}
+          placeholder="Search supplier, category, TPIN, email, phone, or city"
+          query={listState.query}
+          resultLabel="suppliers"
+        />
+
+        {suppliers.length > 0 ? (
+          <div className="divide-y divide-primary-dark/10">
+            {suppliers.map((supplier) => {
+              const contact = primaryContact(supplier);
+              const canMutate = canManage && supplier.status !== "archived";
+              const canAddContact = canCreate && supplier.status !== "archived";
+              const canAddPerformance = canLogPerformance && supplier.status !== "archived";
+
+              return (
+                <article className="p-5" key={supplier.id}>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                          {supplier.supplier_code}
+                        </h3>
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
+                            supplier.status,
+                          )}`}
+                        >
+                          {formatLabel(supplier.status)}
+                        </span>
+                        <span className="inline-flex rounded-full border border-primary-dark/10 bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/55">
+                          {formatLabel(supplier.category)}
+                        </span>
+                      </div>
+                      <p className="mt-2 font-bold text-primary-dark">
+                        {supplier.legal_name}
+                      </p>
+                      {supplier.trading_name ? (
+                        <p className="mt-1 text-sm text-primary-dark/60">
+                          Trading as {supplier.trading_name}
+                        </p>
+                      ) : null}
+                      <p className="mt-2 text-sm leading-6 text-primary-dark/62">
+                        {[supplier.address_line, supplier.city, supplier.country]
+                          .filter(Boolean)
+                          .join(", ") || "Address not recorded"}
+                      </p>
+                    </div>
+                    <div className="grid gap-2 min-[520px]:grid-cols-2 lg:min-w-56 lg:grid-cols-1">
+                      {canMutate ? (
+                        <form action={updateSupplierStatusAction} className="grid gap-2">
+                          <input name="supplier_id" type="hidden" value={supplier.id} />
+                          <label className={OPS_LABEL_CLASS}>
+                            Status
+                            <select className={OPS_INPUT_CLASS} defaultValue={supplier.status} name="status">
+                              <option value="active">Active</option>
+                              <option value="on_hold">On hold</option>
+                            </select>
+                          </label>
+                          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                            Update status
+                          </button>
+                        </form>
+                      ) : null}
+                      {canMutate ? (
+                        <form action={archiveSupplierAction}>
+                          <input name="supplier_id" type="hidden" value={supplier.id} />
+                          <input name="confirm" type="hidden" value="archive" />
+                          <OpsConfirmSubmitButton
+                            className={`${OPS_DANGER_BUTTON_CLASS} w-full`}
+                            confirmText="Confirm archive"
+                          >
+                            <Archive className="size-4" aria-hidden="true" />
+                            Archive
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <dl className="mt-4 grid gap-3 min-[520px]:grid-cols-2 lg:grid-cols-5">
+                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        TPIN
+                      </dt>
+                      <dd className="mt-1 font-bold text-primary-dark">
+                        {supplier.tpin || "Not recorded"}
+                      </dd>
+                    </div>
+                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        Main email
+                      </dt>
+                      <dd className="mt-1 truncate font-bold text-primary-dark">
+                        {supplier.email || "Not recorded"}
+                      </dd>
+                    </div>
+                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        Main phone
+                      </dt>
+                      <dd className="mt-1 font-bold text-primary-dark">
+                        {supplier.phone || "Not recorded"}
+                      </dd>
+                    </div>
+                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        Master rating
+                      </dt>
+                      <dd className="mt-1 font-bold text-primary-dark">
+                        {supplier.rating ? `${supplier.rating}/5` : "Not rated"}
+                      </dd>
+                    </div>
+                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        Recent performance
+                      </dt>
+                      <dd className="mt-1 font-bold text-primary-dark">
+                        {supplier.performance_event_average
+                          ? `${supplier.performance_event_average}/5`
+                          : "No events"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-4 grid gap-4">
+                    {supplier.notes ? (
+                      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                        {supplier.notes}
+                      </p>
+                    ) : null}
+                    <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
+                      <div className="min-w-0">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="font-heading text-base font-bold text-primary-dark">
+                            Contacts
+                          </h4>
+                          {contact ? (
+                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                              Primary: {contact.full_name}
+                            </p>
+                          ) : null}
+                        </div>
+                        <SupplierContactList supplier={supplier} />
+                      </div>
+                      {canAddContact ? <AddSupplierContactForm supplierId={supplier.id} /> : null}
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
+                      <div className="min-w-0">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="font-heading text-base font-bold text-primary-dark">
+                            Performance
+                          </h4>
+                          {supplier.performance_events.length > 0 ? (
+                            <p className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                              <Star className="size-3.5" aria-hidden="true" />
+                              {supplier.performance_events.length} recent event
+                              {supplier.performance_events.length === 1 ? "" : "s"}
+                            </p>
+                          ) : null}
+                        </div>
+                        <SupplierPerformanceList events={supplier.performance_events} />
+                      </div>
+                      {canAddPerformance ? (
+                        <AddSupplierPerformanceEventForm
+                          siteOptions={siteOptions}
+                          supplierId={supplier.id}
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <OpsRecordActivityPanel
+                    canManage={canCreate || canManage}
+                    sourceId={supplier.id}
+                    sourceTable="suppliers"
+                  />
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
+            <Building2 className="size-10 text-primary-blue" aria-hidden="true" />
+            <div>
+              <p className="font-heading text-xl font-bold text-primary-dark">
+                {hasActiveListFilter ? "No matching suppliers" : "No suppliers yet"}
+              </p>
+              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+                {hasActiveListFilter
+                  ? "Adjust the search or status filter to widen the supplier register."
+                  : "Add the first approved supplier before RFQ and purchase order workflows are connected."}
+              </p>
+            </div>
+          </div>
+        )}
+        <OpsPaginationControls
+          basePath="/ops/suppliers"
+          filters={[
+            {
+              label: "Status",
+              name: "status",
+              options: [],
+              value: status,
+            },
+          ]}
+          pagination={supplierPage.pagination}
+          query={listState.query}
+          resultLabel="suppliers"
+        />
+        </div>
+      </OpsDashboardPanel>
+    </div>
+  );
+}

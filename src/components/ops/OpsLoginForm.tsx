@@ -1,12 +1,12 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import {
-  OPS_INPUT_CLASS,
-  OPS_PRIMARY_BUTTON_CLASS,
-  OPS_SECONDARY_BUTTON_CLASS,
-} from "@/lib/ops/ui";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -113,13 +113,13 @@ export function OpsLoginForm({ initialError = null }: OpsLoginFormProps) {
       onSubmit={handleSubmit}
     >
       <div className="grid gap-1.5">
-        <label className="text-sm font-semibold text-primary-dark" htmlFor={emailId}>
+        <Label className="text-sm font-semibold text-foreground" htmlFor={emailId}>
           Email
-        </label>
-        <input
+        </Label>
+        <Input
           aria-invalid={errorMessage ? true : undefined}
           autoComplete="email"
-          className={OPS_INPUT_CLASS}
+          className="min-h-11"
           id={emailId}
           onChange={(event) => setEmail(event.target.value)}
           required
@@ -129,13 +129,13 @@ export function OpsLoginForm({ initialError = null }: OpsLoginFormProps) {
       </div>
 
       <div className="grid gap-1.5">
-        <label className="text-sm font-semibold text-primary-dark" htmlFor={passwordId}>
+        <Label className="text-sm font-semibold text-foreground" htmlFor={passwordId}>
           Password
-        </label>
-        <input
+        </Label>
+        <Input
           aria-invalid={errorMessage ? true : undefined}
           autoComplete="current-password"
-          className={OPS_INPUT_CLASS}
+          className="min-h-11"
           id={passwordId}
           onChange={(event) => setPassword(event.target.value)}
           required
@@ -145,41 +145,60 @@ export function OpsLoginForm({ initialError = null }: OpsLoginFormProps) {
       </div>
 
       {errorMessage ? (
-        <p
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        <Alert
+          className="border-destructive/25 bg-destructive/10 text-sm text-destructive"
           id={errorId}
           role="alert"
         >
           {errorMessage}
-        </p>
+        </Alert>
       ) : null}
 
       {resetMessage ? (
-        <p
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+        <Alert
+          className="border-emerald-200 bg-emerald-50 text-sm text-emerald-700"
           id={resetId}
           role="status"
         >
           {resetMessage}
-        </p>
+        </Alert>
       ) : null}
 
-      <button
-        className={`${OPS_PRIMARY_BUTTON_CLASS} mt-2 w-full`}
+      <Button
+        aria-disabled={isSubmitting}
+        className="mt-2 min-h-11 w-full"
         disabled={isSubmitting}
+        size="lg"
         type="submit"
       >
-        {isSubmitting ? "Signing in..." : "Sign in"}
-      </button>
+        {isSubmitting ? (
+          <>
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Signing in...
+          </>
+        ) : (
+          "Sign in"
+        )}
+      </Button>
 
-      <button
-        className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`}
+      <Button
+        aria-disabled={isResetting || isSubmitting}
+        className="min-h-11 w-full"
         disabled={isResetting || isSubmitting}
         onClick={handlePasswordReset}
+        size="lg"
         type="button"
+        variant="outline"
       >
-        {isResetting ? "Sending reset email..." : "Forgot password"}
-      </button>
+        {isResetting ? (
+          <>
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            Sending reset email...
+          </>
+        ) : (
+          "Forgot password"
+        )}
+      </Button>
     </form>
   );
 }

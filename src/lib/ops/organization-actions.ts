@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { parseCoordinateInput } from "@/lib/ops/coordinates";
 import { canManageOps } from "@/lib/ops/permissions";
@@ -60,7 +61,7 @@ function field(formData: FormData, name: string) {
 }
 
 function organizationError(message: string): never {
-  redirect(`/ops/settings?error=${encodeURIComponent(message)}`);
+  redirect(`/ops/settings?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
 }
 
 function coordinateField(formData: FormData, name: "headquarters_latitude" | "headquarters_longitude") {

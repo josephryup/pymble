@@ -6,6 +6,11 @@ import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import Script from "next/script";
 import { AppChrome } from "@/components/layout/AppChrome";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 /**
  * Root metadata — SEO defaults for the entire site.
@@ -77,7 +82,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={cn("font-sans", geist.variable)}>
       <head>
         {process.env.NODE_ENV === "production" && (
           <Script
@@ -90,7 +95,9 @@ export default function RootLayout({
       <body
         className="antialiased bg-white text-primary-dark font-sans selection:bg-primary-blue selection:text-white"
       >
-        <AppChrome>{children}</AppChrome>
+        <TooltipProvider>
+          <AppChrome>{children}</AppChrome>
+        </TooltipProvider>
         <Analytics />
         <SpeedInsights />
       </body>

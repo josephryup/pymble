@@ -1,8 +1,9 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { requireServerEnv } from "@/lib/ops/env";
 
 let r2Client: S3Client | null = null;
+const OPS_R2_READ_URL_EXPIRES_SECONDS = 60 * 10;
 
 export function getOpsR2BucketName() {
   return requireServerEnv("R2_BUCKET_NAME");
@@ -51,6 +52,15 @@ export async function createOpsR2ReadUrl(key: string) {
       Bucket: getOpsR2BucketName(),
       Key: key,
     }),
-    { expiresIn: 60 * 30 },
+    { expiresIn: OPS_R2_READ_URL_EXPIRES_SECONDS },
+  );
+}
+
+export async function deleteOpsR2Object(key: string) {
+  await getOpsR2Client().send(
+    new DeleteObjectCommand({
+      Bucket: getOpsR2BucketName(),
+      Key: key,
+    }),
   );
 }

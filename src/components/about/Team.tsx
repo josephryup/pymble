@@ -27,8 +27,8 @@ const teamMembers = [
         id: 3,
         name: "John Mulilo",
         role: "Operations Manager",
-        credentials: "",
-        image: COMPANY_LOGO,
+        credentials: "Bsc Project Management",
+        image: "/images/team/John Mulilo- Operations Manager.jpeg",
     },
     {
         id: 4,
@@ -48,8 +48,8 @@ const teamMembers = [
         id: 6,
         name: "Asher Mulenga",
         role: "Quality Surveyor",
-        credentials: "",
-        image: COMPANY_LOGO,
+        credentials: "BSc Quantity Surveying, MZIQS, MSc Project Management",
+        image: "/images/team/Asher Mulenga- Quantity Surveyor.jpeg",
     },
     {
         id: 7,
@@ -104,8 +104,8 @@ const teamMembers = [
         id: 14,
         name: "Cassim Musolo",
         role: "HSE Officer",
-        credentials: "",
-        image: COMPANY_LOGO,
+        credentials: "Diploma in Occupational Health and Safety Management",
+        image: "/images/team/Cassim Musolo- HSE officer.jpeg",
     },
     {
         id: 15,

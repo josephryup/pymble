@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { canRecordAttendance } from "@/lib/ops/permissions";
 import { putOpsR2Object } from "@/lib/ops/r2";
@@ -23,7 +24,7 @@ function field(formData: FormData, name: string) {
 }
 
 function photoError(message: string): never {
-  redirect(`/ops/photos?error=${encodeURIComponent(message)}`);
+  redirect(`/ops/photos?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
 }
 
 function safeFileName(name: string) {

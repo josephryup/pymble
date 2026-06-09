@@ -1,4 +1,10 @@
 import { createOpsServerSessionClient } from "@/lib/ops/auth";
+import {
+  opsIlikeOrFilter,
+  toOpsPaginatedResult,
+  type OpsListState,
+  type OpsPaginatedResult,
+} from "@/lib/ops/listing";
 import type { OpsInvoiceStatus } from "@/lib/ops/types";
 
 export type OpsInvoiceSite = {
@@ -41,6 +47,17 @@ type RawInvoice = Omit<OpsInvoice, "boq" | "site" | "subtotal" | "total_amount" 
   vat_amount: number | string;
 };
 
+export type FetchOpsInvoicesOptions = {
+  query?: string;
+  status?: OpsInvoiceStatus;
+};
+
+export type FetchPaginatedOpsInvoicesOptions = FetchOpsInvoicesOptions & {
+  listState: OpsListState;
+};
+
+export type OpsInvoiceStatusCounts = Record<OpsInvoiceStatus | "total", number>;
+
 function normalizeMoney(value: number | string | null) {
   return Number(value ?? 0);
 }
@@ -49,9 +66,9 @@ function normalizeRelation<T>(value: Relation<T>) {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-export async function fetchOpsInvoices() {
+async function fetchOpsInvoiceItems(options: FetchOpsInvoicesOptions = {}, listState?: OpsListState) {
   const supabase = await createOpsServerSessionClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select(
       `
@@ -72,16 +89,34 @@ export async function fetchOpsInvoices() {
         site:sites!invoices_site_id_fkey(id, code, name),
         boq:boq_documents!invoices_boq_id_fkey(id, title)
       `,
+      listState ? { count: "exact" } : undefined,
     )
     .is("deleted_at", null)
     .order("issued_at", { ascending: false })
     .order("created_at", { ascending: false });
 
+  if (options.status) {
+    query = query.eq("status", options.status);
+  }
+
+  const searchFilter = opsIlikeOrFilter(
+    ["invoice_number", "client_name", "tpin"],
+    options.query ?? "",
+  );
+
+  if (searchFilter) {
+    query = query.or(searchFilter);
+  }
+
+  const { data, error, count } = await (listState
+    ? query.range(listState.from, listState.to)
+    : query);
+
   if (error) {
     throw error;
   }
 
-  return ((data ?? []) as unknown as RawInvoice[]).map((invoice) => ({
+  const items = ((data ?? []) as unknown as RawInvoice[]).map((invoice) => ({
     ...invoice,
     boq: normalizeRelation(invoice.boq),
     site: normalizeRelation(invoice.site),
@@ -89,4 +124,60 @@ export async function fetchOpsInvoices() {
     total_amount: normalizeMoney(invoice.total_amount),
     vat_amount: normalizeMoney(invoice.vat_amount),
   }));
+
+  return {
+    count,
+    items,
+  };
+}
+
+export async function fetchOpsInvoices(options: FetchOpsInvoicesOptions = {}) {
+  const result = await fetchOpsInvoiceItems(options);
+  return result.items;
+}
+
+export async function fetchPaginatedOpsInvoices(
+  options: FetchPaginatedOpsInvoicesOptions,
+): Promise<OpsPaginatedResult<OpsInvoice>> {
+  const result = await fetchOpsInvoiceItems(options, options.listState);
+  return toOpsPaginatedResult(result.items, result.count, options.listState);
+}
+
+export async function fetchOpsInvoiceStatusCounts(): Promise<OpsInvoiceStatusCounts> {
+  const supabase = await createOpsServerSessionClient();
+  const [totalResult, draftResult, sentResult, paidResult] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .is("deleted_at", null),
+    supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "draft")
+      .is("deleted_at", null),
+    supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "sent")
+      .is("deleted_at", null),
+    supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "paid")
+      .is("deleted_at", null),
+  ]);
+
+  const firstError =
+    totalResult.error ?? draftResult.error ?? sentResult.error ?? paidResult.error;
+
+  if (firstError) {
+    throw firstError;
+  }
+
+  return {
+    draft: draftResult.count ?? 0,
+    paid: paidResult.count ?? 0,
+    sent: sentResult.count ?? 0,
+    total: totalResult.count ?? 0,
+  };
 }

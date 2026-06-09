@@ -1,4 +1,5 @@
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
+import { fetchOpsDashboardSnapshot } from "@/lib/ops/dashboard-snapshots";
 import {
   fetchOpsOrganizationProfile,
   type OrganizationProfile,
@@ -315,21 +316,15 @@ export async function fetchOpsOverview() {
   await requireOpsUser();
 
   const supabase = await createOpsServerSessionClient();
-  const { data, error } = await supabase.rpc("ops_overview_snapshot");
-
-  if (!error && data) {
-    return normalizeOverviewSnapshot(data as RawOverviewSnapshot);
-  }
-
-  if (error) {
-    console.warn("[ops] overview snapshot RPC unavailable; using query fallback", {
-      code: error.code,
-      message: error.message,
-    });
-  }
-
-  return fetchOpsOverviewViaQueries();
+  return fetchOpsDashboardSnapshot({
+    fallback: fetchOpsOverviewViaQueries,
+    load: async () => supabase.rpc("ops_overview_snapshot"),
+    name: "overview",
+    normalize: (data) => normalizeOverviewSnapshot(data as RawOverviewSnapshot),
+  });
 }
+
+export type OpsOverview = Awaited<ReturnType<typeof fetchOpsOverview>>;
 
 async function fetchOpsOverviewViaQueries() {
   const { profile: userProfile } = await requireOpsUser();

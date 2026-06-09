@@ -1,0 +1,786 @@
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  FileText,
+  HardHat,
+  Plus,
+  Send,
+} from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
+import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import {
+  addDailySiteReportEntryAction,
+  closeDailySiteReportAction,
+  createDailySiteReportAction,
+  reviewDailySiteReportAction,
+  submitDailySiteReportAction,
+} from "@/lib/ops/daily-site-report-actions";
+import {
+  canCloseOpsDailySiteReport,
+  canCreateOpsDailySiteReport,
+  canEditOpsDailySiteReport,
+  canReviewOpsDailySiteReport,
+  canSubmitOpsDailySiteReport,
+} from "@/lib/ops/daily-site-report-permissions";
+import {
+  fetchPaginatedOpsDailySiteReports,
+  type OpsDailySiteReportEntry,
+} from "@/lib/ops/daily-site-reports";
+import { requireOpsUser } from "@/lib/ops/auth";
+import { parseOpsListState } from "@/lib/ops/listing";
+import { canAccessOpsHref } from "@/lib/ops/permissions";
+import { formatOpsUserName } from "@/lib/ops/roles";
+import { fetchActiveSiteOptions } from "@/lib/ops/sites";
+import {
+  firstParam,
+  noticeFromParams,
+  OPS_FOCUS_CLASS,
+  OPS_INPUT_CLASS,
+  OPS_LABEL_CLASS,
+  OPS_PRIMARY_BUTTON_CLASS,
+  OPS_SECONDARY_BUTTON_CLASS,
+  type OpsSearchParams,
+} from "@/lib/ops/ui";
+import type {
+  OpsDailySiteReportEntryType,
+  OpsDailySiteReportStatus,
+} from "@/lib/ops/types";
+
+type PageProps = {
+  searchParams?: Promise<OpsSearchParams>;
+};
+
+const DAILY_REPORT_STATUS_OPTIONS: Array<{
+  label: string;
+  value: OpsDailySiteReportStatus | "";
+}> = [
+  { label: "All statuses", value: "" },
+  { label: "Draft", value: "draft" },
+  { label: "Submitted", value: "submitted" },
+  { label: "Reviewed", value: "reviewed" },
+  { label: "Closed", value: "closed" },
+];
+
+const REPORT_ENTRY_TYPE_OPTIONS: Array<{
+  label: string;
+  value: OpsDailySiteReportEntryType;
+}> = [
+  { label: "Progress", value: "progress" },
+  { label: "Labour", value: "labour" },
+  { label: "Equipment", value: "equipment" },
+  { label: "Material", value: "material" },
+  { label: "Delay", value: "delay" },
+  { label: "HSE", value: "hse" },
+  { label: "Commercial", value: "commercial" },
+];
+
+function dailyReportStatusFromParam(value: string | undefined) {
+  return DAILY_REPORT_STATUS_OPTIONS.some((status) => status.value === value)
+    ? (value as OpsDailySiteReportStatus | "")
+    : "";
+}
+
+function dailyReportNotice(params: OpsSearchParams) {
+  const created = noticeFromParams(params, "report", "Daily site report created.");
+
+  if (created) {
+    return created;
+  }
+
+  const updated = firstParam(params.updated);
+
+  if (updated === "entry_added") {
+    return { message: "Daily site report entry added.", tone: "success" as const };
+  }
+
+  if (updated === "submitted") {
+    return { message: "Daily site report submitted.", tone: "success" as const };
+  }
+
+  if (updated === "reviewed") {
+    return { message: "Daily site report reviewed.", tone: "success" as const };
+  }
+
+  if (updated === "closed") {
+    return { message: "Daily site report closed.", tone: "success" as const };
+  }
+
+  if (updated === "attachment") {
+    return { message: "Daily site report attachment uploaded.", tone: "success" as const };
+  }
+
+  if (updated === "comment") {
+    return { message: "Daily site report comment added.", tone: "success" as const };
+  }
+
+  return null;
+}
+
+function todayInLusaka() {
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Africa/Lusaka",
+    year: "numeric",
+  }).format(new Date());
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-ZM", {
+    dateStyle: "medium",
+    timeZone: "Africa/Lusaka",
+  }).format(new Date(`${value}T00:00:00+02:00`));
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return "Not set";
+  }
+
+  return new Intl.DateTimeFormat("en-ZM", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function formatNumber(value: number) {
+  return value.toLocaleString("en-ZM", {
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatLabel(value: string) {
+  return value.replace(/_/g, " ");
+}
+
+function statusClass(status: OpsDailySiteReportStatus) {
+  if (status === "closed" || status === "reviewed") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "submitted") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+
+  return "border-orange-200 bg-orange-50 text-orange-700";
+}
+
+function entryTypeClass(entryType: OpsDailySiteReportEntryType) {
+  if (entryType === "hse" || entryType === "delay") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  if (entryType === "commercial") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+
+  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/60";
+}
+
+function ReportMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+        {label}
+      </dt>
+      <dd className="mt-1 font-bold text-primary-dark">{value}</dd>
+    </div>
+  );
+}
+
+function EntryList({ entries }: { entries: OpsDailySiteReportEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <p className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-3 text-sm text-primary-dark/60">
+        No structured entries added yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-3">
+      {entries.map((entry) => (
+        <div className="rounded-md border border-primary-dark/10 p-3" key={entry.id}>
+          <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
+            <div>
+              <span
+                className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${entryTypeClass(
+                  entry.entry_type,
+                )}`}
+              >
+                {formatLabel(entry.entry_type)}
+              </span>
+              <p className="mt-2 font-bold text-primary-dark">{entry.title}</p>
+            </div>
+            <div className="grid gap-2 text-sm min-[520px]:grid-cols-2">
+              <span className="font-semibold text-primary-dark/65">
+                Qty {formatNumber(entry.quantity)} {entry.unit}
+              </span>
+              <span className="font-semibold text-primary-dark/65">
+                Hours {formatNumber(entry.hours)}
+              </span>
+            </div>
+          </div>
+          {entry.notes ? (
+            <p className="mt-2 text-sm leading-6 text-primary-dark/60">{entry.notes}</p>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AddEntryForm({ reportId }: { reportId: string }) {
+  return (
+    <details className="rounded-md border border-primary-dark/10">
+      <summary
+        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+      >
+        <span className="inline-flex items-center gap-2">
+          <Plus className="size-4" aria-hidden="true" />
+          Add report entry
+        </span>
+        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+          Open
+        </span>
+      </summary>
+      <form
+        action={addDailySiteReportEntryAction}
+        className="grid gap-3 border-t border-primary-dark/10 p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+      >
+        <input name="report_id" type="hidden" value={reportId} />
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Entry type
+          <select className={OPS_INPUT_CLASS} defaultValue="progress" name="entry_type">
+            {REPORT_ENTRY_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Title
+          <input className={OPS_INPUT_CLASS} name="title" required />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Quantity
+          <input className={OPS_INPUT_CLASS} min="0" name="quantity" step="0.01" type="number" />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Unit
+          <input className={OPS_INPUT_CLASS} name="unit" />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Hours
+          <input className={OPS_INPUT_CLASS} min="0" name="hours" step="0.01" type="number" />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
+          Notes
+          <input className={OPS_INPUT_CLASS} name="notes" />
+        </label>
+        <div className="flex items-end lg:col-span-1">
+          <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
+            <Plus className="size-4" aria-hidden="true" />
+            Add
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
+export default async function OpsDailySiteReportsPage({ searchParams }: PageProps) {
+  const [params, auth] = await Promise.all([
+    searchParams ?? Promise.resolve({} as OpsSearchParams),
+    requireOpsUser(),
+  ]);
+
+  if (!canAccessOpsHref(auth.profile.role, "/ops/daily-site-reports")) {
+    notFound();
+  }
+
+  const listState = parseOpsListState(params, { defaultPageSize: 8 });
+  const status = dailyReportStatusFromParam(firstParam(params.status));
+  const [reportPage, siteOptions] = await Promise.all([
+    fetchPaginatedOpsDailySiteReports({
+      listState,
+      query: listState.query,
+      status: status || undefined,
+    }),
+    fetchActiveSiteOptions(),
+  ]);
+  const reports = reportPage.items;
+  const notice = dailyReportNotice(params);
+  const canCreate = canCreateOpsDailySiteReport(auth.profile.role);
+  const canReview = canReviewOpsDailySiteReport(auth.profile.role);
+  const canClose = canCloseOpsDailySiteReport(auth.profile.role);
+  const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
+  const draftCount = reports.filter((report) => report.status === "draft").length;
+  const submittedCount = reports.filter((report) => report.status === "submitted").length;
+  const reviewedCount = reports.filter((report) => report.status === "reviewed").length;
+  const incidentCount = reports.reduce((sum, report) => sum + report.incident_count, 0);
+  const labourCount = reports.reduce((sum, report) => sum + report.labour_count, 0);
+  const equipmentCount = reports.reduce((sum, report) => sum + report.equipment_count, 0);
+  const materialDeliveryCount = reports.reduce(
+    (sum, report) => sum + report.material_deliveries_count,
+    0,
+  );
+  const averageProgress =
+    reports.length === 0
+      ? 0
+      : reports.reduce((sum, report) => sum + report.overall_progress_percent, 0) / reports.length;
+  const createPanelParams = new URLSearchParams();
+
+  if (listState.query) {
+    createPanelParams.set("q", listState.query);
+  }
+
+  if (status) {
+    createPanelParams.set("status", status);
+  }
+
+  createPanelParams.set("create", "report");
+  const createReportHref = `/ops/daily-site-reports?${createPanelParams.toString()}#daily-report-create-panel`;
+  const openCreatePanel = firstParam(params.create) === "report";
+
+  return (
+    <div className="w-full max-w-none space-y-6">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+            Engineering field control
+          </p>
+          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            Daily site reports
+          </h1>
+          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            Site progress, labour, equipment, material movement, delays, HSE notes, and commercial
+            observations in one daily record.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/sites">
+            <FileText className="size-4" aria-hidden="true" />
+            Sites
+          </Link>
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/material-requests">
+            <ClipboardList className="size-4" aria-hidden="true" />
+            Material requests
+          </Link>
+          {canCreate ? (
+            <a className={OPS_PRIMARY_BUTTON_CLASS} href={createReportHref}>
+              <Plus className="size-4" aria-hidden="true" />
+              New report
+            </a>
+          ) : null}
+        </div>
+      </section>
+
+      {notice ? (
+        <div
+          className={`rounded-md border px-4 py-3 text-sm font-semibold ${
+            notice.tone === "error"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+          role={notice.tone === "error" ? "alert" : "status"}
+        >
+          {notice.message}
+        </div>
+      ) : null}
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <OpsKpiCard
+          href="/ops/daily-site-reports?status=draft#daily-report-register"
+          icon={Clock}
+          label="Draft shown"
+          tone={draftCount > 0 ? "warn" : "default"}
+          trend="Editable"
+          value={String(draftCount)}
+        />
+        <OpsKpiCard
+          href="/ops/daily-site-reports?status=submitted#daily-report-register"
+          icon={Send}
+          label="Submitted"
+          tone={submittedCount > 0 ? "warn" : "default"}
+          trend="Needs review"
+          value={String(submittedCount)}
+        />
+        <OpsKpiCard
+          href="/ops/daily-site-reports?status=reviewed#daily-report-register"
+          icon={CheckCircle2}
+          label="Reviewed"
+          tone="good"
+          trend="Accepted"
+          value={String(reviewedCount)}
+        />
+        <OpsKpiCard
+          href="/ops/daily-site-reports#daily-report-register"
+          icon={AlertTriangle}
+          label="Incidents shown"
+          tone={incidentCount > 0 ? "warn" : "default"}
+          trend="Current filter"
+          value={String(incidentCount)}
+        />
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.8fr)]">
+        <OpsDashboardPanel eyebrow="Visible field totals" title="Current report selection">
+          <dl className="grid gap-3 min-[520px]:grid-cols-2 xl:grid-cols-4">
+            <ReportMetric label="Reports" value={reportPage.pagination.total.toLocaleString("en-ZM")} />
+            <ReportMetric label="Labour count" value={labourCount.toLocaleString("en-ZM")} />
+            <ReportMetric label="Equipment count" value={equipmentCount.toLocaleString("en-ZM")} />
+            <ReportMetric
+              label="Material deliveries"
+              value={materialDeliveryCount.toLocaleString("en-ZM")}
+            />
+          </dl>
+        </OpsDashboardPanel>
+
+        <OpsDashboardPanel eyebrow="Progress signal" title="Average visible progress">
+          <div className="rounded-md border border-primary-dark/10 p-4">
+            <p className="font-heading text-3xl font-bold text-primary-dark">
+              {formatNumber(averageProgress)}%
+            </p>
+            <p className="mt-2 text-sm leading-6 text-primary-dark/60">
+              Average of progress percentages in the current filtered report list.
+            </p>
+          </div>
+        </OpsDashboardPanel>
+      </div>
+
+      {canCreate ? (
+        <details
+          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          id="daily-report-create-panel"
+          open={openCreatePanel}
+        >
+          <summary
+            className={`flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
+              <HardHat className="size-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-heading text-xl font-bold text-primary-dark">
+                Create daily site report
+              </span>
+              <span className="mt-1 block text-sm text-primary-dark/60">
+                Capture the day summary, counts, risks, and operational notes before adding line entries.
+              </span>
+            </span>
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+              Open
+            </span>
+          </summary>
+          {siteOptions.length === 0 ? (
+            <div className="border-t border-primary-dark/10 p-5">
+              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+                Add at least one active site before creating daily site reports.
+              </div>
+            </div>
+          ) : (
+            <form
+              action={createDailySiteReportAction}
+              className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+            >
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                Site
+                <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id" required>
+                  <option value="" disabled>
+                    Select Pymble site
+                  </option>
+                  {siteOptions.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.code} - {site.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Report date
+                <input
+                  className={OPS_INPUT_CLASS}
+                  defaultValue={todayInLusaka()}
+                  name="report_date"
+                  required
+                  type="date"
+                />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Weather
+                <input className={OPS_INPUT_CLASS} name="weather" />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Progress %
+                <input
+                  className={OPS_INPUT_CLASS}
+                  max="100"
+                  min="0"
+                  name="overall_progress_percent"
+                  step="0.01"
+                  type="number"
+                />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Labour count
+                <input className={OPS_INPUT_CLASS} min="0" name="labour_count" type="number" />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Equipment count
+                <input className={OPS_INPUT_CLASS} min="0" name="equipment_count" type="number" />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Material deliveries
+                <input
+                  className={OPS_INPUT_CLASS}
+                  min="0"
+                  name="material_deliveries_count"
+                  type="number"
+                />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Incidents
+                <input className={OPS_INPUT_CLASS} min="0" name="incident_count" type="number" />
+              </label>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+                Progress summary
+                <textarea className={OPS_INPUT_CLASS} name="progress_summary" required rows={3} />
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+                Labour notes
+                <textarea className={OPS_INPUT_CLASS} name="labour_notes" rows={2} />
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+                Equipment notes
+                <textarea className={OPS_INPUT_CLASS} name="equipment_notes" rows={2} />
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+                Material notes
+                <textarea className={OPS_INPUT_CLASS} name="material_notes" rows={2} />
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+                Delay notes
+                <textarea className={OPS_INPUT_CLASS} name="delay_notes" rows={2} />
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+                HSE notes
+                <textarea className={OPS_INPUT_CLASS} name="hse_notes" rows={2} />
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+                Commercial notes
+                <textarea className={OPS_INPUT_CLASS} name="commercial_notes" rows={2} />
+              </label>
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+                <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
+                  <Plus className="size-4" aria-hidden="true" />
+                  Create report
+                </button>
+              </div>
+            </form>
+          )}
+        </details>
+      ) : null}
+
+      <section
+        className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+        id="daily-report-register"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+              Report register
+            </p>
+            <h2 className="font-heading text-xl font-bold text-primary-dark">
+              Daily field records
+            </h2>
+            <p className="mt-1 text-sm text-primary-dark/60">
+              {reportPage.pagination.total} matching reports filtered by status and search.
+            </p>
+          </div>
+          <HardHat className="size-6 shrink-0 text-primary-blue" aria-hidden="true" />
+        </div>
+        <OpsListControls
+          action="/ops/daily-site-reports"
+          filters={[
+            {
+              label: "Status",
+              name: "status",
+              options: DAILY_REPORT_STATUS_OPTIONS,
+              value: status,
+            },
+          ]}
+          placeholder="Search report number, weather, progress, notes"
+          query={listState.query}
+          resultLabel="daily site reports"
+        />
+
+        {reports.length > 0 ? (
+          <div className="divide-y divide-primary-dark/10">
+            {reports.map((report) => {
+              const canEdit = canEditOpsDailySiteReport(auth.profile.id, auth.profile.role, report);
+              const canSubmit = canSubmitOpsDailySiteReport(
+                auth.profile.id,
+                auth.profile.role,
+                report,
+              );
+              const canReviewThis = canReview && report.status === "submitted";
+              const canCloseThis = canClose && report.status === "reviewed";
+
+              return (
+                <article className="p-5" key={report.id}>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                          {report.report_number}
+                        </h3>
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
+                            report.status,
+                          )}`}
+                        >
+                          {formatLabel(report.status)}
+                        </span>
+                      </div>
+                      <p className="mt-2 font-bold text-primary-dark">
+                        {report.site
+                          ? `${report.site.code} - ${report.site.name}`
+                          : "Site unavailable"}
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                        {formatDate(report.report_date)} / prepared by{" "}
+                        {formatOpsUserName(
+                          report.prepared_by_user?.full_name,
+                          report.prepared_by_user?.id,
+                        )}
+                      </p>
+                      <p className="mt-2 max-w-4xl text-sm leading-6 text-primary-dark/60">
+                        {report.progress_summary}
+                      </p>
+                    </div>
+                    <div className="grid gap-2 min-[520px]:grid-cols-3 lg:min-w-56 lg:grid-cols-1">
+                      {canSubmit ? (
+                        <form action={submitDailySiteReportAction}>
+                          <input name="report_id" type="hidden" value={report.id} />
+                          <OpsConfirmSubmitButton
+                            className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
+                            confirmText="Confirm submit"
+                          >
+                            <Send className="size-4" aria-hidden="true" />
+                            Submit
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                      {canReviewThis ? (
+                        <form action={reviewDailySiteReportAction}>
+                          <input name="report_id" type="hidden" value={report.id} />
+                          <OpsConfirmSubmitButton
+                            className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
+                            confirmText="Confirm review"
+                          >
+                            <CheckCircle2 className="size-4" aria-hidden="true" />
+                            Review
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                      {canCloseThis ? (
+                        <form action={closeDailySiteReportAction}>
+                          <input name="report_id" type="hidden" value={report.id} />
+                          <OpsConfirmSubmitButton
+                            className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`}
+                            confirmText="Confirm close"
+                          >
+                            Close
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <dl className="mt-4 grid gap-3 md:grid-cols-5">
+                    <ReportMetric label="Progress" value={`${formatNumber(report.overall_progress_percent)}%`} />
+                    <ReportMetric label="Labour" value={report.labour_count.toLocaleString("en-ZM")} />
+                    <ReportMetric label="Equipment" value={report.equipment_count.toLocaleString("en-ZM")} />
+                    <ReportMetric
+                      label="Deliveries"
+                      value={report.material_deliveries_count.toLocaleString("en-ZM")}
+                    />
+                    <ReportMetric label="Incidents" value={report.incident_count.toLocaleString("en-ZM")} />
+                  </dl>
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    {[
+                      ["Weather", report.weather || "Not recorded"],
+                      ["Labour notes", report.labour_notes || "No labour notes"],
+                      ["Equipment notes", report.equipment_notes || "No equipment notes"],
+                      ["Material notes", report.material_notes || "No material notes"],
+                      ["Delay notes", report.delay_notes || "No delay notes"],
+                      ["HSE notes", report.hse_notes || "No HSE notes"],
+                      ["Commercial notes", report.commercial_notes || "No commercial notes"],
+                      ["Reviewed", formatDateTime(report.reviewed_at)],
+                    ].map(([label, value]) => (
+                      <div className="rounded-md border border-primary-dark/10 px-3 py-2" key={label}>
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                          {label}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-primary-dark/65">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 grid gap-4">
+                    {canEdit ? <AddEntryForm reportId={report.id} /> : null}
+                    <EntryList entries={report.entries} />
+                  </div>
+
+                  <OpsRecordActivityPanel
+                    canManage={canEdit || canReviewThis || canCloseThis}
+                    sourceId={report.id}
+                    sourceTable="daily_site_reports"
+                  />
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
+            <HardHat className="size-10 text-primary-blue" aria-hidden="true" />
+            <div>
+              <p className="font-heading text-xl font-bold text-primary-dark">
+                {hasActiveListFilter ? "No matching daily reports" : "No daily site reports yet"}
+              </p>
+              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+                {hasActiveListFilter
+                  ? "Adjust the search or status filter to widen the daily report register."
+                  : "Create the first report for a site, then add structured entries for the day."}
+              </p>
+            </div>
+          </div>
+        )}
+        <OpsPaginationControls
+          basePath="/ops/daily-site-reports"
+          filters={[
+            {
+              label: "Status",
+              name: "status",
+              options: [],
+              value: status,
+            },
+          ]}
+          pagination={reportPage.pagination}
+          query={listState.query}
+          resultLabel="daily site reports"
+        />
+      </section>
+    </div>
+  );
+}

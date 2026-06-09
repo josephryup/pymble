@@ -1,0 +1,2441 @@
+import {
+  Boxes,
+  CalendarCheck,
+  CheckCircle2,
+  ClipboardCheck,
+  ClipboardList,
+  GraduationCap,
+  HardHat,
+  Plus,
+  RotateCcw,
+  ShieldCheck,
+  ShieldPlus,
+  XCircle,
+} from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
+import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { requireOpsUser } from "@/lib/ops/auth";
+import {
+  adjustPpeItemStockAction,
+  approveHseRiskAssessmentAction,
+  archiveHseRiskAssessmentAction,
+  cancelHseComplianceAuditAction,
+  cancelHseInspectionAction,
+  cancelHseInspectionFindingAction,
+  cancelPpeIssueAction,
+  cancelHseRiskAssessmentAction,
+  cancelSafetyTrainingRecordAction,
+  cancelToolboxTalkAction,
+  closeHseComplianceAuditAction,
+  completeHseComplianceAuditAction,
+  closeHseInspectionAction,
+  completeHseInspectionAction,
+  completeSafetyTrainingRecordAction,
+  completeToolboxTalkAction,
+  correctHseInspectionFindingAction,
+  createHseComplianceAuditAction,
+  createHseInspectionAction,
+  createHseInspectionFindingAction,
+  createPpeIssueAction,
+  createPpeItemAction,
+  createHseRiskAssessmentAction,
+  createSafetyTrainingRecordAction,
+  createToolboxTalkAction,
+  createToolboxTalkAttendeeAction,
+  markPpeIssueDamagedAction,
+  markPpeIssueLostAction,
+  requireHseComplianceAuditActionAction,
+  requireHseInspectionActionAction,
+  returnPpeIssueAction,
+  startHseInspectionFindingAction,
+  submitHseRiskAssessmentAction,
+  verifyHseInspectionFindingAction,
+} from "@/lib/ops/hse-compliance-actions";
+import {
+  fetchActivePpeItemOptions,
+  fetchHseComplianceEmployeeOptions,
+  fetchOpsHseAgeingAlerts,
+  fetchOpsHseComplianceStats,
+  fetchPaginatedOpsPpeIssues,
+  fetchRecentOpsHseComplianceAudits,
+  fetchRecentOpsHseInspections,
+  fetchRecentOpsPpeItems,
+  fetchRecentOpsHseRiskAssessments,
+  fetchRecentOpsSafetyTrainingRecords,
+  fetchRecentOpsToolboxTalks,
+  type OpsHseComplianceAuditSummary,
+  type OpsHseInspectionFindingSummary,
+  type OpsHseInspectionSummary,
+  type OpsHseRiskAssessmentSummary,
+  type OpsPpeIssueSummary,
+  type OpsPpeItemSummary,
+  type OpsSafetyTrainingRecordSummary,
+  type OpsToolboxTalkSummary,
+} from "@/lib/ops/hse-compliance";
+import {
+  buildOpsHseAuditEscalations,
+  buildOpsHseRiskHeatmap,
+  OPS_HSE_RISK_LEVELS,
+  type OpsHseAuditEscalationBucket,
+  type OpsHseRiskHeatmapCell,
+} from "@/lib/ops/hse-compliance-reporting";
+import {
+  canAddOpsToolboxTalkAttendee,
+  canAdjustOpsPpeItem,
+  canApproveOpsHseRiskAssessment,
+  canArchiveOpsHseRiskAssessment,
+  canCancelOpsHseComplianceAudit,
+  canCancelOpsHseInspection,
+  canCancelOpsHseInspectionFinding,
+  canCancelOpsPpeIssue,
+  canCancelOpsHseRiskAssessment,
+  canCancelOpsSafetyTraining,
+  canCancelOpsToolboxTalk,
+  canCloseOpsHseComplianceAudit,
+  canCompleteOpsHseComplianceAudit,
+  canCloseOpsHseInspection,
+  canCompleteOpsHseInspection,
+  canCompleteOpsSafetyTraining,
+  canCompleteOpsToolboxTalk,
+  canCorrectOpsHseInspectionFinding,
+  canCreateOpsHseComplianceAudit,
+  canCreateOpsHseInspection,
+  canCreateOpsHseInspectionFinding,
+  canCreateOpsPpeIssue,
+  canCreateOpsPpeItem,
+  canCreateOpsHseRiskAssessment,
+  canCreateOpsSafetyTraining,
+  canCreateOpsToolboxTalk,
+  canManageOpsHseInspection,
+  canManageOpsPpeIssue,
+  canManageOpsToolboxTalk,
+  canMarkOpsPpeIssueDamaged,
+  canMarkOpsPpeIssueLost,
+  canRequireOpsHseComplianceAuditAction,
+  canRequireOpsHseInspectionAction,
+  canReturnOpsPpeIssue,
+  canStartOpsHseInspectionFinding,
+  canSubmitOpsHseRiskAssessment,
+  canVerifyOpsHseInspectionFinding,
+} from "@/lib/ops/hse-permissions";
+import { fetchHseUserOptions } from "@/lib/ops/hse";
+import { parseOpsListState } from "@/lib/ops/listing";
+import { canAccessOpsHref } from "@/lib/ops/permissions";
+import { formatOpsUserName } from "@/lib/ops/roles";
+import { fetchActiveSiteOptions } from "@/lib/ops/sites";
+import type {
+  OpsHseComplianceAuditStatus,
+  OpsHseInspectionFindingStatus,
+  OpsHseInspectionStatus,
+  OpsHseInspectionType,
+  OpsHseRiskAssessmentStatus,
+  OpsPpeIssueStatus,
+  OpsPpeItemType,
+  OpsSafetyTrainingStatus,
+  OpsToolboxTalkStatus,
+  OpsUserRole,
+} from "@/lib/ops/types";
+import {
+  firstParam,
+  formatZmw,
+  noticeFromParams,
+  OPS_DANGER_BUTTON_CLASS,
+  OPS_INPUT_CLASS,
+  OPS_LABEL_CLASS,
+  OPS_PRIMARY_BUTTON_CLASS,
+  OPS_SECONDARY_BUTTON_CLASS,
+  OPS_TABLE_SCROLL_CLASS,
+  type OpsSearchParams,
+} from "@/lib/ops/ui";
+
+type PageProps = {
+  searchParams?: Promise<OpsSearchParams>;
+};
+
+const PPE_STATUS_OPTIONS: Array<{ label: string; value: OpsPpeIssueStatus | "" }> = [
+  { label: "All statuses", value: "" },
+  { label: "Issued", value: "issued" },
+  { label: "Returned", value: "returned" },
+  { label: "Damaged", value: "damaged" },
+  { label: "Lost", value: "lost" },
+  { label: "Cancelled", value: "cancelled" },
+];
+
+const PPE_TYPE_OPTIONS: Array<{ label: string; value: OpsPpeItemType }> = [
+  { label: "Helmet", value: "helmet" },
+  { label: "Vest", value: "vest" },
+  { label: "Boots", value: "boots" },
+  { label: "Gloves", value: "gloves" },
+  { label: "Goggles", value: "goggles" },
+  { label: "Harness", value: "harness" },
+  { label: "Respirator", value: "respirator" },
+  { label: "Ear protection", value: "ear_protection" },
+  { label: "Other", value: "other" },
+];
+
+const INSPECTION_TYPE_OPTIONS: Array<{ label: string; value: OpsHseInspectionType }> = [
+  { label: "Site walk", value: "site_walk" },
+  { label: "Scaffolding", value: "scaffolding" },
+  { label: "Lifting", value: "lifting" },
+  { label: "Electrical", value: "electrical" },
+  { label: "Excavation", value: "excavation" },
+  { label: "Fire", value: "fire" },
+  { label: "Environmental", value: "environmental" },
+  { label: "Plant equipment", value: "plant_equipment" },
+  { label: "Housekeeping", value: "housekeeping" },
+  { label: "Other", value: "other" },
+];
+
+const FINDING_SEVERITY_OPTIONS = [
+  { label: "Low", value: "low" },
+  { label: "Medium", value: "medium" },
+  { label: "High", value: "high" },
+  { label: "Critical", value: "critical" },
+] as const;
+
+function statusFromParam(value: string | undefined) {
+  return PPE_STATUS_OPTIONS.some((status) => status.value === value)
+    ? (value as OpsPpeIssueStatus | "")
+    : "";
+}
+
+function hseComplianceNotice(params: OpsSearchParams) {
+  const created = noticeFromParams(params, "ppe", "PPE issue created.");
+
+  if (created) {
+    return created;
+  }
+
+  const createdValue = firstParam(params.created);
+  const updatedValue = firstParam(params.updated);
+  const messages: Record<string, string> = {
+    attachment: "HSE compliance attachment uploaded.",
+    audit_action_required: "Compliance audit marked action required.",
+    audit_cancelled: "Compliance audit cancelled.",
+    audit_closed: "Compliance audit closed.",
+    audit_completed: "Compliance audit completed.",
+    compliance_audit: "Compliance audit created.",
+    comment: "HSE compliance comment added.",
+    inspection: "Inspection created.",
+    inspection_action_required: "Inspection marked action required.",
+    inspection_cancelled: "Inspection cancelled.",
+    inspection_closed: "Inspection closed.",
+    inspection_completed: "Inspection completed.",
+    inspection_finding: "Inspection finding created.",
+    finding_cancelled: "Inspection finding cancelled.",
+    finding_corrected: "Inspection finding corrected.",
+    finding_started: "Inspection finding started.",
+    finding_verified: "Inspection finding verified.",
+    ppe_cancelled: "PPE issue cancelled.",
+    ppe_damaged: "PPE marked damaged.",
+    ppe_item: "PPE stock item created.",
+    ppe_lost: "PPE marked lost.",
+    ppe_returned: "PPE returned.",
+    ppe_stock: "PPE stock adjusted.",
+    risk_approved: "Risk assessment approved.",
+    risk_archived: "Risk assessment archived.",
+    risk_assessment: "Risk assessment created.",
+    risk_cancelled: "Risk assessment cancelled.",
+    risk_submitted: "Risk assessment submitted.",
+    training: "Safety training record created.",
+    training_cancelled: "Safety training cancelled.",
+    training_completed: "Safety training completed.",
+    toolbox: "Toolbox talk created.",
+    toolbox_attendee: "Toolbox attendee added.",
+    toolbox_cancelled: "Toolbox talk cancelled.",
+    toolbox_completed: "Toolbox talk completed.",
+  };
+  const key = createdValue ?? updatedValue ?? "";
+
+  return key && messages[key]
+    ? {
+        message: messages[key],
+        tone: "success" as const,
+      }
+    : null;
+}
+
+function todayInLusaka() {
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Africa/Lusaka",
+    year: "numeric",
+  }).format(new Date());
+}
+
+function formatDate(value: string | null) {
+  if (!value) {
+    return "Not set";
+  }
+
+  return new Intl.DateTimeFormat("en-ZM", {
+    dateStyle: "medium",
+    timeZone: "Africa/Lusaka",
+  }).format(new Date(`${value.slice(0, 10)}T00:00:00+02:00`));
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return "Not set";
+  }
+
+  return new Intl.DateTimeFormat("en-ZM", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function formatLabel(value: string) {
+  return value.replace(/_/g, " ");
+}
+
+function ppeStatusClass(status: OpsPpeIssueStatus) {
+  if (status === "returned") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "damaged" || status === "lost" || status === "cancelled") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  return "border-orange-200 bg-orange-50 text-orange-700";
+}
+
+function talkStatusClass(status: OpsToolboxTalkStatus) {
+  if (status === "completed") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "cancelled") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
+function inspectionStatusClass(status: OpsHseInspectionStatus) {
+  if (status === "closed" || status === "completed") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "cancelled") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (status === "action_required") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
+function findingStatusClass(status: OpsHseInspectionFindingStatus) {
+  if (status === "verified") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "cancelled") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (status === "corrected") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  if (status === "in_progress") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
+function trainingStatusClass(status: OpsSafetyTrainingStatus) {
+  if (status === "completed") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "cancelled" || status === "expired") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
+function riskAssessmentStatusClass(status: OpsHseRiskAssessmentStatus) {
+  if (status === "approved") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "archived") {
+    return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
+  }
+
+  if (status === "cancelled") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (status === "submitted") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
+function complianceAuditStatusClass(status: OpsHseComplianceAuditStatus) {
+  if (status === "closed" || status === "completed") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "cancelled") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (status === "action_required") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
+function severityClass(value: string) {
+  if (value === "critical" || value === "high") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (value === "medium") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function riskHeatmapCellClass(cell: OpsHseRiskHeatmapCell) {
+  if (cell.count === 0) {
+    return "border-primary-dark/10 bg-primary-dark/[0.015] text-primary-dark/34";
+  }
+
+  if (cell.residualRisk === "critical") {
+    return "border-red-200 bg-red-50 text-red-800";
+  }
+
+  if (cell.residualRisk === "high") {
+    return "border-orange-200 bg-orange-50 text-orange-800";
+  }
+
+  if (cell.residualRisk === "medium") {
+    return "border-sky-200 bg-sky-50 text-sky-800";
+  }
+
+  return "border-emerald-200 bg-emerald-50 text-emerald-800";
+}
+
+function auditEscalationBucketLabel(bucket: OpsHseAuditEscalationBucket) {
+  const labels: Record<OpsHseAuditEscalationBucket, string> = {
+    action_required: "Action required",
+    completed_with_ncs: "Completed with NCs",
+    due_soon: "Due soon",
+    overdue: "Overdue",
+  };
+
+  return labels[bucket];
+}
+
+function auditEscalationBucketClass(bucket: OpsHseAuditEscalationBucket) {
+  if (bucket === "overdue") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (bucket === "action_required") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  if (bucket === "completed_with_ncs") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
+function StatusBadge({ className, value }: { className: string; value: string }) {
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${className}`}>
+      {formatLabel(value)}
+    </span>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary-dark/40">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-primary-dark">{value}</p>
+    </div>
+  );
+}
+
+function InlineActionForm({
+  action,
+  buttonClass,
+  children,
+  confirmText,
+  hidden,
+}: {
+  action: (formData: FormData) => Promise<void>;
+  buttonClass: string;
+  children: React.ReactNode;
+  confirmText: string;
+  hidden: Record<string, string>;
+}) {
+  return (
+    <form action={action}>
+      {Object.entries(hidden).map(([name, value]) => (
+        <input key={name} name={name} type="hidden" value={value} />
+      ))}
+      <OpsConfirmSubmitButton className={buttonClass} confirmText={confirmText}>
+        {children}
+      </OpsConfirmSubmitButton>
+    </form>
+  );
+}
+
+function PpeActions({ issue, role }: { issue: OpsPpeIssueSummary; role: OpsUserRole }) {
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {canReturnOpsPpeIssue(role, issue) ? (
+        <details className="w-full rounded-md border border-primary-dark/10 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+            Return PPE
+          </summary>
+          <form action={returnPpeIssueAction} className="mt-3 grid gap-3">
+            <input name="issue_id" type="hidden" value={issue.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Return notes
+              <textarea className={OPS_INPUT_CLASS} name="return_condition_notes" rows={2} />
+            </label>
+            <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+              <RotateCcw className="size-4" aria-hidden="true" />
+              Mark returned
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canMarkOpsPpeIssueDamaged(role, issue) ? (
+        <details className="w-full rounded-md border border-orange-100 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-orange-700">
+            Mark damaged
+          </summary>
+          <form action={markPpeIssueDamagedAction} className="mt-3 grid gap-3">
+            <input name="issue_id" type="hidden" value={issue.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Replacement cost
+              <input className={OPS_INPUT_CLASS} min="0" name="replacement_cost" step="0.01" type="number" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Notes
+              <textarea className={OPS_INPUT_CLASS} name="return_condition_notes" rows={2} />
+            </label>
+            <button className={OPS_DANGER_BUTTON_CLASS} type="submit">
+              Mark damaged
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canMarkOpsPpeIssueLost(role, issue) ? (
+        <details className="w-full rounded-md border border-red-100 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-red-700">
+            Mark lost
+          </summary>
+          <form action={markPpeIssueLostAction} className="mt-3 grid gap-3">
+            <input name="issue_id" type="hidden" value={issue.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Replacement cost
+              <input className={OPS_INPUT_CLASS} min="0" name="replacement_cost" step="0.01" type="number" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Notes
+              <textarea className={OPS_INPUT_CLASS} name="return_condition_notes" rows={2} />
+            </label>
+            <button className={OPS_DANGER_BUTTON_CLASS} type="submit">
+              Mark lost
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canCancelOpsPpeIssue(role, issue) ? (
+        <InlineActionForm
+          action={cancelPpeIssueAction}
+          buttonClass={OPS_DANGER_BUTTON_CLASS}
+          confirmText="Cancel PPE issue?"
+          hidden={{ issue_id: issue.id }}
+        >
+          <XCircle className="size-4" aria-hidden="true" />
+          Cancel
+        </InlineActionForm>
+      ) : null}
+    </div>
+  );
+}
+
+function ToolboxTalkActions({ role, talk }: { role: OpsUserRole; talk: OpsToolboxTalkSummary }) {
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {canCompleteOpsToolboxTalk(role, talk) ? (
+        <details className="w-full rounded-md border border-primary-dark/10 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+            Complete talk
+          </summary>
+          <form action={completeToolboxTalkAction} className="mt-3 grid gap-3 sm:grid-cols-2">
+            <input name="talk_id" type="hidden" value={talk.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Attendees
+              <input className={OPS_INPUT_CLASS} min="0" name="attendees_count" type="number" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Duration minutes
+              <input className={OPS_INPUT_CLASS} min="0" name="duration_minutes" type="number" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-2`}>
+              Summary
+              <textarea className={OPS_INPUT_CLASS} name="summary" rows={2} />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-2`}>
+              Actions required
+              <textarea className={OPS_INPUT_CLASS} name="actions_required" rows={2} />
+            </label>
+            <button className={`${OPS_PRIMARY_BUTTON_CLASS} sm:col-span-2`} type="submit">
+              <CheckCircle2 className="size-4" aria-hidden="true" />
+              Complete
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canCancelOpsToolboxTalk(role, talk) ? (
+        <InlineActionForm
+          action={cancelToolboxTalkAction}
+          buttonClass={OPS_DANGER_BUTTON_CLASS}
+          confirmText="Cancel toolbox talk?"
+          hidden={{ talk_id: talk.id }}
+        >
+          <XCircle className="size-4" aria-hidden="true" />
+          Cancel
+        </InlineActionForm>
+      ) : null}
+    </div>
+  );
+}
+
+function InspectionActions({ inspection, role }: { inspection: OpsHseInspectionSummary; role: OpsUserRole }) {
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {canCompleteOpsHseInspection(role, inspection) ? (
+        <details className="w-full rounded-md border border-primary-dark/10 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+            Complete inspection
+          </summary>
+          <form action={completeHseInspectionAction} className="mt-3 grid gap-3 sm:grid-cols-3">
+            <input name="inspection_id" type="hidden" value={inspection.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Score
+              <input className={OPS_INPUT_CLASS} max="100" min="0" name="score" step="0.01" type="number" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Findings
+              <input className={OPS_INPUT_CLASS} min="0" name="findings_count" type="number" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Actions
+              <input className={OPS_INPUT_CLASS} min="0" name="action_count" type="number" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-3`}>
+              Summary
+              <textarea className={OPS_INPUT_CLASS} name="summary" rows={2} />
+            </label>
+            <button className={`${OPS_PRIMARY_BUTTON_CLASS} sm:col-span-3`} type="submit">
+              Complete
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canRequireOpsHseInspectionAction(role, inspection) ? (
+        <details className="w-full rounded-md border border-orange-100 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-orange-700">
+            Require action
+          </summary>
+          <form action={requireHseInspectionActionAction} className="mt-3 grid gap-3">
+            <input name="inspection_id" type="hidden" value={inspection.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Corrective actions required
+              <textarea className={OPS_INPUT_CLASS} name="corrective_actions_required" required rows={2} />
+            </label>
+            <button className={OPS_DANGER_BUTTON_CLASS} type="submit">
+              Require action
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canCloseOpsHseInspection(role, inspection) ? (
+        <InlineActionForm
+          action={closeHseInspectionAction}
+          buttonClass={OPS_SECONDARY_BUTTON_CLASS}
+          confirmText="Close inspection?"
+          hidden={{ inspection_id: inspection.id }}
+        >
+          Close
+        </InlineActionForm>
+      ) : null}
+      {canCancelOpsHseInspection(role, inspection) ? (
+        <InlineActionForm
+          action={cancelHseInspectionAction}
+          buttonClass={OPS_DANGER_BUTTON_CLASS}
+          confirmText="Cancel inspection?"
+          hidden={{ inspection_id: inspection.id }}
+        >
+          Cancel
+        </InlineActionForm>
+      ) : null}
+    </div>
+  );
+}
+
+function InspectionFindingActions({
+  finding,
+  role,
+}: {
+  finding: OpsHseInspectionFindingSummary;
+  role: OpsUserRole;
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {canStartOpsHseInspectionFinding(role, finding) ? (
+        <InlineActionForm
+          action={startHseInspectionFindingAction}
+          buttonClass={OPS_SECONDARY_BUTTON_CLASS}
+          confirmText="Start this finding?"
+          hidden={{ finding_id: finding.id }}
+        >
+          Start
+        </InlineActionForm>
+      ) : null}
+      {canCorrectOpsHseInspectionFinding(role, finding) ? (
+        <details className="w-full rounded-md border border-primary-dark/10 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+            Correct finding
+          </summary>
+          <form action={correctHseInspectionFindingAction} className="mt-3 grid gap-3">
+            <input name="finding_id" type="hidden" value={finding.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Completion notes
+              <textarea className={OPS_INPUT_CLASS} name="completion_notes" rows={2} />
+            </label>
+            <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+              Mark corrected
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canVerifyOpsHseInspectionFinding(role, finding) ? (
+        <InlineActionForm
+          action={verifyHseInspectionFindingAction}
+          buttonClass={OPS_PRIMARY_BUTTON_CLASS}
+          confirmText="Verify this finding?"
+          hidden={{ finding_id: finding.id }}
+        >
+          Verify
+        </InlineActionForm>
+      ) : null}
+      {canCancelOpsHseInspectionFinding(role, finding) ? (
+        <InlineActionForm
+          action={cancelHseInspectionFindingAction}
+          buttonClass={OPS_DANGER_BUTTON_CLASS}
+          confirmText="Cancel this finding?"
+          hidden={{ finding_id: finding.id }}
+        >
+          Cancel
+        </InlineActionForm>
+      ) : null}
+    </div>
+  );
+}
+
+function SafetyTrainingActions({
+  record,
+  role,
+  today,
+}: {
+  record: OpsSafetyTrainingRecordSummary;
+  role: OpsUserRole;
+  today: string;
+}) {
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {canCompleteOpsSafetyTraining(role, record) ? (
+        <details className="w-full rounded-md border border-primary-dark/10 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+            Complete training
+          </summary>
+          <form action={completeSafetyTrainingRecordAction} className="mt-3 grid gap-3 sm:grid-cols-3">
+            <input name="training_id" type="hidden" value={record.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Completed date
+              <input className={OPS_INPUT_CLASS} defaultValue={today} name="completed_date" type="date" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Expiry date
+              <input className={OPS_INPUT_CLASS} name="expiry_date" type="date" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Score
+              <input className={OPS_INPUT_CLASS} max="100" min="0" name="score" step="0.01" type="number" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-3`}>
+              Notes
+              <textarea className={OPS_INPUT_CLASS} name="notes" rows={2} />
+            </label>
+            <button className={`${OPS_PRIMARY_BUTTON_CLASS} sm:col-span-3`} type="submit">
+              Complete training
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canCancelOpsSafetyTraining(role, record) ? (
+        <InlineActionForm
+          action={cancelSafetyTrainingRecordAction}
+          buttonClass={OPS_DANGER_BUTTON_CLASS}
+          confirmText="Cancel this training record?"
+          hidden={{ training_id: record.id }}
+        >
+          Cancel
+        </InlineActionForm>
+      ) : null}
+    </div>
+  );
+}
+
+function RiskAssessmentActions({
+  actorId,
+  assessment,
+  role,
+}: {
+  actorId: string;
+  assessment: OpsHseRiskAssessmentSummary;
+  role: OpsUserRole;
+}) {
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {canSubmitOpsHseRiskAssessment(actorId, role, assessment) ? (
+        <InlineActionForm
+          action={submitHseRiskAssessmentAction}
+          buttonClass={OPS_SECONDARY_BUTTON_CLASS}
+          confirmText="Submit this risk assessment?"
+          hidden={{ assessment_id: assessment.id }}
+        >
+          Submit
+        </InlineActionForm>
+      ) : null}
+      {canApproveOpsHseRiskAssessment(role, assessment) ? (
+        <InlineActionForm
+          action={approveHseRiskAssessmentAction}
+          buttonClass={OPS_PRIMARY_BUTTON_CLASS}
+          confirmText="Approve this risk assessment?"
+          hidden={{ assessment_id: assessment.id }}
+        >
+          Approve
+        </InlineActionForm>
+      ) : null}
+      {canArchiveOpsHseRiskAssessment(role, assessment) ? (
+        <InlineActionForm
+          action={archiveHseRiskAssessmentAction}
+          buttonClass={OPS_SECONDARY_BUTTON_CLASS}
+          confirmText="Archive this risk assessment?"
+          hidden={{ assessment_id: assessment.id }}
+        >
+          Archive
+        </InlineActionForm>
+      ) : null}
+      {canCancelOpsHseRiskAssessment(role, assessment) ? (
+        <InlineActionForm
+          action={cancelHseRiskAssessmentAction}
+          buttonClass={OPS_DANGER_BUTTON_CLASS}
+          confirmText="Cancel this risk assessment?"
+          hidden={{ assessment_id: assessment.id }}
+        >
+          Cancel
+        </InlineActionForm>
+      ) : null}
+    </div>
+  );
+}
+
+function ComplianceAuditActions({
+  audit,
+  role,
+  today,
+}: {
+  audit: OpsHseComplianceAuditSummary;
+  role: OpsUserRole;
+  today: string;
+}) {
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {canCompleteOpsHseComplianceAudit(role, audit) ? (
+        <details className="w-full rounded-md border border-primary-dark/10 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+            Complete audit
+          </summary>
+          <form action={completeHseComplianceAuditAction} className="mt-3 grid gap-3 sm:grid-cols-3">
+            <input name="audit_id" type="hidden" value={audit.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Completed date
+              <input className={OPS_INPUT_CLASS} defaultValue={today} name="completed_date" type="date" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Score
+              <input className={OPS_INPUT_CLASS} max="100" min="0" name="score" step="0.01" type="number" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Next audit
+              <input className={OPS_INPUT_CLASS} name="next_audit_date" type="date" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Findings
+              <input className={OPS_INPUT_CLASS} min="0" name="findings_count" type="number" />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Non-conformances
+              <input className={OPS_INPUT_CLASS} min="0" name="non_conformance_count" type="number" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-3`}>
+              Summary
+              <textarea className={OPS_INPUT_CLASS} name="summary" rows={2} />
+            </label>
+            <button className={`${OPS_PRIMARY_BUTTON_CLASS} sm:col-span-3`} type="submit">
+              Complete audit
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canRequireOpsHseComplianceAuditAction(role, audit) ? (
+        <details className="w-full rounded-md border border-orange-100 p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-orange-700">
+            Require action
+          </summary>
+          <form action={requireHseComplianceAuditActionAction} className="mt-3 grid gap-3">
+            <input name="audit_id" type="hidden" value={audit.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Action required
+              <textarea className={OPS_INPUT_CLASS} name="action_required" required rows={2} />
+            </label>
+            <button className={OPS_DANGER_BUTTON_CLASS} type="submit">
+              Require action
+            </button>
+          </form>
+        </details>
+      ) : null}
+      {canCloseOpsHseComplianceAudit(role, audit) ? (
+        <InlineActionForm
+          action={closeHseComplianceAuditAction}
+          buttonClass={OPS_SECONDARY_BUTTON_CLASS}
+          confirmText="Close this compliance audit?"
+          hidden={{ audit_id: audit.id }}
+        >
+          Close
+        </InlineActionForm>
+      ) : null}
+      {canCancelOpsHseComplianceAudit(role, audit) ? (
+        <InlineActionForm
+          action={cancelHseComplianceAuditAction}
+          buttonClass={OPS_DANGER_BUTTON_CLASS}
+          confirmText="Cancel this compliance audit?"
+          hidden={{ audit_id: audit.id }}
+        >
+          Cancel
+        </InlineActionForm>
+      ) : null}
+    </div>
+  );
+}
+
+export default async function HseCompliancePage({ searchParams }: PageProps) {
+  const params = (await searchParams) ?? {};
+  const auth = await requireOpsUser();
+
+  if (!canAccessOpsHref(auth.profile.role, "/ops/hse-compliance")) {
+    notFound();
+  }
+
+  const listState = parseOpsListState(params, { defaultPageSize: 8 });
+  const status = statusFromParam(firstParam(params.status));
+  const [
+    sites,
+    users,
+    employees,
+    stats,
+    ppeIssues,
+    ppeItems,
+    ppeItemOptions,
+    toolboxTalks,
+    inspections,
+    trainingRecords,
+    riskAssessments,
+    complianceAudits,
+    ageingAlerts,
+  ] = await Promise.all([
+    fetchActiveSiteOptions(),
+    fetchHseUserOptions(),
+    fetchHseComplianceEmployeeOptions(),
+    fetchOpsHseComplianceStats(),
+    fetchPaginatedOpsPpeIssues({
+      listState,
+      query: listState.query,
+      status: status || undefined,
+    }),
+    fetchRecentOpsPpeItems(),
+    fetchActivePpeItemOptions(),
+    fetchRecentOpsToolboxTalks(),
+    fetchRecentOpsHseInspections(),
+    fetchRecentOpsSafetyTrainingRecords(),
+    fetchRecentOpsHseRiskAssessments(),
+    fetchRecentOpsHseComplianceAudits(),
+    fetchOpsHseAgeingAlerts(),
+  ]);
+  const canCreatePpe = canCreateOpsPpeIssue(auth.profile.role);
+  const canCreatePpeItem = canCreateOpsPpeItem(auth.profile.role);
+  const canCreateTalk = canCreateOpsToolboxTalk(auth.profile.role);
+  const canCreateInspection = canCreateOpsHseInspection(auth.profile.role);
+  const canCreateTraining = canCreateOpsSafetyTraining(auth.profile.role);
+  const canCreateRisk = canCreateOpsHseRiskAssessment(auth.profile.role);
+  const canCreateAudit = canCreateOpsHseComplianceAudit(auth.profile.role);
+  const canManagePpe = canManageOpsPpeIssue(auth.profile.role);
+  const canManageTalk = canManageOpsToolboxTalk(auth.profile.role);
+  const canManageInspection = canManageOpsHseInspection(auth.profile.role);
+  const notice = hseComplianceNotice(params);
+  const today = todayInLusaka();
+  const riskHeatmap = buildOpsHseRiskHeatmap(riskAssessments, today);
+  const auditEscalations = buildOpsHseAuditEscalations(complianceAudits, today);
+  const openCreate = firstParam(params.create);
+  const hasActiveListFilter = listState.query.length > 0 || status.length > 0;
+
+  return (
+    <div className="w-full max-w-none space-y-6">
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+            HSE compliance
+          </p>
+          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            HSE compliance controls
+          </h1>
+          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            Control safety risk, audits, PPE, toolbox talks, inspections, training evidence, and ageing incident follow-up.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {canCreatePpeItem ? (
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=ppe-item#ppe-item-create-panel">
+              PPE stock
+            </Link>
+          ) : null}
+          {canCreatePpe ? (
+            <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/hse-compliance?create=ppe#ppe-create-panel">
+              <Plus className="size-4" aria-hidden="true" />
+              Issue PPE
+            </Link>
+          ) : null}
+          {canCreateTalk ? (
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=toolbox#toolbox-create-panel">
+              Toolbox talk
+            </Link>
+          ) : null}
+          {canCreateInspection ? (
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=inspection#inspection-create-panel">
+              Inspection
+            </Link>
+          ) : null}
+          {canCreateRisk ? (
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=risk#risk-create-panel">
+              Risk assessment
+            </Link>
+          ) : null}
+          {canCreateAudit ? (
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=audit#audit-create-panel">
+              Audit
+            </Link>
+          ) : null}
+          {canCreateTraining ? (
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=training#training-create-panel">
+              Training
+            </Link>
+          ) : null}
+        </div>
+      </section>
+
+      {notice ? (
+        <div
+          className={`rounded-md border px-4 py-3 text-sm font-semibold ${
+            notice.tone === "error"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          }`}
+          role={notice.tone === "error" ? "alert" : "status"}
+        >
+          {notice.message}
+        </div>
+      ) : null}
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <OpsKpiCard
+          href="/ops/hse-compliance?status=issued#ppe-register"
+          icon={HardHat}
+          label="Issued PPE"
+          tone={stats.overduePpe > 0 ? "warn" : "default"}
+          trend={`${stats.overduePpe} overdue / ${stats.lowStockPpeItems} zero stock`}
+          value={String(stats.issuedPpe)}
+        />
+        <OpsKpiCard
+          href="/ops/hse-compliance#toolbox-panel"
+          icon={ClipboardCheck}
+          label="Toolbox talks"
+          tone={stats.plannedTalks > 0 ? "default" : "good"}
+          trend={`${stats.plannedTalks} planned`}
+          value={String(stats.completedTalks)}
+        />
+        <OpsKpiCard
+          href="/ops/hse-compliance#inspection-panel"
+          icon={ShieldCheck}
+          label="Open inspections"
+          tone={stats.actionRequiredInspections > 0 || stats.overdueInspections > 0 ? "warn" : "default"}
+          trend={`${stats.actionRequiredInspections} action / ${stats.openInspectionFindings} findings`}
+          value={String(stats.openInspections)}
+        />
+        <OpsKpiCard
+          href="/ops/hse-compliance#training-panel"
+          icon={GraduationCap}
+          label="Training due"
+          tone={stats.expiredTraining > 0 || stats.trainingDueSoon > 0 ? "warn" : "good"}
+          trend={`${stats.expiredTraining} expired`}
+          value={String(stats.trainingDueSoon)}
+        />
+        <OpsKpiCard
+          href="/ops/hse-compliance#risk-assessment-panel"
+          icon={ShieldPlus}
+          label="Risk reviews"
+          tone={stats.reviewDueRiskAssessments > 0 || stats.highRiskAssessments > 0 ? "warn" : "default"}
+          trend={`${stats.highRiskAssessments} high residual`}
+          value={String(stats.reviewDueRiskAssessments)}
+        />
+        <OpsKpiCard
+          href="/ops/hse-compliance#audit-panel"
+          icon={ClipboardList}
+          label="Audit actions"
+          tone={stats.actionRequiredAudits > 0 || stats.auditsDueSoon > 0 ? "warn" : "default"}
+          trend={`${stats.auditsDueSoon} due soon`}
+          value={String(stats.actionRequiredAudits)}
+        />
+      </section>
+
+      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-primary-dark">Incident ageing watch</h2>
+            <p className="mt-1 text-sm text-primary-dark/56">
+              Oldest open incident records from the incident register.
+            </p>
+          </div>
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse#incident-register">
+            Open HSE
+          </Link>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {ageingAlerts.length > 0 ? (
+            ageingAlerts.map((alert) => (
+              <article className="rounded-md border border-primary-dark/10 p-3" key={alert.id}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                      {alert.incident_number}
+                    </p>
+                    <h3 className="mt-1 font-bold text-primary-dark">{alert.title}</h3>
+                    <p className="mt-1 text-sm text-primary-dark/58">
+                      {alert.site ? `${alert.site.code} - ${alert.site.name}` : "No site"} / {formatLabel(alert.status)}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-orange-700">
+                    {alert.days_open} days
+                  </span>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-md border border-primary-dark/10 p-4 text-sm font-semibold text-primary-dark/58 lg:col-span-2">
+              No open incident ageing alerts.
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+        <div className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-primary-dark">Risk heatmap</h2>
+              <p className="mt-1 text-sm text-primary-dark/56">
+                Active assessments by initial and residual risk.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md border border-primary-dark/10 px-3 py-2">
+                <p className="text-lg font-bold text-primary-dark">{riskHeatmap.totalActive}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-primary-dark/44">Active</p>
+              </div>
+              <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2">
+                <p className="text-lg font-bold text-orange-800">{riskHeatmap.highResidualCount}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-orange-700">High+</p>
+              </div>
+              <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2">
+                <p className="text-lg font-bold text-sky-800">{riskHeatmap.reviewDueCount}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-sky-700">Review</p>
+              </div>
+            </div>
+          </div>
+          <div className={`${OPS_TABLE_SCROLL_CLASS} mt-4`}>
+            <table className="min-w-[620px] w-full border-separate border-spacing-0 text-left text-sm">
+              <caption className="sr-only">
+                HSE risk heatmap showing active risk assessments by initial risk and residual risk.
+              </caption>
+              <thead>
+                <tr>
+                  <th
+                    className="w-28 px-2 py-2 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/40"
+                    scope="col"
+                  >
+                    Initial
+                  </th>
+                  {OPS_HSE_RISK_LEVELS.map((level) => (
+                    <th
+                      className="px-2 py-2 text-center text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/40"
+                      key={level}
+                      scope="col"
+                    >
+                      {formatLabel(level)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {riskHeatmap.matrix.map((row) => (
+                  <tr key={row[0].initialRisk}>
+                    <th
+                      className="px-2 py-2 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/54"
+                      scope="row"
+                    >
+                      {formatLabel(row[0].initialRisk)}
+                    </th>
+                    {row.map((cell) => (
+                      <td className="px-2 py-2 align-top" key={`${cell.initialRisk}-${cell.residualRisk}`}>
+                        <div className={`min-h-24 rounded-md border p-3 ${riskHeatmapCellClass(cell)}`}>
+                          <p className="text-2xl font-bold">{cell.count}</p>
+                          <p className="mt-1 text-[11px] font-semibold opacity-75">
+                            {cell.approvedCount} approved / {cell.submittedCount} submitted
+                          </p>
+                          {cell.reviewDueCount > 0 ? (
+                            <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.08em]">
+                              {cell.reviewDueCount} review due
+                            </p>
+                          ) : null}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+          <div>
+            <h2 className="text-lg font-bold text-primary-dark">Audit escalation watch</h2>
+            <p className="mt-1 text-sm text-primary-dark/56">
+              Planned audits, overdue schedules, open actions, and non-conformance follow-up.
+            </p>
+          </div>
+          <div className="mt-4 grid gap-2 min-[520px]:grid-cols-2">
+            {(["action_required", "overdue", "due_soon", "completed_with_ncs"] as const).map((bucket) => (
+              <div className={`rounded-md border p-3 ${auditEscalationBucketClass(bucket)}`} key={bucket}>
+                <p className="text-xl font-bold">{auditEscalations.counts[bucket]}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em]">
+                  {auditEscalationBucketLabel(bucket)}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-3">
+            {auditEscalations.items.length > 0 ? (
+              auditEscalations.items.slice(0, 6).map(({ audit, bucket }) => (
+                <article className="rounded-md border border-primary-dark/10 p-3" key={`${bucket}-${audit.id}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                        {audit.audit_number}
+                      </p>
+                      <h3 className="mt-1 font-bold text-primary-dark">{audit.title}</h3>
+                      <p className="mt-1 text-sm text-primary-dark/58">
+                        {audit.site ? `${audit.site.code} - ${audit.site.name}` : "No site"} /{" "}
+                        {formatDate(audit.scheduled_date)}
+                      </p>
+                    </div>
+                    <StatusBadge className={auditEscalationBucketClass(bucket)} value={auditEscalationBucketLabel(bucket)} />
+                  </div>
+                  {audit.action_required ? (
+                    <p className="mt-3 text-sm leading-6 text-primary-dark/62">
+                      {audit.action_required}
+                    </p>
+                  ) : null}
+                </article>
+              ))
+            ) : (
+              <div className="rounded-md border border-primary-dark/10 p-4 text-sm font-semibold text-primary-dark/58">
+                No audit escalations in the current register.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {(canCreatePpeItem || canCreatePpe || canCreateTalk || canCreateInspection || canCreateRisk || canCreateAudit || canCreateTraining) ? (
+        <section className="grid gap-4 xl:grid-cols-3">
+          {canCreatePpeItem ? (
+            <details
+              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              id="ppe-item-create-panel"
+              open={openCreate === "ppe-item"}
+            >
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+                PPE stock item
+              </summary>
+              <form action={createPpeItemAction} className="mt-4 grid gap-3">
+                <label className={OPS_LABEL_CLASS}>
+                  Item name
+                  <input className={OPS_INPUT_CLASS} name="item_name" required />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  PPE type
+                  <select className={OPS_INPUT_CLASS} defaultValue="helmet" name="ppe_type">
+                    {PPE_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className={OPS_LABEL_CLASS}>
+                    Opening stock
+                    <input className={OPS_INPUT_CLASS} defaultValue="0" min="0" name="stock_on_hand" type="number" />
+                  </label>
+                  <label className={OPS_LABEL_CLASS}>
+                    Reorder level
+                    <input className={OPS_INPUT_CLASS} defaultValue="0" min="0" name="reorder_level" type="number" />
+                  </label>
+                  <label className={OPS_LABEL_CLASS}>
+                    Unit
+                    <input className={OPS_INPUT_CLASS} defaultValue="each" name="unit" />
+                  </label>
+                </div>
+                <label className={OPS_LABEL_CLASS}>
+                  Storage location
+                  <input className={OPS_INPUT_CLASS} name="storage_location" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Description
+                  <textarea className={OPS_INPUT_CLASS} name="description" rows={2} />
+                </label>
+                <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                  Create stock item
+                </button>
+              </form>
+            </details>
+          ) : null}
+
+          {canCreatePpe ? (
+            <details
+              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              id="ppe-create-panel"
+              open={openCreate === "ppe"}
+            >
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+                Issue PPE
+              </summary>
+              <form action={createPpeIssueAction} className="mt-4 grid gap-3">
+                <label className={OPS_LABEL_CLASS}>
+                  Site
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id">
+                    <option value="">No site link</option>
+                    {sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.code} - {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Employee
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="employee_id">
+                    <option value="">No employee link</option>
+                    {employees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.employee_number} - {employee.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  PPE stock item
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="ppe_item_id">
+                    <option value="">Ad hoc issue</option>
+                    {ppeItemOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.item_code} - {item.item_name} ({item.stock_on_hand} {item.unit})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Issued to
+                  <input className={OPS_INPUT_CLASS} name="issued_to_name" required />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  PPE type
+                  <select className={OPS_INPUT_CLASS} defaultValue="helmet" name="ppe_type">
+                    {PPE_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Item description
+                  <input className={OPS_INPUT_CLASS} name="item_description" />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className={OPS_LABEL_CLASS}>
+                    Quantity
+                    <input className={OPS_INPUT_CLASS} defaultValue="1" min="1" name="quantity" type="number" />
+                  </label>
+                  <label className={OPS_LABEL_CLASS}>
+                    Issue date
+                    <input className={OPS_INPUT_CLASS} defaultValue={today} name="issue_date" type="date" />
+                  </label>
+                  <label className={OPS_LABEL_CLASS}>
+                    Due return
+                    <input className={OPS_INPUT_CLASS} name="due_return_date" type="date" />
+                  </label>
+                </div>
+                <label className={OPS_LABEL_CLASS}>
+                  Notes
+                  <textarea className={OPS_INPUT_CLASS} name="notes" rows={2} />
+                </label>
+                <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                  Issue PPE
+                </button>
+              </form>
+            </details>
+          ) : null}
+
+          {canCreateTalk ? (
+            <details
+              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              id="toolbox-create-panel"
+              open={openCreate === "toolbox"}
+            >
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+                Toolbox talk
+              </summary>
+              <form action={createToolboxTalkAction} className="mt-4 grid gap-3">
+                <label className={OPS_LABEL_CLASS}>
+                  Site
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id" required>
+                    <option value="">Select site</option>
+                    {sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.code} - {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Facilitator
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="facilitator_id">
+                    <option value="">Unassigned</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Topic
+                  <input className={OPS_INPUT_CLASS} name="topic" required />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Category
+                  <input className={OPS_INPUT_CLASS} name="safety_category" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Date
+                  <input className={OPS_INPUT_CLASS} defaultValue={today} name="talk_date" type="date" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Planned summary
+                  <textarea className={OPS_INPUT_CLASS} name="summary" rows={2} />
+                </label>
+                <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                  Create talk
+                </button>
+              </form>
+            </details>
+          ) : null}
+
+          {canCreateInspection ? (
+            <details
+              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              id="inspection-create-panel"
+              open={openCreate === "inspection"}
+            >
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+                HSE inspection
+              </summary>
+              <form action={createHseInspectionAction} className="mt-4 grid gap-3">
+                <label className={OPS_LABEL_CLASS}>
+                  Site
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id" required>
+                    <option value="">Select site</option>
+                    {sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.code} - {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Inspector
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="inspector_id">
+                    <option value="">Unassigned</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Type
+                  <select className={OPS_INPUT_CLASS} defaultValue="site_walk" name="inspection_type">
+                    {INSPECTION_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Scheduled date
+                  <input className={OPS_INPUT_CLASS} defaultValue={today} name="scheduled_date" type="date" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Title
+                  <input className={OPS_INPUT_CLASS} name="title" required />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Scope
+                  <textarea className={OPS_INPUT_CLASS} name="summary" rows={2} />
+                </label>
+                <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                  Create inspection
+                </button>
+              </form>
+            </details>
+          ) : null}
+
+          {canCreateRisk ? (
+            <details
+              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              id="risk-create-panel"
+              open={openCreate === "risk"}
+            >
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+                Risk assessment
+              </summary>
+              <form action={createHseRiskAssessmentAction} className="mt-4 grid gap-3">
+                <label className={OPS_LABEL_CLASS}>
+                  Site
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id">
+                    <option value="">No site link</option>
+                    {sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.code} - {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Responsible user
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="responsible_user_id">
+                    <option value="">Unassigned</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Title
+                  <input className={OPS_INPUT_CLASS} name="title" required />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Activity
+                  <input className={OPS_INPUT_CLASS} name="activity" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Area/location
+                  <input className={OPS_INPUT_CLASS} name="area_location" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Hazard category
+                  <input className={OPS_INPUT_CLASS} defaultValue="general" name="hazard_category" />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className={OPS_LABEL_CLASS}>
+                    Initial risk
+                    <select className={OPS_INPUT_CLASS} defaultValue="medium" name="initial_risk">
+                      {FINDING_SEVERITY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={OPS_LABEL_CLASS}>
+                    Residual risk
+                    <select className={OPS_INPUT_CLASS} defaultValue="low" name="residual_risk">
+                      {FINDING_SEVERITY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className={OPS_LABEL_CLASS}>
+                    Assessment date
+                    <input className={OPS_INPUT_CLASS} defaultValue={today} name="assessment_date" type="date" />
+                  </label>
+                  <label className={OPS_LABEL_CLASS}>
+                    Review date
+                    <input className={OPS_INPUT_CLASS} name="review_date" type="date" />
+                  </label>
+                </div>
+                <label className={OPS_LABEL_CLASS}>
+                  Control measures
+                  <textarea className={OPS_INPUT_CLASS} name="control_measures" rows={3} />
+                </label>
+                <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                  Create risk assessment
+                </button>
+              </form>
+            </details>
+          ) : null}
+
+          {canCreateAudit ? (
+            <details
+              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              id="audit-create-panel"
+              open={openCreate === "audit"}
+            >
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+                Compliance audit
+              </summary>
+              <form action={createHseComplianceAuditAction} className="mt-4 grid gap-3">
+                <label className={OPS_LABEL_CLASS}>
+                  Site
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id">
+                    <option value="">No site link</option>
+                    {sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.code} - {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Auditor
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="auditor_id">
+                    <option value="">Unassigned</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Title
+                  <input className={OPS_INPUT_CLASS} name="title" required />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Audit type
+                  <input className={OPS_INPUT_CLASS} defaultValue="general" name="audit_type" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Scheduled date
+                  <input className={OPS_INPUT_CLASS} defaultValue={today} name="scheduled_date" type="date" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Scope/notes
+                  <textarea className={OPS_INPUT_CLASS} name="summary" rows={3} />
+                </label>
+                <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                  Create audit
+                </button>
+              </form>
+            </details>
+          ) : null}
+
+          {canCreateTraining ? (
+            <details
+              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              id="training-create-panel"
+              open={openCreate === "training"}
+            >
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+                Safety training
+              </summary>
+              <form action={createSafetyTrainingRecordAction} className="mt-4 grid gap-3">
+                <label className={OPS_LABEL_CLASS}>
+                  Site
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id">
+                    <option value="">No site link</option>
+                    {sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.code} - {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Employee
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="employee_id">
+                    <option value="">No employee link</option>
+                    {employees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.employee_number} - {employee.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Trainee name
+                  <input className={OPS_INPUT_CLASS} name="trainee_name" required />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Training title
+                  <input className={OPS_INPUT_CLASS} name="training_title" required />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className={OPS_LABEL_CLASS}>
+                    Type
+                    <input className={OPS_INPUT_CLASS} defaultValue="general" name="training_type" />
+                  </label>
+                  <label className={OPS_LABEL_CLASS}>
+                    Planned date
+                    <input className={OPS_INPUT_CLASS} defaultValue={today} name="planned_date" type="date" />
+                  </label>
+                  <label className={OPS_LABEL_CLASS}>
+                    Expiry date
+                    <input className={OPS_INPUT_CLASS} name="expiry_date" type="date" />
+                  </label>
+                </div>
+                <label className={OPS_LABEL_CLASS}>
+                  Provider
+                  <input className={OPS_INPUT_CLASS} name="provider" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Notes
+                  <textarea className={OPS_INPUT_CLASS} name="notes" rows={2} />
+                </label>
+                <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                  Create training record
+                </button>
+              </form>
+            </details>
+          ) : null}
+        </section>
+      ) : null}
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="risk-assessment-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+            <div>
+              <h2 className="text-lg font-bold text-primary-dark">Risk assessments</h2>
+              <p className="mt-1 text-sm text-primary-dark/56">
+                Activity hazards, controls, residual risk, and review dates.
+              </p>
+            </div>
+            <ShieldPlus className="size-5 text-primary-blue" aria-hidden="true" />
+          </div>
+          <div className="grid gap-3 p-5">
+            {riskAssessments.length > 0 ? (
+              riskAssessments.map((assessment: OpsHseRiskAssessmentSummary) => (
+                <article className="rounded-lg border border-primary-dark/10 p-4" key={assessment.id}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                        {assessment.assessment_number}
+                      </p>
+                      <h3 className="mt-1 text-base font-bold text-primary-dark">{assessment.title}</h3>
+                      <p className="mt-1 text-sm text-primary-dark/58">
+                        {assessment.site ? `${assessment.site.code} - ${assessment.site.name}` : "No site"} /{" "}
+                        {assessment.activity || "No activity"}
+                      </p>
+                    </div>
+                    <StatusBadge className={riskAssessmentStatusClass(assessment.status)} value={assessment.status} />
+                  </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-4">
+                    <DetailItem label="Assessed" value={formatDate(assessment.assessment_date)} />
+                    <DetailItem label="Review" value={formatDate(assessment.review_date)} />
+                    <DetailItem label="Area" value={assessment.area_location || "Not set"} />
+                    <DetailItem label="Owner" value={assessment.responsible_user?.full_name ?? "Unassigned"} />
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <StatusBadge className={severityClass(assessment.initial_risk)} value={`initial ${assessment.initial_risk}`} />
+                    <StatusBadge className={severityClass(assessment.residual_risk)} value={`residual ${assessment.residual_risk}`} />
+                    <StatusBadge className="border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/58" value={assessment.hazard_category} />
+                  </div>
+                  {assessment.control_measures ? (
+                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                      {assessment.control_measures}
+                    </p>
+                  ) : null}
+                  <RiskAssessmentActions
+                    actorId={auth.profile.id}
+                    assessment={assessment}
+                    role={auth.profile.role}
+                  />
+                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                    <OpsRecordActivityPanel
+                      canManage={canCreateRisk}
+                      sourceId={assessment.id}
+                      sourceTable="hse_risk_assessments"
+                    />
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="p-6 text-center">
+                <ShieldPlus className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-primary-dark">No risk assessments yet</h3>
+                <p className="mt-2 text-sm text-primary-dark/56">
+                  Create risk assessments for high-risk site activities and keep review dates visible.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="audit-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+            <div>
+              <h2 className="text-lg font-bold text-primary-dark">Compliance audits</h2>
+              <p className="mt-1 text-sm text-primary-dark/56">
+                Audit schedules, completion scores, non-conformances, and action requirements.
+              </p>
+            </div>
+            <ClipboardList className="size-5 text-primary-blue" aria-hidden="true" />
+          </div>
+          <div className="grid gap-3 p-5">
+            {complianceAudits.length > 0 ? (
+              complianceAudits.map((audit: OpsHseComplianceAuditSummary) => (
+                <article className="rounded-lg border border-primary-dark/10 p-4" key={audit.id}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                        {audit.audit_number}
+                      </p>
+                      <h3 className="mt-1 text-base font-bold text-primary-dark">{audit.title}</h3>
+                      <p className="mt-1 text-sm text-primary-dark/58">
+                        {audit.site ? `${audit.site.code} - ${audit.site.name}` : "No site"} /{" "}
+                        {formatLabel(audit.audit_type)}
+                      </p>
+                    </div>
+                    <StatusBadge className={complianceAuditStatusClass(audit.status)} value={audit.status} />
+                  </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-4">
+                    <DetailItem label="Scheduled" value={formatDate(audit.scheduled_date)} />
+                    <DetailItem label="Completed" value={formatDate(audit.completed_date)} />
+                    <DetailItem label="Score" value={`${audit.score}%`} />
+                    <DetailItem label="Auditor" value={audit.auditor?.full_name ?? "Unassigned"} />
+                  </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                    <DetailItem label="Findings" value={String(audit.findings_count)} />
+                    <DetailItem label="NCs" value={String(audit.non_conformance_count)} />
+                    <DetailItem label="Next audit" value={formatDate(audit.next_audit_date)} />
+                  </div>
+                  {audit.summary || audit.action_required ? (
+                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                      {[audit.summary, audit.action_required].filter(Boolean).join(" ")}
+                    </p>
+                  ) : null}
+                  <ComplianceAuditActions audit={audit} role={auth.profile.role} today={today} />
+                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                    <OpsRecordActivityPanel
+                      canManage={canCreateAudit}
+                      sourceId={audit.id}
+                      sourceTable="hse_compliance_audits"
+                    />
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="p-6 text-center">
+                <ClipboardList className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-primary-dark">No compliance audits yet</h3>
+                <p className="mt-2 text-sm text-primary-dark/56">
+                  Schedule site and internal compliance audits, then track findings and action closure.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="ppe-stock">
+        <div className="flex flex-col gap-3 border-b border-primary-dark/10 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-primary-dark">PPE stock master</h2>
+            <p className="mt-1 text-sm text-primary-dark/56">
+              Active PPE stock, issue availability, and reorder risk.
+            </p>
+          </div>
+          <StatusBadge className="border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58" value={`${ppeItems.length} items`} />
+        </div>
+        <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
+          {ppeItems.length > 0 ? (
+            ppeItems.map((item: OpsPpeItemSummary) => {
+              const isLow = item.stock_on_hand <= item.reorder_level;
+              const canAdjust = canAdjustOpsPpeItem(auth.profile.role, item);
+
+              return (
+                <article className="rounded-lg border border-primary-dark/10 p-4" key={item.id}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                        {item.item_code}
+                      </p>
+                      <h3 className="mt-1 text-base font-bold text-primary-dark">{item.item_name}</h3>
+                      <p className="mt-1 text-sm text-primary-dark/58">
+                        {formatLabel(item.ppe_type)} / {item.storage_location || "No storage location"}
+                      </p>
+                    </div>
+                    <StatusBadge
+                      className={
+                        isLow
+                          ? "border-orange-200 bg-orange-50 text-orange-700"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      }
+                      value={isLow ? "low stock" : "in stock"}
+                    />
+                  </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                    <DetailItem label="On hand" value={`${item.stock_on_hand} ${item.unit}`} />
+                    <DetailItem label="Reorder" value={`${item.reorder_level} ${item.unit}`} />
+                    <DetailItem label="Active" value={item.is_active ? "Yes" : "No"} />
+                  </div>
+                  {item.description ? (
+                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">{item.description}</p>
+                  ) : null}
+                  {canAdjust ? (
+                    <details className="mt-4 rounded-md border border-primary-dark/10 p-3">
+                      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+                        Adjust stock
+                      </summary>
+                      <form action={adjustPpeItemStockAction} className="mt-3 grid gap-3">
+                        <input name="ppe_item_id" type="hidden" value={item.id} />
+                        <label className={OPS_LABEL_CLASS}>
+                          Quantity change
+                          <input className={OPS_INPUT_CLASS} name="quantity_delta" required type="number" />
+                        </label>
+                        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                          Adjust
+                        </button>
+                      </form>
+                    </details>
+                  ) : null}
+                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                    <OpsRecordActivityPanel canManage={canAdjust} sourceId={item.id} sourceTable="ppe_items" />
+                  </div>
+                </article>
+              );
+            })
+          ) : (
+            <div className="p-8 text-center md:col-span-2 xl:col-span-3">
+              <Boxes className="mx-auto size-10 text-primary-dark/24" aria-hidden="true" />
+              <h3 className="mt-3 text-lg font-bold text-primary-dark">No PPE stock items yet</h3>
+              <p className="mt-2 text-sm text-primary-dark/56">
+                Add stock items before issuing controlled PPE from inventory.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="ppe-register">
+        <div className="flex flex-col gap-3 border-b border-primary-dark/10 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-primary-dark">PPE issue register</h2>
+            <p className="mt-1 text-sm text-primary-dark/56">
+              Track PPE issue, return, damage, loss, and replacement exposure.
+            </p>
+          </div>
+          <StatusBadge className="border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58" value={`${ppeIssues.pagination.total} records`} />
+        </div>
+        <OpsListControls
+          action="/ops/hse-compliance"
+          filters={[{ label: "Status", name: "status", options: PPE_STATUS_OPTIONS, value: status }]}
+          placeholder="Search issue number, issued-to name, item, or notes"
+          query={listState.query}
+          resultLabel="PPE issues"
+        />
+        <div className={OPS_TABLE_SCROLL_CLASS} tabIndex={0}>
+          <div className="min-w-[900px] divide-y divide-primary-dark/10">
+            {ppeIssues.items.length > 0 ? (
+              ppeIssues.items.map((issue) => (
+                <article className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]" key={issue.id}>
+                  <div>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                          {issue.issue_number}
+                        </p>
+                        <h3 className="mt-1 text-lg font-bold text-primary-dark">{issue.issued_to_name}</h3>
+                        <p className="mt-1 text-sm text-primary-dark/58">
+                          {issue.site ? `${issue.site.code} - ${issue.site.name}` : "No site"} / {formatLabel(issue.ppe_type)}
+                        </p>
+                      </div>
+                      <StatusBadge className={ppeStatusClass(issue.status)} value={issue.status} />
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                      <DetailItem label="Issue date" value={formatDate(issue.issue_date)} />
+                      <DetailItem label="Due return" value={formatDate(issue.due_return_date)} />
+                      <DetailItem label="Quantity" value={String(issue.quantity)} />
+                      <DetailItem label="Replacement" value={formatZmw(issue.replacement_cost)} />
+                    </div>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                      <DetailItem label="Employee" value={issue.employee?.full_name ?? "No employee link"} />
+                      <DetailItem
+                        label="Issued by"
+                        value={formatOpsUserName(
+                          issue.issued_by_user?.full_name,
+                          issue.issued_by_user?.id,
+                        )}
+                      />
+                      <DetailItem label="Returned" value={formatDateTime(issue.returned_at)} />
+                      <DetailItem
+                        label="Item"
+                        value={
+                          issue.ppe_item
+                            ? `${issue.ppe_item.item_code} - ${issue.ppe_item.item_name}`
+                            : issue.item_description || "Not specified"
+                        }
+                      />
+                    </div>
+                    {issue.notes || issue.return_condition_notes ? (
+                      <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                        {[issue.notes, issue.return_condition_notes].filter(Boolean).join(" ")}
+                      </p>
+                    ) : null}
+                    <PpeActions issue={issue} role={auth.profile.role} />
+                  </div>
+                  <div className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                    <OpsRecordActivityPanel canManage={canManagePpe} sourceId={issue.id} sourceTable="ppe_issues" />
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="p-8 text-center">
+                <HardHat className="mx-auto size-10 text-primary-dark/24" aria-hidden="true" />
+                <h3 className="mt-3 text-lg font-bold text-primary-dark">
+                  {hasActiveListFilter ? "No matching PPE issues" : "No PPE issues yet"}
+                </h3>
+                <p className="mt-2 text-sm text-primary-dark/56">
+                  {hasActiveListFilter
+                    ? "Adjust the search or status filter to widen the PPE register."
+                    : "Issue PPE when safety equipment is handed out to staff, workers, or visitors."}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+        <OpsPaginationControls
+          basePath="/ops/hse-compliance"
+          filters={[{ label: "Status", name: "status", options: PPE_STATUS_OPTIONS, value: status }]}
+          pagination={ppeIssues.pagination}
+          query={listState.query}
+          resultLabel="PPE issues"
+        />
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="toolbox-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+            <div>
+              <h2 className="text-lg font-bold text-primary-dark">Toolbox talks</h2>
+              <p className="mt-1 text-sm text-primary-dark/56">
+                Planned and completed safety briefings by site.
+              </p>
+            </div>
+            <ClipboardList className="size-5 text-primary-blue" aria-hidden="true" />
+          </div>
+          <div className="grid gap-3 p-5">
+            {toolboxTalks.length > 0 ? (
+              toolboxTalks.map((talk) => (
+                <article className="rounded-lg border border-primary-dark/10 p-4" key={talk.id}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                        {talk.talk_number}
+                      </p>
+                      <h3 className="mt-1 text-base font-bold text-primary-dark">{talk.topic}</h3>
+                      <p className="mt-1 text-sm text-primary-dark/58">
+                        {talk.site ? `${talk.site.code} - ${talk.site.name}` : "No site"}
+                      </p>
+                    </div>
+                    <StatusBadge className={talkStatusClass(talk.status)} value={talk.status} />
+                  </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                    <DetailItem label="Date" value={formatDate(talk.talk_date)} />
+                    <DetailItem label="Attendees" value={String(talk.attendees_count)} />
+                    <DetailItem label="Facilitator" value={talk.facilitator?.full_name ?? "Unassigned"} />
+                  </div>
+                  {talk.summary || talk.actions_required ? (
+                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                      {[talk.summary, talk.actions_required].filter(Boolean).join(" ")}
+                    </p>
+                  ) : null}
+                  {talk.attendees.length > 0 ? (
+                    <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/44">
+                        Attendance
+                      </p>
+                      <div className="mt-3 grid gap-2">
+                        {talk.attendees.map((attendee) => (
+                          <div
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary-dark/10 bg-white px-3 py-2"
+                            key={attendee.id}
+                          >
+                            <div>
+                              <p className="text-sm font-bold text-primary-dark">{attendee.attendee_name}</p>
+                              <p className="text-xs text-primary-dark/54">
+                                {attendee.role_title || attendee.employee?.job_title || "Role not set"} / {attendee.company}
+                              </p>
+                            </div>
+                            <StatusBadge
+                              className={
+                                attendee.attended
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-red-200 bg-red-50 text-red-700"
+                              }
+                              value={attendee.attended ? "attended" : "absent"}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {canAddOpsToolboxTalkAttendee(auth.profile.role, talk) ? (
+                    <details className="mt-4 rounded-md border border-primary-dark/10 p-3">
+                      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+                        Add attendee
+                      </summary>
+                      <form action={createToolboxTalkAttendeeAction} className="mt-3 grid gap-3">
+                        <input name="talk_id" type="hidden" value={talk.id} />
+                        <label className={OPS_LABEL_CLASS}>
+                          Employee
+                          <select className={OPS_INPUT_CLASS} defaultValue="" name="employee_id">
+                            <option value="">No employee link</option>
+                            {employees.map((employee) => (
+                              <option key={employee.id} value={employee.id}>
+                                {employee.employee_number} - {employee.full_name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Attendee name
+                          <input className={OPS_INPUT_CLASS} name="attendee_name" required />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Role
+                          <input className={OPS_INPUT_CLASS} name="role_title" />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Company
+                          <input className={OPS_INPUT_CLASS} defaultValue="Pymble Construction Limited" name="company" />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Notes
+                          <textarea className={OPS_INPUT_CLASS} name="notes" rows={2} />
+                        </label>
+                        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                          Add attendee
+                        </button>
+                      </form>
+                    </details>
+                  ) : null}
+                  <ToolboxTalkActions role={auth.profile.role} talk={talk} />
+                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                    <OpsRecordActivityPanel canManage={canManageTalk} sourceId={talk.id} sourceTable="toolbox_talks" />
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="p-6 text-center">
+                <ClipboardList className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-primary-dark">No toolbox talks yet</h3>
+                <p className="mt-2 text-sm text-primary-dark/56">
+                  Create planned talks for site safety briefings and complete them after attendance is confirmed.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="inspection-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+            <div>
+              <h2 className="text-lg font-bold text-primary-dark">HSE inspections</h2>
+              <p className="mt-1 text-sm text-primary-dark/56">
+                Site inspections with scoring, findings, and required actions.
+              </p>
+            </div>
+            <CalendarCheck className="size-5 text-primary-blue" aria-hidden="true" />
+          </div>
+          <div className="grid gap-3 p-5">
+            {inspections.length > 0 ? (
+              inspections.map((inspection) => (
+                <article className="rounded-lg border border-primary-dark/10 p-4" key={inspection.id}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                        {inspection.inspection_number}
+                      </p>
+                      <h3 className="mt-1 text-base font-bold text-primary-dark">{inspection.title}</h3>
+                      <p className="mt-1 text-sm text-primary-dark/58">
+                        {inspection.site ? `${inspection.site.code} - ${inspection.site.name}` : "No site"} /{" "}
+                        {formatLabel(inspection.inspection_type)}
+                      </p>
+                    </div>
+                    <StatusBadge className={inspectionStatusClass(inspection.status)} value={inspection.status} />
+                  </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-4">
+                    <DetailItem label="Scheduled" value={formatDate(inspection.scheduled_date)} />
+                    <DetailItem label="Score" value={`${inspection.score}%`} />
+                    <DetailItem
+                      label="Findings"
+                      value={String(Math.max(inspection.findings_count, inspection.findings.length))}
+                    />
+                    <DetailItem label="Actions" value={String(inspection.action_count)} />
+                  </div>
+                  {inspection.summary || inspection.corrective_actions_required ? (
+                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                      {[inspection.summary, inspection.corrective_actions_required].filter(Boolean).join(" ")}
+                    </p>
+                  ) : null}
+                  {inspection.findings.length > 0 ? (
+                    <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/44">
+                        Findings
+                      </p>
+                      <div className="mt-3 grid gap-3">
+                        {inspection.findings.map((finding) => (
+                          <article className="rounded-md border border-primary-dark/10 bg-white p-3" key={finding.id}>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                                  {finding.finding_number}
+                                </p>
+                                <h4 className="mt-1 text-sm font-bold text-primary-dark">{finding.title}</h4>
+                                <p className="mt-1 text-xs text-primary-dark/54">
+                                  {formatLabel(finding.finding_type)} / {formatLabel(finding.severity)}
+                                </p>
+                              </div>
+                              <StatusBadge className={findingStatusClass(finding.status)} value={finding.status} />
+                            </div>
+                            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                              <DetailItem label="Due" value={formatDate(finding.due_date)} />
+                              <DetailItem label="Responsible" value={finding.responsible_user?.full_name ?? "Unassigned"} />
+                              <DetailItem label="Verified" value={formatDateTime(finding.verified_at)} />
+                            </div>
+                            {finding.description || finding.completion_notes ? (
+                              <p className="mt-3 text-sm leading-6 text-primary-dark/62">
+                                {[finding.description, finding.completion_notes].filter(Boolean).join(" ")}
+                              </p>
+                            ) : null}
+                            <InspectionFindingActions finding={finding} role={auth.profile.role} />
+                            <div className="mt-3 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                              <OpsRecordActivityPanel
+                                canManage={canManageInspection}
+                                sourceId={finding.id}
+                                sourceTable="hse_inspection_findings"
+                              />
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {canCreateOpsHseInspectionFinding(auth.profile.role, inspection) ? (
+                    <details className="mt-4 rounded-md border border-primary-dark/10 p-3">
+                      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+                        Add finding
+                      </summary>
+                      <form action={createHseInspectionFindingAction} className="mt-3 grid gap-3">
+                        <input name="inspection_id" type="hidden" value={inspection.id} />
+                        <label className={OPS_LABEL_CLASS}>
+                          Title
+                          <input className={OPS_INPUT_CLASS} name="title" required />
+                        </label>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <label className={OPS_LABEL_CLASS}>
+                            Type
+                            <input className={OPS_INPUT_CLASS} defaultValue="observation" name="finding_type" />
+                          </label>
+                          <label className={OPS_LABEL_CLASS}>
+                            Severity
+                            <select className={OPS_INPUT_CLASS} defaultValue="low" name="severity">
+                              {FINDING_SEVERITY_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className={OPS_LABEL_CLASS}>
+                            Due date
+                            <input className={OPS_INPUT_CLASS} name="due_date" type="date" />
+                          </label>
+                        </div>
+                        <label className={OPS_LABEL_CLASS}>
+                          Responsible user
+                          <select className={OPS_INPUT_CLASS} defaultValue="" name="responsible_user_id">
+                            <option value="">Unassigned</option>
+                            {users.map((user) => (
+                              <option key={user.id} value={user.id}>
+                                {user.full_name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Description
+                          <textarea className={OPS_INPUT_CLASS} name="description" rows={2} />
+                        </label>
+                        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                          Add finding
+                        </button>
+                      </form>
+                    </details>
+                  ) : null}
+                  <InspectionActions inspection={inspection} role={auth.profile.role} />
+                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                    <OpsRecordActivityPanel canManage={canManageInspection} sourceId={inspection.id} sourceTable="hse_inspections" />
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="p-6 text-center">
+                <ShieldPlus className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-primary-dark">No inspections yet</h3>
+                <p className="mt-2 text-sm text-primary-dark/56">
+                  Schedule site inspections, complete scoring, and mark action requirements when needed.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="training-panel">
+        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+          <div>
+            <h2 className="text-lg font-bold text-primary-dark">Safety training</h2>
+            <p className="mt-1 text-sm text-primary-dark/56">
+              Planned training, completed certificates, and expiry watch.
+            </p>
+          </div>
+          <GraduationCap className="size-5 text-primary-blue" aria-hidden="true" />
+        </div>
+        <div className="grid gap-3 p-5 md:grid-cols-2">
+          {trainingRecords.length > 0 ? (
+            trainingRecords.map((record: OpsSafetyTrainingRecordSummary) => (
+              <article className="rounded-lg border border-primary-dark/10 p-4" key={record.id}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                      {record.training_number}
+                    </p>
+                    <h3 className="mt-1 text-base font-bold text-primary-dark">{record.training_title}</h3>
+                    <p className="mt-1 text-sm text-primary-dark/58">
+                      {record.trainee_name} / {record.site ? `${record.site.code} - ${record.site.name}` : "No site"}
+                    </p>
+                  </div>
+                  <StatusBadge className={trainingStatusClass(record.status)} value={record.status} />
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-4">
+                  <DetailItem label="Type" value={formatLabel(record.training_type)} />
+                  <DetailItem label="Planned" value={formatDate(record.planned_date)} />
+                  <DetailItem label="Completed" value={formatDate(record.completed_date)} />
+                  <DetailItem label="Expiry" value={formatDate(record.expiry_date)} />
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  <DetailItem label="Provider" value={record.provider || "Not set"} />
+                  <DetailItem label="Score" value={`${record.score}%`} />
+                  <DetailItem label="Completed by" value={record.completed_by_user?.full_name ?? "Not completed"} />
+                </div>
+                {record.notes ? (
+                  <p className="mt-4 text-sm leading-6 text-primary-dark/62">{record.notes}</p>
+                ) : null}
+                <SafetyTrainingActions record={record} role={auth.profile.role} today={today} />
+                <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <OpsRecordActivityPanel
+                    canManage={canManageInspection}
+                    sourceId={record.id}
+                    sourceTable="safety_training_records"
+                  />
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="p-8 text-center md:col-span-2">
+              <GraduationCap className="mx-auto size-10 text-primary-dark/24" aria-hidden="true" />
+              <h3 className="mt-3 text-lg font-bold text-primary-dark">No safety training records yet</h3>
+              <p className="mt-2 text-sm text-primary-dark/56">
+                Create planned training for site inductions, HSE refreshers, and certification renewals.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}

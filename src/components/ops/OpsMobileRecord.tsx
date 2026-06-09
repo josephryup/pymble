@@ -1,3 +1,5 @@
+import { Card, CardContent } from "@/components/ui/card";
+
 type OpsMobileRecordProps = {
   children: React.ReactNode;
 };
@@ -8,9 +10,9 @@ export function OpsMobileRecordList({ children }: OpsMobileRecordProps) {
 
 export function OpsMobileRecordCard({ children }: OpsMobileRecordProps) {
   return (
-    <article className="rounded-lg border border-primary-dark/10 bg-white p-4 shadow-sm">
-      <div className="grid gap-3">{children}</div>
-    </article>
+    <Card className="py-0 shadow-sm">
+      <CardContent className="grid gap-3 p-4">{children}</CardContent>
+    </Card>
   );
 }
 
@@ -21,11 +23,11 @@ export function OpsMobileRecordRow({
   label: string;
 }) {
   return (
-    <div className="border-t border-primary-dark/10 pt-3 first:border-t-0 first:pt-0">
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="border-t border-border pt-3 first:border-t-0 first:pt-0">
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </p>
-      <div className="mt-1 text-sm font-semibold leading-6 text-primary-dark">{children}</div>
+      <div className="mt-1 text-sm font-semibold leading-6 text-foreground">{children}</div>
     </div>
   );
 }

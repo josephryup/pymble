@@ -1,4 +1,10 @@
-import { createOpsServerSessionClient } from "@/lib/ops/auth";
+import {
+  opsIlikePattern,
+  toOpsPaginatedResult,
+  type OpsListState,
+  type OpsPaginatedResult,
+} from "@/lib/ops/listing";
+import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsBoqStatus } from "@/lib/ops/types";
 
 export type OpsBoqSite = {
@@ -40,6 +46,15 @@ export type OpsBoqOption = {
   budgeted_total: number;
 };
 
+export type FetchOpsBoqDocumentsOptions = {
+  query?: string;
+  status?: OpsBoqStatus;
+};
+
+export type FetchPaginatedOpsBoqDocumentsOptions = FetchOpsBoqDocumentsOptions & {
+  listState: OpsListState;
+};
+
 type Relation<T> = T | T[] | null;
 
 type RawBoqDocument = Omit<
@@ -77,9 +92,12 @@ function normalizeLineItem(item: RawBoqLineItem): OpsBoqLineItem {
   };
 }
 
-export async function fetchOpsBoqDocuments() {
-  const supabase = await createOpsServerSessionClient();
-  const { data: documentData, error: documentError } = await supabase
+async function fetchOpsBoqDocumentItems(
+  options: FetchOpsBoqDocumentsOptions = {},
+  listState?: OpsListState,
+) {
+  const supabase = getOpsSupabaseServiceClient();
+  let documentQuery = supabase
     .from("boq_documents")
     .select(
       `
@@ -92,9 +110,24 @@ export async function fetchOpsBoqDocuments() {
         updated_at,
         site:sites!boq_documents_site_id_fkey(id, code, name)
       `,
+      listState ? { count: "exact" } : undefined,
     )
     .is("deleted_at", null)
     .order("updated_at", { ascending: false });
+
+  if (options.status) {
+    documentQuery = documentQuery.eq("status", options.status);
+  }
+
+  const searchPattern = opsIlikePattern(options.query ?? "");
+
+  if (searchPattern) {
+    documentQuery = documentQuery.ilike("title", searchPattern);
+  }
+
+  const { data: documentData, error: documentError, count } = await (listState
+    ? documentQuery.range(listState.from, listState.to)
+    : documentQuery);
 
   if (documentError) {
     throw documentError;
@@ -109,7 +142,10 @@ export async function fetchOpsBoqDocuments() {
   }));
 
   if (!documents.length) {
-    return documents;
+    return {
+      count,
+      items: documents,
+    };
   }
 
   const { data: itemData, error: itemError } = await supabase
@@ -127,7 +163,7 @@ export async function fetchOpsBoqDocuments() {
 
   const items = ((itemData ?? []) as unknown as RawBoqLineItem[]).map(normalizeLineItem);
 
-  return documents.map((document) => {
+  const itemsWithTotals = documents.map((document) => {
     const documentItems = items.filter((item) => item.boq_id === document.id);
     const budgetedTotal = documentItems.reduce((sum, item) => sum + item.budgeted_total, 0);
     const actualTotal = documentItems.reduce(
@@ -142,6 +178,23 @@ export async function fetchOpsBoqDocuments() {
       items: documentItems,
     };
   });
+
+  return {
+    count,
+    items: itemsWithTotals,
+  };
+}
+
+export async function fetchOpsBoqDocuments(options: FetchOpsBoqDocumentsOptions = {}) {
+  const result = await fetchOpsBoqDocumentItems(options);
+  return result.items;
+}
+
+export async function fetchPaginatedOpsBoqDocuments(
+  options: FetchPaginatedOpsBoqDocumentsOptions,
+): Promise<OpsPaginatedResult<OpsBoqDocument>> {
+  const result = await fetchOpsBoqDocumentItems(options, options.listState);
+  return toOpsPaginatedResult(result.items, result.count, options.listState);
 }
 
 export async function fetchOpsBoqOptions() {

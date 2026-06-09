@@ -4,6 +4,11 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { BadgeDollarSign, Camera, ClipboardCheck, MapPin, Users } from "lucide-react";
 import { useMemo, useState } from "react";
+import { OpsBrandMark } from "@/components/ops/OpsBrandMark";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { OpsSiteMapProps } from "@/components/ops/OpsSiteMapClient";
 import type {
   OpsOverviewAttendancePing,
@@ -21,11 +26,15 @@ const OpsSiteMap = dynamic<OpsSiteMapProps>(
     ssr: false,
     loading: () => (
       <div
-        className="flex min-h-96 items-center justify-center gap-3 rounded-md border border-primary-dark/10 bg-white p-8 text-sm text-primary-dark/60"
+        aria-live="polite"
+        className="flex min-h-96 flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground"
         role="status"
       >
-        <div className="size-4 animate-spin rounded-full border-2 border-primary-blue border-t-transparent" />
+        <span className="flex size-16 items-center justify-center rounded-lg border border-primary-dark/10">
+          <OpsBrandMark decorative className="h-12 w-12" sizes="48px" />
+        </span>
         <span>Loading Pymble site map...</span>
+        <Skeleton className="h-2 w-44" />
       </div>
     ),
   },
@@ -70,15 +79,17 @@ function DetailStat({
   value: string;
 }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3">
-      <div className="flex items-center gap-2 text-primary-blue">
+    <Card className="py-0">
+      <CardContent className="px-4 py-3">
+      <div className="flex items-center gap-2 text-primary">
         <Icon className="size-4" aria-hidden="true" />
-        <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
           {label}
         </p>
       </div>
-      <p className="mt-2 font-heading text-xl font-bold text-primary-dark">{value}</p>
-    </div>
+      <p className="mt-2 font-heading text-xl font-bold text-foreground">{value}</p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -147,24 +158,25 @@ export function OpsOverviewMapPanel({
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-      <section
+      <Card
         aria-labelledby="ops-map-title"
-        className="rounded-lg border border-primary-dark/10 bg-white p-5"
+        className="py-0"
       >
-        <div className="mb-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+        <CardHeader className="p-5 pb-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
             Site Locations
           </p>
-          <h2
-            className="mt-1 font-heading text-xl font-bold text-primary-dark"
+          <CardTitle
+            className="mt-1 text-xl font-bold text-foreground"
             id="ops-map-title"
           >
             Pymble operating map
-          </h2>
-        </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 pt-0">
         {sites.length > 0 ? (
-          <label className="mb-4 block text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/52">
-            Select site
+          <Label className="mb-4 grid gap-1.5 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
+            <span>Select site</span>
             <select
               className={OPS_INPUT_CLASS}
               onChange={(event) => setSelectedSiteId(event.target.value)}
@@ -176,7 +188,7 @@ export function OpsOverviewMapPanel({
                 </option>
               ))}
             </select>
-          </label>
+          </Label>
         ) : null}
         <OpsSiteMap
           activeDate={activeDate}
@@ -187,54 +199,59 @@ export function OpsOverviewMapPanel({
           sites={sites}
           workers={workers}
         />
-      </section>
+        </CardContent>
+      </Card>
 
-      <section
+      <Card
         aria-labelledby="ops-map-details-title"
-        className="rounded-lg border border-primary-dark/10 bg-white p-5"
+        className="py-0"
       >
-        <div className="mb-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+        <CardHeader className="p-5 pb-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
             Focused Site
           </p>
-          <h2
-            className="mt-1 font-heading text-xl font-bold text-primary-dark"
+          <CardTitle
+            className="mt-1 text-xl font-bold text-foreground"
             id="ops-map-details-title"
           >
             {selectedSite?.name ?? "Pymble site details"}
-          </h2>
-        </div>
+          </CardTitle>
+        </CardHeader>
 
+        <CardContent className="p-5 pt-0">
         {selectedSite ? (
           <div className="space-y-4">
-            <div className="rounded-lg border border-primary-dark/10 bg-primary-dark/[0.03] p-5">
+            <Card className="bg-muted/70 py-0">
+              <CardContent className="p-5">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <p className="text-sm font-bold text-primary-dark">{selectedSite.name}</p>
-                  <p className="mt-1.5 text-xs text-primary-dark/55">
+                  <p className="text-sm font-bold text-foreground">{selectedSite.name}</p>
+                  <CardDescription className="mt-1.5 text-xs">
                     {selectedSite.code} - {selectedSite.location}
-                  </p>
+                  </CardDescription>
                 </div>
-                <span
-                  className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
+                <Badge
+                  className={`h-auto w-fit border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
                     selectedSite.status,
                   )}`}
+                  variant="outline"
                 >
                   {selectedSite.status}
-                </span>
+                </Badge>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-full border border-primary-dark/10 bg-white px-3 py-1 text-xs font-semibold text-primary-dark/70">
+                <Badge className="h-auto border-border bg-background px-3 py-1 text-xs font-semibold text-foreground/70" variant="outline">
                   {formatZmw(selectedSite.budget_zmw)} budget
-                </span>
-                <span className="rounded-full border border-primary-dark/10 bg-white px-3 py-1 text-xs font-semibold text-primary-dark/70">
+                </Badge>
+                <Badge className="h-auto border-border bg-background px-3 py-1 text-xs font-semibold text-foreground/70" variant="outline">
                   {selectedSite.client_name || "Client not recorded"}
-                </span>
-                <span className="rounded-full border border-primary-dark/10 bg-white px-3 py-1 text-xs font-semibold text-primary-dark/70">
+                </Badge>
+                <Badge className="h-auto border-border bg-background px-3 py-1 text-xs font-semibold text-foreground/70" variant="outline">
                   {selectedSite.supervisor_name || "Supervisor not assigned"}
-                </span>
+                </Badge>
               </div>
-            </div>
+              </CardContent>
+            </Card>
 
             <div className="grid gap-3 md:grid-cols-2">
               <DetailStat icon={Users} label="Crew" value={String(siteStats.workers)} />
@@ -251,19 +268,21 @@ export function OpsOverviewMapPanel({
               />
             </div>
 
-            <div className="rounded-md border border-primary-dark/10 bg-white p-4">
-              <div className="flex items-center gap-2 text-primary-blue">
+            <Card className="py-0">
+              <CardContent className="p-4">
+              <div className="flex items-center gap-2 text-primary">
                 <MapPin className="size-4" aria-hidden="true" />
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                   Site GPS
                 </p>
               </div>
-              <p className="mt-2 text-sm font-semibold text-primary-dark">
+              <p className="mt-2 text-sm font-semibold text-foreground">
                 {selectedSite.latitude !== null && selectedSite.longitude !== null
                   ? `${selectedSite.latitude.toFixed(6)}, ${selectedSite.longitude.toFixed(6)}`
                   : "Coordinates not set"}
               </p>
-            </div>
+              </CardContent>
+            </Card>
 
             <Link
               className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`}
@@ -273,11 +292,12 @@ export function OpsOverviewMapPanel({
             </Link>
           </div>
         ) : (
-          <div className="flex min-h-72 items-center justify-center rounded-md border border-dashed border-primary-dark/15 bg-primary-dark/[0.03] p-8 text-center text-sm leading-6 text-primary-dark/60">
+          <div className="flex min-h-72 items-center justify-center rounded-lg border border-dashed border-border bg-muted/70 p-8 text-center text-sm leading-6 text-muted-foreground">
             Create a Pymble site to populate the map and focused site panel.
           </div>
         )}
-      </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }

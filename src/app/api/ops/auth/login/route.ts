@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createOpsServerSessionClient, getOpsUserProfile } from "@/lib/ops/auth";
+import { rejectMismatchedOpsOrigin } from "@/lib/ops/api-security";
+import { createOpsCookieSessionClient, getOpsUserProfile } from "@/lib/ops/auth";
+import { OPS_LOCAL_ROLE_PREVIEW_COOKIE } from "@/lib/ops/local-role-preview";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -8,13 +10,19 @@ const loginSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const originError = rejectMismatchedOpsOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
   const parsed = loginSchema.safeParse(await request.json().catch(() => null));
 
   if (!parsed.success) {
     return NextResponse.json({ error: "Enter a valid email and password." }, { status: 400 });
   }
 
-  const supabase = await createOpsServerSessionClient();
+  const supabase = await createOpsCookieSessionClient();
   const {
     data: { user },
     error,
@@ -22,7 +30,7 @@ export async function POST(request: Request) {
 
   if (error || !user) {
     return NextResponse.json(
-      { error: error?.message ?? "Login failed. Check your credentials." },
+      { error: "Login failed. Check your credentials." },
       { status: 401 },
     );
   }
@@ -37,5 +45,15 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+
+  response.cookies.set(OPS_LOCAL_ROLE_PREVIEW_COOKIE, "", {
+    httpOnly: true,
+    maxAge: 0,
+    path: "/",
+    sameSite: "lax",
+    secure: false,
+  });
+
+  return response;
 }

@@ -1,5 +1,13 @@
+import { cookies, headers } from "next/headers";
+import { OpsBrandMark } from "@/components/ops/OpsBrandMark";
+import { OpsLocalRolePreviewPanel } from "@/components/ops/OpsLocalRolePreviewPanel";
 import { OpsLoginForm } from "@/components/ops/OpsLoginForm";
 import { OPS_BRAND } from "@/lib/ops/constants";
+import {
+  canUseOpsLocalRolePreview,
+  OPS_LOCAL_ROLE_PREVIEW_COOKIE,
+  parseOpsLocalRolePreviewRole,
+} from "@/lib/ops/local-role-preview";
 import { firstParam, type OpsSearchParams } from "@/lib/ops/ui";
 
 type PageProps = {
@@ -8,6 +16,13 @@ type PageProps = {
 
 export default async function OpsLoginPage({ searchParams }: PageProps) {
   const params = ((await searchParams) ?? {}) as OpsSearchParams;
+  const headerStore = await headers();
+  const canPreviewRoles = canUseOpsLocalRolePreview(headerStore.get("host"));
+  const previewRole = canPreviewRoles
+    ? parseOpsLocalRolePreviewRole(
+        (await cookies()).get(OPS_LOCAL_ROLE_PREVIEW_COOKIE)?.value,
+      )
+    : null;
 
   return (
     <main className="ops-ui min-h-screen bg-[#f6f7fb] px-5 py-10 text-primary-dark">
@@ -16,7 +31,8 @@ export default async function OpsLoginPage({ searchParams }: PageProps) {
           aria-labelledby="ops-login-title"
           className="w-full rounded-lg border border-primary-dark/10 bg-white p-6 shadow-sm"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+          <OpsBrandMark priority className="h-16 w-16 rounded-md" sizes="64px" />
+          <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             Pymble Operations
           </p>
           <h1
@@ -30,6 +46,10 @@ export default async function OpsLoginPage({ searchParams }: PageProps) {
           </p>
 
           <OpsLoginForm initialError={firstParam(params.error)} />
+
+          {canPreviewRoles ? (
+            <OpsLocalRolePreviewPanel activeRole={previewRole} />
+          ) : null}
         </section>
       </div>
     </main>

@@ -1,22 +1,22 @@
 export type OpsSearchParams = Record<string, string | string[] | undefined>;
 
 export const OPS_FOCUS_CLASS =
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue";
+  "focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export const OPS_INPUT_CLASS =
-  `mt-1 min-h-11 w-full rounded-md border border-primary-dark/15 bg-white px-3 py-2.5 text-sm text-primary-dark transition focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/10 ${OPS_FOCUS_CLASS}`;
+  `mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm font-medium text-foreground shadow-sm shadow-primary-dark/[0.02] transition-colors placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 ${OPS_FOCUS_CLASS}`;
 
 export const OPS_LABEL_CLASS =
-  "text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/52";
+  "text-sm font-medium text-muted-foreground";
 
 export const OPS_PRIMARY_BUTTON_CLASS =
-  `inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary-blue px-4 py-3 text-sm font-bold text-white transition hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60 ${OPS_FOCUS_CLASS}`;
+  `inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/10 transition hover:bg-primary/88 disabled:cursor-not-allowed disabled:opacity-60 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 ${OPS_FOCUS_CLASS}`;
 
 export const OPS_SECONDARY_BUTTON_CLASS =
-  `inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-primary-dark/10 px-4 py-3 text-sm font-bold text-primary-dark transition hover:border-primary-blue hover:text-primary-blue disabled:cursor-not-allowed disabled:opacity-60 ${OPS_FOCUS_CLASS}`;
+  `inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm shadow-primary-dark/[0.02] transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 ${OPS_FOCUS_CLASS}`;
 
 export const OPS_DANGER_BUTTON_CLASS =
-  `inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-red-200 px-3 py-2 text-xs font-bold uppercase tracking-[0.1em] text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 ${OPS_FOCUS_CLASS}`;
+  `inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-destructive/25 bg-background px-3 py-2 text-sm font-semibold text-destructive shadow-sm shadow-primary-dark/[0.02] transition hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 ${OPS_FOCUS_CLASS}`;
 
 export const OPS_TABLE_SCROLL_CLASS =
   `overflow-x-auto ${OPS_FOCUS_CLASS}`;

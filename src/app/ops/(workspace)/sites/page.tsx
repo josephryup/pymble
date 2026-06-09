@@ -1,16 +1,21 @@
 import { HardHat, MapPin, Plus } from "lucide-react";
 import { notFound } from "next/navigation";
+import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import {
   OpsMobileRecordCard,
   OpsMobileRecordList,
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
+import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { formatCoordinateValue } from "@/lib/ops/coordinates";
+import { parseOpsListState } from "@/lib/ops/listing";
 import { createSiteAction } from "@/lib/ops/site-actions";
-import { fetchOpsSites, type OpsSite } from "@/lib/ops/sites";
+import { fetchPaginatedOpsSites, type OpsSite } from "@/lib/ops/sites";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import {
+  firstParam,
   formatZmw,
   noticeFromParams,
   OPS_INPUT_CLASS,
@@ -23,6 +28,43 @@ import {
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
 };
+
+const SITE_STATUS_OPTIONS: Array<{ label: string; value: OpsSite["status"] | "" }> = [
+  { label: "All statuses", value: "" },
+  { label: "Active", value: "active" },
+  { label: "Mobilizing", value: "mobilizing" },
+  { label: "Closing", value: "closing" },
+];
+
+function siteStatusFromParam(value: string | undefined) {
+  return SITE_STATUS_OPTIONS.some((status) => status.value === value)
+    ? (value as OpsSite["status"] | "")
+    : "";
+}
+
+function siteNotice(params: OpsSearchParams) {
+  const created = noticeFromParams(params, "site", "Site created successfully.");
+
+  if (created) {
+    return created;
+  }
+
+  if (firstParam(params.updated) === "attachment") {
+    return {
+      tone: "success" as const,
+      message: "Site attachment uploaded.",
+    };
+  }
+
+  if (firstParam(params.updated) === "comment") {
+    return {
+      tone: "success" as const,
+      message: "Site comment added.",
+    };
+  }
+
+  return null;
+}
 
 function statusClass(status: OpsSite["status"]) {
   if (status === "active") {
@@ -37,23 +79,30 @@ function statusClass(status: OpsSite["status"]) {
 }
 
 export default async function OpsSitesPage({ searchParams }: PageProps) {
-  const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({}), requireOpsUser()]);
+  const [params, auth] = await Promise.all([
+    searchParams ?? Promise.resolve({} as OpsSearchParams),
+    requireOpsUser(),
+  ]);
 
   if (!canAccessOpsHref(auth.profile.role, "/ops/sites")) {
     notFound();
   }
 
-  const sites = await fetchOpsSites();
+  const listState = parseOpsListState(params, { defaultPageSize: 10 });
+  const status = siteStatusFromParam(firstParam(params.status));
+  const sitePage = await fetchPaginatedOpsSites({
+    listState,
+    query: listState.query,
+    status: status || undefined,
+  });
+  const sites = sitePage.items;
+  const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const canManage = canManageOps(auth.profile.role);
-  const notice = noticeFromParams(
-    params,
-    "site",
-    "Site created successfully.",
-  );
+  const notice = siteNotice(params);
   const totalBudget = sites.reduce((sum, site) => sum + site.budget_zmw, 0);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="w-full max-w-none space-y-6">
       <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -70,15 +119,15 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded-md border border-primary-dark/10 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
-                Active sites
+                Matching sites
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
-                {sites.length}
+                {sitePage.pagination.total}
               </p>
             </div>
             <div className="rounded-md border border-primary-dark/10 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
-                Budget total
+                Shown budget
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
                 {formatZmw(totalBudget)}
@@ -165,13 +214,13 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
               <input className={OPS_INPUT_CLASS} inputMode="decimal" name="longitude" />
             </label>
             <div className="flex items-end min-[520px]:col-span-2 lg:col-span-2">
-              <button
+              <OpsSubmitButton
                 className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
-                type="submit"
+                pendingLabel="Adding site..."
               >
                 <Plus className="size-4" aria-hidden="true" />
                 Add site
-              </button>
+              </OpsSubmitButton>
             </div>
           </form>
         </section>
@@ -185,6 +234,20 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
         <div className="border-b border-primary-dark/10 p-5">
           <h2 className="font-heading text-xl font-bold text-primary-dark">Current sites</h2>
         </div>
+        <OpsListControls
+          action="/ops/sites"
+          filters={[
+            {
+              label: "Status",
+              name: "status",
+              options: SITE_STATUS_OPTIONS,
+              value: status,
+            },
+          ]}
+          placeholder="Search code, site, location, client, or supervisor"
+          query={listState.query}
+          resultLabel="sites"
+        />
         {sites.length > 0 ? (
           <>
             <OpsMobileRecordList>
@@ -219,6 +282,11 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                   <OpsMobileRecordRow label="Budget">
                     {formatZmw(site.budget_zmw)}
                   </OpsMobileRecordRow>
+                  <OpsRecordActivityPanel
+                    canManage={canManage}
+                    sourceId={site.id}
+                    sourceTable="sites"
+                  />
                 </OpsMobileRecordCard>
               ))}
             </OpsMobileRecordList>
@@ -250,6 +318,9 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                   </th>
                   <th className="px-5 py-3" scope="col">
                     Status
+                  </th>
+                  <th className="px-5 py-3" scope="col">
+                    Activity
                   </th>
                 </tr>
               </thead>
@@ -295,6 +366,13 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                         {site.status}
                       </span>
                     </td>
+                    <td className="min-w-[28rem] px-0 py-0 align-top">
+                      <OpsRecordActivityPanel
+                        canManage={canManage}
+                        sourceId={site.id}
+                        sourceTable="sites"
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -306,15 +384,30 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
             <HardHat className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
               <p className="font-heading text-xl font-bold text-primary-dark">
-                No sites registered yet
+                {hasActiveListFilter ? "No matching sites" : "No sites registered yet"}
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
-                Create your first site above. Site coordinates will appear on the overview map and
-                enable worker assignment.
+                {hasActiveListFilter
+                  ? "Adjust the search or status filter to widen the site register."
+                  : "Create your first site above. Site coordinates will appear on the overview map and enable worker assignment."}
               </p>
             </div>
           </div>
         )}
+        <OpsPaginationControls
+          basePath="/ops/sites"
+          filters={[
+            {
+              label: "Status",
+              name: "status",
+              options: [],
+              value: status,
+            },
+          ]}
+          pagination={sitePage.pagination}
+          query={listState.query}
+          resultLabel="sites"
+        />
       </section>
     </div>
   );

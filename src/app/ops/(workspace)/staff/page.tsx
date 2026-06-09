@@ -1,6 +1,7 @@
 import { ShieldCheck, UserPlus, Users } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import {
   OpsMobileRecordCard,
   OpsMobileRecordList,
@@ -130,7 +131,7 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
   );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="w-full max-w-none space-y-6">
       <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -256,13 +257,13 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
               </select>
             </label>
             <div className="flex items-end min-[520px]:col-span-2 lg:col-span-5">
-              <button
+              <OpsSubmitButton
                 className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`}
-                type="submit"
+                pendingLabel="Sending invitation..."
               >
                 <UserPlus className="size-4" aria-hidden="true" />
                 Send invitation
-              </button>
+              </OpsSubmitButton>
             </div>
           </form>
         </section>

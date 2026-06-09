@@ -55,7 +55,7 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
   const deliveryCount = photos.filter((photo) => photo.tag === "delivery").length;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="w-full max-w-none space-y-6">
       <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>

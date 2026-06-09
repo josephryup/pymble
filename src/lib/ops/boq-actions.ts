@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { canManageOps } from "@/lib/ops/permissions";
 
@@ -28,7 +29,7 @@ function field(formData: FormData, name: string) {
 }
 
 function boqError(message: string): never {
-  redirect(`/ops/boq?error=${encodeURIComponent(message)}`);
+  redirect(`/ops/boq?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
 }
 
 export async function createBoqDocumentAction(formData: FormData) {

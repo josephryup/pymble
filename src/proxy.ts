@@ -1,8 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import {
+  canUseOpsLocalRolePreview,
+  OPS_LOCAL_ROLE_PREVIEW_COOKIE,
+  parseOpsLocalRolePreviewRole,
+} from "@/lib/ops/local-role-preview";
 
 const OPS_PATH_PREFIX = "/ops";
 const DEFAULT_OPS_HOST = "ops.pymbleconstruction.com";
+const OPS_SESSION_REFRESH_TIMEOUT_MS = 2500;
+
+function opsContentSecurityPolicy() {
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://*.r2.cloudflarestorage.com",
+    "font-src 'self' data:",
+    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com",
+    "media-src 'self' data: blob:",
+    "worker-src 'self' blob:",
+  ].join("; ");
+}
 
 function isStaticAsset(pathname: string) {
   return /\.[a-z0-9]+$/i.test(pathname);
@@ -34,6 +57,39 @@ function isRetiredOpsPath(host: string, pathname: string) {
   );
 }
 
+function shouldApplyOpsSecurityHeaders(host: string, pathname: string) {
+  if (pathname.startsWith("/_next") || isStaticAsset(pathname)) {
+    return false;
+  }
+
+  return (
+    isOpsHost(host) ||
+    pathname.startsWith(OPS_PATH_PREFIX) ||
+    pathname.startsWith("/api/ops")
+  );
+}
+
+function applyOpsSecurityHeaders(
+  response: NextResponse,
+  host: string,
+  pathname: string,
+) {
+  if (!shouldApplyOpsSecurityHeaders(host, pathname)) {
+    return response;
+  }
+
+  response.headers.set("Cache-Control", "no-store, max-age=0");
+  response.headers.set("Content-Security-Policy", opsContentSecurityPolicy());
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Robots-Tag", "noindex, nofollow");
+
+  return response;
+}
+
 function hasSupabaseAuthCookie(request: NextRequest) {
   return request.cookies
     .getAll()
@@ -59,6 +115,40 @@ function shouldRefreshOpsSession(request: NextRequest) {
     pathname.startsWith(OPS_PATH_PREFIX) ||
     pathname.startsWith("/api/ops")
   );
+}
+
+function hasOpsLocalRolePreview(request: NextRequest, host: string) {
+  return Boolean(
+    canUseOpsLocalRolePreview(host) &&
+      parseOpsLocalRolePreviewRole(
+        request.cookies.get(OPS_LOCAL_ROLE_PREVIEW_COOKIE)?.value,
+      ),
+  );
+}
+
+function shouldBlockOpsLocalRolePreviewMutation(request: NextRequest, host: string) {
+  if (!hasOpsLocalRolePreview(request, host)) {
+    return false;
+  }
+
+  const { pathname } = request.nextUrl;
+
+  if (
+    pathname === "/api/ops/dev-preview" ||
+    pathname === "/api/ops/auth/logout"
+  ) {
+    return false;
+  }
+
+  if (pathname.startsWith("/api/ops")) {
+    return true;
+  }
+
+  if (pathname.startsWith(OPS_PATH_PREFIX)) {
+    return request.method !== "GET" && request.method !== "HEAD" && request.method !== "OPTIONS";
+  }
+
+  return false;
 }
 
 function copyResponseCookies(from: NextResponse, to: NextResponse) {
@@ -95,7 +185,12 @@ async function refreshOpsSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getClaims();
+  await Promise.race([
+    supabase.auth.getClaims(),
+    new Promise((resolve) => {
+      setTimeout(resolve, OPS_SESSION_REFRESH_TIMEOUT_MS);
+    }),
+  ]).catch(() => undefined);
 
   return response;
 }
@@ -104,8 +199,21 @@ export async function proxy(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
   const { pathname } = request.nextUrl;
 
+  if (shouldBlockOpsLocalRolePreviewMutation(request, host)) {
+    const response = pathname.startsWith("/api/ops")
+      ? NextResponse.json(
+          { error: "Local role preview is read-only." },
+          { status: 403 },
+        )
+      : NextResponse.redirect(new URL("/ops?error=local_preview_read_only", request.url), {
+          status: 303,
+        });
+
+    return applyOpsSecurityHeaders(response, host, pathname);
+  }
+
   if (isRetiredOpsPath(host, pathname)) {
-    return new NextResponse(null, { status: 404 });
+    return applyOpsSecurityHeaders(new NextResponse(null, { status: 404 }), host, pathname);
   }
 
   const authResponse = await refreshOpsSession(request);
@@ -117,7 +225,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/_next") ||
     isStaticAsset(pathname)
   ) {
-    return authResponse;
+    return applyOpsSecurityHeaders(authResponse, host, pathname);
   }
 
   const nextUrl = request.nextUrl.clone();
@@ -127,7 +235,7 @@ export async function proxy(request: NextRequest) {
   const rewriteResponse = NextResponse.rewrite(nextUrl, { request });
   copyResponseCookies(authResponse, rewriteResponse);
 
-  return rewriteResponse;
+  return applyOpsSecurityHeaders(rewriteResponse, host, pathname);
 }
 
 export const config = {

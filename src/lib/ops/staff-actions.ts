@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { getOpsAuthCallbackUrl } from "@/lib/ops/auth-redirect";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canCreateStaffRole, canDeactivateStaffRole, canManageStaff } from "@/lib/ops/permissions";
@@ -27,7 +28,7 @@ function field(formData: FormData, name: string) {
 }
 
 function staffError(message: string): never {
-  redirect(`/ops/staff?error=${encodeURIComponent(message)}`);
+  redirect(`/ops/staff?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
 }
 
 export async function createStaffMemberAction(formData: FormData) {

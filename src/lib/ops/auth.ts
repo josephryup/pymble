@@ -1,8 +1,14 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { requirePublicEnv } from "@/lib/ops/env";
+import {
+  buildOpsLocalRolePreviewProfile,
+  canUseOpsLocalRolePreview,
+  OPS_LOCAL_ROLE_PREVIEW_COOKIE,
+  parseOpsLocalRolePreviewRole,
+} from "@/lib/ops/local-role-preview";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsUserRole } from "@/lib/ops/types";
 
@@ -22,7 +28,51 @@ export type OpsUserProfile = {
   updated_at: string;
 };
 
+export type OpsUserContext = {
+  authUser: OpsSessionUser;
+  isLocalRolePreview: boolean;
+  profile: OpsUserProfile;
+};
+
+async function getOpsLocalRolePreviewContext(): Promise<OpsUserContext | null> {
+  const headerStore = await headers();
+
+  if (!canUseOpsLocalRolePreview(headerStore.get("host"))) {
+    return null;
+  }
+
+  const cookieStore = await cookies();
+  const role = parseOpsLocalRolePreviewRole(
+    cookieStore.get(OPS_LOCAL_ROLE_PREVIEW_COOKIE)?.value,
+  );
+
+  if (!role) {
+    return null;
+  }
+
+  const profile = buildOpsLocalRolePreviewProfile(role);
+
+  return {
+    authUser: {
+      email: profile.email,
+      id: profile.id,
+    },
+    isLocalRolePreview: true,
+    profile,
+  };
+}
+
 export async function createOpsServerSessionClient() {
+  const localRolePreview = await getOpsLocalRolePreviewContext();
+
+  if (localRolePreview) {
+    return getOpsSupabaseServiceClient();
+  }
+
+  return createOpsCookieSessionClient();
+}
+
+export async function createOpsCookieSessionClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -95,6 +145,12 @@ export const getOpsUserProfile = cache(async (userId: string) => {
 });
 
 export const getOptionalOpsUser = cache(async () => {
+  const localRolePreview = await getOpsLocalRolePreviewContext();
+
+  if (localRolePreview) {
+    return localRolePreview;
+  }
+
   const user = await getOpsSessionUser();
 
   if (!user) {
@@ -103,7 +159,7 @@ export const getOptionalOpsUser = cache(async () => {
 
   try {
     const profile = await getOpsUserProfile(user.id);
-    return { authUser: user, profile };
+    return { authUser: user, isLocalRolePreview: false, profile };
   } catch {
     return null;
   }

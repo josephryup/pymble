@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { canManageOps } from "@/lib/ops/permissions";
 import type { OrganizationProfile } from "@/lib/ops/organization";
@@ -33,7 +34,7 @@ function field(formData: FormData, name: string) {
 }
 
 function invoiceError(message: string): never {
-  redirect(`/ops/invoices?error=${encodeURIComponent(message)}`);
+  redirect(`/ops/invoices?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
 }
 
 function roundToTwo(value: number) {

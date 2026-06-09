@@ -1,12 +1,17 @@
-import { Building2, MapPin, Save } from "lucide-react";
+import { Building2, MapPin, Save, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchPurchaseOrderApprovalSettings } from "@/lib/ops/approval-settings";
+import { updatePurchaseOrderApprovalSettingsAction } from "@/lib/ops/approval-settings-actions";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { formatCoordinateValue } from "@/lib/ops/coordinates";
 import { fetchOpsOrganizationProfile } from "@/lib/ops/organization";
 import { updateOrganizationProfileAction } from "@/lib/ops/organization-actions";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
+import { formatOpsRole } from "@/lib/ops/roles";
 import {
   firstParam,
+  formatZmw,
   OPS_INPUT_CLASS,
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
@@ -34,6 +39,13 @@ function settingsNotice(params: OpsSearchParams) {
     };
   }
 
+  if (firstParam(params.updated) === "purchase_order_approval") {
+    return {
+      message: "Purchase order approval settings saved.",
+      tone: "success" as const,
+    };
+  }
+
   return null;
 }
 
@@ -52,7 +64,10 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
     notFound();
   }
 
-  const profile = await fetchOpsOrganizationProfile();
+  const [profile, purchaseOrderApprovalSettings] = await Promise.all([
+    fetchOpsOrganizationProfile(),
+    fetchPurchaseOrderApprovalSettings(),
+  ]);
   const canManage = canManageOps(auth.profile.role);
   const notice = settingsNotice(params);
 
@@ -308,13 +323,108 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
         </section>
 
         {canManage ? (
-          <button
+          <OpsSubmitButton
             className={OPS_PRIMARY_BUTTON_CLASS}
-            type="submit"
+            pendingLabel="Saving organization settings..."
           >
             <Save className="size-4" aria-hidden="true" />
             Save organization settings
-          </button>
+          </OpsSubmitButton>
+        ) : null}
+      </form>
+
+      <form action={updatePurchaseOrderApprovalSettingsAction} className="space-y-5">
+        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
+              <ShieldCheck className="size-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="font-heading text-xl font-bold text-primary-dark">
+                Purchase order approvals
+              </h2>
+              <p className="text-sm text-primary-dark/60">
+                Draft purchase orders must pass this chain before they can be issued.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                First review
+              </p>
+              <p className="mt-1 font-heading text-lg font-bold text-primary-dark">
+                {formatOpsRole(purchaseOrderApprovalSettings.first_step_role)}
+              </p>
+            </div>
+            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                Budget check
+              </p>
+              <p className="mt-1 font-heading text-lg font-bold text-primary-dark">
+                {purchaseOrderApprovalSettings.second_step_role
+                  ? formatOpsRole(purchaseOrderApprovalSettings.second_step_role)
+                  : "Not required"}
+              </p>
+            </div>
+            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                Threshold approver
+              </p>
+              <p className="mt-1 font-heading text-lg font-bold text-primary-dark">
+                {purchaseOrderApprovalSettings.threshold_step_role
+                  ? formatOpsRole(purchaseOrderApprovalSettings.threshold_step_role)
+                  : "Not required"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6">
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              MD threshold amount
+              <input
+                className={OPS_INPUT_CLASS}
+                defaultValue={purchaseOrderApprovalSettings.threshold_amount.toFixed(2)}
+                min="0"
+                name="threshold_amount"
+                readOnly={!canManage}
+                required
+                step="0.01"
+                type="number"
+              />
+            </label>
+            <label className="flex min-h-11 items-center gap-3 rounded-md border border-primary-dark/10 px-4 py-3 text-sm font-semibold text-primary-dark lg:col-span-2">
+              <input
+                className="size-4 accent-primary-blue"
+                defaultChecked={purchaseOrderApprovalSettings.threshold_enabled}
+                disabled={!canManage}
+                name="threshold_enabled"
+                type="checkbox"
+              />
+              Add Managing Director review at threshold
+            </label>
+            <div className="rounded-md border border-primary-dark/10 px-4 py-3 lg:col-span-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                Current trigger
+              </p>
+              <p className="mt-1 font-heading text-lg font-bold text-primary-dark">
+                {purchaseOrderApprovalSettings.threshold_enabled
+                  ? `${formatZmw(purchaseOrderApprovalSettings.threshold_amount)} and above`
+                  : "Disabled"}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {canManage ? (
+          <OpsSubmitButton
+            className={OPS_PRIMARY_BUTTON_CLASS}
+            pendingLabel="Saving approval settings..."
+          >
+            <Save className="size-4" aria-hidden="true" />
+            Save approval settings
+          </OpsSubmitButton>
         ) : null}
       </form>
     </div>

@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import { OPS_FOCUS_CLASS } from "@/lib/ops/ui";
 
 export function OpsNavLink({
   href,
+  icon: Icon,
   onNavigate,
   title,
 }: {
   href: string;
+  icon?: LucideIcon;
   onNavigate?: () => void;
   title: string;
 }) {
@@ -17,17 +20,18 @@ export function OpsNavLink({
   const isActive = href === "/ops" ? pathname === "/ops" : pathname.startsWith(href);
 
   return (
-      <Link
-        aria-current={isActive ? "page" : undefined}
-        className={`flex min-h-11 items-center rounded-md px-3 py-2.5 text-sm font-semibold transition ${OPS_FOCUS_CLASS} ${
-          isActive
-            ? "bg-white text-primary-dark shadow-sm"
-            : "text-white/78 hover:bg-white/10 hover:text-white"
-        }`}
-        href={href}
-        onClick={onNavigate}
-      >
-      {title}
+    <Link
+      aria-current={isActive ? "page" : undefined}
+      className={`flex min-h-10 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold transition ${OPS_FOCUS_CLASS} ${
+        isActive
+          ? "bg-primary/10 text-primary shadow-sm shadow-primary-dark/5"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      }`}
+      href={href}
+      onClick={onNavigate}
+    >
+      {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
+      <span className="min-w-0 truncate">{title}</span>
     </Link>
   );
 }
