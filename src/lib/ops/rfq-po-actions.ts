@@ -48,7 +48,20 @@ const itemSchema = z.object({
   unit: z.string().trim().min(1, "Unit is required.").max(40),
 });
 
-const createRfqSchema = headerSchema.extend(itemSchema.shape);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const optionalSupplierId = z
+  .string()
+  .trim()
+  .default("")
+  .transform((value) => (value.length > 0 ? value : null))
+  .refine((value) => value === null || UUID_PATTERN.test(value), {
+    message: "Select a valid supplier.",
+  });
+
+const createRfqSchema = headerSchema.extend(itemSchema.shape).extend({
+  supplier_id: optionalSupplierId,
+});
 
 const rfqIdSchema = z.object({
   rfq_id: z.string().uuid("Select an RFQ."),
@@ -337,6 +350,7 @@ export async function createRfqAction(formData: FormData) {
     quantity: field(formData, "quantity"),
     site_id: field(formData, "site_id"),
     specification: field(formData, "specification"),
+    supplier_id: field(formData, "supplier_id"),
     title: field(formData, "title"),
     unit: field(formData, "unit") || "each",
   });
@@ -401,6 +415,51 @@ export async function createRfqAction(formData: FormData) {
       await supabase.from("rfqs").delete().eq("id", rfq.id);
     })().catch(() => null);
     rfqError(itemError.message);
+  }
+
+  // Best-effort: when the RFQ is seeded from a BOQ line (or any flow that
+  // pre-fills a supplier), auto-invite that supplier so the package is ready to
+  // quote. Failures here must never void the created RFQ.
+  if (parsed.data.supplier_id && canInviteOpsRfqSupplier(profile.role, { status: "draft" })) {
+    try {
+      const supplier = await fetchSupplierForRfq(parsed.data.supplier_id);
+
+      if (supplier && supplier.status === "active") {
+        const { error: inviteError } = await supabase.from("supplier_quotes").insert({
+          created_by: profile.id,
+          rfq_id: rfq.id,
+          supplier_id: supplier.id,
+        });
+
+        if (!inviteError) {
+          await supabase
+            .from("rfqs")
+            .update({ issued_at: new Date().toISOString(), status: "issued" })
+            .eq("id", rfq.id)
+            .eq("status", "draft");
+
+          await recordOpsAuditEvent({
+            action: "rfq.supplier_invited",
+            actorUserId: profile.id,
+            entityId: rfq.id,
+            entityType: "rfq",
+            metadata: {
+              auto_invited: true,
+              rfq_number: rfq.rfq_number,
+              supplier_code: supplier.supplier_code,
+              supplier_id: supplier.id,
+              source: "boq_line",
+            },
+            moduleKey: "rfq_po",
+            sourceId: rfq.id,
+            sourceTable: "rfqs",
+            summary: `Auto-invited ${supplier.supplier_code} to ${rfq.rfq_number}`,
+          }).catch(() => null);
+        }
+      }
+    } catch {
+      // Swallow: the RFQ is still valid without the supplier pre-invite.
+    }
   }
 
   await recordOpsAuditEvent({

@@ -13,6 +13,12 @@ export type OpsBoqSite = {
   name: string;
 };
 
+export type OpsBoqLineSupplier = {
+  id: string;
+  supplier_code: string;
+  legal_name: string;
+};
+
 export type OpsBoqLineItem = {
   id: string;
   boq_id: string;
@@ -22,6 +28,8 @@ export type OpsBoqLineItem = {
   unit_rate: number;
   budgeted_total: number;
   actual_quantity: number;
+  supplier_id: string | null;
+  supplier: OpsBoqLineSupplier | null;
   updated_at: string;
 };
 
@@ -66,12 +74,13 @@ type RawBoqDocument = Omit<
 
 type RawBoqLineItem = Omit<
   OpsBoqLineItem,
-  "actual_quantity" | "budgeted_total" | "quantity" | "unit_rate"
+  "actual_quantity" | "budgeted_total" | "quantity" | "unit_rate" | "supplier"
 > & {
   actual_quantity: number | string;
   budgeted_total: number | string;
   quantity: number | string;
   unit_rate: number | string;
+  supplier: Relation<OpsBoqLineSupplier>;
 };
 
 function normalizeMoney(value: number | string | null) {
@@ -88,6 +97,7 @@ function normalizeLineItem(item: RawBoqLineItem): OpsBoqLineItem {
     actual_quantity: normalizeMoney(item.actual_quantity),
     budgeted_total: normalizeMoney(item.budgeted_total),
     quantity: normalizeMoney(item.quantity),
+    supplier: normalizeRelation(item.supplier),
     unit_rate: normalizeMoney(item.unit_rate),
   };
 }
@@ -150,7 +160,9 @@ async function fetchOpsBoqDocumentItems(
 
   const { data: itemData, error: itemError } = await supabase
     .from("boq_line_items")
-    .select("id, boq_id, description, unit, quantity, unit_rate, budgeted_total, actual_quantity, updated_at")
+    .select(
+      "id, boq_id, description, unit, quantity, unit_rate, budgeted_total, actual_quantity, supplier_id, updated_at, supplier:suppliers!boq_line_items_supplier_id_fkey(id, supplier_code, legal_name)",
+    )
     .in(
       "boq_id",
       documents.map((document) => document.id),

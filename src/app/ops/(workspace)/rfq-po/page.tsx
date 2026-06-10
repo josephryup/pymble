@@ -465,6 +465,15 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
   const createRfqHref = `/ops/rfq-po?${createPanelParams.toString()}#rfq-create-panel`;
   const openCreatePanel = firstParam(params.create) === "rfq";
 
+  // Pre-fill values when an RFQ is seeded from another module (e.g. a BOQ line).
+  const prefillSiteId = firstParam(params.site_id) ?? "";
+  const prefillSupplierId = firstParam(params.supplier_id) ?? "";
+  const prefillTitle = firstParam(params.title) ?? "";
+  const prefillItemName = firstParam(params.item_name) ?? "";
+  const prefillQuantity = firstParam(params.quantity) ?? "";
+  const prefillUnit = firstParam(params.unit) ?? "each";
+  const prefillUnitCost = firstParam(params.estimated_unit_cost) ?? "";
+
   return (
     <div className="w-full max-w-none space-y-6">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -615,13 +624,39 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
-                <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id" required>
+                <select
+                  className={OPS_INPUT_CLASS}
+                  defaultValue={
+                    siteOptions.some((site) => site.id === prefillSiteId) ? prefillSiteId : ""
+                  }
+                  name="site_id"
+                  required
+                >
                   <option value="" disabled>
                     Select Pymble site
                   </option>
                   {siteOptions.map((site) => (
                     <option key={site.id} value={site.id}>
                       {site.code} - {site.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                Invite supplier (optional)
+                <select
+                  className={OPS_INPUT_CLASS}
+                  defaultValue={
+                    supplierOptions.some((supplier) => supplier.id === prefillSupplierId)
+                      ? prefillSupplierId
+                      : ""
+                  }
+                  name="supplier_id"
+                >
+                  <option value="">No supplier yet</option>
+                  {supplierOptions.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.supplier_code} - {supplier.label}
                     </option>
                   ))}
                 </select>
@@ -644,7 +679,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               </label>
               <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
                 RFQ title
-                <input className={OPS_INPUT_CLASS} name="title" required />
+                <input className={OPS_INPUT_CLASS} defaultValue={prefillTitle} name="title" required />
               </label>
               <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
                 Description
@@ -652,19 +687,34 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               </label>
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 First item
-                <input className={OPS_INPUT_CLASS} name="item_name" required />
+                <input className={OPS_INPUT_CLASS} defaultValue={prefillItemName} name="item_name" required />
               </label>
               <label className={OPS_LABEL_CLASS}>
                 Quantity
-                <input className={OPS_INPUT_CLASS} min="0.01" name="quantity" required step="0.01" type="number" />
+                <input
+                  className={OPS_INPUT_CLASS}
+                  defaultValue={prefillQuantity}
+                  min="0.01"
+                  name="quantity"
+                  required
+                  step="0.01"
+                  type="number"
+                />
               </label>
               <label className={OPS_LABEL_CLASS}>
                 Unit
-                <input className={OPS_INPUT_CLASS} defaultValue="each" name="unit" required />
+                <input className={OPS_INPUT_CLASS} defaultValue={prefillUnit} name="unit" required />
               </label>
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Unit estimate
-                <input className={OPS_INPUT_CLASS} min="0" name="estimated_unit_cost" step="0.01" type="number" />
+                <input
+                  className={OPS_INPUT_CLASS}
+                  defaultValue={prefillUnitCost}
+                  min="0"
+                  name="estimated_unit_cost"
+                  step="0.01"
+                  type="number"
+                />
               </label>
               <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
                 Specification

@@ -37,13 +37,7 @@ const teamMembers = [
         credentials: "",
         image: COMPANY_LOGO,
     },
-    {
-        id: 5,
-        name: "Carol Sinkala",
-        role: "Procurement Manager",
-        credentials: "Diploma in Occupational Health and Safety Management",
-        image: COMPANY_LOGO,
-    },
+    
     {
         id: 6,
         name: "Asher Mulenga",
@@ -72,13 +66,7 @@ const teamMembers = [
         credentials: "",
         image: COMPANY_LOGO,
     },
-    {
-        id: 10,
-        name: "Henda Juma",
-        role: "Accountant",
-        credentials: "ZICA part qualified ,ACCA Diploma in Accounting and Business\nACCA Diploma in Financial and Management Accounting",
-        image: "/images/team/henda-juma.jpeg",
-    },
+    
     {
         id: 11,
         name: "Mateo Chalwe",

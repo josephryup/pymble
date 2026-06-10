@@ -6,6 +6,8 @@ import {
   FileText,
   Plus,
   ReceiptText,
+  Send,
+  Upload,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -19,12 +21,17 @@ import {
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
-import { createBoqDocumentAction, createBoqLineItemAction } from "@/lib/ops/boq-actions";
+import {
+  createBoqDocumentAction,
+  createBoqLineItemAction,
+  importBoqLineItemsCsvAction,
+} from "@/lib/ops/boq-actions";
 import { fetchPaginatedOpsBoqDocuments, type OpsBoqDocument } from "@/lib/ops/boq";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
+import { fetchActiveSupplierOptions } from "@/lib/ops/suppliers";
 import {
   firstParam,
   formatZmw,
@@ -67,6 +74,17 @@ function boqNotice(params: OpsSearchParams) {
     return createdLine;
   }
 
+  const imported = firstParam(params.imported);
+
+  if (imported) {
+    const skipped = firstParam(params.skipped);
+    const skippedNote = skipped && skipped !== "0" ? ` ${skipped} row(s) skipped.` : "";
+    return {
+      tone: "success" as const,
+      message: `Imported ${imported} BOQ line item(s) from CSV.${skippedNote}`,
+    };
+  }
+
   if (firstParam(params.updated) === "attachment") {
     return {
       tone: "success" as const,
@@ -88,6 +106,27 @@ function formatNumber(value: number) {
   return value.toLocaleString("en-ZM", {
     maximumFractionDigits: 2,
   });
+}
+
+function buildBoqLineRfqHref(
+  document: Pick<OpsBoqDocument, "site_id" | "title">,
+  item: OpsBoqDocument["items"][number],
+) {
+  const params = new URLSearchParams({
+    create: "rfq",
+    estimated_unit_cost: String(item.unit_rate),
+    item_name: item.description.slice(0, 160),
+    quantity: String(item.quantity),
+    site_id: document.site_id,
+    title: `${document.title} - ${item.description}`.slice(0, 160),
+    unit: item.unit,
+  });
+
+  if (item.supplier_id) {
+    params.set("supplier_id", item.supplier_id);
+  }
+
+  return `/ops/rfq-po?${params.toString()}#rfq-create-panel`;
 }
 
 function boqStatusClass(status: OpsBoqDocument["status"]) {
@@ -148,13 +187,14 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 6 });
   const status = boqStatusFromParam(firstParam(params.status));
-  const [documents, siteOptions] = await Promise.all([
+  const [documents, siteOptions, supplierOptions] = await Promise.all([
     fetchPaginatedOpsBoqDocuments({
       listState,
       query: listState.query,
       status: status || undefined,
     }),
     fetchActiveSiteOptions(),
+    fetchActiveSupplierOptions(),
   ]);
   const boqDocuments = documents.items;
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
@@ -460,6 +500,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                 </div>
 
                 {canManage ? (
+                  <>
                   <details className="mt-5 rounded-md border border-primary-dark/10">
                     <summary
                       className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
@@ -521,7 +562,18 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           type="number"
                         />
                       </label>
-                      <div className="flex items-end md:col-span-3 lg:col-span-6">
+                      <label className={`${OPS_LABEL_CLASS} md:col-span-3 lg:col-span-3`}>
+                        Supplier (optional)
+                        <select className={OPS_INPUT_CLASS} defaultValue="" name="supplier_id">
+                          <option value="">No nominated supplier</option>
+                          {supplierOptions.map((supplier) => (
+                            <option key={supplier.id} value={supplier.id}>
+                              {supplier.supplier_code} - {supplier.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="flex items-end md:col-span-3 lg:col-span-3">
                         <button
                           className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`}
                           type="submit"
@@ -532,6 +584,50 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                       </div>
                     </form>
                   </details>
+
+                  <details className="mt-3 rounded-md border border-primary-dark/10">
+                    <summary
+                      className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <Upload className="size-4" aria-hidden="true" />
+                        Import line items from CSV
+                      </span>
+                      <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+                        Open
+                      </span>
+                    </summary>
+                    <form
+                      action={importBoqLineItemsCsvAction}
+                      className="grid gap-3 border-t border-primary-dark/10 p-4"
+                    >
+                      <input name="boq_id" type="hidden" value={document.id} />
+                      <p className="text-sm leading-6 text-primary-dark/60">
+                        Upload a CSV with columns{" "}
+                        <span className="font-semibold text-primary-dark">description, unit, quantity, rate</span>{" "}
+                        (optional: <span className="font-semibold text-primary-dark">actual</span> and{" "}
+                        <span className="font-semibold text-primary-dark">supplier code</span>). The first row
+                        must be the header. To attach the original BOQ as a PDF, use the documents panel below.
+                      </p>
+                      <label className={OPS_LABEL_CLASS}>
+                        CSV file
+                        <input
+                          accept=".csv,text/csv"
+                          className={OPS_INPUT_CLASS}
+                          name="csv"
+                          required
+                          type="file"
+                        />
+                      </label>
+                      <div>
+                        <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
+                          <Upload className="size-4" aria-hidden="true" />
+                          Import CSV
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+                  </>
                 ) : null}
               </div>
 
@@ -559,6 +655,18 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           <OpsMobileRecordRow label="Total">
                             {formatZmw(item.budgeted_total)}
                           </OpsMobileRecordRow>
+                          <OpsMobileRecordRow label="Supplier">
+                            {item.supplier ? item.supplier.supplier_code : "—"}
+                          </OpsMobileRecordRow>
+                          {canManage ? (
+                            <Link
+                              className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-blue hover:underline"
+                              href={buildBoqLineRfqHref(document, item)}
+                            >
+                              <Send className="size-3.5" aria-hidden="true" />
+                              Create RFQ from this line
+                            </Link>
+                          ) : null}
                         </OpsMobileRecordCard>
                       ))}
                     </OpsMobileRecordList>
@@ -592,6 +700,14 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                         <th className="px-5 py-3" scope="col">
                           Total
                         </th>
+                        <th className="px-5 py-3" scope="col">
+                          Supplier
+                        </th>
+                        {canManage ? (
+                          <th className="px-5 py-3" scope="col">
+                            Source
+                          </th>
+                        ) : null}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-primary-dark/10">
@@ -613,6 +729,26 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           <td className="px-5 py-4 font-semibold text-primary-dark">
                             {formatZmw(item.budgeted_total)}
                           </td>
+                          <td className="px-5 py-4 text-primary-dark/70">
+                            {item.supplier ? (
+                              <span title={item.supplier.legal_name}>
+                                {item.supplier.supplier_code}
+                              </span>
+                            ) : (
+                              <span className="text-primary-dark/40">—</span>
+                            )}
+                          </td>
+                          {canManage ? (
+                            <td className="px-5 py-4">
+                              <Link
+                                className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-blue hover:underline"
+                                href={buildBoqLineRfqHref(document, item)}
+                              >
+                                <Send className="size-3.5" aria-hidden="true" />
+                                RFQ
+                              </Link>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>
