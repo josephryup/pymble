@@ -262,6 +262,9 @@ export async function fetchOpsOverviewRoleMetrics(): Promise<OpsOverviewRoleMetr
       staleDeliveryExceptions: 0,
       staleMaterialRequests: 0,
       stalePaymentRequests: 0,
+      staleRfqs: 0,
+      stalePurchaseOrders: 0,
+      budgetVariance: 0,
       total: 0,
     })),
   ]);

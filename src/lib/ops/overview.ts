@@ -82,6 +82,8 @@ export type OpsOverviewInvoice = {
 export type OpsOverviewActivity = {
   id: string;
   message: string;
+  actor_name: string | null;
+  actor_role: string | null;
   tone: "info" | "warn" | "good";
   created_at: string;
 };
@@ -128,11 +130,17 @@ type RawOverviewInvoice = Omit<NonNullable<OpsOverviewInvoice>, "total_amount"> 
   total_amount: number | string;
 };
 
+type RawActivityActor = {
+  full_name: string | null;
+  role: string | null;
+};
+
 type RawActivity = {
   id: string;
   action: string;
   entity_type: string;
   created_at: string;
+  actor?: RawActivityActor | RawActivityActor[] | null;
 };
 
 type RawOrganizationProfile = Omit<
@@ -225,13 +233,26 @@ function activityTone(action: string): OpsOverviewActivity["tone"] {
   return "info";
 }
 
+function resolveActivityActor(actor: RawActivity["actor"]) {
+  const resolved = Array.isArray(actor) ? (actor[0] ?? null) : (actor ?? null);
+  return {
+    name: resolved?.full_name?.trim() || null,
+    role: resolved?.role || null,
+  };
+}
+
 function normalizeActivity(items: RawActivity[] | null | undefined) {
-  return (items ?? []).map((item) => ({
-    id: item.id,
-    message: formatAction(item.action, item.entity_type),
-    tone: activityTone(item.action),
-    created_at: item.created_at,
-  }));
+  return (items ?? []).map((item) => {
+    const actor = resolveActivityActor(item.actor);
+    return {
+      id: item.id,
+      message: formatAction(item.action, item.entity_type),
+      actor_name: actor.name,
+      actor_role: actor.role,
+      tone: activityTone(item.action),
+      created_at: item.created_at,
+    };
+  });
 }
 
 function normalizeProfile(profile: RawOrganizationProfile | null | undefined) {
@@ -501,16 +522,23 @@ async function fetchOpsOverviewViaQueries() {
   if (canManageOps(userProfile.role)) {
     const { data: activityData } = await supabase
       .from("audit_events")
-      .select("id, action, entity_type, created_at")
+      .select(
+        "id, action, entity_type, created_at, actor:users!audit_events_actor_user_id_fkey(full_name, role)",
+      )
       .order("created_at", { ascending: false })
       .limit(6);
 
-    activity = ((activityData ?? []) as RawActivity[]).map((item) => ({
-      id: item.id,
-      message: formatAction(item.action, item.entity_type),
-      tone: activityTone(item.action),
-      created_at: item.created_at,
-    }));
+    activity = ((activityData ?? []) as unknown as RawActivity[]).map((item) => {
+      const actor = resolveActivityActor(item.actor);
+      return {
+        id: item.id,
+        message: formatAction(item.action, item.entity_type),
+        actor_name: actor.name,
+        actor_role: actor.role,
+        tone: activityTone(item.action),
+        created_at: item.created_at,
+      };
+    });
   }
 
   const openApprovals = attendancePings.filter((record) => !record.approved_at).length;

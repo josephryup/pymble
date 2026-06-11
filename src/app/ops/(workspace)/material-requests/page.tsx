@@ -13,6 +13,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsChainTracker } from "@/components/ops/OpsChainTracker";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
@@ -30,6 +31,7 @@ import {
   canSubmitOpsMaterialRequest,
 } from "@/lib/ops/material-request-permissions";
 import {
+  buildMaterialRequestChainSteps,
   fetchPaginatedOpsMaterialRequests,
   type OpsMaterialRequestSummary,
 } from "@/lib/ops/material-requests";
@@ -772,6 +774,10 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       </dd>
                     </div>
                   </dl>
+
+                  <div className="mt-4">
+                    <OpsChainTracker steps={buildMaterialRequestChainSteps(request)} />
+                  </div>
 
                   <div className="mt-4 grid gap-4">
                     <MaterialRequestItems request={request} />

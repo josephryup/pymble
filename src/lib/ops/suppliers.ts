@@ -8,6 +8,7 @@ import {
 import { canViewOpsSuppliers } from "@/lib/ops/supplier-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
+  OpsSupplierKind,
   OpsSupplierPerformanceEventType,
   OpsSupplierStatus,
   OpsUserRole,
@@ -67,6 +68,7 @@ export type OpsSupplierSummary = {
   performance_events: OpsSupplierPerformanceEventSummary[];
   phone: string;
   rating: number | null;
+  kind: OpsSupplierKind;
   status: OpsSupplierStatus;
   supplier_code: string;
   tpin: string;
@@ -88,6 +90,7 @@ export type OpsSupplierStats = {
 };
 
 export type FetchOpsSuppliersOptions = {
+  kind?: OpsSupplierKind;
   limit?: number;
   query?: string;
   status?: OpsSupplierStatus;
@@ -249,6 +252,7 @@ async function fetchOpsSupplierItems(
         "legal_name",
         "trading_name",
         "category",
+        "kind",
         "status",
         "tpin",
         "email",
@@ -269,6 +273,12 @@ async function fetchOpsSupplierItems(
 
   if (options.status) {
     supplierQuery = supplierQuery.eq("status", options.status);
+  }
+
+  if (options.kind) {
+    supplierQuery = options.kind === "both"
+      ? supplierQuery.eq("kind", "both")
+      : supplierQuery.in("kind", [options.kind, "both"]);
   }
 
   const searchFilter = opsIlikeOrFilter(

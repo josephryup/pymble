@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsCommercialKpiPanel } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
@@ -159,6 +160,7 @@ import type {
   OpsCommercialMarginReport,
   OpsCommercialMarginTone,
 } from "@/lib/ops/commercial-reporting";
+import { fetchOpsCommercialKpis } from "@/lib/ops/finance-kpis";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
@@ -1652,6 +1654,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     milestones,
     variations,
     claims,
+    commercialKpis,
   ] = await Promise.all([
     fetchActiveSiteOptions(),
     fetchCommercialBoqOptions(),
@@ -1674,6 +1677,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     fetchRecentCommercialMilestones(),
     fetchRecentCommercialVariations(),
     fetchRecentCommercialClaims(),
+    fetchOpsCommercialKpis(),
   ]);
   const notice = commercialNotice(params);
   const canCreate = canCreateOpsCommercialRecord(auth.profile.role);
@@ -1843,6 +1847,8 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           value={formatZmw(forecastReport.totals.milestoneForecastAmount)}
         />
       </section>
+
+      <OpsCommercialKpiPanel kpis={commercialKpis} />
 
       <CommercialMarginPanel report={marginReport} />
       <CommercialForecastPanel report={forecastReport} />

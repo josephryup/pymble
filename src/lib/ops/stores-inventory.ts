@@ -45,6 +45,10 @@ export type OpsStockItemSummary = {
   item_name: string;
   specification: string;
   unit: string;
+  minimum_quantity: number;
+  target_quantity: number;
+  lead_time_days: number;
+  last_unit_cost: number;
 };
 
 export type OpsReceivablePurchaseOrderItemOption = {
@@ -273,7 +277,9 @@ export async function fetchActiveStockItemOptions(limit = 150) {
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("stock_items")
-    .select("id, item_code, item_name, category, specification, unit, is_active")
+    .select(
+      "id, item_code, item_name, category, specification, unit, is_active, minimum_quantity, target_quantity, lead_time_days, last_unit_cost",
+    )
     .eq("is_active", true)
     .order("item_name", { ascending: true })
     .limit(normalizeLimit(limit, 250));
@@ -282,7 +288,23 @@ export async function fetchActiveStockItemOptions(limit = 150) {
     throw error;
   }
 
-  return (data ?? []) as unknown as OpsStockItemSummary[];
+  type RawStockItem = Omit<
+    OpsStockItemSummary,
+    "minimum_quantity" | "target_quantity" | "lead_time_days" | "last_unit_cost"
+  > & {
+    minimum_quantity: number | string;
+    target_quantity: number | string;
+    lead_time_days: number | string;
+    last_unit_cost: number | string;
+  };
+
+  return ((data ?? []) as unknown as RawStockItem[]).map((row) => ({
+    ...row,
+    minimum_quantity: Number(row.minimum_quantity ?? 0),
+    target_quantity: Number(row.target_quantity ?? 0),
+    lead_time_days: Number(row.lead_time_days ?? 0),
+    last_unit_cost: Number(row.last_unit_cost ?? 0),
+  }));
 }
 
 export async function fetchReceivablePurchaseOrderItemOptions(limit = 150) {

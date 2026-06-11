@@ -23,6 +23,14 @@ export type OpsUserRole =
 export type OpsWorkerType = "casual" | "permanent";
 export type OpsMomoProvider = "mtn" | "airtel";
 export type OpsSiteStatus = "active" | "mobilizing" | "closing";
+export type OpsSiteStage =
+  | "planning"
+  | "mobilizing"
+  | "in_progress"
+  | "handover"
+  | "completed"
+  | "on_hold"
+  | "cancelled";
 export type OpsAttendanceSource = "app" | "manual" | "ussd";
 export type OpsAttendancePresence = "present" | "late" | "absent";
 export type OpsPayrollStatus = "draft" | "approved" | "disbursing" | "completed";
@@ -54,6 +62,7 @@ export type OpsMaterialRequestStatus =
 export type OpsNotificationStatus = "unread" | "read" | "archived";
 export type OpsEmailDeliveryStatus = "sent" | "failed" | "skipped";
 export type OpsSupplierStatus = "active" | "on_hold" | "archived";
+export type OpsSupplierKind = "vendor" | "subcontractor" | "both";
 export type OpsSupplierPerformanceEventType =
   | "delivery"
   | "quality"
@@ -446,6 +455,15 @@ export type OpsRecruitmentRequisitionStatus =
   | "offered"
   | "filled"
   | "cancelled";
+export type OpsJobApplicationStatus =
+  | "new"
+  | "screening"
+  | "shortlisted"
+  | "interview"
+  | "offer"
+  | "hired"
+  | "rejected"
+  | "withdrawn";
 export type OpsEmployeeContractStatus =
   | "draft"
   | "active"

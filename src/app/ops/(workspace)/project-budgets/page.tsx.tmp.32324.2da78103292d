@@ -14,7 +14,6 @@ import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
-import { OpsProjectPnlPanel } from "@/components/ops/OpsProjectPnlPanel";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -41,7 +40,6 @@ import {
 } from "@/lib/ops/finance";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
-import { fetchOpsProjectPnl } from "@/lib/ops/project-pnl";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import {
   firstParam,

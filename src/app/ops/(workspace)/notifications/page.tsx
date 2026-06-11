@@ -12,6 +12,7 @@ import {
   archiveOpsNotificationAction,
   markAllOpsNotificationsReadAction,
   markOpsNotificationReadAction,
+  openOpsNotificationAction,
   restoreOpsNotificationAction,
 } from "@/lib/ops/notification-actions";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -258,9 +259,13 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
                     </div>
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       {actionHref ? (
-                        <Link className={OPS_SECONDARY_BUTTON_CLASS} href={actionHref}>
-                          Open related record
-                        </Link>
+                        <form action={openOpsNotificationAction}>
+                          <input name="id" type="hidden" value={notification.id} />
+                          <input name="action_href" type="hidden" value={actionHref} />
+                          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                            Open related record
+                          </button>
+                        </form>
                       ) : null}
 
                       {notification.status === "unread" ? (

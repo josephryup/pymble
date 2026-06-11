@@ -167,6 +167,14 @@ export function canManageOpsRecruitmentRequisition(
   return HR_MANAGE_ROLES.includes(role) && (!requisition || requisition.status !== "cancelled");
 }
 
+export function canManageOpsJobPosting(role: OpsUserRole) {
+  return HR_MANAGE_ROLES.includes(role);
+}
+
+export function canReviewOpsJobApplication(role: OpsUserRole) {
+  return HR_MANAGE_ROLES.includes(role);
+}
+
 export function canCreateOpsEmployeeContract(role: OpsUserRole) {
   return HR_MANAGE_ROLES.includes(role);
 }

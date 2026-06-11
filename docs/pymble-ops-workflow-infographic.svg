@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#475467"/>
+    </marker>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#2737e8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="1180" fill="#f6f7fb"/>
+
+  <!-- Header -->
+  <rect x="0" y="0" width="1600" height="118" fill="url(#header)"/>
+  <text x="60" y="52" fill="#9db2ff" font-size="15" font-weight="700" letter-spacing="3">PYMBLE OPERATIONS</text>
+  <text x="60" y="90" fill="#ffffff" font-size="34" font-weight="800">End-to-End System Workflow</text>
+  <text x="1540" y="58" fill="#c7d2fe" font-size="14" text-anchor="end">Raise it in the system, not on the phone.</text>
+  <text x="1540" y="82" fill="#c7d2fe" font-size="14" text-anchor="end">The system routes the work. Leadership reviews dashboards.</text>
+
+  <!-- Department band -->
+  <text x="60" y="168" fill="#475467" font-size="14" font-weight="700" letter-spacing="2">DEPARTMENTS</text>
+  <g font-size="14" font-weight="700" text-anchor="middle">
+    <g>
+      <rect x="60" y="184" width="178" height="46" rx="10" fill="#0b1220"/>
+      <text x="149" y="213" fill="#ffffff">Engineering</text>
+    </g>
+    <g>
+      <rect x="252" y="184" width="178" height="46" rx="10" fill="#2737e8"/>
+      <text x="341" y="213" fill="#ffffff">Procurement</text>
+    </g>
+    <g>
+      <rect x="444" y="184" width="178" height="46" rx="10" fill="#059669"/>
+      <text x="533" y="213" fill="#ffffff">Finance</text>
+    </g>
+    <g>
+      <rect x="636" y="184" width="178" height="46" rx="10" fill="#0891b2"/>
+      <text x="725" y="213" fill="#ffffff">Operations</text>
+    </g>
+    <g>
+      <rect x="828" y="184" width="178" height="46" rx="10" fill="#dc2626"/>
+      <text x="917" y="213" fill="#ffffff">HSE</text>
+    </g>
+    <g>
+      <rect x="1020" y="184" width="178" height="46" rx="10" fill="#b45309"/>
+      <text x="1109" y="213" fill="#ffffff">Admin &amp; HR</text>
+    </g>
+    <g>
+      <rect x="1212" y="184" width="178" height="46" rx="10" fill="#6d28d9"/>
+      <text x="1301" y="213" fill="#ffffff">QS &amp; Commercial</text>
+    </g>
+    <g>
+      <rect x="1404" y="184" width="136" height="46" rx="10" fill="#101828" stroke="#f59e0b" stroke-width="2"/>
+      <text x="1472" y="213" fill="#f59e0b">Executive</text>
+    </g>
+  </g>
+
+  <!-- Flow section title -->
+  <text x="60" y="300" fill="#101828" font-size="20" font-weight="800">The record chain</text>
+  <text x="60" y="324" fill="#667085" font-size="14">Each step creates or pre-fills the next. Follow the arrows.</text>
+
+  <!-- ROW A (left to right) -->
+  <g font-weight="700" text-anchor="middle">
+    <!-- Site setup -->
+    <rect x="60" y="356" width="210" height="78" rx="12" fill="#0b1220"/>
+    <text x="165" y="392" fill="#ffffff" font-size="16">Site &amp; Budget setup</text>
+    <text x="165" y="414" fill="#9db2ff" font-size="12" font-weight="600">Projects &amp; Sites</text>
+
+    <!-- BOQ -->
+    <rect x="300" y="356" width="210" height="78" rx="12" fill="#6d28d9"/>
+    <text x="405" y="392" fill="#ffffff" font-size="16">BOQ &amp; Cost plan</text>
+    <text x="405" y="414" fill="#e9d5ff" font-size="12" font-weight="600">Quantity Surveying</text>
+
+    <!-- Material request -->
+    <rect x="540" y="356" width="210" height="78" rx="12" fill="#0b1220"/>
+    <text x="645" y="392" fill="#ffffff" font-size="16">Material Request</text>
+    <text x="645" y="414" fill="#9db2ff" font-size="12" font-weight="600">Site Engineer</text>
+
+    <!-- RFQ -->
+    <rect x="780" y="356" width="210" height="78" rx="12" fill="#2737e8"/>
+    <text x="885" y="392" fill="#ffffff" font-size="16">RFQ</text>
+    <text x="885" y="414" fill="#c7d2fe" font-size="12" font-weight="600">Procurement</text>
+
+    <!-- Supplier quotes -->
+    <rect x="1020" y="356" width="210" height="78" rx="12" fill="#2737e8"/>
+    <text x="1125" y="386" fill="#ffffff" font-size="16">Supplier Quotes</text>
+    <text x="1125" y="408" fill="#c7d2fe" font-size="12" font-weight="600">Compare &amp; award</text>
+
+    <!-- Purchase order -->
+    <rect x="1260" y="356" width="210" height="78" rx="12" fill="#2737e8"/>
+    <text x="1365" y="386" fill="#ffffff" font-size="16">Purchase Order</text>
+    <text x="1365" y="408" fill="#c7d2fe" font-size="12" font-weight="600">Approved &amp; issued</text>
+  </g>
+
+  <!-- Row A arrows -->
+  <g stroke="#475467" stroke-width="2.5" marker-end="url(#arrow)">
+    <line x1="272" y1="395" x2="298" y2="395"/>
+    <line x1="512" y1="395" x2="538" y2="395"/>
+    <line x1="752" y1="395" x2="778" y2="395"/>
+    <line x1="992" y1="395" x2="1018" y2="395"/>
+    <line x1="1232" y1="395" x2="1258" y2="395"/>
+  </g>
+
+  <!-- Down connector PO -> Goods received -->
+  <g stroke="#475467" stroke-width="2.5" marker-end="url(#arrow)">
+    <line x1="1365" y1="436" x2="1365" y2="494"/>
+  </g>
+  <text x="1385" y="470" fill="#667085" font-size="12">Finance verifies budget · MD approves above threshold</text>
+
+  <!-- ROW B (right to left) -->
+  <g font-weight="700" text-anchor="middle">
+    <rect x="1260" y="496" width="210" height="78" rx="12" fill="#0891b2"/>
+    <text x="1365" y="526" fill="#ffffff" font-size="16">Goods Received</text>
+    <text x="1365" y="548" fill="#cffafe" font-size="12" font-weight="600">GRN · Storekeeper</text>
+
+    <rect x="1020" y="496" width="210" height="78" rx="12" fill="#0891b2"/>
+    <text x="1125" y="526" fill="#ffffff" font-size="16">Stores &amp; Inventory</text>
+    <text x="1125" y="548" fill="#cffafe" font-size="12" font-weight="600">Stock control</text>
+
+    <rect x="780" y="496" width="210" height="78" rx="12" fill="#059669"/>
+    <text x="885" y="526" fill="#ffffff" font-size="16">Client Invoice</text>
+    <text x="885" y="548" fill="#d1fae5" font-size="12" font-weight="600">Finance / QS</text>
+
+    <rect x="540" y="496" width="210" height="78" rx="12" fill="#059669"/>
+    <text x="645" y="526" fill="#ffffff" font-size="16">Payment Request</text>
+    <text x="645" y="548" fill="#d1fae5" font-size="12" font-weight="600">Supplier / expense</text>
+
+    <rect x="300" y="496" width="210" height="78" rx="12" fill="#6d28d9"/>
+    <text x="405" y="520" fill="#ffffff" font-size="15">IPCs · Variations</text>
+    <text x="405" y="540" fill="#e9d5ff" font-size="12" font-weight="600">Claims · Commercial</text>
+
+    <rect x="60" y="496" width="210" height="78" rx="12" fill="#101828" stroke="#f59e0b" stroke-width="2"/>
+    <text x="165" y="526" fill="#f59e0b" font-size="16">Executive Dashboard</text>
+    <text x="165" y="548" fill="#fcd34d" font-size="12" font-weight="600">MD reviews summaries</text>
+  </g>
+
+  <!-- Row B arrows (pointing left) -->
+  <g stroke="#475467" stroke-width="2.5" marker-end="url(#arrow)">
+    <line x1="1258" y1="535" x2="1232" y2="535"/>
+    <line x1="1018" y1="535" x2="992" y2="535"/>
+    <line x1="778" y1="535" x2="752" y2="535"/>
+    <line x1="538" y1="535" x2="512" y2="535"/>
+    <line x1="298" y1="535" x2="272" y2="535"/>
+  </g>
+
+  <!-- Delivery exception branch -->
+  <g stroke="#dc2626" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#arrow)">
+    <line x1="1365" y1="574" x2="1365" y2="628"/>
+  </g>
+  <g text-anchor="middle" font-weight="700">
+    <rect x="1260" y="630" width="210" height="58" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="1365" y="657" fill="#b91c1c" font-size="14">Delivery Exception</text>
+    <text x="1365" y="676" fill="#dc2626" font-size="12" font-weight="600">Shortage / damage</text>
+  </g>
+
+  <!-- Site lifecycle strip -->
+  <text x="60" y="770" fill="#101828" font-size="20" font-weight="800">Site lifecycle &amp; progress</text>
+  <g font-weight="700" text-anchor="middle" font-size="14">
+    <rect x="60" y="794" width="150" height="50" rx="25" fill="#e0e7ff"/>
+    <text x="135" y="824" fill="#3730a3">planning</text>
+    <rect x="250" y="794" width="150" height="50" rx="25" fill="#dbeafe"/>
+    <text x="325" y="824" fill="#1d4ed8">mobilizing</text>
+    <rect x="440" y="794" width="150" height="50" rx="25" fill="#cffafe"/>
+    <text x="515" y="824" fill="#0e7490">in_progress</text>
+    <rect x="630" y="794" width="150" height="50" rx="25" fill="#fef3c7"/>
+    <text x="705" y="824" fill="#b45309">handover</text>
+    <rect x="820" y="794" width="150" height="50" rx="25" fill="#d1fae5"/>
+    <text x="895" y="824" fill="#047857">completed</text>
+  </g>
+  <g stroke="#94a3b8" stroke-width="2.5" marker-end="url(#arrow)">
+    <line x1="212" y1="819" x2="248" y2="819"/>
+    <line x1="402" y1="819" x2="438" y2="819"/>
+    <line x1="592" y1="819" x2="628" y2="819"/>
+    <line x1="782" y1="819" x2="818" y2="819"/>
+  </g>
+  <g font-weight="700" text-anchor="middle" font-size="13">
+    <rect x="1010" y="794" width="120" height="50" rx="25" fill="#f3f4f6" stroke="#9ca3af"/>
+    <text x="1070" y="823" fill="#6b7280">on_hold</text>
+    <rect x="1150" y="794" width="120" height="50" rx="25" fill="#fee2e2" stroke="#ef4444"/>
+    <text x="1210" y="823" fill="#b91c1c">cancelled</text>
+  </g>
+  <text x="1300" y="816" fill="#667085" font-size="13">+ progress %</text>
+  <text x="1300" y="834" fill="#667085" font-size="13">feeds MD completion KPI</text>
+
+  <!-- Cross-cutting band -->
+  <rect x="60" y="900" width="1480" height="120" rx="16" fill="#ffffff" stroke="#e4e7ec" stroke-width="1.5"/>
+  <text x="90" y="940" fill="#101828" font-size="18" font-weight="800">Runs across every step</text>
+  <g font-weight="700" text-anchor="middle" font-size="15">
+    <rect x="90" y="958" width="320" height="44" rx="10" fill="#eef2ff"/>
+    <text x="250" y="986" fill="#3730a3">Approvals (threshold-based)</text>
+    <rect x="430" y="958" width="280" height="44" rx="10" fill="#ecfeff"/>
+    <text x="570" y="986" fill="#0e7490">Notifications</text>
+    <rect x="730" y="958" width="280" height="44" rx="10" fill="#ecfdf5"/>
+    <text x="870" y="986" fill="#047857">Documents (versioned)</text>
+    <rect x="1030" y="958" width="320" height="44" rx="10" fill="#fef2f2"/>
+    <text x="1190" y="986" fill="#b91c1c">Audit trail (who &amp; when)</text>
+  </g>
+
+  <!-- MD callout -->
+  <rect x="60" y="1050" width="1480" height="86" rx="16" fill="#0b1220"/>
+  <text x="92" y="1090" fill="#f59e0b" font-size="16" font-weight="800">MD operates by exception</text>
+  <text x="92" y="1116" fill="#e5e7eb" font-size="15">Sees dashboards — cashflow, completion %, receivables, profitability — and approves only above threshold. No daily operational calls.</text>
+
+  <text x="1540" y="1170" fill="#98a2b3" font-size="12" text-anchor="end">Pymble Construction · Operations workflow · see pymble-ops-operations-guide.md</text>
+</svg>

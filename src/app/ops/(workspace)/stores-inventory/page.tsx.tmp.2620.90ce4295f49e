@@ -17,17 +17,9 @@ import { notFound } from "next/navigation";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
-import {
-  OpsDeliveryTrackerPanel,
-  OpsStockAlertsPanel,
-} from "@/components/ops/OpsProcurementKpiPanels";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canCreateOpsDeliveryException } from "@/lib/ops/delivery-exception-permissions";
-import {
-  fetchOpsDeliveryTracker,
-  fetchOpsStockAlerts,
-} from "@/lib/ops/procurement-kpis";
 import { deliveryExceptionCreateHrefForGrn } from "@/lib/ops/delivery-exception-shortcuts";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -772,9 +764,6 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
           value={String(stats.activeStockItems)}
         />
       </div>
-
-      <OpsStockAlertsPanel summary={stockAlerts} />
-      <OpsDeliveryTrackerPanel summary={deliveryTracker} />
 
       <OpsDashboardPanel
         actions={

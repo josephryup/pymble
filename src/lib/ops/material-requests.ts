@@ -76,6 +76,111 @@ export type FetchPaginatedOpsMaterialRequestsOptions = FetchOpsMaterialRequestsO
   listState: OpsListState;
 };
 
+export type OpsChainStepDescriptor = {
+  key: string;
+  label: string;
+  state: "done" | "current" | "pending" | "rejected";
+  caption: string | null;
+  href: string | null;
+};
+
+function chainDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-ZM", {
+    dateStyle: "medium",
+    timeZone: "Africa/Lusaka",
+  }).format(new Date(value));
+}
+
+/**
+ * Maps a material request to its position in the
+ * Request → Submit → Approve → Procure (RFQ/PO) → Close chain.
+ * Derived entirely from the request's own status + timestamps (no extra query).
+ */
+export function buildMaterialRequestChainSteps(
+  request: Pick<
+    OpsMaterialRequestSummary,
+    | "status"
+    | "request_number"
+    | "created_at"
+    | "submitted_at"
+    | "approved_at"
+    | "rejected_at"
+    | "ordered_at"
+    | "closed_at"
+  >,
+): OpsChainStepDescriptor[] {
+  const s = request.status;
+
+  if (s === "cancelled") {
+    return [
+      {
+        key: "requested",
+        label: "Requested",
+        state: "done",
+        caption: chainDate(request.created_at),
+        href: null,
+      },
+      { key: "cancelled", label: "Cancelled", state: "rejected", caption: null, href: null },
+    ];
+  }
+
+  const submittedDone = ["submitted", "in_review", "approved", "ordered", "closed"].includes(s);
+  const approvedDone = ["approved", "ordered", "closed"].includes(s);
+  const orderedDone = ["ordered", "closed"].includes(s);
+  const rejected = s === "rejected";
+
+  return [
+    {
+      key: "requested",
+      label: "Requested",
+      state: "done",
+      caption: chainDate(request.created_at),
+      href: null,
+    },
+    {
+      key: "submitted",
+      label: "Submitted",
+      state: submittedDone ? "done" : s === "draft" ? "current" : "pending",
+      caption: chainDate(request.submitted_at) ?? (s === "draft" ? "Awaiting submission" : null),
+      href: null,
+    },
+    {
+      key: "approved",
+      label: rejected ? "Rejected" : "Approved",
+      state: rejected
+        ? "rejected"
+        : approvedDone
+          ? "done"
+          : ["submitted", "in_review"].includes(s)
+            ? "current"
+            : "pending",
+      caption: rejected
+        ? chainDate(request.rejected_at)
+        : (chainDate(request.approved_at) ??
+          (["submitted", "in_review"].includes(s) ? "Awaiting approval" : null)),
+      href: null,
+    },
+    {
+      key: "procured",
+      label: "Procured (RFQ/PO)",
+      state: orderedDone ? "done" : s === "approved" ? "current" : "pending",
+      caption: chainDate(request.ordered_at) ?? (s === "approved" ? "Ready to procure" : null),
+      href: orderedDone || s === "approved" ? "/ops/rfq-po" : null,
+    },
+    {
+      key: "closed",
+      label: "Closed",
+      state: s === "closed" ? "done" : "pending",
+      caption: chainDate(request.closed_at),
+      href: null,
+    },
+  ];
+}
+
 type RawMaterialRequest = Omit<
   OpsMaterialRequestSummary,
   "approval_status" | "estimated_total" | "items" | "requester" | "site"

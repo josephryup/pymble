@@ -12,6 +12,7 @@ import {
   markOpsNotificationRead,
   restoreOpsNotification,
 } from "@/lib/ops/notifications";
+import { safeOpsReturnTo } from "@/lib/ops/return-paths";
 
 function field(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -85,6 +86,31 @@ export async function archiveOpsNotificationAction(formData: FormData) {
   revalidatePath("/ops/approvals");
   revalidatePath("/ops/notifications");
   redirectWithNotice(parsed.returnTo, "notification_archived");
+}
+
+/**
+ * Opens a notification's related record and marks the notification read in one
+ * server action. Lets the UI keep a single "Open related record" button without
+ * leaving badges stale after click-through.
+ */
+export async function openOpsNotificationAction(formData: FormData) {
+  const id = field(formData, "id");
+  const target = safeOpsReturnTo(field(formData, "action_href"), "/ops");
+
+  if (id) {
+    try {
+      await markOpsNotificationRead(id);
+    } catch {
+      // Silently swallow — the user's intent is to view the record. They can
+      // mark-read manually from the notifications page if it really matters.
+    }
+
+    revalidatePath("/ops");
+    revalidatePath("/ops/approvals");
+    revalidatePath("/ops/notifications");
+  }
+
+  redirect(target);
 }
 
 export async function restoreOpsNotificationAction(formData: FormData) {

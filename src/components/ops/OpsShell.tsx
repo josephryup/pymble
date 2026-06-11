@@ -35,6 +35,7 @@ import { OpsNavLink } from "@/components/ops/OpsNavLink";
 import { OpsBrandMark } from "@/components/ops/OpsBrandMark";
 import { OpsLocalRolePreviewGuard } from "@/components/ops/OpsLocalRolePreviewGuard";
 import { OpsLocalRolePreviewPanel } from "@/components/ops/OpsLocalRolePreviewPanel";
+import { OpsInstallPrompt } from "@/components/ops/OpsInstallPrompt";
 import { OpsTopUtilityBar } from "@/components/ops/OpsTopUtilityBar";
 import { OPS_BRAND, OPS_MODULE_GROUPS } from "@/lib/ops/constants";
 import { visibleOpsModules, visibleOpsRouteModules } from "@/lib/ops/permissions";
@@ -500,10 +501,11 @@ export function OpsShell({
             modules={routeModules}
             unreadNotifications={unreadNotifications}
           />
-          <div className="grid w-full gap-4 p-4 lg:p-5">
+          <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 lg:p-5">
             {isLocalRolePreview ? (
               <OpsLocalRolePreviewPanel activeRole={profileRole} compact />
             ) : null}
+            <OpsInstallPrompt />
             {children}
           </div>
         </main>

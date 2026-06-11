@@ -17,10 +17,12 @@ import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsSupplierScorecardPanel } from "@/components/ops/OpsProcurementKpiPanels";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
+import { fetchOpsSupplierScorecards } from "@/lib/ops/procurement-kpis";
 import {
   addSupplierPerformanceEventAction,
   addSupplierContactAction,
@@ -40,7 +42,11 @@ import {
   type OpsSupplierPerformanceEventSummary,
   type OpsSupplierSummary,
 } from "@/lib/ops/suppliers";
-import type { OpsSupplierPerformanceEventType, OpsSupplierStatus } from "@/lib/ops/types";
+import type {
+  OpsSupplierKind,
+  OpsSupplierPerformanceEventType,
+  OpsSupplierStatus,
+} from "@/lib/ops/types";
 import {
   firstParam,
   noticeFromParams,
@@ -65,6 +71,44 @@ const SUPPLIER_STATUS_OPTIONS: Array<{
   { label: "On hold", value: "on_hold" },
   { label: "Archived", value: "archived" },
 ];
+
+const SUPPLIER_KIND_OPTIONS: Array<{
+  label: string;
+  value: OpsSupplierKind | "";
+}> = [
+  { label: "All kinds", value: "" },
+  { label: "Vendors", value: "vendor" },
+  { label: "Subcontractors", value: "subcontractor" },
+  { label: "Both", value: "both" },
+];
+
+function supplierKindFromParam(value: string | undefined) {
+  return SUPPLIER_KIND_OPTIONS.some((kind) => kind.value === value)
+    ? (value as OpsSupplierKind | "")
+    : "";
+}
+
+function kindLabel(kind: OpsSupplierKind) {
+  switch (kind) {
+    case "subcontractor":
+      return "Subcontractor";
+    case "both":
+      return "Vendor & Sub";
+    default:
+      return "Vendor";
+  }
+}
+
+function kindClass(kind: OpsSupplierKind) {
+  switch (kind) {
+    case "subcontractor":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "both":
+      return "border-purple-200 bg-purple-50 text-purple-700";
+    default:
+      return "border-primary-blue/20 bg-primary-blue/10 text-primary-blue";
+  }
+}
 
 const SUPPLIER_CATEGORY_OPTIONS = [
   { label: "General", value: "general" },
@@ -421,21 +465,24 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = supplierStatusFromParam(firstParam(params.status));
+  const kind = supplierKindFromParam(firstParam(params.kind));
   const canCreate = canCreateOpsSupplier(auth.profile.role);
   const canManage = canManageOpsSupplier(auth.profile.role);
   const canLogPerformance = canCreateOpsSupplierPerformanceEvent(auth.profile.role);
-  const [supplierPage, supplierStats, siteOptions] = await Promise.all([
+  const [supplierPage, supplierStats, siteOptions, supplierScorecards] = await Promise.all([
     fetchPaginatedOpsSuppliers({
       listState,
       query: listState.query,
       status: status || undefined,
+      kind: kind || undefined,
     }),
     fetchOpsSupplierStats(),
     canLogPerformance ? fetchActiveSiteOptions() : Promise.resolve([]),
+    fetchOpsSupplierScorecards(),
   ]);
   const suppliers = supplierPage.items;
   const notice = supplierNotice(params);
-  const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
+  const hasActiveListFilter = listState.query.length > 0 || Boolean(status) || Boolean(kind);
 
   return (
     <div className="w-full max-w-none space-y-5">
@@ -505,6 +552,8 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
         />
       </section>
 
+      <OpsSupplierScorecardPanel scorecards={supplierScorecards} />
+
       {canCreate ? (
         <details
           className="rounded-lg border border-primary-dark/10 bg-white"
@@ -546,6 +595,14 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
                     {category.label}
                   </option>
                 ))}
+              </select>
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Kind
+              <select className={OPS_INPUT_CLASS} defaultValue="vendor" name="kind">
+                <option value="vendor">Vendor (materials/equipment)</option>
+                <option value="subcontractor">Subcontractor (labour/services)</option>
+                <option value="both">Both — vendor &amp; subcontractor</option>
               </select>
             </label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -635,6 +692,12 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
               options: SUPPLIER_STATUS_OPTIONS,
               value: status,
             },
+            {
+              label: "Kind",
+              name: "kind",
+              options: SUPPLIER_KIND_OPTIONS,
+              value: kind,
+            },
           ]}
           placeholder="Search supplier, category, TPIN, email, phone, or city"
           query={listState.query}
@@ -666,6 +729,13 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
                         </span>
                         <span className="inline-flex rounded-full border border-primary-dark/10 bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/55">
                           {formatLabel(supplier.category)}
+                        </span>
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${kindClass(
+                            supplier.kind,
+                          )}`}
+                        >
+                          {kindLabel(supplier.kind)}
                         </span>
                       </div>
                       <p className="mt-2 font-bold text-primary-dark">
@@ -838,6 +908,12 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
               name: "status",
               options: [],
               value: status,
+            },
+            {
+              label: "Kind",
+              name: "kind",
+              options: [],
+              value: kind,
             },
           ]}
           pagination={supplierPage.pagination}

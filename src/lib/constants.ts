@@ -60,6 +60,7 @@ export const NAV_LINKS = [
     { name: "Services", href: "/services" },
     { name: "Projects", href: "/projects" },
     { name: "Blog", href: "/blog" },
+    { name: "Careers", href: "/careers" },
     { name: "Contact", href: "/contact" },
 ] as const;
 

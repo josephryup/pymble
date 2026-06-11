@@ -20,6 +20,7 @@ import {
   ShieldPlus,
   ShoppingCart,
   Truck,
+  UserCircle2,
   Users,
   Warehouse,
   type LucideIcon,
@@ -107,7 +108,7 @@ const DASHBOARD_COPY: Record<
   },
   executive: {
     eyebrow: "Executive Workspace",
-    title: "Business health control",
+    title: "Business health",
   },
   finance: {
     eyebrow: "Finance Workspace",
@@ -1423,9 +1424,21 @@ function ActivityPanel({ activity }: { activity: OpsOverviewActivity[] }) {
                       {meta.label}
                     </Badge>
                   </div>
-                  <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary-dark/45">
-                    <Clock3 className="size-3.5" aria-hidden="true" />
-                    {formatActivityTime(item.created_at)}
+                  <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-primary-dark/45">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock3 className="size-3.5" aria-hidden="true" />
+                      {formatActivityTime(item.created_at)}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-primary-dark/70">
+                      <UserCircle2 className="size-3.5" aria-hidden="true" />
+                      {item.actor_name ?? "System"}
+                      {item.actor_role ? (
+                        <span className="text-primary-dark/45">
+                          · {formatOpsRole(item.actor_role)}
+                        </span>
+                      ) : null}
+                    </span>
                   </p>
                 </div>
               </div>

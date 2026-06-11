@@ -16,10 +16,12 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsHseKpiPanel } from "@/components/ops/OpsHseKpiPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { fetchOpsHseComplianceKpis, fetchOpsLtifr } from "@/lib/ops/hse-kpis";
 import {
   cancelCorrectiveActionAction,
   cancelHseIncidentAction,
@@ -638,6 +640,8 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
     userOptions,
     executiveSafetyRollup,
     emailDeliveryReport,
+    ltifr,
+    hseCompliance,
   ] = await Promise.all([
     fetchPaginatedOpsHseIncidents({
       listState,
@@ -650,6 +654,8 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
     fetchHseUserOptions(),
     fetchOpsHseExecutiveSafetyRollup(),
     fetchOpsHseEmailDeliveryReport(),
+    fetchOpsLtifr(),
+    fetchOpsHseComplianceKpis(),
   ]);
   const notice = hseNotice(params);
   const canCreateIncident = canCreateOpsHseIncident(auth.profile.role);
@@ -703,6 +709,8 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
           {notice.message}
         </div>
       ) : null}
+
+      <OpsHseKpiPanel compliance={hseCompliance} ltifr={ltifr} />
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <OpsKpiCard

@@ -6,9 +6,34 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { parseCoordinateInput } from "@/lib/ops/coordinates";
-import { canManageOps } from "@/lib/ops/permissions";
+import { canArchiveSite, canManageSites } from "@/lib/ops/permissions";
+import type { OpsSiteStage, OpsSiteStatus } from "@/lib/ops/types";
 
-const createSiteSchema = z.object({
+const SITE_STAGES = [
+  "planning",
+  "mobilizing",
+  "in_progress",
+  "handover",
+  "completed",
+  "on_hold",
+  "cancelled",
+] as const satisfies readonly OpsSiteStage[];
+
+// The legacy `status` column is derived from the richer `stage` so existing
+// reads (overview map, filters) stay coherent without the user managing it.
+function statusFromStage(stage: OpsSiteStage): OpsSiteStatus {
+  if (stage === "planning" || stage === "mobilizing") {
+    return "mobilizing";
+  }
+
+  if (stage === "in_progress" || stage === "handover") {
+    return "active";
+  }
+
+  return "closing";
+}
+
+const siteCoreSchema = z.object({
   code: z
     .string()
     .trim()
@@ -22,7 +47,16 @@ const createSiteSchema = z.object({
   budget_zmw: z.coerce.number().min(0, "Budget cannot be negative.").default(0),
   latitude: z.number().min(-90).max(90).nullable(),
   longitude: z.number().min(-180).max(180).nullable(),
-  status: z.enum(["active", "mobilizing", "closing"]),
+  stage: z.enum(SITE_STAGES).default("planning"),
+  progress_percent: z.coerce
+    .number()
+    .min(0, "Progress cannot be below 0.")
+    .max(100, "Progress cannot exceed 100.")
+    .default(0),
+});
+
+const siteIdSchema = z.object({
+  id: z.string().uuid("Select a site."),
 });
 
 function field(formData: FormData, name: string) {
@@ -44,13 +78,7 @@ function coordinateField(formData: FormData, name: "latitude" | "longitude") {
   return parsed;
 }
 
-export async function createSiteAction(formData: FormData) {
-  const { profile } = await requireOpsUser();
-
-  if (!canManageOps(profile.role)) {
-    siteError("Your role cannot create sites yet.");
-  }
-
+function parseSiteForm(formData: FormData) {
   const latitude = coordinateField(formData, "latitude");
   const longitude = coordinateField(formData, "longitude");
 
@@ -58,7 +86,7 @@ export async function createSiteAction(formData: FormData) {
     siteError("Enter both latitude and longitude, or leave both blank.");
   }
 
-  const parsed = createSiteSchema.safeParse({
+  const parsed = siteCoreSchema.safeParse({
     code: field(formData, "code"),
     name: field(formData, "name"),
     location: field(formData, "location"),
@@ -67,25 +95,38 @@ export async function createSiteAction(formData: FormData) {
     budget_zmw: field(formData, "budget_zmw"),
     latitude,
     longitude,
-    status: field(formData, "status") || "active",
+    stage: field(formData, "stage") || "planning",
+    progress_percent: field(formData, "progress_percent") || "0",
   });
 
   if (!parsed.success) {
     siteError(parsed.error.issues[0]?.message ?? "Check the site details and try again.");
   }
 
+  return parsed.data;
+}
+
+export async function createSiteAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageSites(profile.role)) {
+    siteError("Your role cannot create sites.");
+  }
+
+  const data = parseSiteForm(formData);
   const supabase = await createOpsServerSessionClient();
-  const { data, error } = await supabase
+  const { data: created, error } = await supabase
     .from("sites")
     .insert({
-      ...parsed.data,
+      ...data,
+      status: statusFromStage(data.stage),
       created_by: profile.id,
       is_active: true,
     })
     .select("id")
     .single<{ id: string }>();
 
-  if (error || !data) {
+  if (error || !created) {
     siteError(
       error
         ? error.code === "23505"
@@ -99,16 +140,88 @@ export async function createSiteAction(formData: FormData) {
     actor_user_id: profile.id,
     action: "site.created",
     entity_type: "site",
-    entity_id: data.id,
-    metadata: {
-      code: parsed.data.code,
-      latitude: parsed.data.latitude,
-      longitude: parsed.data.longitude,
-      name: parsed.data.name,
-    },
+    entity_id: created.id,
+    metadata: { code: data.code, name: data.name, stage: data.stage },
   });
 
   revalidatePath("/ops");
   revalidatePath("/ops/sites");
   redirect("/ops/sites?created=site");
+}
+
+export async function updateSiteAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageSites(profile.role)) {
+    siteError("Your role cannot edit sites.");
+  }
+
+  const parsedId = siteIdSchema.safeParse({ id: field(formData, "id") });
+
+  if (!parsedId.success) {
+    siteError("Select a site to edit.");
+  }
+
+  const data = parseSiteForm(formData);
+  const supabase = await createOpsServerSessionClient();
+  const { error } = await supabase
+    .from("sites")
+    .update({
+      ...data,
+      status: statusFromStage(data.stage),
+      actual_completion_date: data.stage === "completed" ? new Date().toISOString().slice(0, 10) : null,
+    })
+    .eq("id", parsedId.data.id)
+    .eq("is_active", true);
+
+  if (error) {
+    siteError(error.code === "23505" ? "That site code already exists." : error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "site.updated",
+    entity_type: "site",
+    entity_id: parsedId.data.id,
+    metadata: { code: data.code, stage: data.stage, progress_percent: data.progress_percent },
+  });
+
+  revalidatePath("/ops");
+  revalidatePath("/ops/sites");
+  redirect("/ops/sites?updated=site");
+}
+
+export async function archiveSiteAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canArchiveSite(profile.role)) {
+    siteError("Only the Developer, Managing Director, and General Manager can archive sites.");
+  }
+
+  const parsedId = siteIdSchema.safeParse({ id: field(formData, "id") });
+
+  if (!parsedId.success) {
+    siteError("Select a site to archive.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { error } = await supabase
+    .from("sites")
+    .update({ is_active: false })
+    .eq("id", parsedId.data.id);
+
+  if (error) {
+    siteError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "site.archived",
+    entity_type: "site",
+    entity_id: parsedId.data.id,
+  });
+
+  revalidatePath("/ops");
+  revalidatePath("/ops/sites");
+  redirect("/ops/sites?updated=archived");
 }

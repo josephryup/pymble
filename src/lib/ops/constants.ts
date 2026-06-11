@@ -583,6 +583,17 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Employees and Leave",
   },
   {
+    description: "Publish job openings to the website, review candidate applications, and move applicants through hiring stages.",
+    group: "hr",
+    href: "/ops/recruitment",
+    id: "recruitment",
+    phase: "Phase 5",
+    navigationRoles: OPS_HR_ROLES,
+    roles: OPS_HR_ROLES,
+    status: "ready",
+    title: "Recruitment",
+  },
+  {
     description: "Track IPCs, valuations, variations, claims, contract milestones, and commercial risk.",
     group: "commercial",
     href: "/ops/commercial",

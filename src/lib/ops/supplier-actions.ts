@@ -28,6 +28,7 @@ const optionalEmailSchema = z
 const supplierSchema = z.object({
   address_line: z.string().trim().max(240).default(""),
   category: z.string().trim().max(80).default("general"),
+  kind: z.enum(["vendor", "subcontractor", "both"]).default("vendor"),
   city: z.string().trim().max(80).default(""),
   contact_email: optionalEmailSchema.default(""),
   contact_full_name: z.string().trim().max(120).default(""),
@@ -188,6 +189,7 @@ export async function createSupplierAction(formData: FormData) {
     contact_role: field(formData, "contact_role"),
     country: field(formData, "country") || "Zambia",
     email: field(formData, "email"),
+    kind: field(formData, "kind") || "vendor",
     legal_name: field(formData, "legal_name"),
     notes: field(formData, "notes"),
     phone: field(formData, "phone"),
@@ -214,6 +216,7 @@ export async function createSupplierAction(formData: FormData) {
       country: parsed.data.country || "Zambia",
       created_by: profile.id,
       email: parsed.data.email,
+      kind: parsed.data.kind,
       legal_name: parsed.data.legal_name,
       notes: parsed.data.notes,
       phone: parsed.data.phone,

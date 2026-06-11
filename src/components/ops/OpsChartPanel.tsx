@@ -181,16 +181,18 @@ export function OpsChartPanel({ data, description, title }: OpsChartPanelProps) 
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-col gap-3 min-[640px]:flex-row min-[640px]:items-end min-[640px]:justify-between">
+      <div className="flex flex-col gap-3">
         <CardHeader className="p-0">
           <p className="text-sm font-medium text-muted-foreground">Operational analytics</p>
-          <CardTitle className="mt-1 text-xl font-semibold text-foreground">{title}</CardTitle>
+          <CardTitle className="mt-1 text-pretty text-xl font-semibold text-foreground">
+            {title}
+          </CardTitle>
           {description ? (
             <CardDescription className="mt-1 max-w-2xl leading-6">{description}</CardDescription>
           ) : null}
         </CardHeader>
         <a
-          className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-fit")}
+          className={cn(buttonVariants({ variant: "outline", size: "lg" }), "w-fit shrink-0")}
           href="#ops-overview-shortcuts"
         >
           Open related records

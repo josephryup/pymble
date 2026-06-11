@@ -5,6 +5,8 @@ import type {
   OpsDeliveryExceptionStatus,
   OpsMaterialRequestStatus,
   OpsPaymentRequestStatus,
+  OpsPurchaseOrderStatus,
+  OpsRfqStatus,
   OpsUserRole,
 } from "@/lib/ops/types";
 
@@ -16,7 +18,13 @@ export const OPS_ESCALATION_SLA_DAYS = {
   deliveryExceptions: 2,
   materialRequests: 2,
   paymentRequests: 2,
+  purchaseOrders: 1,
+  rfqs: 2,
 } as const;
+
+// Budget variance: alert when actual+committed cost exceeds the active budget by
+// this fraction. 1.05 = 5% over budget triggers; tune via env if needed later.
+export const OPS_BUDGET_VARIANCE_THRESHOLD = 1.05;
 
 const LEADERSHIP_ESCALATION_ROLES: OpsUserRole[] = [
   "developer",
@@ -48,6 +56,12 @@ const FINANCE_ESCALATION_ROLES: OpsUserRole[] = [
   ...LEADERSHIP_ESCALATION_ROLES,
   "finance_manager",
   "accountant",
+];
+
+const PURCHASE_ORDER_ESCALATION_ROLES: OpsUserRole[] = [
+  ...LEADERSHIP_ESCALATION_ROLES,
+  "procurement_manager",
+  "finance_manager",
 ];
 
 type SupabaseServiceClient = ReturnType<typeof getOpsSupabaseServiceClient>;
@@ -113,6 +127,25 @@ type PaymentRequestEscalationRow = {
   title: string;
 };
 
+type RfqEscalationRow = {
+  created_at: string;
+  created_by: string | null;
+  id: string;
+  issued_at: string | null;
+  rfq_number: string;
+  status: OpsRfqStatus;
+  title: string;
+};
+
+type PurchaseOrderEscalationRow = {
+  created_at: string;
+  created_by: string | null;
+  id: string;
+  po_number: string;
+  status: OpsPurchaseOrderStatus;
+  title: string;
+};
+
 type DeliveryExceptionEscalationRow = {
   assigned_to: string | null;
   due_at: string | null;
@@ -141,6 +174,9 @@ export type OpsEscalationSnapshot = {
   staleDeliveryExceptions: number;
   staleMaterialRequests: number;
   stalePaymentRequests: number;
+  staleRfqs: number;
+  stalePurchaseOrders: number;
+  budgetVariance: number;
   total: number;
 };
 
@@ -151,6 +187,9 @@ export type OpsEscalationSweepResult = {
     deliveryExceptions: number;
     materialRequests: number;
     paymentRequests: number;
+    rfqs: number;
+    purchaseOrders: number;
+    budgets: number;
   };
   notificationFailures: number;
   notificationsQueued: number;
@@ -385,6 +424,116 @@ async function fetchDeliveryExceptionEscalationRows(supabase: SupabaseServiceCli
   return (data ?? []) as DeliveryExceptionEscalationRow[];
 }
 
+async function fetchRfqEscalationRows(supabase: SupabaseServiceClient) {
+  const { data, error } = await supabase
+    .from("rfqs")
+    .select("id, rfq_number, title, status, created_by, issued_at, created_at")
+    .in("status", ["draft", "issued"])
+    .order("created_at", { ascending: true })
+    .limit(MAX_ESCALATION_RECORDS_PER_TABLE);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as RfqEscalationRow[];
+}
+
+type BudgetVarianceRow = {
+  site_id: string;
+  site_code: string;
+  site_name: string;
+  budget_id: string;
+  budget_number: string;
+  budgeted_total: number;
+  actual_total: number;
+  variance_ratio: number;
+};
+
+async function fetchBudgetVarianceCandidates(
+  supabase: SupabaseServiceClient,
+): Promise<BudgetVarianceRow[]> {
+  const [budgetsResult, linesResult, costsResult] = await Promise.all([
+    supabase
+      .from("project_budgets")
+      .select(
+        "id, site_id, budget_number, contingency_amount, site:sites!project_budgets_site_id_fkey(code, name)",
+      )
+      .eq("status", "active"),
+    supabase.from("project_budget_lines").select("budget_id, budgeted_amount"),
+    supabase
+      .from("project_cost_entries")
+      .select("site_id, amount")
+      .in("status", ["committed", "posted"]),
+  ]);
+
+  if (budgetsResult.error || linesResult.error || costsResult.error) {
+    return [];
+  }
+
+  type BudgetRow = {
+    id: string;
+    site_id: string;
+    budget_number: string;
+    contingency_amount: number | string;
+    site: { code: string; name: string } | { code: string; name: string }[] | null;
+  };
+  type LineRow = { budget_id: string; budgeted_amount: number | string };
+  type CostRow = { site_id: string; amount: number | string };
+
+  const lines = (linesResult.data ?? []) as LineRow[];
+  const linesByBudget = new Map<string, number>();
+  for (const line of lines) {
+    linesByBudget.set(
+      line.budget_id,
+      (linesByBudget.get(line.budget_id) ?? 0) + Number(line.budgeted_amount ?? 0),
+    );
+  }
+
+  const costs = (costsResult.data ?? []) as CostRow[];
+  const costBySite = new Map<string, number>();
+  for (const cost of costs) {
+    costBySite.set(cost.site_id, (costBySite.get(cost.site_id) ?? 0) + Number(cost.amount ?? 0));
+  }
+
+  const budgets = (budgetsResult.data ?? []) as BudgetRow[];
+  return budgets
+    .map((budget) => {
+      const site = Array.isArray(budget.site) ? budget.site[0] : budget.site;
+      const budgetedTotal =
+        (linesByBudget.get(budget.id) ?? 0) + Number(budget.contingency_amount ?? 0);
+      const actualTotal = costBySite.get(budget.site_id) ?? 0;
+      const ratio = budgetedTotal > 0 ? actualTotal / budgetedTotal : 0;
+
+      return {
+        site_id: budget.site_id,
+        site_code: site?.code ?? "",
+        site_name: site?.name ?? "",
+        budget_id: budget.id,
+        budget_number: budget.budget_number,
+        budgeted_total: budgetedTotal,
+        actual_total: actualTotal,
+        variance_ratio: ratio,
+      } satisfies BudgetVarianceRow;
+    })
+    .filter((row) => row.budgeted_total > 0 && row.variance_ratio >= OPS_BUDGET_VARIANCE_THRESHOLD);
+}
+
+async function fetchPurchaseOrderEscalationRows(supabase: SupabaseServiceClient) {
+  const { data, error } = await supabase
+    .from("purchase_orders")
+    .select("id, po_number, title, status, created_by, created_at")
+    .eq("status", "approval_pending")
+    .order("created_at", { ascending: true })
+    .limit(MAX_ESCALATION_RECORDS_PER_TABLE);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as PurchaseOrderEscalationRow[];
+}
+
 export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsEscalationSnapshot> {
   const supabase = getOpsSupabaseServiceClient();
   const nowIso = now.toISOString();
@@ -395,11 +544,22 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
     now,
   );
 
-  const [approvals, materialRequests, paymentRequests, deliveryExceptions] = await Promise.all([
+  const [
+    approvals,
+    materialRequests,
+    paymentRequests,
+    deliveryExceptions,
+    rfqs,
+    purchaseOrders,
+    budgetVariances,
+  ] = await Promise.all([
     fetchApprovalEscalationRows(supabase),
     fetchMaterialRequestEscalationRows(supabase),
     fetchPaymentRequestEscalationRows(supabase),
     fetchDeliveryExceptionEscalationRows(supabase),
+    fetchRfqEscalationRows(supabase),
+    fetchPurchaseOrderEscalationRows(supabase),
+    fetchBudgetVarianceCandidates(supabase),
   ]);
 
   const staleApprovals = approvals.filter((approval) =>
@@ -439,12 +599,39 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
     }),
   ).length;
 
+  const staleRfqs = rfqs.filter((rfq) =>
+    classifyOpsEscalationAge({
+      nowIso,
+      staleAt: rfq.issued_at ?? rfq.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.rfqs, now),
+      todayIsoDate,
+    }),
+  ).length;
+  const stalePurchaseOrders = purchaseOrders.filter((purchaseOrder) =>
+    classifyOpsEscalationAge({
+      nowIso,
+      staleAt: purchaseOrder.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.purchaseOrders, now),
+      todayIsoDate,
+    }),
+  ).length;
+
   return {
     staleApprovals,
     staleDeliveryExceptions,
     staleMaterialRequests,
     stalePaymentRequests,
-    total: staleApprovals + staleDeliveryExceptions + staleMaterialRequests + stalePaymentRequests,
+    staleRfqs,
+    stalePurchaseOrders,
+    budgetVariance: budgetVariances.length,
+    total:
+      staleApprovals +
+      staleDeliveryExceptions +
+      staleMaterialRequests +
+      stalePaymentRequests +
+      staleRfqs +
+      stalePurchaseOrders +
+      budgetVariances.length,
   };
 }
 
@@ -454,11 +641,22 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
   const nowIso = now.toISOString();
   const todayIsoDate = dateKey;
   const users = await fetchActiveEscalationUsers(supabase);
-  const [approvals, materialRequests, paymentRequests, deliveryExceptions] = await Promise.all([
+  const [
+    approvals,
+    materialRequests,
+    paymentRequests,
+    deliveryExceptions,
+    rfqs,
+    purchaseOrders,
+    budgetVariances,
+  ] = await Promise.all([
     fetchApprovalEscalationRows(supabase),
     fetchMaterialRequestEscalationRows(supabase),
     fetchPaymentRequestEscalationRows(supabase),
     fetchDeliveryExceptionEscalationRows(supabase),
+    fetchRfqEscalationRows(supabase),
+    fetchPurchaseOrderEscalationRows(supabase),
+    fetchBudgetVarianceCandidates(supabase),
   ]);
   const approvalSteps = await fetchPendingApprovalSteps(
     supabase,
@@ -470,6 +668,9 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       staleDeliveryExceptions: 0,
       staleMaterialRequests: 0,
       stalePaymentRequests: 0,
+      staleRfqs: 0,
+      stalePurchaseOrders: 0,
+      budgetVariance: 0,
       total: 0,
     },
     inspected: {
@@ -477,6 +678,9 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       deliveryExceptions: deliveryExceptions.length,
       materialRequests: materialRequests.length,
       paymentRequests: paymentRequests.length,
+      rfqs: rfqs.length,
+      purchaseOrders: purchaseOrders.length,
+      budgets: budgetVariances.length,
     },
     notificationFailures: 0,
     notificationsQueued: 0,
@@ -638,11 +842,108 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     result.notificationsQueued += queued.queued;
   }
 
+  for (const rfq of rfqs) {
+    const reason = classifyOpsEscalationAge({
+      nowIso,
+      staleAt: rfq.issued_at ?? rfq.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.rfqs, now),
+      todayIsoDate,
+    });
+
+    if (!reason) {
+      continue;
+    }
+
+    const awaiting = rfq.status === "issued" ? "awaiting supplier quotes" : "still in draft";
+    const queued = await queueEscalationNotifications({
+      actionHref: "/ops/rfq-po",
+      body: `${rfq.rfq_number} - ${rfq.title} is ${awaiting} and ${reasonText(reason)}. Procurement should invite suppliers, capture quotes, or award.`,
+      idempotencyBase: buildOpsEscalationIdempotencyKey({
+        dateKey,
+        reason,
+        recipientId: "role",
+        sourceId: rfq.id,
+        sourceTable: "rfqs",
+      }),
+      moduleKey: "rfq_po",
+      recipients: recipientsFor(users, PROCUREMENT_ESCALATION_ROLES, [rfq.created_by]),
+      sourceId: rfq.id,
+      sourceTable: "rfqs",
+      title: "RFQ escalation",
+    });
+    result.escalated.staleRfqs += 1;
+    result.notificationFailures += queued.failures;
+    result.notificationsQueued += queued.queued;
+  }
+
+  for (const purchaseOrder of purchaseOrders) {
+    const reason = classifyOpsEscalationAge({
+      nowIso,
+      staleAt: purchaseOrder.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.purchaseOrders, now),
+      todayIsoDate,
+    });
+
+    if (!reason) {
+      continue;
+    }
+
+    const queued = await queueEscalationNotifications({
+      actionHref: "/ops/rfq-po",
+      body: `${purchaseOrder.po_number} - ${purchaseOrder.title} is pending approval and ${reasonText(reason)}. Procurement and finance approvers should action it so the order can be issued.`,
+      idempotencyBase: buildOpsEscalationIdempotencyKey({
+        dateKey,
+        reason,
+        recipientId: "role",
+        sourceId: purchaseOrder.id,
+        sourceTable: "purchase_orders",
+      }),
+      moduleKey: "rfq_po",
+      recipients: recipientsFor(users, PURCHASE_ORDER_ESCALATION_ROLES, [purchaseOrder.created_by]),
+      sourceId: purchaseOrder.id,
+      sourceTable: "purchase_orders",
+      title: "Purchase order escalation",
+    });
+    result.escalated.stalePurchaseOrders += 1;
+    result.notificationFailures += queued.failures;
+    result.notificationsQueued += queued.queued;
+  }
+
+  for (const variance of budgetVariances) {
+    const overspendPct = Math.round((variance.variance_ratio - 1) * 100);
+    const queued = await queueEscalationNotifications({
+      actionHref: "/ops/project-budgets",
+      body: `${variance.site_code} - ${variance.site_name} active budget ${variance.budget_number} is ${overspendPct}% over plan (actual ${Math.round(
+        variance.actual_total,
+      ).toLocaleString("en-ZM")} ZMW vs budget ${Math.round(variance.budgeted_total).toLocaleString(
+        "en-ZM",
+      )} ZMW). Finance and projects leadership should confirm scope, cost, or budget revision.`,
+      idempotencyBase: buildOpsEscalationIdempotencyKey({
+        dateKey,
+        reason: "overdue",
+        recipientId: "role",
+        sourceId: variance.budget_id,
+        sourceTable: "project_budgets",
+      }),
+      moduleKey: "project_budgets",
+      recipients: recipientsFor(users, [...FINANCE_ESCALATION_ROLES, "projects_manager"]),
+      sourceId: variance.budget_id,
+      sourceTable: "project_budgets",
+      title: "Budget variance escalation",
+    });
+    result.escalated.budgetVariance += 1;
+    result.notificationFailures += queued.failures;
+    result.notificationsQueued += queued.queued;
+  }
+
   result.escalated.total =
     result.escalated.staleApprovals +
     result.escalated.staleMaterialRequests +
     result.escalated.stalePaymentRequests +
-    result.escalated.staleDeliveryExceptions;
+    result.escalated.staleDeliveryExceptions +
+    result.escalated.staleRfqs +
+    result.escalated.stalePurchaseOrders +
+    result.escalated.budgetVariance;
 
   return result;
 }

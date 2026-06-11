@@ -5,7 +5,7 @@ import {
   type OpsListState,
   type OpsPaginatedResult,
 } from "@/lib/ops/listing";
-import type { OpsSiteStatus } from "@/lib/ops/types";
+import type { OpsSiteStage, OpsSiteStatus } from "@/lib/ops/types";
 
 export type OpsSite = {
   id: string;
@@ -18,6 +18,8 @@ export type OpsSite = {
   latitude: number | null;
   longitude: number | null;
   status: OpsSiteStatus;
+  stage: OpsSiteStage;
+  progress_percent: number;
   is_active: boolean;
   created_at: string;
 };
@@ -30,7 +32,7 @@ export type OpsSiteOption = {
 
 export type FetchOpsSitesOptions = {
   query?: string;
-  status?: OpsSiteStatus;
+  stage?: OpsSiteStage;
 };
 
 export type FetchPaginatedOpsSitesOptions = FetchOpsSitesOptions & {
@@ -50,14 +52,14 @@ async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?:
   let query = supabase
     .from("sites")
     .select(
-      "id, code, name, location, supervisor_name, client_name, budget_zmw, latitude, longitude, status, is_active, created_at",
+      "id, code, name, location, supervisor_name, client_name, budget_zmw, latitude, longitude, status, stage, progress_percent, is_active, created_at",
       listState ? { count: "exact" } : undefined,
     )
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
-  if (options.status) {
-    query = query.eq("status", options.status);
+  if (options.stage) {
+    query = query.eq("stage", options.stage);
   }
 
   const searchFilter = opsIlikeOrFilter(
@@ -79,10 +81,11 @@ async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?:
 
   const items = (
     (data ?? []) as Array<
-      Omit<OpsSite, "budget_zmw" | "latitude" | "longitude"> & {
+      Omit<OpsSite, "budget_zmw" | "latitude" | "longitude" | "progress_percent"> & {
         budget_zmw: number | string;
         latitude: number | string | null;
         longitude: number | string | null;
+        progress_percent: number | string;
       }
     >
   ).map((site) => ({
@@ -90,6 +93,7 @@ async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?:
     budget_zmw: normalizeMoney(site.budget_zmw),
     latitude: normalizeCoordinate(site.latitude),
     longitude: normalizeCoordinate(site.longitude),
+    progress_percent: normalizeMoney(site.progress_percent),
   }));
 
   return {

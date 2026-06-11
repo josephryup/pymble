@@ -17,6 +17,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import {
+  OpsAgeingPanel,
+  OpsCashflowChartPanel,
+} from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
@@ -48,6 +52,11 @@ import {
   fetchPaginatedOpsPaymentRequests,
   type OpsPaymentRequestSummary,
 } from "@/lib/ops/finance";
+import {
+  fetchOpsCashflowChart,
+  fetchOpsReceivablesAgeing,
+  fetchOpsSupplierAgeing,
+} from "@/lib/ops/finance-kpis";
 import type { OpsFinanceAgeingBucket } from "@/lib/ops/finance-reporting";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -277,6 +286,9 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
     supplierOptions,
     budgetLineOptions,
     purchaseOrderOptions,
+    cashflowChart,
+    supplierAgeing,
+    receivablesAgeing,
   ] = await Promise.all([
     fetchPaginatedOpsPaymentRequests({
       listState,
@@ -290,6 +302,9 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
     fetchActiveSupplierOptions(),
     fetchFinanceBudgetLineOptions(),
     fetchFinancePurchaseOrderOptions(),
+    fetchOpsCashflowChart(),
+    fetchOpsSupplierAgeing(),
+    fetchOpsReceivablesAgeing(),
   ]);
   const notice = paymentRequestNotice(params);
   const canCreate = canCreateOpsPaymentRequest(auth.profile.role);
@@ -387,6 +402,25 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
           value={formatMoney(stats.unpaidAmount)}
         />
       </section>
+
+      <OpsCashflowChartPanel data={cashflowChart} />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <OpsAgeingPanel
+          description="Outstanding supplier payment requests by days since submission."
+          emptyMessage="No outstanding payment requests."
+          eyebrow="Supplier ageing"
+          summary={supplierAgeing}
+          title="Payables ageing 0/30/60/90"
+        />
+        <OpsAgeingPanel
+          description="Outstanding sent client invoices by days since issue."
+          emptyMessage="No outstanding receivables."
+          eyebrow="Receivables ageing"
+          summary={receivablesAgeing}
+          title="Receivables ageing 0/30/60/90"
+        />
+      </div>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <OpsDashboardPanel

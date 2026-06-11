@@ -11,17 +11,27 @@ const DEFAULT_OPS_HOST = "ops.pymbleconstruction.com";
 const OPS_SESSION_REFRESH_TIMEOUT_MS = 2500;
 
 function opsContentSecurityPolicy() {
+  // React in development uses eval() for hot reload + dev tooling. Production
+  // builds never call eval() so we keep production strict.
+  const isDev = process.env.NODE_ENV !== "production";
+  const scriptSrc = isDev
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    : "script-src 'self' 'unsafe-inline'";
+  const connectSrc = isDev
+    ? "connect-src 'self' ws: wss: https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com"
+    : "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com";
+
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://*.r2.cloudflarestorage.com",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com",
+    connectSrc,
     "media-src 'self' data: blob:",
     "worker-src 'self' blob:",
   ].join("; ");

@@ -29,6 +29,32 @@ export function canRecordAttendance(role: OpsUserRole) {
   return role !== "crew";
 }
 
+// Site register: who can create/edit, archive, and hard-delete sites.
+const SITE_MANAGE_ROLES: OpsUserRole[] = [
+  "developer",
+  "managing_director",
+  "owner",
+  "general_manager",
+  "manager",
+  "operations_manager",
+  "supervisor",
+  "projects_manager",
+];
+
+export function canManageSites(role: OpsUserRole) {
+  return SITE_MANAGE_ROLES.includes(role);
+}
+
+export function canArchiveSite(role: OpsUserRole) {
+  return (
+    isDeveloperRole(role) || isManagingDirectorRole(role) || isGeneralManagerRole(role)
+  );
+}
+
+export function canDeleteSite(role: OpsUserRole) {
+  return isDeveloperRole(role);
+}
+
 export function canViewSensitiveOpsFoundation(role: OpsUserRole) {
   return (
     isDeveloperRole(role) ||
