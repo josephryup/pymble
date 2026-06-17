@@ -14,6 +14,7 @@ import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton"
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
@@ -22,6 +23,7 @@ import {
   addRfqItemAction,
   awardSupplierQuoteAction,
   cancelRfqAction,
+  convertRfqToPurchaseOrdersAction,
   createRfqAction,
   inviteSupplierToRfqAction,
   issuePurchaseOrderAction,
@@ -107,6 +109,7 @@ function rfqPoNotice(params: OpsSearchParams) {
     quote_recorded: "Supplier quote recorded.",
     po_issued: "Purchase order issued.",
     rfq_cancelled: "RFQ cancelled.",
+    rfq_converted: "RFQ converted into draft purchase orders, grouped by supplier.",
     supplier_invited: "Supplier invited to RFQ.",
     attachment: "RFQ attachment uploaded.",
     comment: "RFQ comment added.",
@@ -465,7 +468,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
   const createRfqHref = `/ops/rfq-po?${createPanelParams.toString()}#rfq-create-panel`;
   const openCreatePanel = firstParam(params.create) === "rfq";
 
-  // Pre-fill values when an RFQ is seeded from another module (e.g. a BOQ line).
+  // Pre-fill values when a Request for Quotation is seeded from another module (e.g. a BOQ line).
   const prefillSiteId = firstParam(params.site_id) ?? "";
   const prefillSupplierId = firstParam(params.supplier_id) ?? "";
   const prefillTitle = firstParam(params.title) ?? "";
@@ -476,36 +479,29 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
-            Procurement workflow
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
-            RFQs and purchase orders
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
-            Approved material needs, supplier quote comparison, draft purchase orders, approvals,
-            and issue controls.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/material-requests">
-            <ClipboardList className="size-4" aria-hidden="true" />
-            Material requests
-          </Link>
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/suppliers">
-            <PackagePlus className="size-4" aria-hidden="true" />
-            Suppliers
-          </Link>
-          {canCreate ? (
-            <a className={OPS_PRIMARY_BUTTON_CLASS} href={createRfqHref}>
-              <FilePlus2 className="size-4" aria-hidden="true" />
-              New RFQ
-            </a>
-          ) : null}
-        </div>
-      </section>
+      <OpsPageHeader
+        eyebrow="Procurement workflow"
+        title="Requests for Quotation and Purchase Orders"
+        description="Approved material needs, per-item supplier nomination, draft purchase orders grouped by supplier, approvals, and issue controls. Suppliers are not invited externally — the team records who each line is going to internally."
+        actions={
+          <>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/material-requests">
+              <ClipboardList className="size-4" aria-hidden="true" />
+              Material requests
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/suppliers">
+              <PackagePlus className="size-4" aria-hidden="true" />
+              Suppliers
+            </Link>
+            {canCreate ? (
+              <a className={OPS_PRIMARY_BUTTON_CLASS} href={createRfqHref}>
+                <FilePlus2 className="size-4" aria-hidden="true" />
+                New Request for Quotation
+              </a>
+            ) : null}
+          </>
+        }
+      />
 
       {notice ? (
         <div
@@ -602,7 +598,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               </span>
               <span className="min-w-0">
                 <span className="block font-heading text-lg font-bold text-primary-dark">
-                  Create RFQ
+                  Create Request for Quotation
                 </span>
                 <span className="mt-1 block text-sm text-primary-dark/60">
                   Site, approved request link, supplier deadline, and first package item.
@@ -727,7 +723,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4 lg:justify-end">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
-                  Create RFQ
+                  Create Request for Quotation
                 </button>
               </div>
             </form>
@@ -802,19 +798,33 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                         </p>
                       ) : null}
                     </div>
-                    {canCancel ? (
-                      <form action={cancelRfqAction} className="lg:min-w-44">
-                        <input name="rfq_id" type="hidden" value={rfq.id} />
-                        <input name="confirm" type="hidden" value="cancel" />
-                        <OpsConfirmSubmitButton
-                          className={`${OPS_DANGER_BUTTON_CLASS} w-full`}
-                          confirmText="Confirm cancel"
-                        >
-                          <XCircle className="size-4" aria-hidden="true" />
-                          Cancel RFQ
-                        </OpsConfirmSubmitButton>
-                      </form>
-                    ) : null}
+                    <div className="flex flex-col gap-2 lg:min-w-44">
+                      {rfq.status !== "closed" && rfq.status !== "cancelled" ? (
+                        <form action={convertRfqToPurchaseOrdersAction}>
+                          <input name="rfq_id" type="hidden" value={rfq.id} />
+                          <OpsConfirmSubmitButton
+                            className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
+                            confirmText="Confirm convert"
+                          >
+                            <FileCheck2 className="size-4" aria-hidden="true" />
+                            Convert to Purchase Orders
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                      {canCancel ? (
+                        <form action={cancelRfqAction}>
+                          <input name="rfq_id" type="hidden" value={rfq.id} />
+                          <input name="confirm" type="hidden" value="cancel" />
+                          <OpsConfirmSubmitButton
+                            className={`${OPS_DANGER_BUTTON_CLASS} w-full`}
+                            confirmText="Confirm cancel"
+                          >
+                            <XCircle className="size-4" aria-hidden="true" />
+                            Cancel Request for Quotation
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                    </div>
                   </div>
 
                   <dl className="mt-4 grid gap-3 md:grid-cols-5">
@@ -1040,7 +1050,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
                 {hasActiveListFilter
-                  ? "Adjust the search or status filter to widen the RFQ register."
+                  ? "Adjust the search or status filter to widen the Request for Quotation register."
                   : "Create the first RFQ after the supplier register has active suppliers."}
               </p>
             </div>

@@ -40,7 +40,7 @@ export function OpsHseKpiPanel({
             Safety performance — last {ltifr.windowDays} days
           </h2>
           <p className="mt-1 text-sm text-primary-dark/60">
-            Lost-time injury rate, PPE compliance, audit/inspection scores, and training currency.
+            Lost-time injury rate, Personal Protective Equipment compliance, audit/inspection scores, and training currency.
           </p>
         </div>
         <span className="flex size-9 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
@@ -77,7 +77,7 @@ export function OpsHseKpiPanel({
 
         <article className="rounded-md border border-primary-dark/10 p-4">
           <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
-            PPE compliance
+            Personal Protective Equipment compliance
             <HardHat className="size-3.5 text-primary-blue" aria-hidden="true" />
           </p>
           <p className={`mt-1 font-heading text-2xl font-bold ${pctClass(compliance.ppeCompliancePct, 90, 70)}`}>

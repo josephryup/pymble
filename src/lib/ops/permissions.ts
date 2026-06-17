@@ -83,6 +83,30 @@ export function canCreateStaffRole(actorRole: OpsUserRole, targetRole: OpsAssign
   return false;
 }
 
+export function canChangeStaffRole(
+  actorRole: OpsUserRole,
+  targetCurrentRole: OpsUserRole,
+  desiredRole: OpsAssignableStaffRole,
+) {
+  // Developer-only protection: never re-role a developer; OpsAssignableStaffRole
+  // already excludes "developer" so non-developers can't grant it.
+  if (isDeveloperRole(targetCurrentRole) && !isDeveloperRole(actorRole)) {
+    return false;
+  }
+  // Existing creation rules already encode who can assign which roles, so reuse them.
+  if (!canCreateStaffRole(actorRole, desiredRole)) {
+    return false;
+  }
+  // Demotions of leadership: same scope as deactivation (MD, GM are protected from HR).
+  if (isManagingDirectorRole(targetCurrentRole) && !isDeveloperRole(actorRole)) {
+    return false;
+  }
+  if (isGeneralManagerRole(targetCurrentRole) && isHumanResourceRole(actorRole)) {
+    return false;
+  }
+  return true;
+}
+
 export function canDeactivateStaffRole(actorRole: OpsUserRole, targetRole: OpsUserRole) {
   if (isDeveloperRole(targetRole)) {
     return false;

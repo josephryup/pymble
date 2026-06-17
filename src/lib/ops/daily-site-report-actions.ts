@@ -6,9 +6,14 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
+import { queueOpsNotification } from "@/lib/ops/notifications";
 import {
+  canArchiveOpsDailySiteReport,
+  canCancelOpsDailySiteReport,
   canCloseOpsDailySiteReport,
   canCreateOpsDailySiteReport,
+  canDeleteOpsDailySiteReport,
   canEditOpsDailySiteReport,
   canReviewOpsDailySiteReport,
   canSubmitOpsDailySiteReport,
@@ -246,7 +251,35 @@ export async function submitDailySiteReportAction(formData: FormData) {
     summary: `Submitted daily site report ${report.report_number}`,
   }).catch(() => null);
 
+  // K3: notify leadership when a Daily Site Report is submitted (per Part 2.5
+  // of the workflow design — "submit → Ops Mgr / Projects Mgr / GM / MD").
+  const leadership = await fanoutToOpsRoles(
+    [
+      "operations_manager",
+      "projects_manager",
+      "general_manager",
+      "managing_director",
+      "owner",
+    ],
+    { excludeUserIds: [profile.id] },
+  );
+  await Promise.all(
+    leadership.map((recipient) =>
+      queueOpsNotification({
+        actionHref: `/ops/daily-site-reports#dsr-${report.id}`,
+        body: `${profile.full_name} submitted daily site report ${report.report_number}. Open it to review today's site activity.`,
+        idempotencyKey: `dsr-submitted:${report.id}:${recipient.id}`,
+        moduleKey: "daily_site_reports",
+        recipientId: recipient.id,
+        sourceId: report.id,
+        sourceTable: "daily_site_reports",
+        title: `Daily site report: ${report.report_number}`,
+      }).catch(() => null),
+    ),
+  );
+
   revalidatePath("/ops/daily-site-reports");
+  revalidatePath("/ops/notifications");
   reportNotice("submitted");
 }
 
@@ -341,4 +374,227 @@ export async function closeDailySiteReportAction(formData: FormData) {
 
   revalidatePath("/ops/daily-site-reports");
   reportNotice("closed");
+}
+
+// =============================================================================
+// J3: Edit / cancel / archive / delete actions for daily site reports.
+// =============================================================================
+
+const updateReportHeaderSchema = z.object({
+  report_id: z.string().uuid("Select a daily report."),
+  weather: z.string().trim().max(160).default(""),
+  labour_count: z.coerce.number().int().min(0).default(0),
+  equipment_count: z.coerce.number().int().min(0).default(0),
+  material_deliveries_count: z.coerce.number().int().min(0).default(0),
+  incident_count: z.coerce.number().int().min(0).default(0),
+  overall_progress_percent: z.coerce.number().min(0).max(100).default(0),
+  progress_summary: z.string().trim().min(2).max(1600),
+  labour_notes: z.string().trim().max(1200).default(""),
+  equipment_notes: z.string().trim().max(1200).default(""),
+  material_notes: z.string().trim().max(1200).default(""),
+  delay_notes: z.string().trim().max(1200).default(""),
+  hse_notes: z.string().trim().max(1200).default(""),
+  commercial_notes: z.string().trim().max(1200).default(""),
+});
+
+export async function updateDailySiteReportAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = updateReportHeaderSchema.safeParse({
+    report_id: field(formData, "report_id"),
+    weather: field(formData, "weather"),
+    labour_count: field(formData, "labour_count") || "0",
+    equipment_count: field(formData, "equipment_count") || "0",
+    material_deliveries_count: field(formData, "material_deliveries_count") || "0",
+    incident_count: field(formData, "incident_count") || "0",
+    overall_progress_percent: field(formData, "overall_progress_percent") || "0",
+    progress_summary: field(formData, "progress_summary"),
+    labour_notes: field(formData, "labour_notes"),
+    equipment_notes: field(formData, "equipment_notes"),
+    material_notes: field(formData, "material_notes"),
+    delay_notes: field(formData, "delay_notes"),
+    hse_notes: field(formData, "hse_notes"),
+    commercial_notes: field(formData, "commercial_notes"),
+  });
+  if (!parsed.success) {
+    reportError(parsed.error.issues[0]?.message ?? "Check the report details.");
+  }
+
+  const report = await fetchReportForPermission(parsed.data.report_id);
+  if (!report) {
+    reportError("Daily site report was not found.");
+  }
+  if (!canEditOpsDailySiteReport(profile.id, profile.role, report)) {
+    reportError("This daily site report can no longer be edited.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("daily_site_reports")
+    .update({
+      weather: parsed.data.weather,
+      labour_count: parsed.data.labour_count,
+      equipment_count: parsed.data.equipment_count,
+      material_deliveries_count: parsed.data.material_deliveries_count,
+      incident_count: parsed.data.incident_count,
+      overall_progress_percent: parsed.data.overall_progress_percent,
+      progress_summary: parsed.data.progress_summary,
+      labour_notes: parsed.data.labour_notes,
+      equipment_notes: parsed.data.equipment_notes,
+      material_notes: parsed.data.material_notes,
+      delay_notes: parsed.data.delay_notes,
+      hse_notes: parsed.data.hse_notes,
+      commercial_notes: parsed.data.commercial_notes,
+    })
+    .eq("id", parsed.data.report_id);
+  if (error) {
+    reportError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "daily_site_report.updated",
+    actorUserId: profile.id,
+    entityId: report.id,
+    entityType: "daily_site_report",
+    moduleKey: "daily_site_reports",
+    sourceId: report.id,
+    sourceTable: "daily_site_reports",
+    summary: `Updated daily site report ${report.report_number}`,
+  }).catch(() => null);
+
+  revalidatePath("/ops/daily-site-reports");
+  reportNotice("report");
+}
+
+export async function cancelDailySiteReportAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = statusSchema.safeParse({ report_id: field(formData, "report_id") });
+  if (!parsed.success) {
+    reportError(parsed.error.issues[0]?.message ?? "Select a daily report.");
+  }
+
+  const report = await fetchReportForPermission(parsed.data.report_id);
+  if (!report) {
+    reportError("Daily site report was not found.");
+  }
+  if (!canCancelOpsDailySiteReport(profile.id, profile.role, report)) {
+    reportError(
+      "Daily site reports can only be cancelled while in draft or submitted, and only by the preparer or leadership.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("daily_site_reports")
+    .update({ cancelled_at: new Date().toISOString(), cancelled_by: profile.id })
+    .eq("id", parsed.data.report_id);
+  if (error) {
+    reportError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "daily_site_report.cancelled",
+    actorUserId: profile.id,
+    entityId: report.id,
+    entityType: "daily_site_report",
+    moduleKey: "daily_site_reports",
+    sourceId: report.id,
+    sourceTable: "daily_site_reports",
+    summary: `Cancelled daily site report ${report.report_number}`,
+  }).catch(() => null);
+
+  revalidatePath("/ops/daily-site-reports");
+  reportNotice("cancelled");
+}
+
+async function fetchReportForArchive(reportId: string) {
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("daily_site_reports")
+    .select("id, report_number, prepared_by, status, cancelled_at")
+    .eq("id", reportId)
+    .maybeSingle<ReportPermissionRecord & { cancelled_at: string | null }>();
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function archiveDailySiteReportAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = statusSchema.safeParse({ report_id: field(formData, "report_id") });
+  if (!parsed.success) {
+    reportError(parsed.error.issues[0]?.message ?? "Select a daily report.");
+  }
+
+  const report = await fetchReportForArchive(parsed.data.report_id);
+  if (!report) {
+    reportError("Daily site report was not found.");
+  }
+  if (!canArchiveOpsDailySiteReport(profile.role, report)) {
+    reportError(
+      "Daily site reports can only be archived once closed or cancelled, and only by leadership.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("daily_site_reports")
+    .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
+    .eq("id", parsed.data.report_id);
+  if (error) {
+    reportError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "daily_site_report.archived",
+    actorUserId: profile.id,
+    entityId: report.id,
+    entityType: "daily_site_report",
+    moduleKey: "daily_site_reports",
+    sourceId: report.id,
+    sourceTable: "daily_site_reports",
+    summary: `Archived daily site report ${report.report_number}`,
+  }).catch(() => null);
+
+  revalidatePath("/ops/daily-site-reports");
+  reportNotice("archived");
+}
+
+export async function deleteDailySiteReportAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canDeleteOpsDailySiteReport(profile.role)) {
+    reportError("Only the Developer can permanently delete a daily site report.");
+  }
+
+  const parsed = statusSchema.safeParse({ report_id: field(formData, "report_id") });
+  if (!parsed.success) {
+    reportError(parsed.error.issues[0]?.message ?? "Select a daily report.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("daily_site_reports")
+    .delete()
+    .eq("id", parsed.data.report_id);
+  if (error) {
+    reportError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "daily_site_report.deleted",
+    actorUserId: profile.id,
+    entityId: parsed.data.report_id,
+    entityType: "daily_site_report",
+    moduleKey: "daily_site_reports",
+    sourceId: parsed.data.report_id,
+    sourceTable: "daily_site_reports",
+    summary: `Deleted daily site report`,
+  }).catch(() => null);
+
+  revalidatePath("/ops/daily-site-reports");
+  reportNotice("deleted");
 }

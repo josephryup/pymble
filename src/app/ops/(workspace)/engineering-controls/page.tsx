@@ -1684,7 +1684,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
               Engineering Controls
             </p>
             <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
-              Site Instructions and QA/QC
+              Site Instructions and Quality Assurance and Quality Control
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/62">
               Control issued instructions, QA inspections, material tests, snags, drawings, and programme milestones against the active project/site master.

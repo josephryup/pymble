@@ -32,6 +32,9 @@ export type OpsInvoice = {
   issued_at: string;
   sent_at: string | null;
   paid_at: string | null;
+  cancelled_at: string | null;
+  archived_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   site: OpsInvoiceSite | null;
   boq: OpsInvoiceBoq | null;
@@ -85,6 +88,9 @@ async function fetchOpsInvoiceItems(options: FetchOpsInvoicesOptions = {}, listS
         issued_at,
         sent_at,
         paid_at,
+        cancelled_at,
+        archived_at,
+        deleted_at,
         created_at,
         site:sites!invoices_site_id_fkey(id, code, name),
         boq:boq_documents!invoices_boq_id_fkey(id, title)
@@ -92,6 +98,8 @@ async function fetchOpsInvoiceItems(options: FetchOpsInvoicesOptions = {}, listS
       listState ? { count: "exact" } : undefined,
     )
     .is("deleted_at", null)
+    .is("archived_at", null)
+    .is("cancelled_at", null)
     .order("issued_at", { ascending: false })
     .order("created_at", { ascending: false });
 

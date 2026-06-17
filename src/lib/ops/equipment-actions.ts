@@ -1650,3 +1650,164 @@ export async function cancelMaintenanceJobAction(formData: FormData) {
   revalidatePath("/ops/project-budgets");
   redirect(`${EQUIPMENT_ROUTE}?updated=maintenance_cancelled`);
 }
+
+// ---------------------------------------------------------------------------
+// S2-4 / J2 backlog: edit + archive for equipment + equipment_requests
+// ---------------------------------------------------------------------------
+
+const equipmentIdSchema = z.object({ id: z.string().uuid("Select an equipment record.") });
+
+const updateEquipmentSchema = equipmentSchema.extend({
+  id: z.string().uuid(),
+});
+
+export async function updateEquipmentAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageOpsEquipmentMasterData(profile.role)) {
+    equipmentError("Your role cannot edit equipment.");
+  }
+
+  const parsed = updateEquipmentSchema.safeParse({
+    id: field(formData, "id"),
+    base_location: field(formData, "base_location"),
+    category_id: field(formData, "category_id"),
+    current_site_id: field(formData, "current_site_id"),
+    daily_rate: field(formData, "daily_rate") || "0",
+    equipment_code: field(formData, "equipment_code"),
+    fuel_tracking_enabled: field(formData, "fuel_tracking_enabled") === "on",
+    name: field(formData, "name"),
+    notes: field(formData, "notes"),
+    ownership: field(formData, "ownership") || "company_owned",
+    registration_number: field(formData, "registration_number"),
+    serial_number: field(formData, "serial_number"),
+  });
+
+  if (!parsed.success) {
+    equipmentError(parsed.error.issues[0]?.message ?? "Check the equipment record.");
+  }
+
+  const { id, ...patch } = parsed.data;
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("equipment")
+    .update({
+      base_location: patch.base_location,
+      category_id: patch.category_id,
+      current_site_id: normalizeOptionalUuid(patch.current_site_id),
+      daily_rate: normalizeNumber(patch.daily_rate),
+      equipment_code: patch.equipment_code || undefined,
+      fuel_tracking_enabled: patch.fuel_tracking_enabled,
+      name: patch.name,
+      notes: patch.notes,
+      ownership: patch.ownership,
+      registration_number: patch.registration_number,
+      serial_number: patch.serial_number,
+    })
+    .eq("id", id)
+    .is("archived_at", null);
+
+  if (error) {
+    equipmentError(error.code === "23505" ? "That equipment code already exists." : error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "equipment.updated",
+    actorUserId: profile.id,
+    entityId: id,
+    entityType: "equipment",
+    moduleKey: "equipment",
+    sourceId: id,
+    sourceTable: "equipment",
+    summary: `Updated equipment ${patch.equipment_code || id.slice(0, 8)}`,
+  }).catch(() => null);
+
+  revalidatePath(EQUIPMENT_ROUTE);
+  redirect(`${EQUIPMENT_ROUTE}?updated=equipment`);
+}
+
+export async function archiveEquipmentAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageOpsEquipmentMasterData(profile.role)) {
+    equipmentError("Your role cannot archive equipment.");
+  }
+
+  const parsed = equipmentIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    equipmentError("Select equipment to archive.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("equipment")
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: profile.id,
+      status: "inactive",
+    })
+    .eq("id", parsed.data.id);
+
+  if (error) {
+    equipmentError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "equipment.archived",
+    actorUserId: profile.id,
+    entityId: parsed.data.id,
+    entityType: "equipment",
+    moduleKey: "equipment",
+    sourceId: parsed.data.id,
+    sourceTable: "equipment",
+    summary: "Archived equipment record",
+  }).catch(() => null);
+
+  revalidatePath(EQUIPMENT_ROUTE);
+  redirect(`${EQUIPMENT_ROUTE}?updated=archived`);
+}
+
+const equipmentRequestIdSchema = z.object({ id: z.string().uuid("Select an equipment request.") });
+
+export async function archiveEquipmentRequestAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  // Same gate as editing master data — anyone who can create equipment
+  // records can tidy up closed-out requests too.
+  if (!canManageOpsEquipmentMasterData(profile.role)) {
+    equipmentError("Your role cannot archive equipment requests.");
+  }
+
+  const parsed = equipmentRequestIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    equipmentError("Select an equipment request to archive.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("equipment_requests")
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: profile.id,
+    })
+    .eq("id", parsed.data.id)
+    .in("status", ["cancelled", "rejected", "fulfilled"]);
+
+  if (error) {
+    equipmentError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "equipment_request.archived",
+    actorUserId: profile.id,
+    entityId: parsed.data.id,
+    entityType: "equipment_request",
+    moduleKey: "equipment",
+    sourceId: parsed.data.id,
+    sourceTable: "equipment_requests",
+    summary: "Archived equipment request",
+  }).catch(() => null);
+
+  revalidatePath(EQUIPMENT_ROUTE);
+  redirect(`${EQUIPMENT_ROUTE}?updated=request_archived`);
+}

@@ -396,9 +396,171 @@ export async function completePayrollRunAction(formData: FormData) {
     action: "payroll_run.completed",
     entity_type: "payroll_run",
     entity_id: run.id,
+    module_key: "payroll",
+    source_table: "payroll_runs",
+    source_id: run.id,
   });
 
   revalidatePath("/ops");
   revalidatePath("/ops/payroll");
   redirect("/ops/payroll?updated=paid");
+}
+
+// =============================================================================
+// J4: Cancel / archive / delete actions for payroll runs.
+// Reuses the existing `payrollRunIdSchema` and `payrollError` helpers above.
+// =============================================================================
+
+async function fetchPayrollRunStatus(runId: string) {
+  const supabase = await createOpsServerSessionClient();
+  const { data, error } = await supabase
+    .from("payroll_runs")
+    .select("id, status")
+    .eq("id", runId)
+    .maybeSingle<{ id: string; status: "draft" | "approved" | "disbursing" | "completed" }>();
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function cancelPayrollRunAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (
+    profile.role !== "managing_director" &&
+    profile.role !== "owner" &&
+    profile.role !== "developer"
+  ) {
+    payrollError("Only the Managing Director or Developer can cancel a payroll run.");
+  }
+
+  const parsed = payrollRunIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    payrollError(parsed.error.issues[0]?.message ?? "Select a payroll run.");
+  }
+
+  const run = await fetchPayrollRunStatus(parsed.data.id);
+  if (!run) {
+    payrollError("Payroll run was not found.");
+  }
+  if (run.status === "completed" || run.status === "disbursing") {
+    payrollError("A payroll run that has been disbursed cannot be cancelled.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  // Detach worker cash advances first so they can be re-included next time.
+  await supabase
+    .from("cash_advances")
+    .update({ payroll_run_id: null })
+    .eq("deducted_in_run_id", run.id);
+
+  const { error } = await supabase
+    .from("payroll_runs")
+    .update({ cancelled_at: new Date().toISOString(), cancelled_by: profile.id })
+    .eq("id", run.id);
+  if (error) {
+    payrollError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "payroll_run.cancelled",
+    entity_type: "payroll_run",
+    entity_id: run.id,
+    module_key: "payroll",
+    source_table: "payroll_runs",
+    source_id: run.id,
+  });
+
+  revalidatePath("/ops/payroll");
+  redirect("/ops/payroll?updated=cancelled");
+}
+
+export async function archivePayrollRunAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (
+    profile.role !== "managing_director" &&
+    profile.role !== "owner" &&
+    profile.role !== "developer"
+  ) {
+    payrollError("Only the Managing Director or Developer can archive a payroll run.");
+  }
+
+  const parsed = payrollRunIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    payrollError(parsed.error.issues[0]?.message ?? "Select a payroll run.");
+  }
+
+  const run = await fetchPayrollRunStatus(parsed.data.id);
+  if (!run) {
+    payrollError("Payroll run was not found.");
+  }
+  if (run.status !== "completed") {
+    payrollError("Payroll runs can only be archived once completed.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { error } = await supabase
+    .from("payroll_runs")
+    .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
+    .eq("id", run.id);
+  if (error) {
+    payrollError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "payroll_run.archived",
+    entity_type: "payroll_run",
+    entity_id: run.id,
+    module_key: "payroll",
+    source_table: "payroll_runs",
+    source_id: run.id,
+  });
+
+  revalidatePath("/ops/payroll");
+  redirect("/ops/payroll?updated=archived");
+}
+
+export async function deletePayrollRunAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (profile.role !== "developer") {
+    payrollError("Only the Developer can permanently delete a payroll run.");
+  }
+
+  const parsed = payrollRunIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    payrollError(parsed.error.issues[0]?.message ?? "Select a payroll run.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  await supabase
+    .from("cash_advances")
+    .update({ payroll_run_id: null, deducted_in_run_id: null })
+    .eq("deducted_in_run_id", parsed.data.id);
+  await supabase.from("payroll_run_items").delete().eq("payroll_run_id", parsed.data.id);
+
+  const { error } = await supabase
+    .from("payroll_runs")
+    .delete()
+    .eq("id", parsed.data.id);
+  if (error) {
+    payrollError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "payroll_run.deleted",
+    entity_type: "payroll_run",
+    entity_id: parsed.data.id,
+    module_key: "payroll",
+    source_table: "payroll_runs",
+    source_id: parsed.data.id,
+  });
+
+  revalidatePath("/ops/payroll");
+  redirect("/ops/payroll?updated=deleted");
 }

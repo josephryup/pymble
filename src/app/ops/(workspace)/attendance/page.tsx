@@ -9,6 +9,7 @@ import {
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approveAttendanceAction,
+  cancelAttendanceAction,
   createAttendanceAction,
 } from "@/lib/ops/attendance-actions";
 import {
@@ -25,6 +26,7 @@ import {
   OPS_INPUT_CLASS,
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
+  OPS_DANGER_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
@@ -438,16 +440,27 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                           Approved
                         </span>
                       ) : canRecord ? (
-                        <form action={approveAttendanceAction}>
-                          <input name="id" type="hidden" value={record.id} />
-                          <OpsConfirmSubmitButton
-                            className={OPS_SECONDARY_BUTTON_CLASS}
-                            confirmText="Confirm approval"
-                          >
-                            <Check className="size-3" aria-hidden="true" />
-                            Approve
-                          </OpsConfirmSubmitButton>
-                        </form>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <form action={approveAttendanceAction}>
+                            <input name="id" type="hidden" value={record.id} />
+                            <OpsConfirmSubmitButton
+                              className={OPS_SECONDARY_BUTTON_CLASS}
+                              confirmText="Confirm approval"
+                            >
+                              <Check className="size-3" aria-hidden="true" />
+                              Approve
+                            </OpsConfirmSubmitButton>
+                          </form>
+                          <form action={cancelAttendanceAction}>
+                            <input name="id" type="hidden" value={record.id} />
+                            <OpsConfirmSubmitButton
+                              className={OPS_DANGER_BUTTON_CLASS}
+                              confirmText="Confirm cancel"
+                            >
+                              Cancel
+                            </OpsConfirmSubmitButton>
+                          </form>
+                        </div>
                       ) : (
                         <span className="text-primary-dark/50">Pending</span>
                       )}

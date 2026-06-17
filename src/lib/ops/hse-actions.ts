@@ -12,6 +12,8 @@ import {
   queueOpsHseRoleNotifications,
   queueOpsHseUserNotification,
 } from "@/lib/ops/hse-notifications";
+import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
+import { queueOpsNotification } from "@/lib/ops/notifications";
 import {
   canCancelOpsCorrectiveAction,
   canCancelOpsHseIncident,
@@ -113,6 +115,7 @@ type HseIncidentForMutation = {
   incident_number: string;
   site_id: string;
   status: OpsHseIncidentStatus;
+  severity: "low" | "medium" | "high" | "critical";
   title: string;
 };
 
@@ -188,7 +191,7 @@ async function fetchIncident(incidentId: string) {
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("hse_incidents")
-    .select("id, incident_number, site_id, title, status, created_by")
+    .select("id, incident_number, site_id, title, status, severity, created_by")
     .eq("id", incidentId)
     .maybeSingle<HseIncidentForMutation>();
 
@@ -462,14 +465,37 @@ export async function closeHseIncidentAction(formData: FormData) {
     actorUserId: profile.id,
     entityId: incident.id,
     entityType: "hse_incident",
-    metadata: { incident_number: incident.incident_number },
+    metadata: { incident_number: incident.incident_number, severity: incident.severity },
     moduleKey: "hse",
     sourceId: incident.id,
     sourceTable: "hse_incidents",
     summary: `Closed HSE incident ${incident.incident_number}`,
   });
 
+  // K4: notify leadership when an HSE incident is closed, especially for high
+  // / critical severity. Per Part 2.7 of the workflow design.
+  const leadership = await fanoutToOpsRoles(
+    ["general_manager", "managing_director", "owner"],
+    { excludeUserIds: [profile.id] },
+  );
+  const severityBadge = incident.severity.toUpperCase();
+  await Promise.all(
+    leadership.map((recipient) =>
+      queueOpsNotification({
+        actionHref: `${HSE_ROUTE}#hi-${incident.id}`,
+        body: `${profile.full_name} closed ${incident.incident_number} (${severityBadge} severity): ${incident.title}.`,
+        idempotencyKey: `hse-incident-closed:${incident.id}:${recipient.id}`,
+        moduleKey: "hse",
+        recipientId: recipient.id,
+        sourceId: incident.id,
+        sourceTable: "hse_incidents",
+        title: `HSE incident closed: ${incident.incident_number}`,
+      }).catch(() => null),
+    ),
+  );
+
   revalidatePath(HSE_ROUTE);
+  revalidatePath("/ops/notifications");
   redirect(`${HSE_ROUTE}?updated=closed`);
 }
 

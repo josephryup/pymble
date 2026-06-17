@@ -28,6 +28,8 @@ export type OpsMaterialRequestUserSummary = {
 };
 
 export type OpsMaterialRequestItem = {
+  actual_total: number;
+  actual_unit_cost: number;
   created_at: string;
   estimated_total: number;
   estimated_unit_cost: number;
@@ -38,10 +40,13 @@ export type OpsMaterialRequestItem = {
   quantity: number;
   request_id: string;
   specification: string;
+  supplier_id: string | null;
+  supplier_name: string | null;
   unit: string;
 };
 
 export type OpsMaterialRequestSummary = {
+  actual_total: number;
   approval_request_id: string | null;
   approval_status: OpsApprovalStatus | null;
   approved_at: string | null;
@@ -53,6 +58,8 @@ export type OpsMaterialRequestSummary = {
   items: OpsMaterialRequestItem[];
   needed_by: string | null;
   ordered_at: string | null;
+  priced_at: string | null;
+  priced_by: string | null;
   priority: OpsPriority;
   rejected_at: string | null;
   request_number: string;
@@ -111,6 +118,7 @@ export function buildMaterialRequestChainSteps(
     | "rejected_at"
     | "ordered_at"
     | "closed_at"
+    | "priced_at"
   >,
 ): OpsChainStepDescriptor[] {
   const s = request.status;
@@ -128,8 +136,24 @@ export function buildMaterialRequestChainSteps(
     ];
   }
 
-  const submittedDone = ["submitted", "in_review", "approved", "ordered", "closed"].includes(s);
-  const approvedDone = ["approved", "ordered", "closed"].includes(s);
+  const submittedDone = [
+    "submitted",
+    "in_review",
+    "pricing_pending",
+    "priced",
+    "approved",
+    "ordered",
+    "closed",
+  ].includes(s);
+  const operationsApprovedDone = [
+    "pricing_pending",
+    "priced",
+    "approved",
+    "ordered",
+    "closed",
+  ].includes(s);
+  const pricedDone = ["priced", "approved", "ordered", "closed"].includes(s);
+  const financeApprovedDone = ["approved", "ordered", "closed"].includes(s);
   const orderedDone = ["ordered", "closed"].includes(s);
   const rejected = s === "rejected";
 
@@ -149,11 +173,11 @@ export function buildMaterialRequestChainSteps(
       href: null,
     },
     {
-      key: "approved",
-      label: rejected ? "Rejected" : "Approved",
+      key: "operations_approved",
+      label: rejected ? "Rejected" : "Operations approved",
       state: rejected
         ? "rejected"
-        : approvedDone
+        : operationsApprovedDone
           ? "done"
           : ["submitted", "in_review"].includes(s)
             ? "current"
@@ -161,12 +185,40 @@ export function buildMaterialRequestChainSteps(
       caption: rejected
         ? chainDate(request.rejected_at)
         : (chainDate(request.approved_at) ??
-          (["submitted", "in_review"].includes(s) ? "Awaiting approval" : null)),
+          (["submitted", "in_review"].includes(s) ? "Awaiting Operations" : null)),
+      href: null,
+    },
+    {
+      key: "priced",
+      label: "Priced by Procurement",
+      state: pricedDone
+        ? "done"
+        : s === "pricing_pending"
+          ? "current"
+          : "pending",
+      caption:
+        chainDate(request.priced_at) ??
+        (s === "pricing_pending" ? "Procurement attaching prices" : null),
+      href: null,
+    },
+    {
+      key: "finance_approved",
+      label: "Finance approved",
+      state: financeApprovedDone
+        ? "done"
+        : s === "priced"
+          ? "current"
+          : "pending",
+      caption: financeApprovedDone
+        ? "Cost approved"
+        : s === "priced"
+          ? "Awaiting Finance"
+          : null,
       href: null,
     },
     {
       key: "procured",
-      label: "Procured (RFQ/PO)",
+      label: "Procured (RFQ / Purchase Order)",
       state: orderedDone ? "done" : s === "approved" ? "current" : "pending",
       caption: chainDate(request.ordered_at) ?? (s === "approved" ? "Ready to procure" : null),
       href: orderedDone || s === "approved" ? "/ops/rfq-po" : null,
@@ -183,7 +235,7 @@ export function buildMaterialRequestChainSteps(
 
 type RawMaterialRequest = Omit<
   OpsMaterialRequestSummary,
-  "approval_status" | "estimated_total" | "items" | "requester" | "site"
+  "actual_total" | "approval_status" | "estimated_total" | "items" | "requester" | "site"
 > & {
   requester: OpsMaterialRequestUserSummary | OpsMaterialRequestUserSummary[] | null;
   site: OpsMaterialRequestSiteSummary | OpsMaterialRequestSiteSummary[] | null;
@@ -191,11 +243,15 @@ type RawMaterialRequest = Omit<
 
 type RawMaterialRequestItem = Omit<
   OpsMaterialRequestItem,
-  "estimated_total" | "estimated_unit_cost" | "quantity"
+  "actual_total" | "actual_unit_cost" | "estimated_total" | "estimated_unit_cost" | "quantity" | "supplier_name"
 > & {
+  actual_total: number | string;
+  actual_unit_cost: number | string;
   estimated_total: number | string;
   estimated_unit_cost: number | string;
   quantity: number | string;
+  supplier_name_freeform: string | null;
+  supplier: { name: string } | { name: string }[] | null;
 };
 
 type RawMaterialRequestApproval = {
@@ -221,11 +277,23 @@ function groupItemsByRequestId(items: RawMaterialRequestItem[]) {
   const grouped = new Map<string, OpsMaterialRequestItem[]>();
 
   items.forEach((item) => {
-    const normalized = {
-      ...item,
+    const supplierRel = Array.isArray(item.supplier) ? item.supplier[0] ?? null : item.supplier;
+    const supplierName =
+      supplierRel?.name ??
+      (item.supplier_name_freeform && item.supplier_name_freeform.trim().length > 0
+        ? item.supplier_name_freeform
+        : null);
+    const { supplier: _ignoredSupplier, supplier_name_freeform: _ignoredFreeform, ...rest } = item;
+    void _ignoredSupplier;
+    void _ignoredFreeform;
+    const normalized: OpsMaterialRequestItem = {
+      ...rest,
+      actual_total: normalizeMoney(item.actual_total),
+      actual_unit_cost: normalizeMoney(item.actual_unit_cost),
       estimated_total: normalizeMoney(item.estimated_total),
       estimated_unit_cost: normalizeMoney(item.estimated_unit_cost),
       quantity: normalizeMoney(item.quantity),
+      supplier_name: supplierName,
     };
 
     grouped.set(item.request_id, [...(grouped.get(item.request_id) ?? []), normalized]);
@@ -252,6 +320,12 @@ export function calculateOpsMaterialRequestTotal(
   return items.reduce((sum, item) => sum + normalizeMoney(item.estimated_total), 0);
 }
 
+export function calculateOpsMaterialRequestActualTotal(
+  items: Array<Pick<OpsMaterialRequestItem, "actual_total">>,
+) {
+  return items.reduce((sum, item) => sum + normalizeMoney(item.actual_total), 0);
+}
+
 async function fetchMaterialRequestItems(requestIds: string[]) {
   if (requestIds.length === 0) {
     return new Map<string, OpsMaterialRequestItem[]>();
@@ -261,7 +335,7 @@ async function fetchMaterialRequestItems(requestIds: string[]) {
   const { data, error } = await supabase
     .from("material_request_items")
     .select(
-      "id, request_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, notes, created_at",
+      "id, request_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, actual_unit_cost, actual_total, notes, created_at, supplier_id, supplier_name_freeform, supplier:suppliers!material_request_items_supplier_id_fkey(name)",
     )
     .in("request_id", requestIds)
     .order("line_number", { ascending: true });
@@ -320,6 +394,8 @@ async function fetchOpsMaterialRequestItems(
         "rejected_at",
         "ordered_at",
         "closed_at",
+        "priced_at",
+        "priced_by",
         "created_at",
         "updated_at",
         "requester:users!material_requests_requested_by_fkey(id, full_name, role)",
@@ -327,6 +403,7 @@ async function fetchOpsMaterialRequestItems(
       ].join(", "),
       listState ? { count: "exact" } : undefined,
     )
+    .is("archived_at", null)
     .order("created_at", { ascending: false });
 
   if (options.status) {
@@ -369,6 +446,7 @@ async function fetchOpsMaterialRequestItems(
 
       return {
         ...request,
+        actual_total: calculateOpsMaterialRequestActualTotal(items),
         approval_request_id: request.approval_request_id ?? approval?.id ?? null,
         approval_status: approval?.status ?? null,
         estimated_total: calculateOpsMaterialRequestTotal(items),

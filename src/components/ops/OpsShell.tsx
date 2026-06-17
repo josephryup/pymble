@@ -91,12 +91,26 @@ const NAV_ICON_BY_HREF: Record<string, LucideIcon> = {
   "/ops/workers": HardHat,
 };
 
+function badgeFor(
+  href: string,
+  unreadNotifications: number | undefined,
+  unreadInbox: number | undefined,
+) {
+  if (href === "/ops/notifications") return unreadNotifications;
+  if (href === "/ops/inbox") return unreadInbox;
+  return undefined;
+}
+
 function Navigation({
   modules,
   onNavigate,
+  unreadInbox,
+  unreadNotifications,
 }: {
   modules: OpsReadyModule[];
   onNavigate?: () => void;
+  unreadInbox?: number;
+  unreadNotifications?: number;
 }) {
   const pathname = usePathname();
   const overviewModule = modules.find((module) => module.href === "/ops");
@@ -124,6 +138,7 @@ function Navigation({
     <div className="grid gap-2">
       {overviewModule ? (
         <OpsNavLink
+          badge={badgeFor(overviewModule.href, unreadNotifications, unreadInbox)}
           href={overviewModule.href}
           icon={NAV_ICON_BY_HREF[overviewModule.href]}
           onNavigate={onNavigate}
@@ -176,6 +191,7 @@ function Navigation({
               >
                 {groupModules.map((item) => (
                   <OpsNavLink
+                    badge={badgeFor(item.href, unreadNotifications, unreadInbox)}
                     href={item.href}
                     icon={NAV_ICON_BY_HREF[item.href]}
                     key={item.href}
@@ -296,6 +312,7 @@ export function OpsShell({
   profileEmail,
   profileName,
   profileRole,
+  unreadInbox,
   unreadNotifications,
 }: {
   children: React.ReactNode;
@@ -303,6 +320,7 @@ export function OpsShell({
   profileEmail?: string | null;
   profileName?: string;
   profileRole?: OpsUserRole;
+  unreadInbox?: number;
   unreadNotifications?: number;
 }) {
   const pathname = usePathname();
@@ -466,7 +484,12 @@ export function OpsShell({
               </button>
             </div>
             <nav aria-label="Operations workspace" className="min-h-0 overflow-y-auto pr-1">
-              <Navigation modules={modules} onNavigate={closeMobileNav} />
+              <Navigation
+                modules={modules}
+                onNavigate={closeMobileNav}
+                unreadInbox={unreadInbox}
+                unreadNotifications={unreadNotifications}
+              />
             </nav>
             <ProfilePanel
               displayName={displayName}
@@ -484,7 +507,11 @@ export function OpsShell({
           <div className="grid h-full w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-4 p-4">
             <OpsLogoLink />
             <nav aria-label="Operations workspace" className="min-h-0 overflow-y-auto pr-1">
-              <Navigation modules={modules} />
+              <Navigation
+                modules={modules}
+                unreadInbox={unreadInbox}
+                unreadNotifications={unreadNotifications}
+              />
             </nav>
             <ProfilePanel
               displayName={displayName}

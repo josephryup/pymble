@@ -13,7 +13,10 @@ import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import {
   addDailySiteReportEntryAction,
@@ -353,36 +356,30 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
-            Engineering field control
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
-            Daily site reports
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
-            Site progress, labour, equipment, material movement, delays, HSE notes, and commercial
-            observations in one daily record.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/sites">
-            <FileText className="size-4" aria-hidden="true" />
-            Sites
-          </Link>
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/material-requests">
-            <ClipboardList className="size-4" aria-hidden="true" />
-            Material requests
-          </Link>
-          {canCreate ? (
-            <a className={OPS_PRIMARY_BUTTON_CLASS} href={createReportHref}>
-              <Plus className="size-4" aria-hidden="true" />
-              New report
-            </a>
-          ) : null}
-        </div>
-      </section>
+      <OpsRealtimeRefresh tables={["daily_site_reports"]} />
+      <OpsPageHeader
+        eyebrow="Engineering field control"
+        title="Daily Site Reports"
+        description="Site progress, labour, equipment, material movement, delays, HSE notes, and commercial observations in one daily record."
+        actions={
+          <>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/sites">
+              <FileText className="size-4" aria-hidden="true" />
+              Sites
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/material-requests">
+              <ClipboardList className="size-4" aria-hidden="true" />
+              Material requests
+            </Link>
+            {canCreate ? (
+              <a className={OPS_PRIMARY_BUTTON_CLASS} href={createReportHref}>
+                <Plus className="size-4" aria-hidden="true" />
+                New report
+              </a>
+            ) : null}
+          </>
+        }
+      />
 
       {notice ? (
         <div
@@ -752,19 +749,26 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
             })}
           </div>
         ) : (
-          <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
-            <HardHat className="size-10 text-primary-blue" aria-hidden="true" />
-            <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
-                {hasActiveListFilter ? "No matching daily reports" : "No daily site reports yet"}
-              </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
-                {hasActiveListFilter
-                  ? "Adjust the search or status filter to widen the daily report register."
-                  : "Create the first report for a site, then add structured entries for the day."}
-              </p>
-            </div>
-          </div>
+          <OpsEmptyState
+            icon={HardHat}
+            title={
+              hasActiveListFilter
+                ? "No daily site reports match these filters"
+                : "No daily site reports yet"
+            }
+            description={
+              hasActiveListFilter
+                ? "Try clearing the search or switching the status filter — drafts, submitted, and reviewed reports sit in different buckets."
+                : "Site engineers and supervisors file one report per site per day capturing progress, labour, equipment, and materials. The first report will appear here once it is created."
+            }
+            actions={
+              hasActiveListFilter
+                ? [{ href: "/ops/daily-site-reports", label: "Clear filters" }]
+                : canCreate
+                  ? [{ href: createReportHref, label: "Create the first daily site report" }]
+                  : [{ href: "/ops", label: "Back to overview", variant: "secondary" }]
+            }
+          />
         )}
         <OpsPaginationControls
           basePath="/ops/daily-site-reports"

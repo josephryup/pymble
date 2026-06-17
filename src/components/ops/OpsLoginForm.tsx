@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { Alert } from "@/components/ui/alert";
@@ -25,6 +25,7 @@ export function OpsLoginForm({ initialError = null }: OpsLoginFormProps) {
   const formId = useId();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(initialError);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
@@ -132,16 +133,32 @@ export function OpsLoginForm({ initialError = null }: OpsLoginFormProps) {
         <Label className="text-sm font-semibold text-foreground" htmlFor={passwordId}>
           Password
         </Label>
-        <Input
-          aria-invalid={errorMessage ? true : undefined}
-          autoComplete="current-password"
-          className="min-h-11"
-          id={passwordId}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-          type="password"
-          value={password}
-        />
+        <div className="relative">
+          <Input
+            aria-invalid={errorMessage ? true : undefined}
+            autoComplete="current-password"
+            className="min-h-11 pr-12"
+            id={passwordId}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            type={showPassword ? "text" : "password"}
+            value={password}
+          />
+          <button
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setShowPassword((current) => !current)}
+            tabIndex={0}
+            type="button"
+          >
+            {showPassword ? (
+              <EyeOff className="size-4" aria-hidden="true" />
+            ) : (
+              <Eye className="size-4" aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </div>
 
       {errorMessage ? (

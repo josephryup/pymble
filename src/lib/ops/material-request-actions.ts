@@ -7,12 +7,18 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
+  canApproveMaterialRequestCost,
+  canArchiveOpsMaterialRequest,
+  canAttachMaterialRequestPricing,
+  canCancelOpsMaterialRequest,
   canCreateOpsMaterialRequest,
+  canDeleteOpsMaterialRequest,
   canEditOpsMaterialRequest,
   canSubmitOpsMaterialRequest,
   materialRequestApprovalRecipientRoles,
   materialRequestApprovalSteps,
 } from "@/lib/ops/material-request-permissions";
+import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsMaterialRequestStatus, OpsPriority } from "@/lib/ops/types";
@@ -34,6 +40,14 @@ const itemSchema = z.object({
   quantity: z.coerce.number().positive("Quantity must be greater than zero."),
   specification: z.string().trim().max(500).default(""),
   unit: z.string().trim().min(1, "Unit is required.").max(40),
+  // Per-item supplier: either the suppliers.id (when picked from the master
+  // list) or a free-text name (when the supplier isn't on the list yet).
+  supplier_id: z
+    .string()
+    .trim()
+    .default("")
+    .transform((value) => (value.length > 0 ? value : null)),
+  supplier_name_freeform: z.string().trim().max(160).default(""),
 });
 
 const createRequestSchema = headerSchema.extend(itemSchema.shape);
@@ -174,6 +188,8 @@ export async function createMaterialRequestAction(formData: FormData) {
     quantity: field(formData, "quantity"),
     site_id: field(formData, "site_id"),
     specification: field(formData, "specification"),
+    supplier_id: field(formData, "supplier_id"),
+    supplier_name_freeform: field(formData, "supplier_name_freeform"),
     title: field(formData, "title"),
     unit: field(formData, "unit") || "each",
   });
@@ -210,6 +226,8 @@ export async function createMaterialRequestAction(formData: FormData) {
     quantity: parsed.data.quantity,
     request_id: request.id,
     specification: parsed.data.specification,
+    supplier_id: parsed.data.supplier_id,
+    supplier_name_freeform: parsed.data.supplier_name_freeform || null,
     unit: parsed.data.unit,
   });
 
@@ -249,6 +267,8 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     quantity: field(formData, "quantity"),
     request_id: field(formData, "request_id"),
     specification: field(formData, "specification"),
+    supplier_id: field(formData, "supplier_id"),
+    supplier_name_freeform: field(formData, "supplier_name_freeform"),
     unit: field(formData, "unit") || "each",
   });
 
@@ -276,6 +296,8 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     quantity: parsed.data.quantity,
     request_id: request.id,
     specification: parsed.data.specification,
+    supplier_id: parsed.data.supplier_id,
+    supplier_name_freeform: parsed.data.supplier_name_freeform || null,
     unit: parsed.data.unit,
   });
 
@@ -439,32 +461,692 @@ export async function submitMaterialRequestForApprovalAction(formData: FormData)
     summary: `Requested approval for ${request.request_number}`,
   }).catch(() => null);
 
+  // Resolve approvers using the workflow fallback chain so a missing role
+  // (e.g. Projects Manager seat unfilled) doesn't drop the notification.
   const recipientRoles = materialRequestApprovalRecipientRoles(steps);
-  const { data: approvers } = await supabase
-    .from("users")
-    .select("id")
-    .in("role", recipientRoles)
-    .eq("is_active", true);
+  const approvers = await fanoutToOpsRoles(recipientRoles, {
+    excludeUserIds: [profile.id],
+  });
 
   await Promise.all(
-    (approvers ?? [])
-      .filter((approver) => approver.id !== profile.id)
-      .map((approver) =>
-        queueOpsNotification({
-          actionHref: `/ops/approvals/${approval.id}`,
-          body: `${profile.full_name} requested approval for ${request.request_number}.`,
-          idempotencyKey: `material-request-approval:${approval.id}:${approver.id}`,
-          moduleKey: "material_requests",
-          recipientId: approver.id as string,
-          sourceId: approval.id,
-          sourceTable: "approval_requests",
-          title: "Material request approval",
-        }).catch(() => null),
-      ),
+    approvers.map((approver) =>
+      queueOpsNotification({
+        actionHref: `/ops/approvals/${approval.id}`,
+        body: `${profile.full_name} requested approval for ${request.request_number}.`,
+        idempotencyKey: `material-request-approval:${approval.id}:${approver.id}`,
+        moduleKey: "material_requests",
+        recipientId: approver.id,
+        sourceId: approval.id,
+        sourceTable: "approval_requests",
+        title: "Material request approval",
+      }).catch(() => null),
+    ),
   );
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   revalidatePath("/ops/approvals");
   revalidatePath("/ops/notifications");
   redirect(`/ops/approvals/${approval.id}?created=material_request_approval`);
+}
+
+// =============================================================================
+// H3: Procurement attaches actual supplier prices to a request that is in
+// `pricing_pending` (operations has approved). On success the request moves to
+// `priced` and Finance is notified to approve the cost.
+// =============================================================================
+
+const pricingItemSchema = z.object({
+  item_id: z.string().uuid("Select a line item."),
+  actual_unit_cost: z.coerce
+    .number()
+    .min(0, "Actual unit cost cannot be negative.")
+    .max(1_000_000_000, "Actual unit cost looks unrealistic."),
+});
+
+export async function attachMaterialRequestPricingAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canAttachMaterialRequestPricing(profile.role)) {
+    materialRequestError(
+      "Only Procurement and leadership can attach supplier prices to a material request.",
+    );
+  }
+
+  const idParsed = requestIdSchema.safeParse({ request_id: field(formData, "request_id") });
+  if (!idParsed.success) {
+    materialRequestError(idParsed.error.issues[0]?.message ?? "Select a material request.");
+  }
+
+  const request = await fetchMaterialRequestForMutation(idParsed.data.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+
+  if (request.status !== "pricing_pending" && request.status !== "priced") {
+    materialRequestError(
+      "Supplier prices can only be attached once Operations has approved the request.",
+    );
+  }
+
+  // Collect every `actual_unit_cost::<itemId>` field from the form. We don't
+  // require every line — a partial update is allowed so procurement can save
+  // progress — but we need at least one valid entry.
+  const updates: { item_id: string; actual_unit_cost: number }[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("actual_unit_cost::")) {
+      continue;
+    }
+    const itemId = key.slice("actual_unit_cost::".length);
+    const parsed = pricingItemSchema.safeParse({ item_id: itemId, actual_unit_cost: value });
+    if (!parsed.success) {
+      materialRequestError(parsed.error.issues[0]?.message ?? "Check supplier prices.");
+    }
+    updates.push(parsed.data);
+  }
+
+  if (updates.length === 0) {
+    materialRequestError("Enter at least one supplier price before saving.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  // Confirm every item belongs to this request — defence against tampered form ids.
+  const itemIds = updates.map((u) => u.item_id);
+  const { data: lineRows, error: lineFetchError } = await supabase
+    .from("material_request_items")
+    .select("id, request_id")
+    .in("id", itemIds);
+
+  if (lineFetchError) {
+    materialRequestError(lineFetchError.message);
+  }
+
+  const valid = (lineRows ?? []) as Array<{ id: string; request_id: string }>;
+  if (valid.length !== updates.length || valid.some((row) => row.request_id !== request.id)) {
+    materialRequestError("One or more line items don't belong to this request.");
+  }
+
+  // Apply updates serially (small N — at most a few line items per request).
+  // The trigger keeps actual_total = actual_unit_cost * quantity automatically.
+  for (const update of updates) {
+    const { error: updErr } = await supabase
+      .from("material_request_items")
+      .update({ actual_unit_cost: update.actual_unit_cost })
+      .eq("id", update.item_id);
+    if (updErr) {
+      materialRequestError(updErr.message);
+    }
+  }
+
+  // Re-read line totals to compute the priced total for the notification body.
+  const { data: pricedRows } = await supabase
+    .from("material_request_items")
+    .select("actual_total")
+    .eq("request_id", request.id);
+  const pricedTotal = ((pricedRows ?? []) as Array<{ actual_total: number | string }>).reduce(
+    (sum, row) => sum + normalizeMoney(row.actual_total),
+    0,
+  );
+
+  // Move the request to `priced` so Finance can approve the cost.
+  const nowIso = new Date().toISOString();
+  const { error: stateError } = await supabase
+    .from("material_requests")
+    .update({ status: "priced", priced_at: nowIso, priced_by: profile.id })
+    .eq("id", request.id);
+  if (stateError) {
+    materialRequestError(stateError.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "material_request.priced",
+    actorUserId: profile.id,
+    entityId: request.id,
+    entityType: "material_request",
+    metadata: {
+      request_number: request.request_number,
+      priced_total_zmw: pricedTotal,
+      lines_updated: updates.length,
+    },
+    moduleKey: "material_requests",
+    sourceId: request.id,
+    sourceTable: "material_requests",
+    summary: `Procurement attached supplier prices to ${request.request_number}`,
+  }).catch(() => null);
+
+  // Notify Finance to approve the cost, plus the requester for awareness.
+  const financeRecipients = await fanoutToOpsRoles(["finance_manager", "accountant"], {
+    excludeUserIds: [profile.id],
+  });
+  await Promise.all(
+    financeRecipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
+        body: `Procurement priced ${request.request_number} at ZMW ${pricedTotal.toLocaleString("en-ZM")}. Please approve the cost.`,
+        idempotencyKey: `material-request-priced:${request.id}:${recipient.id}`,
+        moduleKey: "material_requests",
+        recipientId: recipient.id,
+        sourceId: request.id,
+        sourceTable: "material_requests",
+        title: `Approve cost: ${request.request_number}`,
+      }).catch(() => null),
+    ),
+  );
+
+  if (request.requested_by && request.requested_by !== profile.id) {
+    await queueOpsNotification({
+      actionHref: `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
+      body: `${profile.full_name} attached supplier prices to your request ${request.request_number}. Awaiting Finance approval of the cost.`,
+      idempotencyKey: `material-request-priced-requester:${request.id}`,
+      moduleKey: "material_requests",
+      recipientId: request.requested_by,
+      sourceId: request.id,
+      sourceTable: "material_requests",
+      title: `Priced: ${request.request_number}`,
+    }).catch(() => null);
+  }
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  revalidatePath("/ops/notifications");
+  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=priced#mr-${request.id}`);
+}
+
+// =============================================================================
+// H3: Finance approves the cost of a request that has been priced by
+// procurement. On success the request moves to `approved` (the legacy terminal
+// state, kept so the existing approved → RFQ/PO downstream still works).
+// =============================================================================
+
+const costDecisionSchema = z.object({
+  decision: z.enum(["approve", "reject"]),
+  comment: z.string().trim().max(800).default(""),
+});
+
+export async function decideMaterialRequestCostAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canApproveMaterialRequestCost(profile.role)) {
+    materialRequestError(
+      "Only Finance and leadership can approve or reject the cost of a priced request.",
+    );
+  }
+
+  const idParsed = requestIdSchema.safeParse({ request_id: field(formData, "request_id") });
+  if (!idParsed.success) {
+    materialRequestError(idParsed.error.issues[0]?.message ?? "Select a material request.");
+  }
+
+  const decisionParsed = costDecisionSchema.safeParse({
+    decision: field(formData, "decision"),
+    comment: field(formData, "comment"),
+  });
+  if (!decisionParsed.success) {
+    materialRequestError(
+      decisionParsed.error.issues[0]?.message ?? "Choose approve or reject.",
+    );
+  }
+
+  const request = await fetchMaterialRequestForMutation(idParsed.data.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+
+  if (request.status !== "priced") {
+    materialRequestError(
+      "Finance can only act on a request that has been priced by Procurement.",
+    );
+  }
+
+  if (decisionParsed.data.decision === "reject" && decisionParsed.data.comment.length < 4) {
+    materialRequestError(
+      "Add a brief reason when rejecting a cost so the requester knows what to fix.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const nowIso = new Date().toISOString();
+  const decisionIsApprove = decisionParsed.data.decision === "approve";
+
+  const update: {
+    status: OpsMaterialRequestStatus;
+    approved_at?: string | null;
+    rejected_at?: string | null;
+  } = {
+    status: decisionIsApprove ? "approved" : "rejected",
+  };
+  if (decisionIsApprove) {
+    update.approved_at = nowIso;
+    update.rejected_at = null;
+  } else {
+    update.rejected_at = nowIso;
+  }
+
+  const { error: stateError } = await supabase
+    .from("material_requests")
+    .update(update)
+    .eq("id", request.id);
+  if (stateError) {
+    materialRequestError(stateError.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: decisionIsApprove
+      ? "material_request.cost_approved"
+      : "material_request.cost_rejected",
+    actorUserId: profile.id,
+    entityId: request.id,
+    entityType: "material_request",
+    metadata: {
+      request_number: request.request_number,
+      decision: decisionParsed.data.decision,
+      comment: decisionParsed.data.comment,
+    },
+    moduleKey: "material_requests",
+    sourceId: request.id,
+    sourceTable: "material_requests",
+    summary: decisionIsApprove
+      ? `Finance approved cost for ${request.request_number}`
+      : `Finance rejected cost for ${request.request_number}: ${decisionParsed.data.comment}`,
+  }).catch(() => null);
+
+  // Notify the requester with the decision and reason.
+  if (request.requested_by && request.requested_by !== profile.id) {
+    await queueOpsNotification({
+      actionHref: `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
+      body: decisionIsApprove
+        ? `${profile.full_name} approved the cost of ${request.request_number}. Procurement can now raise the RFQ / Purchase Order.`
+        : `${profile.full_name} rejected the cost of ${request.request_number}. Reason: ${decisionParsed.data.comment}`,
+      idempotencyKey: `material-request-cost-decision:${request.id}:${decisionParsed.data.decision}`,
+      moduleKey: "material_requests",
+      recipientId: request.requested_by,
+      sourceId: request.id,
+      sourceTable: "material_requests",
+      title: decisionIsApprove
+        ? `Approved: ${request.request_number}`
+        : `Rejected: ${request.request_number}`,
+    }).catch(() => null);
+  }
+
+  // Notify procurement so they can raise the RFQ/PO (on approval) or fix prices
+  // and resubmit (on rejection).
+  const procurementRecipients = await fanoutToOpsRoles(
+    ["procurement_manager", "procurement"],
+    { excludeUserIds: [profile.id] },
+  );
+  await Promise.all(
+    procurementRecipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: decisionIsApprove
+          ? "/ops/rfq-po"
+          : `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
+        body: decisionIsApprove
+          ? `Cost approved for ${request.request_number} by ${profile.full_name}. Raise the RFQ / PO.`
+          : `Finance rejected the cost on ${request.request_number}. Reason: ${decisionParsed.data.comment}`,
+        idempotencyKey: `material-request-cost-procurement:${request.id}:${decisionParsed.data.decision}:${recipient.id}`,
+        moduleKey: "material_requests",
+        recipientId: recipient.id,
+        sourceId: request.id,
+        sourceTable: "material_requests",
+        title: decisionIsApprove
+          ? `Order: ${request.request_number}`
+          : `Re-price: ${request.request_number}`,
+      }).catch(() => null),
+    ),
+  );
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  revalidatePath("/ops/notifications");
+  revalidatePath("/ops");
+  redirect(
+    `${MATERIAL_REQUEST_ROUTE}?updated=${decisionIsApprove ? "cost_approved" : "cost_rejected"}#mr-${request.id}`,
+  );
+}
+
+// =============================================================================
+// I5: Edit / cancel / archive / delete actions for material requests.
+// =============================================================================
+
+const updateRequestHeaderSchema = requestIdSchema.extend({
+  title: z.string().trim().min(2, "Request title is required.").max(160),
+  description: z.string().trim().max(800).default(""),
+  priority: z.enum(["low", "normal", "high", "urgent"]),
+  needed_by: z.string().trim().default(""),
+});
+
+const updateItemSchema = z.object({
+  item_id: z.string().uuid("Select a line item."),
+  item_name: z.string().trim().min(2, "Item name is required.").max(160),
+  unit: z.string().trim().min(1, "Unit is required.").max(40),
+  quantity: z.coerce.number().positive("Quantity must be greater than zero."),
+  estimated_unit_cost: z.coerce.number().min(0, "Estimated unit cost cannot be negative."),
+  specification: z.string().trim().max(500).default(""),
+  notes: z.string().trim().max(400).default(""),
+  supplier_id: z
+    .string()
+    .trim()
+    .default("")
+    .transform((value) => (value.length > 0 ? value : null)),
+  supplier_name_freeform: z.string().trim().max(160).default(""),
+});
+
+const itemIdSchema = z.object({
+  item_id: z.string().uuid("Select a line item."),
+});
+
+const cancelSchema = requestIdSchema.extend({
+  reason: z.string().trim().max(800).default(""),
+});
+
+export async function updateMaterialRequestHeaderAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = updateRequestHeaderSchema.safeParse({
+    request_id: field(formData, "request_id"),
+    title: field(formData, "title"),
+    description: field(formData, "description"),
+    priority: field(formData, "priority"),
+    needed_by: field(formData, "needed_by"),
+  });
+  if (!parsed.success) {
+    materialRequestError(parsed.error.issues[0]?.message ?? "Check the request details.");
+  }
+
+  const request = await fetchMaterialRequestForMutation(parsed.data.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+  if (!canEditOpsMaterialRequest(profile.id, profile.role, request)) {
+    materialRequestError("This material request can no longer be edited.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("material_requests")
+    .update({
+      title: parsed.data.title,
+      description: parsed.data.description,
+      priority: parsed.data.priority,
+      needed_by: normalizeDateInput(parsed.data.needed_by),
+    })
+    .eq("id", parsed.data.request_id);
+  if (error) {
+    materialRequestError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "material_request.updated",
+    actorUserId: profile.id,
+    entityId: parsed.data.request_id,
+    entityType: "material_request",
+    moduleKey: "material_requests",
+    sourceId: parsed.data.request_id,
+    sourceTable: "material_requests",
+    summary: `Updated material request ${request.request_number}`,
+  }).catch(() => null);
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=request#mr-${parsed.data.request_id}`);
+}
+
+export async function updateMaterialRequestItemAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = updateItemSchema.safeParse({
+    item_id: field(formData, "item_id"),
+    item_name: field(formData, "item_name"),
+    unit: field(formData, "unit"),
+    quantity: field(formData, "quantity"),
+    estimated_unit_cost: field(formData, "estimated_unit_cost"),
+    specification: field(formData, "specification"),
+    notes: field(formData, "notes"),
+    supplier_id: field(formData, "supplier_id"),
+    supplier_name_freeform: field(formData, "supplier_name_freeform"),
+  });
+  if (!parsed.success) {
+    materialRequestError(parsed.error.issues[0]?.message ?? "Check the line item.");
+  }
+
+  // Find which request this item belongs to so we can check edit permissions.
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: itemRow } = await supabase
+    .from("material_request_items")
+    .select("request_id")
+    .eq("id", parsed.data.item_id)
+    .maybeSingle<{ request_id: string }>();
+  if (!itemRow) {
+    materialRequestError("Line item was not found.");
+  }
+  const request = await fetchMaterialRequestForMutation(itemRow.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+  if (!canEditOpsMaterialRequest(profile.id, profile.role, request)) {
+    materialRequestError("Lines on this request can no longer be edited.");
+  }
+
+  const { error } = await supabase
+    .from("material_request_items")
+    .update({
+      item_name: parsed.data.item_name,
+      unit: parsed.data.unit,
+      quantity: parsed.data.quantity,
+      estimated_unit_cost: parsed.data.estimated_unit_cost,
+      specification: parsed.data.specification,
+      notes: parsed.data.notes,
+      supplier_id: parsed.data.supplier_id,
+      supplier_name_freeform: parsed.data.supplier_name_freeform || null,
+    })
+    .eq("id", parsed.data.item_id);
+  if (error) {
+    materialRequestError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "material_request.item_updated",
+    actorUserId: profile.id,
+    entityId: parsed.data.item_id,
+    entityType: "material_request_item",
+    moduleKey: "material_requests",
+    sourceId: itemRow.request_id,
+    sourceTable: "material_requests",
+    summary: `Updated line item on ${request.request_number}`,
+  }).catch(() => null);
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=item#mr-${itemRow.request_id}`);
+}
+
+export async function deleteMaterialRequestItemAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = itemIdSchema.safeParse({ item_id: field(formData, "item_id") });
+  if (!parsed.success) {
+    materialRequestError(parsed.error.issues[0]?.message ?? "Select a line item.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: itemRow } = await supabase
+    .from("material_request_items")
+    .select("request_id")
+    .eq("id", parsed.data.item_id)
+    .maybeSingle<{ request_id: string }>();
+  if (!itemRow) {
+    materialRequestError("Line item was not found.");
+  }
+  const request = await fetchMaterialRequestForMutation(itemRow.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+  if (!canEditOpsMaterialRequest(profile.id, profile.role, request)) {
+    materialRequestError("Lines on this request can no longer be removed.");
+  }
+
+  const { error } = await supabase
+    .from("material_request_items")
+    .delete()
+    .eq("id", parsed.data.item_id);
+  if (error) {
+    materialRequestError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "material_request.item_deleted",
+    actorUserId: profile.id,
+    entityId: parsed.data.item_id,
+    entityType: "material_request_item",
+    moduleKey: "material_requests",
+    sourceId: itemRow.request_id,
+    sourceTable: "material_requests",
+    summary: `Deleted line item from ${request.request_number}`,
+  }).catch(() => null);
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=item_deleted#mr-${itemRow.request_id}`);
+}
+
+export async function cancelMaterialRequestAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = cancelSchema.safeParse({
+    request_id: field(formData, "request_id"),
+    reason: field(formData, "reason"),
+  });
+  if (!parsed.success) {
+    materialRequestError(parsed.error.issues[0]?.message ?? "Select a request to cancel.");
+  }
+
+  const request = await fetchMaterialRequestForMutation(parsed.data.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+  if (!canCancelOpsMaterialRequest(profile.id, profile.role, request)) {
+    materialRequestError(
+      "This material request can no longer be cancelled — it has already been ordered or closed.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("material_requests")
+    .update({
+      status: "cancelled",
+      cancelled_at: nowIso,
+      cancelled_by: profile.id,
+    })
+    .eq("id", parsed.data.request_id);
+  if (error) {
+    materialRequestError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "material_request.cancelled",
+    actorUserId: profile.id,
+    entityId: parsed.data.request_id,
+    entityType: "material_request",
+    metadata: { reason: parsed.data.reason },
+    moduleKey: "material_requests",
+    sourceId: parsed.data.request_id,
+    sourceTable: "material_requests",
+    summary: `Cancelled material request ${request.request_number}${
+      parsed.data.reason ? `: ${parsed.data.reason}` : ""
+    }`,
+  }).catch(() => null);
+
+  // Tell the requester (if cancelled by someone else) so they know.
+  if (request.requested_by && request.requested_by !== profile.id) {
+    await queueOpsNotification({
+      actionHref: `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
+      body: `${profile.full_name} cancelled your material request ${request.request_number}.${
+        parsed.data.reason ? ` Reason: ${parsed.data.reason}` : ""
+      }`,
+      idempotencyKey: `material-request-cancelled:${request.id}`,
+      moduleKey: "material_requests",
+      recipientId: request.requested_by,
+      sourceId: request.id,
+      sourceTable: "material_requests",
+      title: `Cancelled: ${request.request_number}`,
+    }).catch(() => null);
+  }
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=cancelled#mr-${parsed.data.request_id}`);
+}
+
+export async function archiveMaterialRequestAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = requestIdSchema.safeParse({ request_id: field(formData, "request_id") });
+  if (!parsed.success) {
+    materialRequestError(parsed.error.issues[0]?.message ?? "Select a request.");
+  }
+
+  const request = await fetchMaterialRequestForMutation(parsed.data.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+  if (!canArchiveOpsMaterialRequest(profile.role, request)) {
+    materialRequestError(
+      "Only Operations / Projects Manager / leadership can archive a material request, and only after it is closed, rejected, or cancelled.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("material_requests")
+    .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
+    .eq("id", parsed.data.request_id);
+  if (error) {
+    materialRequestError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "material_request.archived",
+    actorUserId: profile.id,
+    entityId: parsed.data.request_id,
+    entityType: "material_request",
+    moduleKey: "material_requests",
+    sourceId: parsed.data.request_id,
+    sourceTable: "material_requests",
+    summary: `Archived material request ${request.request_number}`,
+  }).catch(() => null);
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=archived#mr-${parsed.data.request_id}`);
+}
+
+export async function deleteMaterialRequestAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canDeleteOpsMaterialRequest(profile.role)) {
+    materialRequestError("Only the Developer can permanently delete a material request.");
+  }
+
+  const parsed = requestIdSchema.safeParse({ request_id: field(formData, "request_id") });
+  if (!parsed.success) {
+    materialRequestError(parsed.error.issues[0]?.message ?? "Select a request.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("material_requests")
+    .delete()
+    .eq("id", parsed.data.request_id);
+  if (error) {
+    materialRequestError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "material_request.deleted",
+    actorUserId: profile.id,
+    entityId: parsed.data.request_id,
+    entityType: "material_request",
+    moduleKey: "material_requests",
+    sourceId: parsed.data.request_id,
+    sourceTable: "material_requests",
+    summary: `Permanently deleted material request`,
+  }).catch(() => null);
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=deleted`);
 }

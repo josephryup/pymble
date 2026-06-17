@@ -12,6 +12,7 @@ import {
   canViewSensitiveOpsFoundation,
 } from "@/lib/ops/permissions";
 import { queueOpsNotification } from "@/lib/ops/notifications";
+import { formatOpsRole } from "@/lib/ops/roles";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsApprovalStatus,
@@ -110,15 +111,29 @@ async function syncMaterialRequestApprovalStatus(
     return;
   }
 
+  // When the operations approval step completes successfully, the material
+  // request enters `pricing_pending` (waiting for procurement to attach supplier
+  // prices). The legacy "approved" terminal state is now reached later, when
+  // Finance approves the cost via approveMaterialRequestCostAction.
+  let mappedStatus: OpsMaterialRequestStatus;
+  if (status === "approved") {
+    mappedStatus = "pricing_pending";
+  } else {
+    mappedStatus = status as OpsMaterialRequestStatus;
+  }
+
   const update: {
     approved_at?: string | null;
     rejected_at?: string | null;
     status: OpsMaterialRequestStatus;
   } = {
-    status: status as OpsMaterialRequestStatus,
+    status: mappedStatus,
   };
 
   if (status === "approved") {
+    // The ops step is what's been approved here — record that this is when
+    // operations gave the green light. The "fully approved" timestamp is set
+    // by the finance cost approval action.
     update.approved_at = decidedAt;
     update.rejected_at = null;
   }
@@ -326,16 +341,28 @@ export async function decideOpsApprovalAction(formData: FormData) {
     summary: `${profile.full_name} ${parsed.data.action === "approve" ? "approved" : "rejected"} ${request.title}`,
   }).catch(() => null);
 
+  // Notify the requester. On rejection, include the rejecter's role and the
+  // reason so they know exactly what to fix without having to open the page.
   if (request.requested_by && request.requested_by !== profile.id) {
+    const decisionVerb = parsed.data.action === "approve" ? "approved" : "rejected";
+    const actorLabel = `${profile.full_name} (${formatOpsRole(profile.role)})`;
+    const reasonSuffix =
+      parsed.data.action === "reject" && parsed.data.comment
+        ? ` Reason: ${parsed.data.comment}`
+        : parsed.data.action === "approve" && parsed.data.comment
+          ? ` Notes: ${parsed.data.comment}`
+          : "";
     await queueOpsNotification({
       actionHref: `/ops/approvals/${request.id}`,
-      body: `${profile.full_name} ${parsed.data.action === "approve" ? "approved" : "rejected"} ${request.title}.`,
+      body: `${actorLabel} ${decisionVerb} ${request.title}.${reasonSuffix}`,
       idempotencyKey: `approval-decision:${request.id}:${nextRequestStatus}:${request.requested_by}`,
       moduleKey: request.module_key,
       recipientId: request.requested_by,
       sourceId: request.id,
       sourceTable: "approval_requests",
-      title: `Approval ${nextRequestStatus}`,
+      title: parsed.data.action === "reject"
+        ? `Rejected: ${request.title}`
+        : `Approved: ${request.title}`,
     }).catch(() => null);
   }
 

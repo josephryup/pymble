@@ -91,6 +91,7 @@ type RawApprovalComment = Omit<OpsApprovalComment, "author"> & {
 export type FetchOpsApprovalRequestsOptions = {
   limit?: number;
   moduleKey?: string;
+  moduleKeys?: string[];
   query?: string;
   status?: OpsApprovalStatus | OpsApprovalStatus[];
 };
@@ -170,6 +171,10 @@ export async function fetchOpsApprovalRequests(
 
   if (options.moduleKey) {
     query = query.eq("module_key", options.moduleKey);
+  }
+
+  if (options.moduleKeys && options.moduleKeys.length > 0) {
+    query = query.in("module_key", options.moduleKeys);
   }
 
   if (Array.isArray(options.status)) {
@@ -333,4 +338,29 @@ export async function fetchOpsApprovalComments(approvalRequestId: string) {
     ...comment,
     author: normalizeRelation(comment.author),
   }));
+}
+
+/**
+ * Lightweight count of open approval requests (submitted + in_review) bucketed
+ * by module_key. Used by the approvals page to show per-department tab badges
+ * without re-running the full paginated query for each tab.
+ */
+export async function fetchOpsOpenApprovalCountsByModule(): Promise<Record<string, number>> {
+  await requireOpsUser();
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("approval_requests")
+    .select("module_key")
+    .in("status", ["submitted", "in_review"]);
+
+  if (error) {
+    return {};
+  }
+
+  const counts: Record<string, number> = {};
+  for (const row of (data ?? []) as Array<{ module_key: string | null }>) {
+    if (!row.module_key) continue;
+    counts[row.module_key] = (counts[row.module_key] ?? 0) + 1;
+  }
+  return counts;
 }

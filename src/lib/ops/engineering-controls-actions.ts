@@ -1449,3 +1449,55 @@ export async function cancelProgrammeMilestoneAction(formData: FormData) {
   revalidatePath(ENGINEERING_ROUTE);
   engineeringNotice("milestone_cancelled");
 }
+
+// ---------------------------------------------------------------------------
+// S2-5 / J2 backlog: archive site instructions after close/cancel so the
+// engineering log isn't cluttered by resolved items.
+// ---------------------------------------------------------------------------
+
+const siteInstructionArchiveSchema = z.object({
+  id: z.string().uuid("Select a site instruction."),
+});
+
+export async function archiveSiteInstructionAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  // Engineering decision roles can archive closed/cancelled site instructions.
+  // We don't have the row in hand yet so just check the role gate.
+  if (!canCreateOpsEngineeringControl(profile.role)) {
+    engineeringError("Your role cannot archive site instructions.");
+  }
+
+  const parsed = siteInstructionArchiveSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    engineeringError("Select a site instruction to archive.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("site_instructions")
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: profile.id,
+    })
+    .eq("id", parsed.data.id)
+    .in("status", ["closed", "cancelled"]);
+
+  if (error) {
+    engineeringError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "site_instruction.archived",
+    actorUserId: profile.id,
+    entityId: parsed.data.id,
+    entityType: "site_instruction",
+    moduleKey: "engineering_controls",
+    sourceId: parsed.data.id,
+    sourceTable: "site_instructions",
+    summary: "Archived site instruction",
+  }).catch(() => null);
+
+  revalidatePath(ENGINEERING_ROUTE);
+  redirect(`${ENGINEERING_ROUTE}?updated=site_instruction_archived`);
+}

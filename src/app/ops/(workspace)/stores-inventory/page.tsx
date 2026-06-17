@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
@@ -33,6 +34,7 @@ import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import {
   adjustStockCountAction,
+  archiveGoodsReceivedNoteAction,
   createInventoryLocationAction,
   createStockItemAction,
   issueStockAction,
@@ -659,6 +661,8 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
   const canRaiseDeliveryException =
     canAccessOpsHref(auth.profile.role, "/ops/delivery-exceptions") &&
     canCreateOpsDeliveryException(auth.profile.role);
+  // Anyone who can record a GRN can archive completed/cancelled ones.
+  const canArchiveGrn = canReceiveGoods;
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const today = new Date().toISOString().slice(0, 10);
   const createPanel = firstParam(params.create);
@@ -783,7 +787,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
               Material requests
             </Link>
             <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/rfq-po">
-              RFQ and PO register
+              Request for Quotation and Purchase Order register
             </Link>
           </>
         }
@@ -1034,6 +1038,20 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
                             Raise exception
                           </Link>
                         ) : null}
+                        {canArchiveGrn && (grn.status === "posted" || grn.status === "cancelled") ? (
+                          <form
+                            action={archiveGoodsReceivedNoteAction}
+                            className="mt-2"
+                          >
+                            <input name="id" type="hidden" value={grn.id} />
+                            <OpsConfirmSubmitButton
+                              className={`${OPS_SECONDARY_BUTTON_CLASS} w-full justify-center`}
+                              confirmText="Confirm archive"
+                            >
+                              Archive
+                            </OpsConfirmSubmitButton>
+                          </form>
+                        ) : null}
                       </div>
                     </div>
 
@@ -1090,7 +1108,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
                   <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
                     {hasActiveListFilter
                       ? "Adjust the search or status filter to widen the goods received register."
-                      : "Issue a purchase order from RFQs and Purchase Orders, then receive it here."}
+                      : "Issue a purchase order from Request for Quotations and Purchase Orders, then receive it here."}
                   </p>
                 </div>
               </div>

@@ -75,3 +75,42 @@ export function canReviewOpsDailySiteReport(role: OpsUserRole) {
 export function canCloseOpsDailySiteReport(role: OpsUserRole) {
   return DAILY_SITE_REPORT_REVIEW_ROLES.has(role);
 }
+
+const DAILY_SITE_REPORT_ARCHIVE_ROLES = new Set<OpsUserRole>([
+  "developer",
+  "managing_director",
+  "owner",
+  "general_manager",
+  "manager",
+  "operations_manager",
+  "projects_manager",
+]);
+
+export function canCancelOpsDailySiteReport(
+  userId: string,
+  role: OpsUserRole,
+  report: { prepared_by: string | null; status: OpsDailySiteReportStatus },
+) {
+  // Preparer can cancel their own draft. Leadership can cancel a draft or
+  // submitted report (e.g. duplicate filed).
+  if (report.status !== "draft" && report.status !== "submitted") {
+    return false;
+  }
+  if (DAILY_SITE_REPORT_ARCHIVE_ROLES.has(role)) {
+    return true;
+  }
+  return report.prepared_by === userId;
+}
+
+export function canArchiveOpsDailySiteReport(
+  role: OpsUserRole,
+  report: { status: OpsDailySiteReportStatus; cancelled_at?: string | null },
+) {
+  // Archive once the report is closed or cancelled.
+  const terminal = report.status === "closed" || report.cancelled_at != null;
+  return terminal && DAILY_SITE_REPORT_ARCHIVE_ROLES.has(role);
+}
+
+export function canDeleteOpsDailySiteReport(role: OpsUserRole) {
+  return role === "developer";
+}

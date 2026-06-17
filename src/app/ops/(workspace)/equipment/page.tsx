@@ -22,6 +22,7 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import {
   allocateEquipmentAction,
   approveEquipmentRequestAction,
+  archiveEquipmentAction,
   cancelEquipmentAllocationAction,
   cancelMaintenanceJobAction,
   cancelEquipmentRequestAction,
@@ -463,7 +464,13 @@ function EquipmentMaintenancePressurePanel({
   );
 }
 
-function EquipmentRegister({ equipment }: { equipment: OpsEquipmentSummary[] }) {
+function EquipmentRegister({
+  equipment,
+  canManage,
+}: {
+  equipment: OpsEquipmentSummary[];
+  canManage: boolean;
+}) {
   if (equipment.length === 0) {
     return (
       <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
@@ -501,6 +508,17 @@ function EquipmentRegister({ equipment }: { equipment: OpsEquipmentSummary[] }) 
               {formatMoney(item.daily_rate)}
             </p>
             <p className="mt-1 text-xs text-primary-dark/45">Daily rate</p>
+            {canManage && item.status !== "inactive" ? (
+              <form action={archiveEquipmentAction} className="mt-2">
+                <input name="id" type="hidden" value={item.id} />
+                <OpsConfirmSubmitButton
+                  className={OPS_DANGER_BUTTON_CLASS}
+                  confirmText="Confirm archive"
+                >
+                  Archive
+                </OpsConfirmSubmitButton>
+              </form>
+            ) : null}
           </div>
         </li>
       ))}
@@ -1359,7 +1377,10 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
         <div className="space-y-6">
           <div id="equipment-register-panel">
             <OpsDashboardPanel eyebrow="Fleet register" title="Equipment status">
-              <EquipmentRegister equipment={equipmentOptions} />
+              <EquipmentRegister
+                canManage={canManageMaster}
+                equipment={equipmentOptions}
+              />
             </OpsDashboardPanel>
           </div>
 

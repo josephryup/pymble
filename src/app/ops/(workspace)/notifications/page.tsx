@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ComponentType } from "react";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   fetchOpsNotifications,
@@ -115,6 +116,7 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
 
   return (
     <div className="w-full max-w-none space-y-6">
+      <OpsRealtimeRefresh tables={["notifications"]} />
       <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>

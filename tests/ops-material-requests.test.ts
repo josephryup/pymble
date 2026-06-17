@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  canApproveMaterialRequestCost,
+  canAttachMaterialRequestPricing,
   canCreateOpsMaterialRequest,
   canEditOpsMaterialRequest,
   canSubmitOpsMaterialRequest,
@@ -10,12 +12,17 @@ import {
 import { calculateOpsMaterialRequestTotal } from "../src/lib/ops/material-requests";
 
 describe("material request workflow guards", () => {
-  it("keeps material request creation scoped to operational roles", () => {
+  it("keeps material request creation scoped to operational and HSE roles", () => {
     assert.equal(canCreateOpsMaterialRequest("developer"), true);
     assert.equal(canCreateOpsMaterialRequest("engineer"), true);
     assert.equal(canCreateOpsMaterialRequest("procurement_assistant"), true);
+    // HSE roles can now raise material requests (e.g. for PPE / safety equipment)
+    // per Phase H3 of the workflow design.
+    assert.equal(canCreateOpsMaterialRequest("hse_officer"), true);
+    assert.equal(canCreateOpsMaterialRequest("hse_assistant_officer"), true);
+    // Finance and HR don't raise material requests.
     assert.equal(canCreateOpsMaterialRequest("accountant"), false);
-    assert.equal(canCreateOpsMaterialRequest("hse_officer"), false);
+    assert.equal(canCreateOpsMaterialRequest("human_resource"), false);
   });
 
   it("allows draft owners and managers to edit or submit", () => {
@@ -42,14 +49,19 @@ describe("material request workflow guards", () => {
     );
   });
 
-  it("uses the first-pass project and procurement approval chain", () => {
+  it("uses a single operations approval step (procurement and finance are explicit actions)", () => {
+    // Per the Phase H3 workflow:
+    //   submitted/in_review → (Operations approves) → pricing_pending →
+    //   (Procurement attaches prices) → priced →
+    //   (Finance approves cost via action) → approved.
+    // The approval chain itself is just the single operations step.
     assert.deepEqual(
       materialRequestApprovalSteps("normal", 25_000).map((step) => step.approverRole),
-      ["projects_manager", "procurement_manager"],
+      ["operations_manager"],
     );
     assert.deepEqual(
       materialRequestApprovalSteps("urgent", 25_000).map((step) => step.approverRole),
-      ["projects_manager", "procurement_manager"],
+      ["operations_manager"],
     );
   });
 
@@ -57,19 +69,69 @@ describe("material request workflow guards", () => {
     assert.deepEqual(
       materialRequestApprovalRecipientRoles([
         {
-          approverRole: "projects_manager",
-          label: "Projects Manager review",
+          approverRole: "operations_manager",
+          label: "Operations review",
           sequence: 1,
           stepNumber: 1,
         },
         {
-          approverRole: "projects_manager",
-          label: "Second Projects Manager review",
+          approverRole: "operations_manager",
+          label: "Second Operations review",
           sequence: 2,
           stepNumber: 1,
         },
       ]),
-      ["projects_manager", "developer"],
+      ["operations_manager", "developer"],
+    );
+  });
+});
+
+describe("material request pricing flow gates", () => {
+  it("only procurement and leadership can attach supplier prices", () => {
+    assert.equal(canAttachMaterialRequestPricing("procurement_manager"), true);
+    assert.equal(canAttachMaterialRequestPricing("procurement"), true);
+    assert.equal(canAttachMaterialRequestPricing("procurement_assistant"), true);
+    assert.equal(canAttachMaterialRequestPricing("developer"), true);
+    assert.equal(canAttachMaterialRequestPricing("managing_director"), true);
+    assert.equal(canAttachMaterialRequestPricing("engineer"), false);
+    assert.equal(canAttachMaterialRequestPricing("finance_manager"), false);
+    assert.equal(canAttachMaterialRequestPricing("hse_officer"), false);
+  });
+
+  it("only finance and leadership can approve the cost", () => {
+    assert.equal(canApproveMaterialRequestCost("finance_manager"), true);
+    assert.equal(canApproveMaterialRequestCost("accountant"), true);
+    assert.equal(canApproveMaterialRequestCost("developer"), true);
+    assert.equal(canApproveMaterialRequestCost("managing_director"), true);
+    assert.equal(canApproveMaterialRequestCost("procurement_manager"), false);
+    assert.equal(canApproveMaterialRequestCost("engineer"), false);
+  });
+
+  it("permits editing while a request is in pricing_pending or priced", () => {
+    // Procurement Manager edits during pricing_pending.
+    assert.equal(
+      canEditOpsMaterialRequest("procurement-mgr-id", "procurement_manager", {
+        requested_by: "engineer-id",
+        status: "pricing_pending",
+      }),
+      true,
+    );
+    // Original requester (engineer) can still edit while priced (e.g. fix a typo
+    // before Finance approves).
+    assert.equal(
+      canEditOpsMaterialRequest("engineer-id", "engineer", {
+        requested_by: "engineer-id",
+        status: "priced",
+      }),
+      true,
+    );
+    // Editing locked after Finance approves.
+    assert.equal(
+      canEditOpsMaterialRequest("engineer-id", "engineer", {
+        requested_by: "engineer-id",
+        status: "approved",
+      }),
+      false,
     );
   });
 });

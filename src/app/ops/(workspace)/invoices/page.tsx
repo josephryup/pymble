@@ -13,13 +13,27 @@ import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import {
+  archiveInvoiceAction,
   createInvoiceAction,
   markInvoicePaidAction,
   sendInvoiceAction,
+  updateInvoiceAction,
+  voidInvoiceAction,
 } from "@/lib/ops/invoice-actions";
+import {
+  canArchiveInvoice,
+  canCreateInvoice,
+  canEditInvoice,
+  canMarkInvoicePaid,
+  canSendInvoice,
+  canVoidInvoice,
+} from "@/lib/ops/invoice-permissions";
 import {
   fetchOpsInvoiceStatusCounts,
   fetchPaginatedOpsInvoices,
@@ -28,7 +42,7 @@ import {
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsBoqOptions } from "@/lib/ops/boq";
 import { parseOpsListState } from "@/lib/ops/listing";
-import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
+import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import {
   firstParam,
@@ -171,7 +185,11 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
   ]);
   const invoices = invoicePage.items;
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
-  const canManage = canManageOps(auth.profile.role);
+  const canCreate = canCreateInvoice(auth.profile.role);
+  // canManage gates legacy "global" UI like the create form and the Activity
+  // panel write permission. Per-invoice mutation gates use the canEdit/Send/Pay/
+  // Void/Archive helpers, which also check the invoice's state.
+  const canManage = canCreate;
   const notice = invoiceNotice(params);
   const pageSubtotal = invoices.reduce((sum, invoice) => sum + invoice.subtotal, 0);
   const pageVat = invoices.reduce((sum, invoice) => sum + invoice.vat_amount, 0);
@@ -197,31 +215,26 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
-            Commercial / Finance
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
-            Invoice register
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
-            VAT invoices, BOQ links, client TPIN records, receivables status, and invoice evidence.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/boq">
-            <FileText className="size-4" aria-hidden="true" />
-            BOQ
-          </Link>
-          {canManage ? (
-            <a className={OPS_PRIMARY_BUTTON_CLASS} href={createInvoiceHref}>
-              <Plus className="size-4" aria-hidden="true" />
-              New invoice
-            </a>
-          ) : null}
-        </div>
-      </section>
+      <OpsRealtimeRefresh tables={["invoices", "approval_requests"]} />
+      <OpsPageHeader
+        eyebrow="Commercial / Finance"
+        title="Invoices"
+        description="Value-Added Tax invoices, Bill of Quantities links, client TPIN records, receivables status, and invoice evidence."
+        actions={
+          <>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/boq">
+              <FileText className="size-4" aria-hidden="true" />
+              Bill of Quantities
+            </Link>
+            {canManage ? (
+              <a className={OPS_PRIMARY_BUTTON_CLASS} href={createInvoiceHref}>
+                <Plus className="size-4" aria-hidden="true" />
+                New invoice
+              </a>
+            ) : null}
+          </>
+        }
+      />
 
       {notice ? (
         <div
@@ -316,7 +329,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                   Create invoice
                 </span>
                 <span className="mt-1 block text-sm text-primary-dark/60">
-                  VAT invoice intake for site work, BOQ-linked billing, and client TPIN records.
+                  Value Added Tax invoice intake for site work, BOQ-linked billing, and client TPIN records.
                 </span>
               </span>
             </span>
@@ -455,7 +468,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {canManage && invoice.status === "draft" ? (
+                      {canSendInvoice(auth.profile.role, invoice) ? (
                         <form action={sendInvoiceAction}>
                           <input name="id" type="hidden" value={invoice.id} />
                           <OpsConfirmSubmitButton
@@ -467,7 +480,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                           </OpsConfirmSubmitButton>
                         </form>
                       ) : null}
-                      {canManage && invoice.status === "sent" ? (
+                      {canMarkInvoicePaid(auth.profile.role, invoice) ? (
                         <form action={markInvoicePaidAction}>
                           <input name="id" type="hidden" value={invoice.id} />
                           <OpsConfirmSubmitButton
@@ -479,8 +492,83 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                           </OpsConfirmSubmitButton>
                         </form>
                       ) : null}
+                      {canVoidInvoice(auth.profile.role, invoice) ? (
+                        <details className="inline-block">
+                          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+                            Void
+                          </summary>
+                          <form
+                            action={voidInvoiceAction}
+                            className="mt-2 grid gap-2 rounded-md border border-red-200 bg-white p-3 shadow-sm"
+                          >
+                            <input name="id" type="hidden" value={invoice.id} />
+                            <label className="text-xs font-bold text-primary-dark/60">
+                              Reason
+                              <input
+                                className={`${OPS_INPUT_CLASS} mt-1`}
+                                name="reason"
+                                placeholder="Brief reason for the void"
+                              />
+                            </label>
+                            <button className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-bold text-white" type="submit">
+                              Void invoice
+                            </button>
+                          </form>
+                        </details>
+                      ) : null}
+                      {canArchiveInvoice(auth.profile.role, invoice) ? (
+                        <form action={archiveInvoiceAction}>
+                          <input name="id" type="hidden" value={invoice.id} />
+                          <button
+                            className="rounded-md border border-primary-dark/15 bg-white px-3 py-1.5 text-xs font-bold text-primary-dark/70 hover:bg-primary-dark/5"
+                            type="submit"
+                          >
+                            Archive
+                          </button>
+                        </form>
+                      ) : null}
                     </div>
                   </div>
+
+                  {canEditInvoice(auth.profile.role, invoice) ? (
+                    <details className="mt-3 rounded-md border border-primary-dark/10">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                        <span>Edit invoice</span>
+                        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+                      </summary>
+                      <form
+                        action={updateInvoiceAction}
+                        className="grid gap-3 border-t border-primary-dark/10 p-3 md:grid-cols-3"
+                      >
+                        <input name="id" type="hidden" value={invoice.id} />
+                        <label className={OPS_LABEL_CLASS}>
+                          Invoice number
+                          <input className={OPS_INPUT_CLASS} defaultValue={invoice.invoice_number} name="invoice_number" required />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Client name
+                          <input className={OPS_INPUT_CLASS} defaultValue={invoice.client_name} name="client_name" required />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          TPIN
+                          <input className={OPS_INPUT_CLASS} defaultValue={invoice.tpin ?? ""} name="tpin" />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Issued date
+                          <input className={OPS_INPUT_CLASS} defaultValue={invoice.issued_at} name="issued_at" required type="date" />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Subtotal (ZMW)
+                          <input className={OPS_INPUT_CLASS} defaultValue={String(invoice.subtotal)} min="0" name="subtotal" required step="0.01" type="number" />
+                        </label>
+                        <div className="flex items-end md:col-span-3">
+                          <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                            Save invoice
+                          </button>
+                        </div>
+                      </form>
+                    </details>
+                  ) : null}
                   <dl className="mt-4 grid gap-3 min-[520px]:grid-cols-3">
                     <InvoiceValueMetric label="Subtotal" value={formatZmw(invoice.subtotal)} />
                     <InvoiceValueMetric label="VAT" value={formatZmw(invoice.vat_amount)} />
@@ -495,19 +583,26 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
               ))}
             </div>
           ) : (
-            <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
-              <FileText className="size-10 text-primary-blue" aria-hidden="true" />
-              <div>
-                <p className="font-heading text-xl font-bold text-primary-dark">
-                  {hasActiveListFilter ? "No matching invoices" : "No invoices yet"}
-                </p>
-                <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
-                  {hasActiveListFilter
-                    ? "Adjust the search or status filter to widen the invoice register."
-                    : "Invoices will appear here after the first site invoice is created."}
-                </p>
-              </div>
-            </div>
+            <OpsEmptyState
+              icon={FileText}
+              title={
+                hasActiveListFilter
+                  ? "No invoices match these filters"
+                  : "No invoices yet"
+              }
+              description={
+                hasActiveListFilter
+                  ? "Try clearing the search or switching the status filter — drafts, sent, and paid invoices sit in different buckets."
+                  : "The first client invoice will appear here once Finance creates one against a Bill of Quantities or Interim Payment Certificate."
+              }
+              actions={
+                hasActiveListFilter
+                  ? [{ href: "/ops/invoices", label: "Clear filters" }]
+                  : canManage
+                    ? [{ href: createInvoiceHref, label: "Create the first invoice" }]
+                    : [{ href: "/ops/boq", label: "Open Bill of Quantities", variant: "secondary" }]
+              }
+            />
           )}
           <OpsPaginationControls
             basePath="/ops/invoices"

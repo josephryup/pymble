@@ -9,10 +9,13 @@ import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
   canActivateOpsProjectBudget,
   canApproveOpsPaymentRequest,
+  canArchiveOpsPaymentRequest,
   canArchiveOpsProjectBudget,
   canCancelOpsPaymentRequest,
   canCreateOpsPaymentRequest,
   canCreateOpsProjectBudget,
+  canDeleteOpsPaymentRequest,
+  canEditOpsPaymentRequest,
   canEditOpsProjectBudgetLine,
   canLockOpsProjectBudget,
   canPayOpsPaymentRequest,
@@ -1135,4 +1138,155 @@ export async function cancelPaymentRequestAction(formData: FormData) {
   revalidatePath(PAYMENT_REQUESTS_ROUTE);
   revalidatePath(PROJECT_BUDGETS_ROUTE);
   redirect(`${PAYMENT_REQUESTS_ROUTE}?updated=cancelled`);
+}
+
+// =============================================================================
+// J2: Edit / archive / hard-delete actions for payment requests.
+// =============================================================================
+
+const updatePaymentRequestSchema = z.object({
+  payment_request_id: z.string().uuid("Select a payment request."),
+  title: z.string().trim().min(2, "Title is required.").max(160),
+  description: z.string().trim().max(800).default(""),
+  requested_amount: z.coerce.number().min(0, "Amount cannot be negative."),
+  due_date: z.string().trim().default(""),
+});
+
+export async function updatePaymentRequestAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = updatePaymentRequestSchema.safeParse({
+    payment_request_id: field(formData, "payment_request_id"),
+    title: field(formData, "title"),
+    description: field(formData, "description"),
+    requested_amount: field(formData, "requested_amount"),
+    due_date: field(formData, "due_date"),
+  });
+  if (!parsed.success) {
+    paymentError(parsed.error.issues[0]?.message ?? "Check the payment request details.");
+  }
+
+  const paymentRequest = await fetchPaymentRequestForMutation(parsed.data.payment_request_id);
+  if (!paymentRequest) {
+    paymentError("Payment request was not found.");
+  }
+  if (!canEditOpsPaymentRequest(profile.id, profile.role, paymentRequest)) {
+    paymentError("Payment requests can only be edited while in draft or rejected status.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const dueDate =
+    parsed.data.due_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.data.due_date)
+      ? parsed.data.due_date
+      : null;
+  const { error } = await supabase
+    .from("payment_requests")
+    .update({
+      title: parsed.data.title,
+      description: parsed.data.description,
+      requested_amount: parsed.data.requested_amount,
+      due_date: dueDate,
+    })
+    .eq("id", parsed.data.payment_request_id);
+  if (error) {
+    paymentError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "payment_request.updated",
+    entity_type: "payment_request",
+    entity_id: parsed.data.payment_request_id,
+    module_key: "payment_requests",
+    source_table: "payment_requests",
+    source_id: parsed.data.payment_request_id,
+    metadata: { request_number: paymentRequest.request_number },
+  });
+
+  revalidatePath(PAYMENT_REQUESTS_ROUTE);
+  redirect(`${PAYMENT_REQUESTS_ROUTE}?updated=payment_request`);
+}
+
+const paymentRequestIdOnlySchema = z.object({
+  payment_request_id: z.string().uuid("Select a payment request."),
+});
+
+export async function archivePaymentRequestAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = paymentRequestIdOnlySchema.safeParse({
+    payment_request_id: field(formData, "payment_request_id"),
+  });
+  if (!parsed.success) {
+    paymentError(parsed.error.issues[0]?.message ?? "Select a payment request.");
+  }
+
+  const paymentRequest = await fetchPaymentRequestForMutation(parsed.data.payment_request_id);
+  if (!paymentRequest) {
+    paymentError("Payment request was not found.");
+  }
+  if (!canArchiveOpsPaymentRequest(profile.role, paymentRequest)) {
+    paymentError(
+      "Payment requests can only be archived once paid, rejected, or cancelled, and only by leadership.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("payment_requests")
+    .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
+    .eq("id", parsed.data.payment_request_id);
+  if (error) {
+    paymentError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "payment_request.archived",
+    entity_type: "payment_request",
+    entity_id: parsed.data.payment_request_id,
+    module_key: "payment_requests",
+    source_table: "payment_requests",
+    source_id: parsed.data.payment_request_id,
+  });
+
+  revalidatePath(PAYMENT_REQUESTS_ROUTE);
+  redirect(`${PAYMENT_REQUESTS_ROUTE}?updated=archived`);
+}
+
+export async function deletePaymentRequestAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canDeleteOpsPaymentRequest(profile.role)) {
+    paymentError("Only the Developer can permanently delete a payment request.");
+  }
+
+  const parsed = paymentRequestIdOnlySchema.safeParse({
+    payment_request_id: field(formData, "payment_request_id"),
+  });
+  if (!parsed.success) {
+    paymentError(parsed.error.issues[0]?.message ?? "Select a payment request.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("payment_requests")
+    .delete()
+    .eq("id", parsed.data.payment_request_id);
+  if (error) {
+    paymentError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "payment_request.deleted",
+    entity_type: "payment_request",
+    entity_id: parsed.data.payment_request_id,
+    module_key: "payment_requests",
+    source_table: "payment_requests",
+    source_id: parsed.data.payment_request_id,
+  });
+
+  revalidatePath(PAYMENT_REQUESTS_ROUTE);
+  redirect(`${PAYMENT_REQUESTS_ROUTE}?updated=deleted`);
 }

@@ -54,6 +54,8 @@ export type OpsMaterialRequestStatus =
   | "draft"
   | "submitted"
   | "in_review"
+  | "pricing_pending"
+  | "priced"
   | "approved"
   | "rejected"
   | "cancelled"
@@ -455,6 +457,7 @@ export type OpsRecruitmentRequisitionStatus =
   | "offered"
   | "filled"
   | "cancelled";
+export type OpsHseWeeklyReportStatus = "draft" | "submitted" | "reviewed";
 export type OpsJobApplicationStatus =
   | "new"
   | "screening"

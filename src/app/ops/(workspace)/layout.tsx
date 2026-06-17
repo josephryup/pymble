@@ -1,5 +1,8 @@
+import { OpsAutoRefresh } from "@/components/ops/OpsAutoRefresh";
+import { OpsFormSubmitGuard } from "@/components/ops/OpsFormSubmitGuard";
 import { OpsShell } from "@/components/ops/OpsShell";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { fetchOpsInboxUnreadCountForCurrentUser } from "@/lib/ops/inbox";
 import { fetchOpsUnreadNotificationCount } from "@/lib/ops/notifications";
 
 export default async function OpsWorkspaceLayout({
@@ -9,9 +12,12 @@ export default async function OpsWorkspaceLayout({
 }>) {
   const auth = await requireOpsUser();
   const { profile } = auth;
-  const unreadNotifications = auth.isLocalRolePreview
-    ? 0
-    : await fetchOpsUnreadNotificationCount().catch(() => 0);
+  const [unreadNotifications, unreadInbox] = auth.isLocalRolePreview
+    ? [0, 0]
+    : await Promise.all([
+        fetchOpsUnreadNotificationCount().catch(() => 0),
+        fetchOpsInboxUnreadCountForCurrentUser().catch(() => 0),
+      ]);
 
   return (
     <OpsShell
@@ -19,8 +25,11 @@ export default async function OpsWorkspaceLayout({
       profileEmail={profile.email}
       profileName={profile.full_name}
       profileRole={profile.role}
+      unreadInbox={unreadInbox}
       unreadNotifications={unreadNotifications}
     >
+      <OpsFormSubmitGuard />
+      {auth.isLocalRolePreview ? null : <OpsAutoRefresh userId={profile.id} />}
       {children}
     </OpsShell>
   );

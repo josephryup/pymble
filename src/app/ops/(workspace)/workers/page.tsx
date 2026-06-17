@@ -9,11 +9,13 @@ import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
-import { createWorkerAction } from "@/lib/ops/worker-actions";
+import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { archiveWorkerAction, createWorkerAction } from "@/lib/ops/worker-actions";
 import { fetchOpsWorkers } from "@/lib/ops/workers";
 import {
   formatZmw,
   noticeFromParams,
+  OPS_DANGER_BUTTON_CLASS,
   OPS_INPUT_CLASS,
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
@@ -237,6 +239,11 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                   <th className="px-5 py-3" scope="col">
                     Type
                   </th>
+                  {canManage ? (
+                    <th className="px-5 py-3" scope="col">
+                      Actions
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-primary-dark/10">
@@ -277,6 +284,19 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                         {worker.worker_type}
                       </span>
                     </td>
+                    {canManage ? (
+                      <td className="px-5 py-4">
+                        <form action={archiveWorkerAction}>
+                          <input name="id" type="hidden" value={worker.id} />
+                          <OpsConfirmSubmitButton
+                            className={OPS_DANGER_BUTTON_CLASS}
+                            confirmText="Confirm archive"
+                          >
+                            Archive
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

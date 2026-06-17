@@ -10,11 +10,13 @@ import {
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   canAccessOpsHref,
+  canChangeStaffRole,
   canCreateStaffRole,
   canDeactivateStaffRole,
   canManageStaff,
 } from "@/lib/ops/permissions";
 import {
+  changeStaffMemberRoleAction,
   createStaffMemberAction,
   deactivateStaffMemberAction,
 } from "@/lib/ops/staff-actions";
@@ -53,6 +55,20 @@ function staffNotice(params: OpsSearchParams) {
     return {
       tone: "success" as const,
       message: "Staff account deactivated.",
+    };
+  }
+
+  if (firstParam(params.updated) === "role") {
+    return {
+      tone: "success" as const,
+      message: "Staff member role updated.",
+    };
+  }
+
+  if (firstParam(params.updated) === "role-unchanged") {
+    return {
+      tone: "success" as const,
+      message: "Staff member already has that role — no change made.",
     };
   }
 
@@ -309,11 +325,42 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
                     </p>
                   </OpsMobileRecordRow>
                   <OpsMobileRecordRow label="Role">
-                    <span
-                      className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${roleClass(member.role)}`}
-                    >
-                      {formatOpsRole(member.role)}
-                    </span>
+                    <div className="space-y-2">
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${roleClass(member.role)}`}
+                      >
+                        {formatOpsRole(member.role)}
+                      </span>
+                      {canCreateStaff && member.id !== auth.authUser.id ? (
+                        <form
+                          action={changeStaffMemberRoleAction}
+                          className="flex flex-wrap items-center gap-2"
+                        >
+                          <input name="id" type="hidden" value={member.id} />
+                          <select
+                            aria-label={`Change role for ${member.full_name}`}
+                            className={`${OPS_INPUT_CLASS} w-auto`}
+                            defaultValue={member.role}
+                            name="role"
+                          >
+                            {OPS_STAFF_ROLE_OPTIONS.filter((role) =>
+                              role.value === member.role ||
+                              canChangeStaffRole(auth.profile.role, member.role, role.value),
+                            ).map((role) => (
+                              <option key={role.value} value={role.value}>
+                                {role.label}
+                              </option>
+                            ))}
+                          </select>
+                          <OpsConfirmSubmitButton
+                            className={OPS_PRIMARY_BUTTON_CLASS}
+                            confirmText="Confirm role change"
+                          >
+                            Change role
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                    </div>
                   </OpsMobileRecordRow>
                   <OpsMobileRecordRow label="Action">
                     {canCreateStaff &&
@@ -389,12 +436,41 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
                         {member.phone ?? "Phone not recorded"}
                       </p>
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-4 align-top">
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${roleClass(member.role)}`}
                       >
                         {formatOpsRole(member.role)}
                       </span>
+                      {canCreateStaff && member.id !== auth.authUser.id ? (
+                        <form
+                          action={changeStaffMemberRoleAction}
+                          className="mt-2 flex flex-wrap items-center gap-2"
+                        >
+                          <input name="id" type="hidden" value={member.id} />
+                          <select
+                            aria-label={`Change role for ${member.full_name}`}
+                            className={`${OPS_INPUT_CLASS} w-auto`}
+                            defaultValue={member.role}
+                            name="role"
+                          >
+                            {OPS_STAFF_ROLE_OPTIONS.filter((role) =>
+                              role.value === member.role ||
+                              canChangeStaffRole(auth.profile.role, member.role, role.value),
+                            ).map((role) => (
+                              <option key={role.value} value={role.value}>
+                                {role.label}
+                              </option>
+                            ))}
+                          </select>
+                          <OpsConfirmSubmitButton
+                            className={OPS_PRIMARY_BUTTON_CLASS}
+                            confirmText="Confirm role change"
+                          >
+                            Change role
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
                     </td>
                     <td className="px-5 py-4">
                       <span

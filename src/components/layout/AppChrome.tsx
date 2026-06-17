@@ -22,12 +22,12 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <>
+    <div className="public-site">
       <SchemaOrg />
       <Header />
       {children}
       <Footer />
       <GlobalFloatingWidgets />
-    </>
+    </div>
   );
 }

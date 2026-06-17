@@ -6,7 +6,12 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { getOpsAuthCallbackUrl } from "@/lib/ops/auth-redirect";
 import { requireOpsUser } from "@/lib/ops/auth";
-import { canCreateStaffRole, canDeactivateStaffRole, canManageStaff } from "@/lib/ops/permissions";
+import {
+  canChangeStaffRole,
+  canCreateStaffRole,
+  canDeactivateStaffRole,
+  canManageStaff,
+} from "@/lib/ops/permissions";
 import { formatOpsRole, OPS_STAFF_ROLE_VALUES } from "@/lib/ops/roles";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsUserRole } from "@/lib/ops/types";
@@ -104,6 +109,9 @@ export async function createStaffMemberAction(formData: FormData) {
     action: "staff.created",
     entity_type: "user",
     entity_id: authData.user.id,
+    module_key: "staff",
+    source_table: "users",
+    source_id: authData.user.id,
     metadata: {
       email: parsed.data.email,
       role: parsed.data.role,
@@ -112,6 +120,99 @@ export async function createStaffMemberAction(formData: FormData) {
 
   revalidatePath("/ops/staff");
   redirect("/ops/staff?created=invitation");
+}
+
+const changeStaffRoleSchema = z.object({
+  id: z.string().uuid("Select a staff member."),
+  role: z.enum(OPS_STAFF_ROLE_VALUES),
+});
+
+export async function changeStaffMemberRoleAction(formData: FormData) {
+  const { authUser, profile } = await requireOpsUser();
+
+  if (!canManageStaff(profile.role)) {
+    staffError(
+      "Only the Developer, Managing Director, General Manager, and Human Resource can change staff roles.",
+    );
+  }
+
+  const parsed = changeStaffRoleSchema.safeParse({
+    id: field(formData, "id"),
+    role: field(formData, "role"),
+  });
+
+  if (!parsed.success) {
+    staffError(parsed.error.issues[0]?.message ?? "Select a staff member and role.");
+  }
+
+  if (parsed.data.id === authUser.id) {
+    staffError("You cannot change your own role.");
+  }
+
+  const serviceClient = getOpsSupabaseServiceClient();
+  const { data: target, error: targetError } = await serviceClient
+    .from("users")
+    .select("id, role")
+    .eq("id", parsed.data.id)
+    .maybeSingle<{ id: string; role: OpsUserRole }>();
+
+  if (targetError || !target) {
+    staffError(targetError?.message ?? "Staff member was not found.");
+  }
+
+  if (target.role === parsed.data.role) {
+    redirect("/ops/staff?updated=role-unchanged");
+  }
+
+  if (!canChangeStaffRole(profile.role, target.role, parsed.data.role)) {
+    staffError(
+      `${formatOpsRole(profile.role)} cannot change a ${formatOpsRole(target.role)} to ${formatOpsRole(parsed.data.role)}.`,
+    );
+  }
+
+  // Singleton guard for Managing Director.
+  if (parsed.data.role === "managing_director") {
+    const { count, error: directorCountError } = await serviceClient
+      .from("users")
+      .select("id", { count: "exact", head: true })
+      .in("role", ["managing_director", "owner"])
+      .eq("is_active", true)
+      .neq("id", parsed.data.id);
+
+    if (directorCountError) {
+      staffError(directorCountError.message);
+    }
+
+    if ((count ?? 0) > 0) {
+      staffError("Only one active Managing Director account is allowed.");
+    }
+  }
+
+  const { error } = await serviceClient
+    .from("users")
+    .update({ role: parsed.data.role })
+    .eq("id", parsed.data.id);
+
+  if (error) {
+    staffError(error.message);
+  }
+
+  await serviceClient.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "staff.role_changed",
+    entity_type: "user",
+    entity_id: parsed.data.id,
+    module_key: "staff",
+    source_table: "users",
+    source_id: parsed.data.id,
+    metadata: {
+      from_role: target.role,
+      to_role: parsed.data.role,
+    },
+  });
+
+  revalidatePath("/ops/staff");
+  redirect("/ops/staff?updated=role");
 }
 
 export async function deactivateStaffMemberAction(formData: FormData) {
@@ -161,6 +262,9 @@ export async function deactivateStaffMemberAction(formData: FormData) {
     actor_user_id: profile.id,
     action: "staff.deactivated",
     entity_type: "user",
+    module_key: "staff",
+    source_table: "users",
+    source_id: parsed.data.id,
     entity_id: parsed.data.id,
   });
 

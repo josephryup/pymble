@@ -1,12 +1,15 @@
 import {
+  Archive,
   Calculator,
   CheckCircle2,
   Clock3,
   FileSpreadsheet,
   FileText,
+  Pencil,
   Plus,
   ReceiptText,
   Send,
+  Trash2,
   Upload,
   type LucideIcon,
 } from "lucide-react";
@@ -15,6 +18,8 @@ import { notFound } from "next/navigation";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import {
   OpsMobileRecordCard,
   OpsMobileRecordList,
@@ -22,14 +27,23 @@ import {
 } from "@/components/ops/OpsMobileRecord";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import {
+  archiveBoqAction,
   createBoqDocumentAction,
   createBoqLineItemAction,
+  deleteBoqLineItemAction,
+  updateBoqDocumentAction,
+  updateBoqLineItemAction,
   importBoqLineItemsCsvAction,
 } from "@/lib/ops/boq-actions";
 import { fetchPaginatedOpsBoqDocuments, type OpsBoqDocument } from "@/lib/ops/boq";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
-import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
+import {
+  canArchiveBoq,
+  canCreateBoq,
+  canEditBoq,
+} from "@/lib/ops/boq-permissions";
+import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import { fetchActiveSupplierOptions } from "@/lib/ops/suppliers";
 import {
@@ -97,6 +111,26 @@ function boqNotice(params: OpsSearchParams) {
       tone: "success" as const,
       message: "BOQ comment added.",
     };
+  }
+
+  const updatedKey = firstParam(params.updated);
+  if (updatedKey === "boq") {
+    return { tone: "success" as const, message: "Bill of Quantities updated." };
+  }
+  if (updatedKey === "line") {
+    return { tone: "success" as const, message: "Line item updated." };
+  }
+  if (updatedKey === "line_deleted") {
+    return { tone: "success" as const, message: "Line item deleted." };
+  }
+  if (updatedKey === "archived") {
+    return { tone: "success" as const, message: "Bill of Quantities archived." };
+  }
+  if (updatedKey === "restored") {
+    return { tone: "success" as const, message: "Bill of Quantities restored." };
+  }
+  if (updatedKey === "deleted") {
+    return { tone: "success" as const, message: "Bill of Quantities permanently deleted." };
   }
 
   return null;
@@ -198,7 +232,15 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
   ]);
   const boqDocuments = documents.items;
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
-  const canManage = canManageOps(auth.profile.role);
+  // canCreate gates the "New Bill of Quantities" button and the global form.
+  // Per-document edit/delete uses canEditBoq(role, doc) so the rules also
+  // respect the document's draft/issued/archived state.
+  const canCreate = canCreateBoq(auth.profile.role);
+  const canArchive = canArchiveBoq(auth.profile.role);
+  // Many UI sections (activity panel, comments) just need write access. Use
+  // canCreate as a stand-in for that — anyone who can create a Bill of Quantities can manage
+  // its comments / attachments.
+  const canManage = canCreate;
   const notice = boqNotice(params);
   const totalBudgeted = boqDocuments.reduce((sum, document) => sum + document.budgeted_total, 0);
   const totalActual = boqDocuments.reduce((sum, document) => sum + document.actual_total, 0);
@@ -223,36 +265,30 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
-            Commercial control
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
-            BOQ register
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
-            Project bill of quantities, measured line items, budgeted values, actual quantities,
-            and invoice-ready commercial source records.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/invoices">
-            <ReceiptText className="size-4" aria-hidden="true" />
-            Invoices
-          </Link>
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/sites">
-            <FileText className="size-4" aria-hidden="true" />
-            Sites
-          </Link>
-          {canManage ? (
-            <a className={OPS_PRIMARY_BUTTON_CLASS} href={createBoqHref}>
-              <Plus className="size-4" aria-hidden="true" />
-              New BOQ
-            </a>
-          ) : null}
-        </div>
-      </section>
+      <OpsRealtimeRefresh tables={["boq_documents", "boq_line_items"]} />
+      <OpsPageHeader
+        eyebrow="Commercial control"
+        title="Bill of Quantities"
+        description="Project bills of quantities — measured line items, budgeted values, actual quantities, and invoice-ready commercial source records."
+        actions={
+          <>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/invoices">
+              <ReceiptText className="size-4" aria-hidden="true" />
+              Invoices
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/sites">
+              <FileText className="size-4" aria-hidden="true" />
+              Sites
+            </Link>
+            {canManage ? (
+              <a className={OPS_PRIMARY_BUTTON_CLASS} href={createBoqHref}>
+                <Plus className="size-4" aria-hidden="true" />
+                New Bill of Quantities
+              </a>
+            ) : null}
+          </>
+        }
+      />
 
       {notice ? (
         <div
@@ -271,7 +307,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
         <OpsKpiCard
           href="/ops/boq#boq-register"
           icon={FileSpreadsheet}
-          label="BOQ documents"
+          label="Bill of Quantities documents"
           trend="Register"
           value={documents.pagination.total.toLocaleString("en-ZM")}
         />
@@ -301,7 +337,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
-        <OpsDashboardPanel eyebrow="Visible values" title="Current BOQ selection">
+        <OpsDashboardPanel eyebrow="Visible values" title="Current Bill of Quantities selection">
           <dl className="grid gap-3 min-[520px]:grid-cols-2 xl:grid-cols-4">
             <BoqValueMetric label="Budgeted shown" value={formatZmw(totalBudgeted)} />
             <BoqValueMetric label="Actual shown" value={formatZmw(totalActual)} />
@@ -320,7 +356,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
             </Link>
           }
           eyebrow="Commercial flow"
-          title="BOQ to invoice"
+          title="Bill of Quantities to invoice"
         >
           <div className="grid gap-3">
             <BoqFlowStep
@@ -359,10 +395,10 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block font-heading text-xl font-bold text-primary-dark">
-                Create BOQ
+                Create Bill of Quantities
               </span>
               <span className="mt-1 block text-sm text-primary-dark/60">
-                Create the site-linked BOQ header before adding measured line items in the register.
+                Create the site-linked Bill of Quantities header before adding measured line items in the register.
               </span>
             </span>
             <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
@@ -372,7 +408,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           {siteOptions.length === 0 ? (
             <div className="border-t border-primary-dark/10 p-5">
               <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
-                Add at least one site before creating a BOQ.
+                Add at least one site before creating a Bill of Quantities.
               </div>
             </div>
           ) : (
@@ -440,14 +476,16 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                 value: status,
               },
             ]}
-            placeholder="Search BOQ title"
+            placeholder="Search Bill of Quantities title"
             query={listState.query}
-            resultLabel="BOQ documents"
+            resultLabel="Bill of Quantities documents"
           />
         </div>
 
         {boqDocuments.length > 0 ? (
-          boqDocuments.map((document) => (
+          boqDocuments.map((document) => {
+            const canEditDoc = canEditBoq(auth.profile.role, document);
+            return (
             <div className="rounded-lg border border-primary-dark/10 bg-white" key={document.id}>
               <div className="border-b border-primary-dark/10 p-5">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -499,7 +537,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                   </div>
                 </div>
 
-                {canManage ? (
+                {canEditDoc ? (
                   <>
                   <details className="mt-5 rounded-md border border-primary-dark/10">
                     <summary
@@ -603,18 +641,21 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     >
                       <input name="boq_id" type="hidden" value={document.id} />
                       <p className="text-sm leading-6 text-primary-dark/60">
-                        Upload a CSV with columns{" "}
-                        <span className="font-semibold text-primary-dark">description, unit, quantity, rate</span>{" "}
-                        (optional: <span className="font-semibold text-primary-dark">actual</span> and{" "}
-                        <span className="font-semibold text-primary-dark">supplier code</span>). The first row
-                        must be the header. To attach the original BOQ as a PDF, use the documents panel below.
+                        Upload a CSV, XLSX, or PDF with columns{" "}
+                        <span className="font-semibold text-primary-dark">
+                          description, unit, quantity, unit price
+                        </span>{" "}
+                        (optional:{" "}
+                        <span className="font-semibold text-primary-dark">supplier name</span>). For XLSX
+                        form-style sheets (Item No, Quantity, Unit of Measure, Description, Unit Price, Total,
+                        Supplier Name), the importer skips title rows and picks up the header automatically.
                       </p>
                       <label className={OPS_LABEL_CLASS}>
-                        CSV file
+                        Bill of Quantities file
                         <input
-                          accept=".csv,text/csv"
+                          accept=".csv,.xlsx,.xls,.pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/pdf"
                           className={OPS_INPUT_CLASS}
-                          name="csv"
+                          name="file"
                           required
                           type="file"
                         />
@@ -622,12 +663,91 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                       <div>
                         <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                           <Upload className="size-4" aria-hidden="true" />
-                          Import CSV
+                          Import lines
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+
+                  <details className="mt-3 rounded-md border border-primary-dark/10">
+                    <summary
+                      className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <Pencil className="size-4" aria-hidden="true" />
+                        Edit Bill of Quantities details
+                      </span>
+                      <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+                        Open
+                      </span>
+                    </summary>
+                    <form
+                      action={updateBoqDocumentAction}
+                      className="grid gap-3 border-t border-primary-dark/10 p-4 md:grid-cols-4"
+                    >
+                      <input name="boq_id" type="hidden" value={document.id} />
+                      <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
+                        Title
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={document.title}
+                          name="title"
+                          required
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Version
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={String(document.version)}
+                          min="1"
+                          name="version"
+                          required
+                          type="number"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Status
+                        <select
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={document.status}
+                          name="status"
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="issued">Issued</option>
+                        </select>
+                      </label>
+                      <div className="flex items-end md:col-span-4">
+                        <button className={`${OPS_PRIMARY_BUTTON_CLASS}`} type="submit">
+                          <Pencil className="size-4" aria-hidden="true" />
+                          Save changes
                         </button>
                       </div>
                     </form>
                   </details>
                   </>
+                ) : null}
+
+                {canArchive ? (
+                  <form
+                    action={archiveBoqAction}
+                    className="mt-3 rounded-md border border-red-200 bg-red-50/40 p-3"
+                  >
+                    <input name="boq_id" type="hidden" value={document.id} />
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm text-red-800">
+                        Archive removes this Bill of Quantities from default listings.
+                        Leadership can restore it later.
+                      </p>
+                      <button
+                        className="inline-flex items-center gap-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-bold text-red-700 transition hover:bg-red-100"
+                        type="submit"
+                      >
+                        <Archive className="size-4" aria-hidden="true" />
+                        Archive
+                      </button>
+                    </div>
+                  </form>
                 ) : null}
               </div>
 
@@ -656,7 +776,11 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                             {formatZmw(item.budgeted_total)}
                           </OpsMobileRecordRow>
                           <OpsMobileRecordRow label="Supplier">
-                            {item.supplier ? item.supplier.supplier_code : "—"}
+                            {item.supplier
+                              ? `${item.supplier.supplier_code} — ${item.supplier.legal_name}`
+                              : item.supplier_name_freeform
+                                ? `${item.supplier_name_freeform} (not in master list)`
+                                : "—"}
                           </OpsMobileRecordRow>
                           {canManage ? (
                             <Link
@@ -664,7 +788,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                               href={buildBoqLineRfqHref(document, item)}
                             >
                               <Send className="size-3.5" aria-hidden="true" />
-                              Create RFQ from this line
+                              Create Request for Quotation from this line
                             </Link>
                           ) : null}
                         </OpsMobileRecordCard>
@@ -734,19 +858,93 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                               <span title={item.supplier.legal_name}>
                                 {item.supplier.supplier_code}
                               </span>
+                            ) : item.supplier_name_freeform ? (
+                              <span
+                                className="text-primary-dark/70"
+                                title="Not in supplier master list yet"
+                              >
+                                {item.supplier_name_freeform}
+                                <span className="ml-1 text-[10px] text-primary-dark/40">*</span>
+                              </span>
                             ) : (
                               <span className="text-primary-dark/40">—</span>
                             )}
                           </td>
                           {canManage ? (
                             <td className="px-5 py-4">
-                              <Link
-                                className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-blue hover:underline"
-                                href={buildBoqLineRfqHref(document, item)}
-                              >
-                                <Send className="size-3.5" aria-hidden="true" />
-                                RFQ
-                              </Link>
+                              <div className="flex flex-wrap items-center gap-3">
+                                <Link
+                                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-blue hover:underline"
+                                  href={buildBoqLineRfqHref(document, item)}
+                                >
+                                  <Send className="size-3.5" aria-hidden="true" />
+                                  RFQ
+                                </Link>
+                                {canEditDoc ? (
+                                  <>
+                                    <details className="inline-block">
+                                      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-primary-dark/70 hover:text-primary-dark [&::-webkit-details-marker]:hidden">
+                                        <Pencil className="size-3.5" aria-hidden="true" />
+                                        Edit
+                                      </summary>
+                                      <form
+                                        action={updateBoqLineItemAction}
+                                        className="mt-2 grid gap-2 rounded-md border border-primary-dark/10 bg-white p-3 shadow-sm"
+                                      >
+                                        <input name="line_item_id" type="hidden" value={item.id} />
+                                        <label className="text-xs font-bold text-primary-dark/60">
+                                          Description
+                                          <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.description} name="description" required />
+                                        </label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          <label className="text-xs font-bold text-primary-dark/60">
+                                            Unit
+                                            <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.unit} name="unit" required />
+                                          </label>
+                                          <label className="text-xs font-bold text-primary-dark/60">
+                                            Qty
+                                            <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={String(item.quantity)} min="0" name="quantity" required step="0.01" type="number" />
+                                          </label>
+                                          <label className="text-xs font-bold text-primary-dark/60">
+                                            Rate
+                                            <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={String(item.unit_rate)} min="0" name="unit_rate" required step="0.01" type="number" />
+                                          </label>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <label className="text-xs font-bold text-primary-dark/60">
+                                            Actual qty
+                                            <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={String(item.actual_quantity)} min="0" name="actual_quantity" step="0.01" type="number" />
+                                          </label>
+                                          <label className="text-xs font-bold text-primary-dark/60">
+                                            Supplier
+                                            <select className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.supplier_id ?? ""} name="supplier_id">
+                                              <option value="">None</option>
+                                              {supplierOptions.map((supplier) => (
+                                                <option key={supplier.id} value={supplier.id}>
+                                                  {supplier.supplier_code}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </label>
+                                        </div>
+                                        <button className={`${OPS_PRIMARY_BUTTON_CLASS} mt-1 w-full`} type="submit">
+                                          Save line
+                                        </button>
+                                      </form>
+                                    </details>
+                                    <form action={deleteBoqLineItemAction} className="inline-block">
+                                      <input name="line_item_id" type="hidden" value={item.id} />
+                                      <button
+                                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700"
+                                        type="submit"
+                                      >
+                                        <Trash2 className="size-3.5" aria-hidden="true" />
+                                        Delete
+                                      </button>
+                                    </form>
+                                  </>
+                                ) : null}
+                              </div>
                             </td>
                           ) : null}
                         </tr>
@@ -757,7 +955,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                 </>
               ) : (
                 <div className="flex min-h-32 items-center justify-center p-8 text-center text-sm text-primary-dark/60">
-                  No line items added to this BOQ yet.
+                  No line items added to this Bill of Quantities yet.
                 </div>
               )}
               <OpsRecordActivityPanel
@@ -766,18 +964,19 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                 sourceTable="boq_documents"
               />
             </div>
-          ))
+            );
+          })
         ) : (
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-primary-dark/10 bg-white p-8 text-center">
             <FileSpreadsheet className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
               <p className="font-heading text-xl font-bold text-primary-dark">
-                {hasActiveListFilter ? "No matching BOQ documents" : "No BOQ documents yet"}
+                {hasActiveListFilter ? "No matching Bill of Quantities documents" : "No Bill of Quantities documents yet"}
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
                 {hasActiveListFilter
-                  ? "Adjust the search or status filter to widen the BOQ document list."
-                  : "Create a site first, then start your first BOQ document."}
+                  ? "Adjust the search or status filter to widen the Bill of Quantities document list."
+                  : "Create a site first, then start your first Bill of Quantities document."}
               </p>
             </div>
           </div>
@@ -794,7 +993,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           ]}
           pagination={documents.pagination}
           query={listState.query}
-          resultLabel="BOQ documents"
+          resultLabel="Bill of Quantities documents"
         />
       </section>
     </div>

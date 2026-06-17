@@ -254,7 +254,7 @@ export function OpsAgeingPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Commercial KPI panel (gross profit %, variation recovery %, IPC turnaround)
+// Commercial KPI panel (gross profit %, variation recovery %, Interim Payment Certificate turnaround)
 // ---------------------------------------------------------------------------
 
 export function OpsCommercialKpiPanel({ kpis }: { kpis: OpsCommercialKpis }) {
@@ -315,7 +315,7 @@ export function OpsCommercialKpiPanel({ kpis }: { kpis: OpsCommercialKpis }) {
 
         <article className="rounded-md border border-primary-dark/10 p-4">
           <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
-            IPC turnaround
+            Interim Payment Certificate turnaround
             <Clock4 className="size-3.5 text-primary-blue" aria-hidden="true" />
           </p>
           <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">

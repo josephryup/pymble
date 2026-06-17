@@ -9,6 +9,14 @@ export const OPS_INPUT_CLASS =
 export const OPS_LABEL_CLASS =
   "text-sm font-medium text-muted-foreground";
 
+/**
+ * Single source of truth for the uppercase "eyebrow" label that sits above
+ * page and panel titles. Replaces the six divergent patterns previously found
+ * across the workspace (UI/UX audit §3b).
+ */
+export const OPS_EYEBROW_CLASS =
+  "text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue";
+
 export const OPS_PRIMARY_BUTTON_CLASS =
   `inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/10 transition hover:bg-primary/88 disabled:cursor-not-allowed disabled:opacity-60 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 ${OPS_FOCUS_CLASS}`;
 

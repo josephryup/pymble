@@ -149,10 +149,15 @@ export function OpsPaginationControls({
             Previous
           </Link>
         ) : (
-          <span className={`${OPS_SECONDARY_BUTTON_CLASS} cursor-not-allowed opacity-50`}>
+          <button
+            aria-disabled="true"
+            className={`${OPS_SECONDARY_BUTTON_CLASS} cursor-not-allowed opacity-50`}
+            disabled
+            type="button"
+          >
             <ChevronLeft className="size-4" aria-hidden="true" />
             Previous
-          </span>
+          </button>
         )}
         <span className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border bg-muted px-4 py-2.5 text-sm font-semibold text-muted-foreground">
           Page {pagination.page} of {pagination.pageCount}
@@ -166,10 +171,15 @@ export function OpsPaginationControls({
             <ChevronRight className="size-4" aria-hidden="true" />
           </Link>
         ) : (
-          <span className={`${OPS_SECONDARY_BUTTON_CLASS} cursor-not-allowed opacity-50`}>
+          <button
+            aria-disabled="true"
+            className={`${OPS_SECONDARY_BUTTON_CLASS} cursor-not-allowed opacity-50`}
+            disabled
+            type="button"
+          >
             Next
             <ChevronRight className="size-4" aria-hidden="true" />
-          </span>
+          </button>
         )}
       </nav>
     </div>

@@ -7,6 +7,9 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { extractMentionedUserIds } from "@/lib/ops/mentions";
+import { fetchOpsActiveUsers } from "@/lib/ops/notification-fanout";
+import { queueOpsNotification } from "@/lib/ops/notifications";
 import { canManageOps } from "@/lib/ops/permissions";
 import { deleteOpsR2Object, putOpsR2Object } from "@/lib/ops/r2";
 import {
@@ -1528,19 +1531,31 @@ export async function addOpsRecordCommentAction(formData: FormData) {
     fallbackError("The record could not be found.");
   }
 
-  const supabase = getOpsSupabaseServiceClient();
-  const { error } = await supabase.from("record_comments").insert({
-    author_id: profile.id,
-    body: comment.body,
-    is_internal: true,
-    module_key: context.moduleKey,
-    site_id: context.siteId,
-    source_id: context.sourceId,
-    source_table: context.sourceTable,
-  });
+  // Phase Q: extract @mentions before insert so we can store them on the row
+  // for the /ops/inbox query path.
+  const activeUsers = await fetchOpsActiveUsers();
+  const mentionedUserIds = extractMentionedUserIds(comment.body, activeUsers).filter(
+    (id) => id !== profile.id,
+  );
 
-  if (error) {
-    activityError(context.route, error.message);
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: inserted, error } = await supabase
+    .from("record_comments")
+    .insert({
+      author_id: profile.id,
+      body: comment.body,
+      is_internal: true,
+      mentioned_user_ids: mentionedUserIds,
+      module_key: context.moduleKey,
+      site_id: context.siteId,
+      source_id: context.sourceId,
+      source_table: context.sourceTable,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !inserted) {
+    activityError(context.route, error?.message ?? "The comment could not be saved.");
   }
 
   await recordOpsAuditEvent({
@@ -1550,6 +1565,7 @@ export async function addOpsRecordCommentAction(formData: FormData) {
     entityType: context.sourceTable,
     metadata: {
       site_id: context.siteId,
+      mention_count: mentionedUserIds.length,
     },
     moduleKey: context.moduleKey,
     sourceId: context.sourceId,
@@ -1557,6 +1573,26 @@ export async function addOpsRecordCommentAction(formData: FormData) {
     summary: `${profile.full_name} commented on ${context.label}`,
   }).catch(() => null);
 
+  // Notify every @mentioned user — give them a direct link back to the record.
+  await Promise.all(
+    mentionedUserIds.map((recipientId) =>
+      queueOpsNotification({
+        actionHref: `/ops/inbox#cm-${inserted.id}`,
+        body: `${profile.full_name} mentioned you on ${context.label}: ${comment.body.slice(0, 160)}`,
+        idempotencyKey: `mention:${inserted.id}:${recipientId}`,
+        moduleKey: context.moduleKey,
+        recipientId,
+        sourceId: context.sourceId,
+        sourceTable: context.sourceTable,
+        title: `${profile.full_name} mentioned you`,
+      }).catch(() => null),
+    ),
+  );
+
   revalidatePath(context.route);
+  if (mentionedUserIds.length > 0) {
+    revalidatePath("/ops/inbox");
+    revalidatePath("/ops/notifications");
+  }
   redirect(`${context.route}?updated=comment`);
 }

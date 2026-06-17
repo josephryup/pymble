@@ -129,6 +129,8 @@ export async function updateOrganizationProfileAction(formData: FormData) {
     action: "organization_profile.updated",
     entity_type: "organization_profile",
     entity_id: null,
+    module_key: "settings",
+    source_table: "organization_profile",
     metadata: {
       headquarters_latitude: profileUpdate.headquarters_latitude,
       headquarters_longitude: profileUpdate.headquarters_longitude,

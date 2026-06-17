@@ -118,6 +118,8 @@ export async function fetchOpsPayrollRuns() {
     .select(
       "id, period_label, period_start, period_end, status, total_gross, total_advances, total_net, created_at",
     )
+    .is("archived_at", null)
+    .is("cancelled_at", null)
     .order("created_at", { ascending: false })
     .limit(20);
 

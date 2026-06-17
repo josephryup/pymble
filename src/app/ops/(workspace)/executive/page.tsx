@@ -188,7 +188,7 @@ export default async function OpsExecutivePage() {
     },
     {
       items: [
-        { href: "/ops/hse", label: "HSE incidents" },
+        { href: "/ops/hse", label: "Health, Safety and Environment incidents" },
         { href: "/ops/fleet-logistics", label: "Fleet logistics" },
         { href: "/ops/employees", label: "Employees and leave" },
       ],

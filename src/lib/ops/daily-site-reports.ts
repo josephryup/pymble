@@ -193,6 +193,8 @@ async function fetchOpsDailySiteReportItems(
       ].join(", "),
       listState ? { count: "exact" } : undefined,
     )
+    .is("archived_at", null)
+    .is("cancelled_at", null)
     .order("report_date", { ascending: false })
     .order("created_at", { ascending: false });
 

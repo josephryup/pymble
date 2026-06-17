@@ -19,6 +19,8 @@ import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton"
 import { OpsHseKpiPanel } from "@/components/ops/OpsHseKpiPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsHseComplianceKpis, fetchOpsLtifr } from "@/lib/ops/hse-kpis";
@@ -145,7 +147,7 @@ function severityFromParam(value: string | undefined) {
 }
 
 function hseNotice(params: OpsSearchParams) {
-  const created = noticeFromParams(params, "incident", "HSE incident created.");
+  const created = noticeFromParams(params, "incident", "Health, Safety and Environment incident created.");
 
   if (created) {
     return created;
@@ -669,33 +671,28 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
-            HSE control
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
-            Incidents and actions
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
-            Record incidents, near misses, investigations, corrective actions, closure notes, and evidence.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canCreateIncident ? (
-            <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/hse?create=incident#incident-create-panel">
-              <Plus className="size-4" aria-hidden="true" />
-              Report incident
-            </Link>
-          ) : null}
-          {canCreateAction ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse?create=action#action-create-panel">
-              <Wrench className="size-4" aria-hidden="true" />
-              New action
-            </Link>
-          ) : null}
-        </div>
-      </section>
+      <OpsRealtimeRefresh tables={["hse_incidents", "hse_corrective_actions"]} />
+      <OpsPageHeader
+        eyebrow="Health, Safety and Environment control"
+        title="Incidents and actions"
+        description="Record incidents, near misses, investigations, corrective actions, closure notes, and evidence."
+        actions={
+          <>
+            {canCreateIncident ? (
+              <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/hse?create=incident#incident-create-panel">
+                <Plus className="size-4" aria-hidden="true" />
+                Report incident
+              </Link>
+            ) : null}
+            {canCreateAction ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse?create=action#action-create-panel">
+                <Wrench className="size-4" aria-hidden="true" />
+                New action
+              </Link>
+            ) : null}
+          </>
+        }
+      />
 
       {notice ? (
         <div
@@ -763,7 +760,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block font-heading text-xl font-bold text-primary-dark">
-                Report HSE incident
+                Report Health, Safety and Environment incident
               </span>
               <span className="mt-1 block text-sm text-primary-dark/60">
                 Capture site, severity, date, people involved, and immediate controls.
@@ -1114,7 +1111,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
             <ShieldCheck className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
               <p className="font-heading text-xl font-bold text-primary-dark">
-                {hasActiveListFilter ? "No matching incidents" : "No HSE incidents yet"}
+                {hasActiveListFilter ? "No matching incidents" : "No Health, Safety and Environment incidents yet"}
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
                 {hasActiveListFilter

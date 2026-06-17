@@ -100,6 +100,9 @@ export async function uploadSitePhotoAction(formData: FormData) {
     action: "site_photo.uploaded",
     entity_type: "site_photo",
     entity_id: data.id,
+    module_key: "photos",
+    source_table: "site_photos",
+    source_id: data.id,
     metadata: {
       r2_key: key,
       site_id: parsed.data.site_id,

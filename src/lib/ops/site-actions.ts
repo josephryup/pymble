@@ -6,6 +6,8 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { parseCoordinateInput } from "@/lib/ops/coordinates";
+import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
+import { queueOpsNotification } from "@/lib/ops/notifications";
 import { canArchiveSite, canManageSites } from "@/lib/ops/permissions";
 import type { OpsSiteStage, OpsSiteStatus } from "@/lib/ops/types";
 
@@ -141,11 +143,43 @@ export async function createSiteAction(formData: FormData) {
     action: "site.created",
     entity_type: "site",
     entity_id: created.id,
+    module_key: "sites",
+    source_table: "sites",
+    source_id: created.id,
     metadata: { code: data.code, name: data.name, stage: data.stage },
   });
 
+  // Phase M: notify the leadership and delivery audiences when a new site is set up.
+  const recipients = await fanoutToOpsRoles(
+    [
+      "managing_director",
+      "general_manager",
+      "owner",
+      "operations_manager",
+      "projects_manager",
+      "quantity_surveyor",
+      "finance_manager",
+    ],
+    { excludeUserIds: [profile.id] },
+  );
+  await Promise.all(
+    recipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: "/ops/sites",
+        body: `${profile.full_name} added a new project site: ${data.name} (${data.code}).`,
+        idempotencyKey: `site-created:${created.id}:${recipient.id}`,
+        moduleKey: "sites",
+        recipientId: recipient.id,
+        sourceId: created.id,
+        sourceTable: "sites",
+        title: `New site created: ${data.name}`,
+      }).catch(() => null),
+    ),
+  );
+
   revalidatePath("/ops");
   revalidatePath("/ops/sites");
+  revalidatePath("/ops/notifications");
   redirect("/ops/sites?created=site");
 }
 
@@ -183,6 +217,9 @@ export async function updateSiteAction(formData: FormData) {
     action: "site.updated",
     entity_type: "site",
     entity_id: parsedId.data.id,
+    module_key: "sites",
+    source_table: "sites",
+    source_id: parsedId.data.id,
     metadata: { code: data.code, stage: data.stage, progress_percent: data.progress_percent },
   });
 
@@ -219,6 +256,9 @@ export async function archiveSiteAction(formData: FormData) {
     action: "site.archived",
     entity_type: "site",
     entity_id: parsedId.data.id,
+    module_key: "sites",
+    source_table: "sites",
+    source_id: parsedId.data.id,
   });
 
   revalidatePath("/ops");

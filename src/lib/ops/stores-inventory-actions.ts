@@ -6,6 +6,8 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
+import { queueOpsNotification } from "@/lib/ops/notifications";
 import {
   canAdjustOpsStock,
   canIssueOpsStock,
@@ -1049,8 +1051,82 @@ export async function recordGoodsReceivedAction(formData: FormData) {
     summary: `Posted ${grn.grn_number} for ${purchaseOrder.po_number}`,
   }).catch(() => null);
 
+  // Phase M backfill: notify procurement + commercial + finance + leadership
+  // so the receipt feeds straight into the matching invoice + budget cycle.
+  const recipients = await fanoutToOpsRoles(
+    [
+      "procurement_manager",
+      "procurement",
+      "quantity_surveyor",
+      "finance_manager",
+      "accountant",
+      "operations_manager",
+      "managing_director",
+    ],
+    { excludeUserIds: [profile.id] },
+  );
+  await Promise.all(
+    recipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: `/ops/stores-inventory#grn-${grn.id}`,
+        body: `${profile.full_name} posted ${grn.grn_number} against ${purchaseOrder.po_number}. Received ${parsed.data.quantity_received}; rejected ${parsed.data.quantity_rejected}.`,
+        idempotencyKey: `grn-posted:${grn.id}:${recipient.id}`,
+        moduleKey: "stores_inventory",
+        recipientId: recipient.id,
+        sourceId: grn.id,
+        sourceTable: "goods_received_notes",
+        title: `Goods received: ${grn.grn_number}`,
+      }).catch(() => null),
+    ),
+  );
+
   revalidatePath(STORES_ROUTE);
   revalidatePath("/ops/rfq-po");
   revalidatePath("/ops/material-requests");
+  revalidatePath("/ops/notifications");
   redirect(`${STORES_ROUTE}?created=grn`);
+}
+
+// ---------------------------------------------------------------------------
+// S2-5 / J2 backlog: archive GRN. GRN already has cancelled_at; archive lets
+// procurement hide completed receipts without losing audit history.
+// ---------------------------------------------------------------------------
+
+const grnIdSchema = z.object({ id: z.string().uuid("Select a Goods Received Note.") });
+
+export async function archiveGoodsReceivedNoteAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = grnIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    storesError("Select a Goods Received Note to archive.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("goods_received_notes")
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: profile.id,
+    })
+    .eq("id", parsed.data.id)
+    .in("status", ["completed", "cancelled"]);
+
+  if (error) {
+    storesError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "goods_received.archived",
+    actorUserId: profile.id,
+    entityId: parsed.data.id,
+    entityType: "goods_received_note",
+    moduleKey: "stores_inventory",
+    sourceId: parsed.data.id,
+    sourceTable: "goods_received_notes",
+    summary: "Archived Goods Received Note",
+  }).catch(() => null);
+
+  revalidatePath(STORES_ROUTE);
+  redirect(`${STORES_ROUTE}?updated=grn_archived`);
 }

@@ -239,7 +239,7 @@ export const OPS_MODULE_GROUPS: OpsModuleGroup[] = [
   {
     id: "engineering",
     title: "Engineering",
-    description: "Control instructions, QA/QC, progress records, tests, snags, and drawings.",
+    description: "Control instructions, Quality Assurance and Quality Control, progress records, tests, snags, and drawings.",
   },
   {
     id: "procurement",
@@ -258,13 +258,13 @@ export const OPS_MODULE_GROUPS: OpsModuleGroup[] = [
   },
   {
     id: "hse",
-    title: "HSE",
-    description: "Record incidents, PPE, toolbox talks, inspections, training, and corrective actions.",
+    title: "Health, Safety and Environment",
+    description: "Record incidents, Personal Protective Equipment, toolbox talks, inspections, training, and corrective actions.",
   },
   {
     id: "hr",
-    title: "Admin and HR",
-    description: "Manage employee records, recruitment, leave, contracts, appraisals, and HR documents.",
+    title: "Administration and Human Resources",
+    description: "Manage employee records, recruitment, leave, contracts, appraisals, and Human Resources documents.",
   },
   {
     id: "executive",
@@ -341,6 +341,17 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Notifications",
   },
   {
+    description: "Every comment where a teammate @mentioned you — reply on the record.",
+    group: "operations",
+    href: "/ops/inbox",
+    id: "inbox",
+    navigationRoles: OPS_OPERATIONAL_ROLES,
+    phase: "Phase 1",
+    roles: OPS_OPERATIONAL_ROLES,
+    status: "ready",
+    title: "My Conversations",
+  },
+  {
     description: "Manage advances, approved payroll runs, and payout progress for site labour.",
     group: "operations",
     href: "/ops/payroll",
@@ -352,7 +363,7 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Payroll",
   },
   {
-    description: "Build project BOQs, track line items, compare quantities, and prepare exportable records.",
+    description: "Build project Bills of Quantities, track line items, compare quantities, and prepare exportable records.",
     group: "commercial",
     href: "/ops/boq",
     id: "boq",
@@ -360,10 +371,10 @@ export const OPS_MODULES: OpsModule[] = [
     phase: "Foundation",
     roles: OPS_OPERATIONAL_ROLES,
     status: "ready",
-    title: "BOQ",
+    title: "Bill of Quantities",
   },
   {
-    description: "Create client invoices, apply VAT details, track status, and prepare PDF outputs.",
+    description: "Create client invoices, apply Value Added Tax details, track status, and prepare PDF outputs.",
     group: "commercial",
     href: "/ops/invoices",
     id: "invoices",
@@ -405,6 +416,17 @@ export const OPS_MODULES: OpsModule[] = [
     showInNavigation: false,
     status: "ready",
     title: "Modules",
+  },
+  {
+    description: "Look up the full meaning of every abbreviation used in the operations workspace in plain English.",
+    group: "records",
+    href: "/ops/glossary",
+    id: "glossary",
+    navigationRoles: OPS_OPERATIONAL_ROLES,
+    phase: "Phase 1",
+    roles: OPS_OPERATIONAL_ROLES,
+    status: "ready",
+    title: "Glossary",
   },
   {
     description: "Create invite-only Pymble staff accounts and manage internal access roles.",
@@ -459,7 +481,7 @@ export const OPS_MODULES: OpsModule[] = [
     phase: "Phase 2",
     roles: OPS_ENGINEERING_CONTROL_ROLES,
     status: "ready",
-    title: "Site Instructions and QA/QC",
+    title: "Site Instructions and Quality Assurance / Quality Control",
   },
   {
     description: "Maintain supplier profiles, contacts, compliance status, and performance evidence.",
@@ -473,7 +495,7 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Suppliers",
   },
   {
-    description: "Prepare RFQs, compare supplier quotes, award orders, and manage PO approvals.",
+    description: "Prepare Requests for Quotation, compare supplier quotes, award orders, and manage Purchase Order approvals.",
     group: "operations",
     href: "/ops/rfq-po",
     id: "rfq-po",
@@ -481,7 +503,7 @@ export const OPS_MODULES: OpsModule[] = [
     phase: "Phase 2",
     roles: OPS_RFQ_PO_ROLES,
     status: "ready",
-    title: "RFQs and Purchase Orders",
+    title: "Requests for Quotation and Purchase Orders",
   },
   {
     description: "Post deliveries, monitor store balances, and record stock issues, transfers, and adjustments.",
@@ -561,7 +583,7 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Incidents and Actions",
   },
   {
-    description: "Manage PPE, toolbox talks, training, inspections, risk assessments, and audit actions.",
+    description: "Manage Personal Protective Equipment, toolbox talks, training, inspections, risk assessments, and audit actions.",
     group: "hse",
     href: "/ops/hse-compliance",
     id: "hse-compliance",
@@ -569,10 +591,21 @@ export const OPS_MODULES: OpsModule[] = [
     navigationRoles: OPS_HSE_ROLES,
     roles: OPS_HSE_ROLES,
     status: "ready",
-    title: "HSE Compliance",
+    title: "Health, Safety and Environment Compliance",
   },
   {
-    description: "Manage employee files, leave, recruitment, contracts, appraisals, and HR documents.",
+    description: "Roll up the week's safety picture (incidents, near misses, Personal Protective Equipment compliance, toolbox talks) and surface it to leadership.",
+    group: "hse",
+    href: "/ops/hse-weekly",
+    id: "hse-weekly",
+    phase: "Phase 5",
+    navigationRoles: OPS_HSE_ROLES,
+    roles: OPS_HSE_ROLES,
+    status: "ready",
+    title: "Weekly Health, Safety and Environment Report",
+  },
+  {
+    description: "Manage employee files, leave, recruitment, contracts, appraisals, and Human Resources documents.",
     group: "hr",
     href: "/ops/employees",
     id: "employees",
@@ -594,7 +627,7 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Recruitment",
   },
   {
-    description: "Track IPCs, valuations, variations, claims, contract milestones, and commercial risk.",
+    description: "Track Interim Payment Certificates, valuations, variations, claims, contract milestones, and commercial risk.",
     group: "commercial",
     href: "/ops/commercial",
     id: "commercial-maturity",
@@ -602,7 +635,7 @@ export const OPS_MODULES: OpsModule[] = [
     phase: "Phase 6",
     roles: OPS_COMMERCIAL_ROLES,
     status: "ready",
-    title: "IPCs, Variations, and Claims",
+    title: "Interim Payment Certificates, Variations and Claims",
   },
   {
     description: "Monitor executive action queues, cashflow, project delay, profitability, safety, and risk.",

@@ -22,7 +22,16 @@ import {
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
 import { requireOpsUser } from "@/lib/ops/auth";
-import { fetchOpsApprovalRequests } from "@/lib/ops/approvals";
+import {
+  fetchOpsApprovalRequests,
+  fetchOpsOpenApprovalCountsByModule,
+} from "@/lib/ops/approvals";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
+import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import {
+  findOpsApprovalsDepartment,
+  getOpsApprovalsDepartmentsForRole,
+} from "@/lib/ops/approvals-departments";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { fetchOpsNotifications } from "@/lib/ops/notifications";
 import { markOpsNotificationReadAction } from "@/lib/ops/notification-actions";
@@ -160,14 +169,43 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 10 });
   const status = approvalStatusFromParam(firstParam(params.status));
-  const [approvalPage, notifications] = await Promise.all([
+
+  // Department tabs: filter the queue by which set of modules concerns this
+  // role. Roles without business in a department don't see its tab. Leadership
+  // sees every tab.
+  const visibleDepartments = getOpsApprovalsDepartmentsForRole(auth.profile.role);
+  const departmentParam = firstParam(params.department);
+  const requestedDept = findOpsApprovalsDepartment(departmentParam);
+  const activeDepartment =
+    requestedDept && visibleDepartments.some((d) => d.key === requestedDept.key)
+      ? requestedDept
+      : visibleDepartments[0];
+
+  const [approvalPage, notifications, openCountsByModule] = await Promise.all([
     fetchOpsApprovalRequests({
       listState,
       query: listState.query,
       status: status || undefined,
+      moduleKeys:
+        activeDepartment.moduleKeys.length > 0 ? activeDepartment.moduleKeys : undefined,
     }),
     fetchOpsNotifications({ limit: 8, status: "unread" }),
+    fetchOpsOpenApprovalCountsByModule().catch(() => ({} as Record<string, number>)),
   ]);
+  const departmentOpenCounts = new Map<string, number>(
+    visibleDepartments.map((dept) => {
+      if (dept.moduleKeys.length === 0) {
+        // "All" / "my_queue" — sum every module key.
+        const total = Object.values(openCountsByModule).reduce((sum, value) => sum + value, 0);
+        return [dept.key, total];
+      }
+      const count = dept.moduleKeys.reduce(
+        (sum, key) => sum + (openCountsByModule[key] ?? 0),
+        0,
+      );
+      return [dept.key, count];
+    }),
+  );
   const requests = approvalPage.items;
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const openRequests = requests.filter((request) =>
@@ -191,6 +229,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-5">
+      <OpsRealtimeRefresh tables={["approval_requests", "approval_steps"]} />
       <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm shadow-primary-dark/5 md:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -291,7 +330,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
               Material requests
             </Link>
             <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/rfq-po">
-              RFQ and PO register
+              Request for Quotation and Purchase Order register
             </Link>
           </>
         }
@@ -346,11 +385,53 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                 Approval requests
               </h2>
               <p className="mt-1 text-sm text-primary-dark/60">
-                Shared approval records filtered by current status and search.
+                {activeDepartment.description}
               </p>
             </div>
             <ShieldCheck className="size-6 shrink-0 text-primary-blue" aria-hidden="true" />
           </div>
+
+          {visibleDepartments.length > 1 ? (
+            <div
+              aria-label="Approval department tabs"
+              className="flex flex-wrap gap-1 border-b border-primary-dark/10 px-3 py-2"
+              role="tablist"
+            >
+              {visibleDepartments.map((dept) => {
+                const isActive = dept.key === activeDepartment.key;
+                const href =
+                  dept.key === activeDepartment.key
+                    ? "/ops/approvals"
+                    : `/ops/approvals?department=${dept.key}`;
+                const openCount = departmentOpenCounts.get(dept.key) ?? 0;
+                return (
+                  <Link
+                    aria-selected={isActive}
+                    className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                      isActive
+                        ? "bg-primary-blue text-white"
+                        : "text-primary-dark/70 hover:bg-primary-blue/10 hover:text-primary-blue"
+                    }`}
+                    href={href}
+                    key={dept.key}
+                    role="tab"
+                  >
+                    {dept.label}
+                    {openCount > 0 ? (
+                      <span
+                        aria-label={`${openCount} open`}
+                        className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-black leading-none ${
+                          isActive ? "bg-white/20 text-white" : "bg-primary-blue/15 text-primary-blue"
+                        }`}
+                      >
+                        {openCount > 99 ? "99+" : openCount}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              })}
+            </div>
+          ) : null}
           <OpsListControls
             action="/ops/approvals"
             filters={[
@@ -483,19 +564,29 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
               </div>
             </>
           ) : (
-            <div className="flex min-h-72 flex-col items-center justify-center gap-3 p-8 text-center">
-              <Inbox className="size-10 text-primary-blue" aria-hidden="true" />
-              <div>
-                <p className="font-heading text-xl font-bold text-primary-dark">
-                  {hasActiveListFilter ? "No matching approval requests" : "No approval requests yet"}
-                </p>
-                <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
-                  {hasActiveListFilter
-                    ? "Adjust the search or status filter to widen the approval inbox."
-                    : "Submitted material requests, documents, and purchase orders appear here after they are sent for approval."}
-                </p>
-              </div>
-            </div>
+            <OpsEmptyState
+              icon={Inbox}
+              title={
+                hasActiveListFilter
+                  ? "No approvals match these filters"
+                  : "You're caught up"
+              }
+              description={
+                hasActiveListFilter
+                  ? "Try clearing the search, switching the status filter, or selecting a different department tab."
+                  : "Nothing is waiting for review in this department. Submitted material requests, documents, and purchase orders will appear here automatically."
+              }
+              actions={
+                hasActiveListFilter
+                  ? [{ href: "/ops/approvals", label: "Clear filters" }]
+                  : [{ href: "/ops", label: "Back to overview", variant: "secondary" }]
+              }
+              tip={
+                hasActiveListFilter
+                  ? "Need broader visibility? The 'All' tab shows every department's queue."
+                  : undefined
+              }
+            />
           )}
           <OpsPaginationControls
             basePath="/ops/approvals"

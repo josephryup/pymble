@@ -16,7 +16,9 @@ import { notFound } from "next/navigation";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsSupplierScorecardPanel } from "@/components/ops/OpsProcurementKpiPanels";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -486,32 +488,25 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-5">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
-            Procurement master data
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark md:text-4xl">
-            Supplier register
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/62 md:text-base">
-            Approved supplier records, contacts, status control, performance evidence, and linked
-            documents for RFQ, purchase order, delivery, and payment workflows.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/rfq-po">
-            <Boxes className="size-4" aria-hidden="true" />
-            RFQ / PO
-          </Link>
-          {canCreate ? (
-            <a className={OPS_PRIMARY_BUTTON_CLASS} href="#supplier-create-panel">
-              <Plus className="size-4" aria-hidden="true" />
-              Add supplier
-            </a>
-          ) : null}
-        </div>
-      </section>
+      <OpsPageHeader
+        eyebrow="Procurement master data"
+        title="Suppliers"
+        description="Approved supplier records, contacts, status control, performance evidence, and linked documents for Request for Quotation, Purchase Order, delivery, and payment workflows."
+        actions={
+          <>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/rfq-po">
+              <Boxes className="size-4" aria-hidden="true" />
+              Requests for Quotation and Purchase Orders
+            </Link>
+            {canCreate ? (
+              <a className={OPS_PRIMARY_BUTTON_CLASS} href="#supplier-create-panel">
+                <Plus className="size-4" aria-hidden="true" />
+                Add supplier
+              </a>
+            ) : null}
+          </>
+        }
+      />
 
       {notice ? (
         <div
@@ -886,19 +881,26 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
             })}
           </div>
         ) : (
-          <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
-            <Building2 className="size-10 text-primary-blue" aria-hidden="true" />
-            <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
-                {hasActiveListFilter ? "No matching suppliers" : "No suppliers yet"}
-              </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
-                {hasActiveListFilter
-                  ? "Adjust the search or status filter to widen the supplier register."
-                  : "Add the first approved supplier before RFQ and purchase order workflows are connected."}
-              </p>
-            </div>
-          </div>
+          <OpsEmptyState
+            icon={Building2}
+            title={
+              hasActiveListFilter
+                ? "No suppliers match these filters"
+                : "No suppliers yet"
+            }
+            description={
+              hasActiveListFilter
+                ? "Try clearing the search or switching the status filter — active, on hold, and archived suppliers sit in different buckets."
+                : "Add the first approved supplier so Request for Quotation and Purchase Order workflows can nominate them per line item."
+            }
+            actions={
+              hasActiveListFilter
+                ? [{ href: "/ops/suppliers", label: "Clear filters" }]
+                : canCreate
+                  ? [{ href: "#supplier-create-panel", label: "Add the first supplier" }]
+                  : [{ href: "/ops", label: "Back to overview", variant: "secondary" }]
+            }
+          />
         )}
         <OpsPaginationControls
           basePath="/ops/suppliers"

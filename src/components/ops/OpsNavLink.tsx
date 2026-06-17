@@ -6,11 +6,13 @@ import type { LucideIcon } from "lucide-react";
 import { OPS_FOCUS_CLASS } from "@/lib/ops/ui";
 
 export function OpsNavLink({
+  badge,
   href,
   icon: Icon,
   onNavigate,
   title,
 }: {
+  badge?: number;
   href: string;
   icon?: LucideIcon;
   onNavigate?: () => void;
@@ -18,6 +20,7 @@ export function OpsNavLink({
 }) {
   const pathname = usePathname();
   const isActive = href === "/ops" ? pathname === "/ops" : pathname.startsWith(href);
+  const showBadge = typeof badge === "number" && badge > 0;
 
   return (
     <Link
@@ -31,7 +34,15 @@ export function OpsNavLink({
       onClick={onNavigate}
     >
       {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
-      <span className="min-w-0 truncate">{title}</span>
+      <span className="min-w-0 flex-1 truncate">{title}</span>
+      {showBadge ? (
+        <span
+          aria-label={`${badge} unread`}
+          className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-black leading-none text-primary-foreground"
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
     </Link>
   );
 }

@@ -1,3 +1,4 @@
+import { getOpsTimelineModuleKeys } from "@/lib/ops/activity-scoping";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsDashboardSnapshot } from "@/lib/ops/dashboard-snapshots";
 import {
@@ -520,15 +521,26 @@ async function fetchOpsOverviewViaQueries() {
   let activity: OpsOverviewActivity[] = [];
 
   if (canManageOps(userProfile.role)) {
-    const { data: activityData } = await supabase
+    let activityQuery = supabase
       .from("audit_events")
       .select(
-        "id, action, entity_type, created_at, actor:users!audit_events_actor_user_id_fkey(full_name, role)",
+        "id, action, entity_type, module_key, created_at, actor:users!audit_events_actor_user_id_fkey(full_name, role)",
       )
       .order("created_at", { ascending: false })
-      .limit(6);
+      .limit(20);
 
-    activity = ((activityData ?? []) as unknown as RawActivity[]).map((item) => {
+    const allowedModules = getOpsTimelineModuleKeys(userProfile.role);
+    if (allowedModules && allowedModules.length > 0) {
+      // Always include events with no module_key (legacy + system events) so we
+      // don't silently hide records we have not yet tagged.
+      activityQuery = activityQuery.or(
+        `module_key.is.null,module_key.in.(${allowedModules.join(",")})`,
+      );
+    }
+
+    const { data: activityData } = await activityQuery;
+
+    activity = ((activityData ?? []) as unknown as RawActivity[]).slice(0, 6).map((item) => {
       const actor = resolveActivityActor(item.actor);
       return {
         id: item.id,

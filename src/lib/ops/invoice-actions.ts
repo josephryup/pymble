@@ -5,7 +5,16 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
-import { canManageOps } from "@/lib/ops/permissions";
+import {
+  canArchiveInvoice,
+  canCreateInvoice,
+  canDeleteInvoice,
+  canEditInvoice,
+  canMarkInvoicePaid,
+  canSendInvoice,
+  canVoidInvoice,
+  type OpsInvoiceMutationTarget,
+} from "@/lib/ops/invoice-permissions";
 import type { OrganizationProfile } from "@/lib/ops/organization";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -60,8 +69,10 @@ async function nextInvoiceNumber(prefix: string) {
 export async function createInvoiceAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
-    invoiceError("Your role cannot create invoices yet.");
+  if (!canCreateInvoice(profile.role)) {
+    invoiceError(
+      "Only the Quantity Surveyor, Finance Manager, Accountant, and leadership can create invoices.",
+    );
   }
 
   const parsed = createInvoiceSchema.safeParse({
@@ -129,6 +140,9 @@ export async function createInvoiceAction(formData: FormData) {
     action: "invoice.created",
     entity_type: "invoice",
     entity_id: data.id,
+    module_key: "invoices",
+    source_table: "invoices",
+    source_id: data.id,
     metadata: {
       invoice_number: invoiceNumber,
       total_amount: totalAmount,
@@ -138,6 +152,21 @@ export async function createInvoiceAction(formData: FormData) {
   revalidatePath("/ops");
   revalidatePath("/ops/invoices");
   redirect("/ops/invoices?created=invoice");
+}
+
+async function fetchInvoiceMutationTarget(
+  invoiceId: string,
+): Promise<(OpsInvoiceMutationTarget & { id: string; invoice_number: string }) | null> {
+  const supabase = await createOpsServerSessionClient();
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, invoice_number, status, cancelled_at, archived_at, deleted_at")
+    .eq("id", invoiceId)
+    .maybeSingle<OpsInvoiceMutationTarget & { id: string; invoice_number: string }>();
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
 async function updateInvoiceStatus(id: string, status: "paid" | "sent", userId: string) {
@@ -168,14 +197,18 @@ async function updateInvoiceStatus(id: string, status: "paid" | "sent", userId: 
 export async function sendInvoiceAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
-    invoiceError("Your role cannot send invoices yet.");
-  }
-
   const parsed = invoiceIdSchema.safeParse({ id: field(formData, "id") });
 
   if (!parsed.success) {
     invoiceError(parsed.error.issues[0]?.message ?? "Select an invoice.");
+  }
+
+  const invoice = await fetchInvoiceMutationTarget(parsed.data.id);
+  if (!invoice) {
+    invoiceError("Invoice was not found.");
+  }
+  if (!canSendInvoice(profile.role, invoice)) {
+    invoiceError("Only Finance and leadership can send a draft invoice.");
   }
 
   await updateInvoiceStatus(parsed.data.id, "sent", profile.id);
@@ -186,18 +219,225 @@ export async function sendInvoiceAction(formData: FormData) {
 export async function markInvoicePaidAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
-    invoiceError("Your role cannot mark invoices paid yet.");
-  }
-
   const parsed = invoiceIdSchema.safeParse({ id: field(formData, "id") });
 
   if (!parsed.success) {
     invoiceError(parsed.error.issues[0]?.message ?? "Select an invoice.");
   }
 
+  const invoice = await fetchInvoiceMutationTarget(parsed.data.id);
+  if (!invoice) {
+    invoiceError("Invoice was not found.");
+  }
+  if (!canMarkInvoicePaid(profile.role, invoice)) {
+    invoiceError("Only Finance and leadership can mark an invoice paid, and only once it has been sent.");
+  }
+
   await updateInvoiceStatus(parsed.data.id, "paid", profile.id);
   revalidatePath("/ops");
   revalidatePath("/ops/invoices");
   redirect("/ops/invoices?updated=paid");
+}
+
+// ---------------------------------------------------------------------------
+// J1: Edit / void / archive / delete actions for invoices
+// ---------------------------------------------------------------------------
+
+const updateInvoiceSchema = invoiceIdSchema.extend({
+  client_name: z.string().trim().min(2, "Client name is required.").max(160),
+  invoice_number: z.string().trim().min(1, "Invoice number is required.").max(80),
+  issued_at: dateSchema,
+  subtotal: z.coerce.number().min(0, "Subtotal cannot be negative."),
+  tpin: z.string().trim().max(80).default(""),
+});
+
+const voidInvoiceSchema = invoiceIdSchema.extend({
+  reason: z.string().trim().max(400).default(""),
+});
+
+export async function updateInvoiceAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = updateInvoiceSchema.safeParse({
+    id: field(formData, "id"),
+    client_name: field(formData, "client_name"),
+    invoice_number: field(formData, "invoice_number"),
+    issued_at: field(formData, "issued_at"),
+    subtotal: field(formData, "subtotal"),
+    tpin: field(formData, "tpin"),
+  });
+  if (!parsed.success) {
+    invoiceError(parsed.error.issues[0]?.message ?? "Check the invoice details.");
+  }
+
+  const invoice = await fetchInvoiceMutationTarget(parsed.data.id);
+  if (!invoice) {
+    invoiceError("Invoice was not found.");
+  }
+  if (!canEditInvoice(profile.role, invoice)) {
+    invoiceError("Invoices can only be edited while in draft.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { data: organization } = await supabase
+    .from("organization_profile")
+    .select("vat_rate")
+    .eq("id", 1)
+    .maybeSingle<{ vat_rate: number | string }>();
+
+  const vatRate = Number(organization?.vat_rate ?? 0);
+  const vatAmount = roundToTwo(parsed.data.subtotal * vatRate);
+  const totalAmount = roundToTwo(parsed.data.subtotal + vatAmount);
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({
+      client_name: parsed.data.client_name,
+      invoice_number: parsed.data.invoice_number,
+      issued_at: parsed.data.issued_at,
+      subtotal: roundToTwo(parsed.data.subtotal),
+      vat_amount: vatAmount,
+      total_amount: totalAmount,
+      tpin: parsed.data.tpin || null,
+    })
+    .eq("id", parsed.data.id);
+  if (error) {
+    invoiceError(error.code === "23505" ? "That invoice number already exists." : error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "invoice.updated",
+    entity_type: "invoice",
+    entity_id: parsed.data.id,
+    module_key: "invoices",
+    source_table: "invoices",
+    source_id: parsed.data.id,
+    metadata: { invoice_number: parsed.data.invoice_number, total_amount: totalAmount },
+  });
+
+  revalidatePath("/ops/invoices");
+  redirect("/ops/invoices?updated=invoice");
+}
+
+export async function voidInvoiceAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = voidInvoiceSchema.safeParse({
+    id: field(formData, "id"),
+    reason: field(formData, "reason"),
+  });
+  if (!parsed.success) {
+    invoiceError(parsed.error.issues[0]?.message ?? "Select an invoice.");
+  }
+
+  const invoice = await fetchInvoiceMutationTarget(parsed.data.id);
+  if (!invoice) {
+    invoiceError("Invoice was not found.");
+  }
+  if (!canVoidInvoice(profile.role, invoice)) {
+    invoiceError(
+      "Only Finance Manager, Managing Director, or Developer can void an invoice, and a paid invoice can't be voided (issue a credit note instead).",
+    );
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("invoices")
+    .update({ cancelled_at: nowIso, cancelled_by: profile.id })
+    .eq("id", parsed.data.id);
+  if (error) {
+    invoiceError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "invoice.voided",
+    entity_type: "invoice",
+    entity_id: parsed.data.id,
+    module_key: "invoices",
+    source_table: "invoices",
+    source_id: parsed.data.id,
+    metadata: { reason: parsed.data.reason, invoice_number: invoice.invoice_number },
+  });
+
+  revalidatePath("/ops/invoices");
+  redirect("/ops/invoices?updated=voided");
+}
+
+export async function archiveInvoiceAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = invoiceIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    invoiceError(parsed.error.issues[0]?.message ?? "Select an invoice.");
+  }
+
+  const invoice = await fetchInvoiceMutationTarget(parsed.data.id);
+  if (!invoice) {
+    invoiceError("Invoice was not found.");
+  }
+  if (!canArchiveInvoice(profile.role, invoice)) {
+    invoiceError(
+      "Invoices can only be archived once paid or voided, and only by Managing Director or Developer.",
+    );
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { error } = await supabase
+    .from("invoices")
+    .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
+    .eq("id", parsed.data.id);
+  if (error) {
+    invoiceError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "invoice.archived",
+    entity_type: "invoice",
+    entity_id: parsed.data.id,
+    module_key: "invoices",
+    source_table: "invoices",
+    source_id: parsed.data.id,
+  });
+
+  revalidatePath("/ops/invoices");
+  redirect("/ops/invoices?updated=archived");
+}
+
+export async function deleteInvoiceAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canDeleteInvoice(profile.role)) {
+    invoiceError("Only the Developer can permanently delete an invoice.");
+  }
+
+  const parsed = invoiceIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    invoiceError(parsed.error.issues[0]?.message ?? "Select an invoice.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { error } = await supabase
+    .from("invoices")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", parsed.data.id);
+  if (error) {
+    invoiceError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "invoice.deleted",
+    entity_type: "invoice",
+    entity_id: parsed.data.id,
+    module_key: "invoices",
+    source_table: "invoices",
+    source_id: parsed.data.id,
+  });
+
+  revalidatePath("/ops/invoices");
+  redirect("/ops/invoices?updated=deleted");
 }

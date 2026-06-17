@@ -345,7 +345,7 @@ function contextLine(
     }, ${metrics.finance.paymentRequestsPending} payment request${
       metrics.finance.paymentRequestsPending === 1 ? "" : "s"
     } in the queue, and ${
-      hseSafetyRollup ? `${hseSafetyRollup.pressureScore}/100 HSE pressure` : "HSE pressure tracked"
+      hseSafetyRollup ? `${hseSafetyRollup.pressureScore}/100 Health, Safety and Environment pressure` : "Health, Safety and Environment pressure tracked"
     }.${escalationText}`;
   }
 
@@ -435,7 +435,7 @@ function kpisForGroup(
       {
         href: "/ops/hse",
         icon: ShieldCheck,
-        label: "HSE pressure",
+        label: "Health, Safety and Environment pressure",
         tone: hseSafetyRollup?.pressureLevel === "urgent" ? "warn" : "default",
         trend: hseSafetyRollup?.pressureLevel ?? "Live",
         value: hseSafetyRollup ? `${hseSafetyRollup.pressureScore}/100` : formatCount(metrics.hse.openIncidents),
@@ -652,7 +652,7 @@ function chartDataForGroup(
       { label: "Sites", tone: "good", value: overview.sites.length },
       { label: "Approvals", tone: overview.openApprovals > 0 ? "warn" : "good", value: overview.openApprovals },
       { label: "Payment queue", tone: metrics.finance.paymentRequestsPending > 0 ? "warn" : "good", value: metrics.finance.paymentRequestsPending },
-      { label: "HSE pressure", tone: hseSafetyRollup?.pressureLevel === "urgent" ? "warn" : "default", value: hseSafetyRollup?.pressureScore ?? metrics.hse.openIncidents },
+      { label: "Health, Safety and Environment pressure", tone: hseSafetyRollup?.pressureLevel === "urgent" ? "warn" : "default", value: hseSafetyRollup?.pressureScore ?? metrics.hse.openIncidents },
       { label: "Delivery exceptions", tone: metrics.procurement.deliveryExceptions > 0 ? "warn" : "good", value: metrics.procurement.deliveryExceptions },
     ];
   }
@@ -750,7 +750,7 @@ function actionsForGroup(
     if (hseSafetyRollup && hseSafetyRollup.pressureLevel !== "steady") {
       actions.push({
         href: "/ops/hse",
-        message: `HSE pressure is ${hseSafetyRollup.pressureLevel} at ${hseSafetyRollup.pressureScore}/100.`,
+        message: `Health, Safety and Environment pressure is ${hseSafetyRollup.pressureLevel} at ${hseSafetyRollup.pressureScore}/100.`,
         tone: "warn",
       });
     }
@@ -985,7 +985,7 @@ function shortcutGroupsForRole(group: DashboardGroup, role: OpsUserRole): Shortc
           { href: "/ops/sites", label: "Projects and sites" },
           { href: "/ops/attendance", label: "Attendance" },
           { href: "/ops/daily-site-reports", label: "Daily site reports" },
-          { href: "/ops/engineering-controls", label: "Instructions and QA/QC" },
+          { href: "/ops/engineering-controls", label: "Instructions and Quality Assurance and Quality Control" },
         ],
       },
       {
@@ -1346,7 +1346,7 @@ function SafetySnapshot({
           </div>
           {hseSafetyRollup ? (
             <div
-              aria-label="HSE pressure index"
+              aria-label="Health, Safety and Environment pressure index"
               aria-valuemax={100}
               aria-valuemin={0}
               aria-valuenow={hseSafetyRollup.pressureScore}

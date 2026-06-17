@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { putOpsR2Object } from "@/lib/ops/r2";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
@@ -119,24 +120,12 @@ export async function POST(request: NextRequest) {
 
   // Fan out a notification to HR and leadership so they see new applications in
   // their queue immediately. Failures here must never reject the candidate.
+  // Uses the workflow fallback so missing HR role still notifies leadership.
   try {
-    const { data: hrUsers } = await supabase
-      .from("users")
-      .select("id")
-      .in("role", [
-        "developer",
-        "managing_director",
-        "general_manager",
-        "human_resource",
-        "hr",
-        "owner",
-        "manager",
-      ])
-      .eq("is_active", true);
-
+    const hrRecipients = await fanoutToOpsRoles(["human_resource", "hr"]);
     const body = `${fullName} applied for ${jobPostingId ? "an open role" : "a general position"}. Open the application to review and progress them through your hiring stages.`;
     await Promise.all(
-      ((hrUsers ?? []) as Array<{ id: string }>).map((user) =>
+      hrRecipients.map((user) =>
         queueOpsNotification({
           actionHref: "/ops/recruitment#applications",
           body,

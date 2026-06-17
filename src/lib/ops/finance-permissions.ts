@@ -180,3 +180,22 @@ export function canCancelOpsPaymentRequest(
     (PAYMENT_APPROVE_ROLES.includes(role) || paymentRequest.requested_by === actorId)
   );
 }
+
+const PAYMENT_ARCHIVE_ROLES: OpsUserRole[] = [
+  "developer",
+  "managing_director",
+  "owner",
+];
+
+export function canArchiveOpsPaymentRequest(
+  role: OpsUserRole,
+  paymentRequest: OpsPaymentRequestMutationTarget,
+) {
+  // Only archive once the request reaches a terminal state.
+  const terminal = ["paid", "rejected", "cancelled"];
+  return terminal.includes(paymentRequest.status) && PAYMENT_ARCHIVE_ROLES.includes(role);
+}
+
+export function canDeleteOpsPaymentRequest(role: OpsUserRole) {
+  return role === "developer";
+}

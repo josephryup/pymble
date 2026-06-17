@@ -50,7 +50,7 @@ describe("ops module visibility", () => {
     );
     assert.equal(
       visibleOpsModuleRegistry("developer").some(
-        (module) => module.title === "Site Instructions and QA/QC",
+        (module) => module.title === "Site Instructions and Quality Assurance / Quality Control",
       ),
       true,
     );

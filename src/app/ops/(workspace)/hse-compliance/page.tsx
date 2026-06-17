@@ -17,6 +17,7 @@ import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
@@ -1024,57 +1025,51 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
-            HSE compliance
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
-            HSE compliance controls
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
-            Control safety risk, audits, PPE, toolbox talks, inspections, training evidence, and ageing incident follow-up.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canCreatePpeItem ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=ppe-item#ppe-item-create-panel">
-              PPE stock
-            </Link>
-          ) : null}
-          {canCreatePpe ? (
-            <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/hse-compliance?create=ppe#ppe-create-panel">
-              <Plus className="size-4" aria-hidden="true" />
-              Issue PPE
-            </Link>
-          ) : null}
-          {canCreateTalk ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=toolbox#toolbox-create-panel">
-              Toolbox talk
-            </Link>
-          ) : null}
-          {canCreateInspection ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=inspection#inspection-create-panel">
-              Inspection
-            </Link>
-          ) : null}
-          {canCreateRisk ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=risk#risk-create-panel">
-              Risk assessment
-            </Link>
-          ) : null}
-          {canCreateAudit ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=audit#audit-create-panel">
-              Audit
-            </Link>
-          ) : null}
-          {canCreateTraining ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=training#training-create-panel">
-              Training
-            </Link>
-          ) : null}
-        </div>
-      </section>
+      <OpsPageHeader
+        eyebrow="Health, Safety and Environment compliance"
+        title="Health, Safety and Environment compliance controls"
+        description="Control safety risk, audits, Personal Protective Equipment, toolbox talks, inspections, training evidence, and ageing incident follow-up."
+        actions={
+          <>
+            {canCreatePpeItem ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=ppe-item#ppe-item-create-panel">
+                Personal Protective Equipment stock
+              </Link>
+            ) : null}
+            {canCreatePpe ? (
+              <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/hse-compliance?create=ppe#ppe-create-panel">
+                <Plus className="size-4" aria-hidden="true" />
+                Issue Personal Protective Equipment
+              </Link>
+            ) : null}
+            {canCreateTalk ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=toolbox#toolbox-create-panel">
+                Toolbox talk
+              </Link>
+            ) : null}
+            {canCreateInspection ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=inspection#inspection-create-panel">
+                Inspection
+              </Link>
+            ) : null}
+            {canCreateRisk ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=risk#risk-create-panel">
+                Risk assessment
+              </Link>
+            ) : null}
+            {canCreateAudit ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=audit#audit-create-panel">
+                Audit
+              </Link>
+            ) : null}
+            {canCreateTraining ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse-compliance?create=training#training-create-panel">
+                Training
+              </Link>
+            ) : null}
+          </>
+        }
+      />
 
       {notice ? (
         <div

@@ -22,7 +22,10 @@ import {
   OpsCashflowChartPanel,
 } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
@@ -325,35 +328,30 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
-            Finance and accounts
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
-            Payment requests
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
-            Supplier bills, expenses, approval handoff, payment status, and project cost posting.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/project-budgets">
-            <Banknote className="size-4" aria-hidden="true" />
-            Budgets
-          </Link>
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/rfq-po">
-            <PackageCheck className="size-4" aria-hidden="true" />
-            RFQ and PO
-          </Link>
-          {canCreate ? (
-            <a className={OPS_PRIMARY_BUTTON_CLASS} href={createPaymentHref}>
-              <Plus className="size-4" aria-hidden="true" />
-              New payment
-            </a>
-          ) : null}
-        </div>
-      </section>
+      <OpsRealtimeRefresh tables={["payment_requests", "approval_requests"]} />
+      <OpsPageHeader
+        eyebrow="Finance and Accounts"
+        title="Payment requests"
+        description="Supplier bills, expenses, approval handoff, payment status, and project cost posting."
+        actions={
+          <>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/project-budgets">
+              <Banknote className="size-4" aria-hidden="true" />
+              Budgets
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/rfq-po">
+              <PackageCheck className="size-4" aria-hidden="true" />
+              Requests for Quotation and Purchase Orders
+            </Link>
+            {canCreate ? (
+              <a className={OPS_PRIMARY_BUTTON_CLASS} href={createPaymentHref}>
+                <Plus className="size-4" aria-hidden="true" />
+                New payment
+              </a>
+            ) : null}
+          </>
+        }
+      />
 
       {notice ? (
         <div
@@ -944,19 +942,26 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
             })}
           </div>
         ) : (
-          <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
-            <Receipt className="size-10 text-primary-blue" aria-hidden="true" />
-            <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
-                {hasActiveListFilter ? "No matching payment requests" : "No payment requests yet"}
-              </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
-                {hasActiveListFilter
-                  ? "Adjust the search or status filter to widen the payment register."
-                  : "Create the first supplier bill or expense request when payment needs approval."}
-              </p>
-            </div>
-          </div>
+          <OpsEmptyState
+            icon={Receipt}
+            title={
+              hasActiveListFilter
+                ? "No payment requests match these filters"
+                : "No payment requests yet"
+            }
+            description={
+              hasActiveListFilter
+                ? "Try clearing the search or switching the status filter — drafts, submitted, approved, and paid sit in different buckets."
+                : "Supplier bills and staff expense reimbursements appear here when raised for approval."
+            }
+            actions={
+              hasActiveListFilter
+                ? [{ href: "/ops/payment-requests", label: "Clear filters" }]
+                : canCreate
+                  ? [{ href: createPaymentHref, label: "Create the first payment request" }]
+                  : [{ href: "/ops/rfq-po", label: "Open Purchase Orders", variant: "secondary" }]
+            }
+          />
         )}
         <OpsPaginationControls
           basePath="/ops/payment-requests"

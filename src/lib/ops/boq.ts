@@ -30,6 +30,7 @@ export type OpsBoqLineItem = {
   actual_quantity: number;
   supplier_id: string | null;
   supplier: OpsBoqLineSupplier | null;
+  supplier_name_freeform: string | null;
   updated_at: string;
 };
 
@@ -123,6 +124,7 @@ async function fetchOpsBoqDocumentItems(
       listState ? { count: "exact" } : undefined,
     )
     .is("deleted_at", null)
+    .is("archived_at", null)
     .order("updated_at", { ascending: false });
 
   if (options.status) {
@@ -161,7 +163,7 @@ async function fetchOpsBoqDocumentItems(
   const { data: itemData, error: itemError } = await supabase
     .from("boq_line_items")
     .select(
-      "id, boq_id, description, unit, quantity, unit_rate, budgeted_total, actual_quantity, supplier_id, updated_at, supplier:suppliers!boq_line_items_supplier_id_fkey(id, supplier_code, legal_name)",
+      "id, boq_id, description, unit, quantity, unit_rate, budgeted_total, actual_quantity, supplier_id, supplier_name_freeform, updated_at, supplier:suppliers!boq_line_items_supplier_id_fkey(id, supplier_code, legal_name)",
     )
     .in(
       "boq_id",
