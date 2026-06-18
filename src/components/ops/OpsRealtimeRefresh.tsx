@@ -44,6 +44,7 @@ export function OpsRealtimeRefresh({ tables, debounceMs = 500 }: OpsRealtimeRefr
     };
 
     const supabase = getOpsSupabaseBrowserClient();
+    if (!supabase) return; // Env vars missing; no-op (workspace still renders).
     const channelName = `ops-page-realtime:${tables.join(",")}:${Date.now()}`;
     let channel = supabase.channel(channelName);
 

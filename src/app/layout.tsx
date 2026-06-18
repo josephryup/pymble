@@ -4,7 +4,6 @@ import "leaflet/dist/leaflet.css";
 import { SEO, SITE_URL, COMPANY } from "@/lib/constants";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import Script from "next/script";
 import { AppChrome } from "@/components/layout/AppChrome";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Geist } from "next/font/google";
@@ -83,15 +82,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable)}>
-      <head>
-        {process.env.NODE_ENV === "production" && (
-          <Script
-            src="https://analytics.ahrefs.com/analytics.js"
-            data-key="yoxMRxpcS5OCp4crqDkMpw"
-            strategy="lazyOnload"
-          />
-        )}
-      </head>
       <body
         className="antialiased bg-white text-primary-dark font-sans selection:bg-primary-blue selection:text-white"
       >

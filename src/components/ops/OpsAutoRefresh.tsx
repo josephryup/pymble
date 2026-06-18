@@ -49,6 +49,28 @@ export function OpsAutoRefresh({ userId, fallbackIntervalMs = 60_000 }: OpsAutoR
     };
 
     const supabase = getOpsSupabaseBrowserClient();
+    if (!supabase) {
+      // No Supabase browser client (env vars missing). Skip realtime; the
+      // visibility-based refresh below still keeps the page reasonably fresh.
+      const onVisibility = () => {
+        if (
+          typeof document !== "undefined" &&
+          document.visibilityState === "visible"
+        ) {
+          router.refresh();
+        }
+      };
+      document.addEventListener("visibilitychange", onVisibility);
+      window.addEventListener("focus", onVisibility);
+      const fallback = window.setInterval(() => {
+        if (document.visibilityState === "visible") router.refresh();
+      }, fallbackIntervalMs);
+      return () => {
+        document.removeEventListener("visibilitychange", onVisibility);
+        window.removeEventListener("focus", onVisibility);
+        window.clearInterval(fallback);
+      };
+    }
 
     const channel = supabase
       .channel(`ops-auto-refresh:${userId}`)

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import Script from "next/script";
 import { Footer } from "@/components/layout/Footer";
 import { GlobalFloatingWidgets } from "@/components/layout/GlobalFloatingWidgets";
 import { Header } from "@/components/layout/Header";
@@ -28,6 +29,13 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
       {children}
       <Footer />
       <GlobalFloatingWidgets />
+      {process.env.NODE_ENV === "production" ? (
+        <Script
+          src="https://analytics.ahrefs.com/analytics.js"
+          data-key="yoxMRxpcS5OCp4crqDkMpw"
+          strategy="lazyOnload"
+        />
+      ) : null}
     </div>
   );
 }

@@ -17,9 +17,13 @@ function opsContentSecurityPolicy() {
   const scriptSrc = isDev
     ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
     : "script-src 'self' 'unsafe-inline'";
+  // Supabase Realtime opens a websocket (`wss://*.supabase.co/realtime/...`),
+  // so `wss:` to the Supabase origins must be allowed in production too,
+  // otherwise the OpsAutoRefresh + OpsRealtimeRefresh subscriptions silently
+  // fail and the workspace looks stale.
   const connectSrc = isDev
     ? "connect-src 'self' ws: wss: https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com"
-    : "connect-src 'self' https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com";
+    : "connect-src 'self' wss://*.supabase.co wss://*.supabase.in https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com";
 
   return [
     "default-src 'self'",
