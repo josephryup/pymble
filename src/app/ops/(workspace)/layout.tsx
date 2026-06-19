@@ -1,6 +1,8 @@
 import { OpsAutoRefresh } from "@/components/ops/OpsAutoRefresh";
 import { OpsFormSubmitGuard } from "@/components/ops/OpsFormSubmitGuard";
+import { OpsServiceWorker } from "@/components/ops/OpsServiceWorker";
 import { OpsShell } from "@/components/ops/OpsShell";
+import { OpsSyncIndicator } from "@/components/ops/OpsSyncIndicator";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsInboxUnreadCountForCurrentUser } from "@/lib/ops/inbox";
 import { fetchOpsUnreadNotificationCount } from "@/lib/ops/notifications";
@@ -28,7 +30,9 @@ export default async function OpsWorkspaceLayout({
       unreadInbox={unreadInbox}
       unreadNotifications={unreadNotifications}
     >
+      <OpsServiceWorker />
       <OpsFormSubmitGuard />
+      <OpsSyncIndicator />
       {auth.isLocalRolePreview ? null : <OpsAutoRefresh userId={profile.id} />}
       {children}
     </OpsShell>

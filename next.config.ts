@@ -1,5 +1,13 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import withSerwistInit from "@serwist/next";
+
+const withSerwist = withSerwistInit({
+  swSrc: "src/app/sw.ts",
+  swDest: "public/sw.js",
+  // Only enable in production builds — dev gets HMR and dev-tools instead.
+  disable: process.env.NODE_ENV !== "production",
+});
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -37,7 +45,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
+export default withSentryConfig(withSerwist(nextConfig), {
   // Sentry Organization + project. Override via env vars in CI if these
   // ever change. Wizard-equivalent settings — see `docs/sentry-setup.md`.
   org: process.env.SENTRY_ORG ?? "joseph-5u",

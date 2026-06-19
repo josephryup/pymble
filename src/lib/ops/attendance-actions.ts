@@ -106,27 +106,41 @@ export async function createAttendanceAction(formData: FormData) {
       ? 0
       : Math.round(((Number(worker.daily_rate) / 8) * hoursWorked + Number.EPSILON) * 100) / 100;
 
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .insert({
-      worker_id: parsed.data.worker_id,
-      site_id: parsed.data.site_id,
-      clock_in_at: combineDateTime(parsed.data.work_date, parsed.data.clock_in_time),
-      clock_out_at: parsed.data.clock_out_time
-        ? combineDateTime(parsed.data.work_date, parsed.data.clock_out_time)
-        : null,
-      hours_worked: hoursWorked,
-      amount_earned: amountEarned,
-      presence: parsed.data.presence,
-      source: "manual",
-      gps_label: parsed.data.gps_label,
-      gps_latitude: parsed.data.gps_latitude,
-      gps_longitude: parsed.data.gps_longitude,
-      created_by: profile.id,
-      is_active: true,
-    })
-    .select("id")
-    .single<{ id: string }>();
+  // Sprint 10 offline support: upsert on the optional client_id so a queued
+  // attendance record from a phone that's been offline doesn't double-insert
+  // when it eventually syncs.
+  const clientId = (field(formData, "client_id") || "").trim() || null;
+  const attendancePayload = {
+    worker_id: parsed.data.worker_id,
+    site_id: parsed.data.site_id,
+    clock_in_at: combineDateTime(parsed.data.work_date, parsed.data.clock_in_time),
+    clock_out_at: parsed.data.clock_out_time
+      ? combineDateTime(parsed.data.work_date, parsed.data.clock_out_time)
+      : null,
+    hours_worked: hoursWorked,
+    amount_earned: amountEarned,
+    presence: parsed.data.presence,
+    source: "manual",
+    gps_label: parsed.data.gps_label,
+    gps_latitude: parsed.data.gps_latitude,
+    gps_longitude: parsed.data.gps_longitude,
+    created_by: profile.id,
+    is_active: true,
+  };
+  const { data, error } = clientId
+    ? await supabase
+        .from("attendance_records")
+        .upsert(
+          { ...attendancePayload, client_id: clientId },
+          { onConflict: "client_id", ignoreDuplicates: false },
+        )
+        .select("id")
+        .single<{ id: string }>()
+    : await supabase
+        .from("attendance_records")
+        .insert(attendancePayload)
+        .select("id")
+        .single<{ id: string }>();
 
   if (error || !data) {
     attendanceError(

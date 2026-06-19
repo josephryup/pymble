@@ -117,15 +117,28 @@ export async function createDailySiteReportAction(formData: FormData) {
     reportError(parsed.error.issues[0]?.message ?? "Check the daily report details.");
   }
 
+  // Sprint 10 offline support: if the page submitted a client_id (UUID
+  // generated when the user filled the form offline), upsert on it so a
+  // replayed FormData doesn't insert twice.
+  const clientId = (field(formData, "client_id") || "").trim() || null;
   const supabase = getOpsSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("daily_site_reports")
-    .insert({
-      ...parsed.data,
-      prepared_by: profile.id,
-    })
-    .select("id, report_number")
-    .single<{ id: string; report_number: string }>();
+  const { data, error } = clientId
+    ? await supabase
+        .from("daily_site_reports")
+        .upsert(
+          { ...parsed.data, client_id: clientId, prepared_by: profile.id },
+          { onConflict: "client_id", ignoreDuplicates: false },
+        )
+        .select("id, report_number")
+        .single<{ id: string; report_number: string }>()
+    : await supabase
+        .from("daily_site_reports")
+        .insert({
+          ...parsed.data,
+          prepared_by: profile.id,
+        })
+        .select("id, report_number")
+        .single<{ id: string; report_number: string }>();
 
   if (error || !data) {
     reportError(error?.message ?? "The daily site report could not be created.");
