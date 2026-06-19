@@ -256,6 +256,7 @@ export async function submitHseWeeklyReportAction(formData: FormData) {
     [
       "operations_manager",
       "projects_manager",
+      "engineering_manager",
       "general_manager",
       "managing_director",
       "owner",

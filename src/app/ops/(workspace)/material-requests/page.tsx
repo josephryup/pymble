@@ -992,6 +992,14 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       ) : null}
                     </div>
                     <div className="grid gap-2 min-[520px]:grid-cols-2 lg:min-w-56 lg:grid-cols-1">
+                      <a
+                        className={OPS_SECONDARY_BUTTON_CLASS}
+                        href={`/api/ops/pdf/material-request/${request.id}`}
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        Download PDF
+                      </a>
                       {request.approval_request_id ? (
                         <Link
                           className={OPS_SECONDARY_BUTTON_CLASS}

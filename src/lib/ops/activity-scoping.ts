@@ -56,6 +56,19 @@ export function getOpsTimelineModuleKeys(role: OpsUserRole): string[] | null {
     case "supervisor":
       return Array.from(new Set([...SITE_MODULES, "material_requests"]));
 
+    case "engineering_manager":
+      // Engineering Manager oversees the whole engineering function, so they
+      // see site delivery + commercial (to track Bill of Quantities cost
+      // pressure) + HSE (incidents that affect engineering work).
+      return Array.from(
+        new Set([
+          ...SITE_MODULES,
+          ...COMMERCIAL_MODULES,
+          ...HSE_MODULES,
+          "engineering_controls",
+        ]),
+      );
+
     case "quantity_surveyor":
       return Array.from(new Set([...COMMERCIAL_MODULES, "boq", "material_requests"]));
 

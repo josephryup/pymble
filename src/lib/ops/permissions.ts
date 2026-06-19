@@ -1,8 +1,10 @@
 import { OPS_MODULES } from "@/lib/ops/constants";
 import {
   isDeveloperRole,
+  isEngineeringManagerRole,
   isGeneralManagerRole,
   isHumanResourceRole,
+  isLeadershipRole,
   isManagingDirectorRole,
   type OpsAssignableStaffRole,
 } from "@/lib/ops/roles";
@@ -152,4 +154,43 @@ export function visibleOpsRouteModules(role: OpsUserRole) {
 
 export function visibleOpsModuleRegistry(role: OpsUserRole) {
   return OPS_MODULES.filter((item) => isDeveloperRole(role) || item.roles.includes(role));
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 8 — Role model rework aligned with the Pymble organogram.
+// ---------------------------------------------------------------------------
+
+/**
+ * Executive dashboard = MD / GM / Developer / Owner only.
+ * Operations Manager is intentionally NOT here — per the organogram they
+ * oversee operations, they do not have company-wide executive visibility.
+ */
+export function canAccessExecutiveDashboard(role: OpsUserRole) {
+  return isLeadershipRole(role);
+}
+
+/**
+ * Cross-department leadership view = same as executive dashboard. Used to
+ * gate widgets that show data from multiple departments at once.
+ */
+export function canSeeCrossDepartmentSummary(role: OpsUserRole) {
+  return isLeadershipRole(role);
+}
+
+/**
+ * Engineering Manager can manage engineers + their work allocation, receive
+ * engineering reports, and escalate to MD/GM. MD / GM / Developer can also do
+ * this by virtue of being above the Engineering Manager on the org chart.
+ */
+export function canManageEngineeringTeam(role: OpsUserRole) {
+  return isLeadershipRole(role) || isEngineeringManagerRole(role);
+}
+
+/**
+ * Recipients of routine engineering escalations (Daily Site Reports,
+ * Engineer-submitted Material Requests, drawing reviews). EM is the first
+ * line, MD/GM see them too so leadership has visibility.
+ */
+export function canReceiveEngineeringEscalations(role: OpsUserRole) {
+  return isLeadershipRole(role) || isEngineeringManagerRole(role);
 }

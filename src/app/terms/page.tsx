@@ -95,7 +95,7 @@ export default function TermsPage() {
                                 <p>
                                     This website is provided on an &quot;as is&quot; basis. While we strive to keep information accurate and up to date, we make no warranties — express or implied — regarding the completeness, accuracy, or reliability of any content on this site.
                                 </p>
-                                <p>
+                                <p>e
                                     We do not warrant that the site will be available uninterrupted, error-free, or free of viruses or other harmful components.
                                 </p>
                             </TermsSection>

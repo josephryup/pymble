@@ -665,6 +665,14 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
                       </p>
                     </div>
                     <div className="grid gap-2 min-[520px]:grid-cols-3 lg:min-w-56 lg:grid-cols-1">
+                      <a
+                        className={OPS_SECONDARY_BUTTON_CLASS}
+                        href={`/api/ops/pdf/daily-site-report/${report.id}`}
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        Download PDF
+                      </a>
                       {canSubmit ? (
                         <form action={submitDailySiteReportAction}>
                           <input name="report_id" type="hidden" value={report.id} />

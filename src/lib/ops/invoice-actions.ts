@@ -50,20 +50,28 @@ function roundToTwo(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+/**
+ * Allocates the next invoice number atomically via the
+ * `public.ops_next_invoice_number(prefix)` Postgres function. Numbers are
+ * monotonic and gap-free per (prefix, year). Per ZRA requirements, a consumed
+ * number that ends up cancelled or voided must remain on file — the function
+ * does NOT recycle gaps.
+ */
 async function nextInvoiceNumber(prefix: string) {
   const supabase = await createOpsServerSessionClient();
-  const year = new Date().getFullYear();
-  const { count, error } = await supabase
-    .from("invoices")
-    .select("id", { count: "exact", head: true })
-    .gte("issued_at", `${year}-01-01`)
-    .lte("issued_at", `${year}-12-31`);
+  const { data, error } = await supabase.rpc("ops_next_invoice_number", {
+    p_prefix: prefix,
+  });
 
   if (error) {
     throw error;
   }
 
-  return `${prefix}-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+  if (typeof data !== "string" || data.length === 0) {
+    throw new Error("Invoice number generator returned an empty value.");
+  }
+
+  return data;
 }
 
 export async function createInvoiceAction(formData: FormData) {

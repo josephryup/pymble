@@ -688,18 +688,18 @@ export async function importBoqLineItemsCsvAction(formData: FormData) {
     if (rawValues.length > 0) {
       const { data: suppliers, error: supplierError } = await service
         .from("suppliers")
-        .select("id, supplier_code, name")
+        .select("id, supplier_code, legal_name")
         .eq("status", "active");
 
       if (supplierError) {
         boqError(supplierError.message);
       }
 
-      for (const supplier of (suppliers ?? []) as Array<{ id: string; supplier_code: string | null; name: string }>) {
+      for (const supplier of (suppliers ?? []) as Array<{ id: string; supplier_code: string | null; legal_name: string }>) {
         if (supplier.supplier_code) {
           supplierCodeToId.set(supplier.supplier_code.toUpperCase(), supplier.id);
         }
-        supplierNameToId.set(supplier.name.toLowerCase(), supplier.id);
+        supplierNameToId.set(supplier.legal_name.toLowerCase(), supplier.id);
       }
     }
   }

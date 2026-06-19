@@ -18,6 +18,7 @@ const OPS_OPERATIONAL_ROLES: OpsUserRole[] = [
   "human_resource",
   "operations_manager",
   "projects_manager",
+  "engineering_manager",
   "procurement_manager",
   "quantity_surveyor",
   "procurement",
@@ -50,6 +51,7 @@ const OPS_SITE_DELIVERY_ROLES: OpsUserRole[] = [
   ...OPS_LEADERSHIP_ROLES,
   "operations_manager",
   "projects_manager",
+  "engineering_manager",
   "engineer",
   "hse_officer",
   "hse_assistant_officer",
@@ -68,6 +70,7 @@ const OPS_MATERIAL_REQUEST_ROLES: OpsUserRole[] = [
   ...OPS_LEADERSHIP_ROLES,
   "operations_manager",
   "projects_manager",
+  "engineering_manager",
   "procurement_manager",
   "quantity_surveyor",
   "procurement",
@@ -137,6 +140,7 @@ const OPS_DAILY_SITE_REPORT_ROLES: OpsUserRole[] = [
   ...OPS_LEADERSHIP_ROLES,
   "operations_manager",
   "projects_manager",
+  "engineering_manager",
   "procurement_manager",
   "quantity_surveyor",
   "finance_manager",
@@ -358,7 +362,10 @@ export const OPS_MODULES: OpsModule[] = [
     id: "payroll",
     navigationRoles: [...OPS_LEADERSHIP_ROLES, ...OPS_HR_ROLES, ...OPS_FINANCE_ROLES],
     phase: "Foundation",
-    roles: OPS_OPERATIONAL_ROLES,
+    // Sprint 8: payroll is HR + Finance + Leadership only. Previously this
+    // used OPS_OPERATIONAL_ROLES which let Procurement / HSE / Engineering
+    // see payroll — a data leak across the organogram.
+    roles: [...OPS_LEADERSHIP_ROLES, ...OPS_HR_ROLES, ...OPS_FINANCE_ROLES],
     status: "ready",
     title: "Payroll",
   },

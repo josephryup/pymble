@@ -92,6 +92,7 @@ const DEPARTMENT_VISIBILITY: Partial<Record<OpsApprovalsDepartmentKey, OpsUserRo
   operations: [
     "operations_manager",
     "projects_manager",
+    "engineering_manager",
     "supervisor",
     "engineer",
     "manager",
@@ -108,6 +109,7 @@ const DEPARTMENT_VISIBILITY: Partial<Record<OpsApprovalsDepartmentKey, OpsUserRo
   commercial: [
     "quantity_surveyor",
     "projects_manager",
+    "engineering_manager",
   ],
   hr: [
     "human_resource",
@@ -117,6 +119,7 @@ const DEPARTMENT_VISIBILITY: Partial<Record<OpsApprovalsDepartmentKey, OpsUserRo
   hse: [
     "hse_officer",
     "hse_assistant_officer",
+    "engineering_manager",
   ],
 };
 

@@ -475,7 +475,7 @@ export async function closeHseIncidentAction(formData: FormData) {
   // K4: notify leadership when an HSE incident is closed, especially for high
   // / critical severity. Per Part 2.7 of the workflow design.
   const leadership = await fanoutToOpsRoles(
-    ["general_manager", "managing_director", "owner"],
+    ["engineering_manager", "general_manager", "managing_director", "owner"],
     { excludeUserIds: [profile.id] },
   );
   const severityBadge = incident.severity.toUpperCase();

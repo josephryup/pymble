@@ -38,7 +38,28 @@ const nextConfig: NextConfig = {
 };
 
 export default withSentryConfig(nextConfig, {
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  silent: true,
+  // Sentry Organization + project. Override via env vars in CI if these
+  // ever change. Wizard-equivalent settings — see `docs/sentry-setup.md`.
+  org: process.env.SENTRY_ORG ?? "joseph-5u",
+  project: process.env.SENTRY_PROJECT ?? "pymble-ops",
+
+  // SENTRY_AUTH_TOKEN must be set in the CI environment for source maps to
+  // upload during the production build. In dev / local builds the upload is
+  // skipped silently.
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  // Print upload + injection notices in CI logs only; suppress locally.
+  silent: !process.env.CI,
+
+  // Bypass ad-blockers that swallow requests to *.sentry.io by tunnelling
+  // events through our own /monitoring path. Vercel proxies it onward.
+  tunnelRoute: "/monitoring",
+
+  // Upload source maps for both client and edge runtimes; also widen the
+  // upload to catch chunks that the default glob misses.
+  widenClientFileUpload: true,
+
+  sourcemaps: {
+    disable: false,
+  },
 });

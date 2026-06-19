@@ -28,7 +28,7 @@ const teamMembers = [
         name: "John Mulilo",
         role: "Operations Manager",
         credentials: "Bsc Project Management",
-        image: "/images/team/John Mulilo- Operations Manager.jpeg",
+        image: "/images/team/john-mulilo.jpeg",
     },
     {
         id: 4,
@@ -37,7 +37,7 @@ const teamMembers = [
         credentials: "",
         image: COMPANY_LOGO,
     },
-    
+
     {
         id: 6,
         name: "Asher Mulenga",
@@ -66,7 +66,7 @@ const teamMembers = [
         credentials: "",
         image: COMPANY_LOGO,
     },
-    
+
     {
         id: 11,
         name: "Mateo Chalwe",

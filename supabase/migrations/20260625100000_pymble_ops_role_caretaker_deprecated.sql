@@ -1,0 +1,23 @@
+-- Sprint 9 prep: care_taker role removed from the application.
+--
+-- The 'care_taker' enum value stays in public.ops_user_role because PostgreSQL
+-- does not support `ALTER TYPE ... DROP VALUE` without rebuilding the type and
+-- updating every dependent column. Since no rows ever used this value (verified
+-- pre-deploy: select count(*) from public.users where role = 'care_taker' = 0),
+-- it's safe to leave it as a dead enum value.
+--
+-- Application-side enforcement:
+--   * OPS_STAFF_ROLE_VALUES + OPS_STAFF_ROLE_OPTIONS no longer include care_taker
+--   * canChangeStaffRole + canCreateStaffRole reject it
+--   * No UI surface offers it as a selection
+--
+-- If we ever need to drop the enum value, the workaround is:
+--   1. Create ops_user_role_v2 without care_taker
+--   2. Alter every column using ops_user_role to ops_user_role_v2 with cast
+--   3. Drop ops_user_role
+--   4. Rename ops_user_role_v2 -> ops_user_role
+--
+-- That's a non-trivial migration and should be done as its own scheduled change.
+
+-- No DDL needed.
+select 'care_taker role deprecated at the application layer' as note;

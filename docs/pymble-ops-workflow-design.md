@@ -1316,3 +1316,90 @@ and auto-restores them after 8 s as a safety net. This complements
 `OpsSubmitButton` / `OpsConfirmSubmitButton` (which use `useFormStatus` per
 button) — defense in depth so a fast double-click can't fire the same action
 twice.
+
+---
+
+## Part 17 — Role model aligned with the Pymble organogram
+
+Status: implemented (Sprint 8, 2026-06-17).
+
+### Why this changed
+
+The role model that grew with the system did not match the Pymble Construction Limited organogram:
+
+- Operations Manager had implicit cross-department / executive visibility through being included in `OPS_OPERATIONAL_ROLES`, which let them into surfaces like `/ops/payroll`. Per the organogram, Operations Manager reports up to the Managing Director and is responsible for operations execution only — not company-wide oversight.
+- There was no Engineering Manager role despite the organogram showing one — the Engineering Department reported through Projects Manager, which conflated two distinct seats.
+- Care Taker (facility maintenance) was missing entirely.
+
+### What the organogram says
+
+```
+                       Board of Directors
+                              │
+                       Managing Director (MD)
+                       │             │
+              General Manager (GM)   Operations Manager
+                       │
+   ┌──────────┬────────┴────────┬───────────┬───────────┐
+Projects   Procurement     Quantity      Finance     Engineering
+Department  Department     Survey Dept   Department  Department
+   │          │              │             │           │
+Projects   Procurement    Quantity      Finance    Engineering
+Manager    Manager        Surveyor      Manager    Manager
+   │          │              │             │           │
+[Engineers] [Procurement  [reports to   Accountant  Engineers
+            Officers]     Projects too]            (oversight by EM)
+
+                                                      HSE Department
+                                                      │
+                                              HSE Officer
+                                                      │
+                                            HSE Assistant Officer
+```
+
+### Code changes
+
+1. **Schema migration**: `engineering_manager` and `care_taker` added to `ops_user_role` enum (migration `20260625090000_pymble_ops_role_engineering_manager_caretaker.sql`).
+2. **Type + labels**: [src/lib/ops/types.ts](../src/lib/ops/types.ts), [src/lib/ops/roles.ts](../src/lib/ops/roles.ts).
+3. **New role helpers**: `isOperationsManagerRole`, `isEngineeringManagerRole`, `isCareTakerRole`, `isLeadershipRole` in [roles.ts](../src/lib/ops/roles.ts).
+4. **New permission helpers**:
+   - `canAccessExecutiveDashboard` — MD/GM/Developer/Owner only.
+   - `canSeeCrossDepartmentSummary` — same scope.
+   - `canManageEngineeringTeam` — leadership + Engineering Manager.
+   - `canReceiveEngineeringEscalations` — same scope; used to fan out DSR/HSE notifications to EM.
+5. **Payroll route gate tightened**: previously `roles: OPS_OPERATIONAL_ROLES`, which let Procurement / HSE / Engineering see payroll. Now `roles: [...OPS_LEADERSHIP_ROLES, ...OPS_HR_ROLES, ...OPS_FINANCE_ROLES]`.
+6. **Activity timeline**: Engineering Manager and Care Taker get role-scoped feeds in [activity-scoping.ts](../src/lib/ops/activity-scoping.ts).
+7. **Approvals departments**: Engineering Manager sees Operations + Commercial + HSE tabs (not Finance, not HR). Department managers no longer see the "All" tab — leadership only.
+8. **Notification fanouts**: Engineering Manager added to recipient sets for Daily Site Report submitted, HSE incident closed, HSE weekly report submitted.
+9. **Dashboard groups**: New `engineering` group in [OpsRoleOverviewDashboard.tsx](../src/components/ops/OpsRoleOverviewDashboard.tsx); Engineering Manager + Engineers land there.
+
+### Operations Manager scope clarification
+
+Operations Manager **can** see: operations modules (sites, attendance, workers, daily site reports, material requests, equipment, fleet logistics, stores, RFQ / PO, suppliers), HSE incidents (for cross-functional context), commercial high-level (BOQ).
+
+Operations Manager **cannot** see: `/ops/executive`, `/ops/payroll`, `/ops/employees`, `/ops/staff`, individual payslips, cross-department executive summaries.
+
+### Engineering Manager scope
+
+Engineering Manager **can** see: engineering controls (site instructions, QA/QC, drawings, snags), daily site reports, material requests, BOQ (commercial context), HSE incidents (their team's exposure), all approvals tabs except finance and HR.
+
+Engineering Manager **receives notifications when**: a Daily Site Report is submitted, an HSE incident is closed, a Weekly HSE Report is submitted. Engineers who submit Material Requests escalate up to the EM by default.
+
+### Care Taker scope
+
+Care Taker only needs login + their own attendance + facility notices. Workspace timeline is filtered to `attendance` only. No access to financial, HR, or executive surfaces.
+
+### Tests
+
+Role-isolation matrix in `tests/role-isolation.test.ts` blocks regressions. 9 assertions covering:
+- Leadership-only executive dashboard
+- Operations Manager has no executive privilege
+- Engineering Manager exists + reports up
+- Care Taker has minimal scope
+- Department managers do not see other departments
+- Leadership has full route access
+- Every department manager has approvals visibility in their own department
+- Department managers never see the "All" tab
+- Operational managers list integrity
+
+Future role additions or scope changes should extend this test file in the same sprint as the code change.

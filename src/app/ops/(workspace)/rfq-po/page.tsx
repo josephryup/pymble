@@ -1026,6 +1026,14 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                               purchaseOrder={po}
                               role={auth.profile.role}
                             />
+                            <a
+                              className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary-blue hover:underline"
+                              href={`/api/ops/pdf/purchase-order/${po.id}`}
+                              target="_blank"
+                              rel="noopener"
+                            >
+                              Download PDF
+                            </a>
                           </li>
                         ))}
                       </ul>

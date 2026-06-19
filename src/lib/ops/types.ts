@@ -12,6 +12,7 @@ export type OpsUserRole =
   | "finance_manager"
   | "accountant"
   | "engineer"
+  | "engineering_manager"
   | "hse_officer"
   | "hse_assistant_officer"
   | "admin_receptionist"

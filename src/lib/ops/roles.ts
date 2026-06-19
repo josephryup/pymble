@@ -2,21 +2,22 @@ import type { OpsUserRole } from "@/lib/ops/types";
 
 export const OPS_ROLE_LABELS: Record<OpsUserRole, string> = {
   accountant: "Accountant",
-  admin_receptionist: "Admin / Receptionist",
+  admin_receptionist: "Administration / Receptionist",
   crew: "Staff",
   developer: "Developer",
   engineer: "Engineer",
+  engineering_manager: "Engineering Manager",
   finance_manager: "Finance Manager",
   general_manager: "General Manager",
-  hr: "Human Resource",
-  hse_assistant_officer: "HSE Assistant Officer",
-  hse_officer: "HSE Officer",
-  human_resource: "Human Resource",
+  hr: "Human Resources",
+  hse_assistant_officer: "Health, Safety and Environment Assistant Officer",
+  hse_officer: "Health, Safety and Environment Officer",
+  human_resource: "Human Resources",
   manager: "General Manager",
   managing_director: "Managing Director",
   operations_manager: "Operations Manager",
   owner: "Managing Director",
-  procurement: "Procurement",
+  procurement: "Procurement Officer",
   procurement_assistant: "Procurement Assistant",
   procurement_manager: "Procurement Manager",
   projects_manager: "Projects Manager",
@@ -27,19 +28,20 @@ export const OPS_ROLE_LABELS: Record<OpsUserRole, string> = {
 export const OPS_STAFF_ROLE_OPTIONS = [
   { value: "managing_director", label: "Managing Director" },
   { value: "general_manager", label: "General Manager" },
-  { value: "human_resource", label: "Human Resource" },
+  { value: "human_resource", label: "Human Resources" },
   { value: "operations_manager", label: "Operations Manager" },
   { value: "projects_manager", label: "Projects Manager" },
+  { value: "engineering_manager", label: "Engineering Manager" },
   { value: "procurement_manager", label: "Procurement Manager" },
   { value: "quantity_surveyor", label: "Quantity Surveyor" },
-  { value: "procurement", label: "Procurement" },
+  { value: "procurement", label: "Procurement Officer" },
   { value: "procurement_assistant", label: "Procurement Assistant" },
   { value: "finance_manager", label: "Finance Manager" },
   { value: "accountant", label: "Accountant" },
   { value: "engineer", label: "Engineer" },
-  { value: "hse_officer", label: "HSE Officer" },
-  { value: "hse_assistant_officer", label: "HSE Assistant Officer" },
-  { value: "admin_receptionist", label: "Admin / Receptionist" },
+  { value: "hse_officer", label: "Health, Safety and Environment Officer" },
+  { value: "hse_assistant_officer", label: "Health, Safety and Environment Assistant Officer" },
+  { value: "admin_receptionist", label: "Administration / Receptionist" },
 ] as const;
 
 export const OPS_STAFF_ROLE_VALUES = [
@@ -48,6 +50,7 @@ export const OPS_STAFF_ROLE_VALUES = [
   "human_resource",
   "operations_manager",
   "projects_manager",
+  "engineering_manager",
   "procurement_manager",
   "quantity_surveyor",
   "procurement",
@@ -108,4 +111,25 @@ export function isGeneralManagerRole(role?: string | null) {
 
 export function isHumanResourceRole(role?: string | null) {
   return role === "human_resource" || role === "hr";
+}
+
+export function isOperationsManagerRole(role?: string | null) {
+  return role === "operations_manager";
+}
+
+export function isEngineeringManagerRole(role?: string | null) {
+  return role === "engineering_manager";
+}
+
+/**
+ * Leadership = MD, GM, Developer, Owner. NOT Operations Manager.
+ * The organogram has Operations Manager reporting up to the Managing Director;
+ * they do not have executive-level visibility.
+ */
+export function isLeadershipRole(role?: string | null) {
+  return (
+    isDeveloperRole(role) ||
+    isManagingDirectorRole(role) ||
+    isGeneralManagerRole(role)
+  );
 }

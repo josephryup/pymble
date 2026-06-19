@@ -24,7 +24,10 @@ describe("ops local role preview", () => {
   it("builds a deterministic read-only preview profile", () => {
     const profile = buildOpsLocalRolePreviewProfile("hse_officer");
 
-    assert.equal(profile.full_name, "Local Preview - HSE Officer");
+    assert.equal(
+      profile.full_name,
+      "Local Preview - Health, Safety and Environment Officer",
+    );
     assert.equal(profile.email, "local-role-preview@pymbleconstruction.test");
     assert.equal(profile.role, "hse_officer");
     assert.equal(profile.is_active, true);

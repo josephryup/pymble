@@ -49,6 +49,7 @@ import {
 type DashboardGroup =
   | "commercial"
   | "delivery"
+  | "engineering"
   | "executive"
   | "finance"
   | "hse"
@@ -105,6 +106,10 @@ const DASHBOARD_COPY: Record<
   delivery: {
     eyebrow: "Site Delivery",
     title: "Site delivery control",
+  },
+  engineering: {
+    eyebrow: "Engineering Workspace",
+    title: "Engineering control",
   },
   executive: {
     eyebrow: "Executive Workspace",
@@ -167,6 +172,16 @@ function dashboardGroupForRole(role: OpsUserRole): DashboardGroup {
     return "commercial";
   }
 
+  // Engineering Manager + Engineers see an engineering-focused dashboard
+  // (Site Instructions, Quality Assurance / Quality Control, Daily Site Reports,
+  // engineer-raised Material Requests waiting on sign-off). Per the organogram,
+  // engineering is its own department reporting up to the MD/GM via the EM.
+  if (role === "engineering_manager" || role === "engineer") {
+    return "engineering";
+  }
+
+  // Operations Manager + Projects Manager + supervisors share the delivery
+  // dashboard — operational execution view, NOT executive.
   return "delivery";
 }
 
@@ -296,6 +311,11 @@ function actionSetForGroup(group: DashboardGroup): DashboardAction[] {
       { href: "/ops/attendance", icon: ClipboardCheck, label: "Attendance" },
       { href: "/ops/material-requests", icon: FilePlus2, label: "Material request" },
     ],
+    engineering: [
+      { href: "/ops/daily-site-reports", icon: FileText, label: "Daily site report" },
+      { href: "/ops/engineering-controls", icon: ClipboardCheck, label: "Site instructions" },
+      { href: "/ops/material-requests", icon: FilePlus2, label: "Material request" },
+    ],
     executive: [
       { href: "/ops/executive", icon: BarChart3, label: "Executive dashboard" },
       { href: "/ops/approvals", icon: ClipboardCheck, label: "Approvals" },
@@ -349,7 +369,7 @@ function contextLine(
     }.${escalationText}`;
   }
 
-  if (group === "delivery") {
+  if (group === "delivery" || group === "engineering") {
     return `${overview.attendancePings.length} attendance ping${
       overview.attendancePings.length === 1 ? "" : "s"
     } today across ${overview.sites.length} active site${
@@ -443,7 +463,7 @@ function kpisForGroup(
     ];
   }
 
-  if (group === "delivery") {
+  if (group === "delivery" || group === "engineering") {
     return [
       {
         href: "/ops/sites",
@@ -657,7 +677,7 @@ function chartDataForGroup(
     ];
   }
 
-  if (group === "delivery") {
+  if (group === "delivery" || group === "engineering") {
     return [
       { label: "Sites", tone: "good", value: overview.sites.length },
       { label: "Attendance", tone: "good", value: overview.attendancePings.length },
@@ -756,7 +776,7 @@ function actionsForGroup(
     }
   }
 
-  if (group === "delivery") {
+  if (group === "delivery" || group === "engineering") {
     if (metrics.escalations.staleApprovals > 0) {
       actions.push({
         href: "/ops/approvals",
@@ -994,6 +1014,25 @@ function shortcutGroupsForRole(group: DashboardGroup, role: OpsUserRole): Shortc
           { href: "/ops/material-requests", label: "Material requests" },
           { href: "/ops/stores-inventory", label: "Stores and inventory" },
           { href: "/ops/equipment", label: "Equipment" },
+        ],
+      },
+    ],
+    engineering: [
+      {
+        title: "Engineering control",
+        items: [
+          { href: "/ops/engineering-controls", label: "Site instructions and Quality Assurance and Quality Control" },
+          { href: "/ops/daily-site-reports", label: "Daily site reports" },
+          { href: "/ops/material-requests", label: "Material requests" },
+          { href: "/ops/boq", label: "Bills of Quantities" },
+        ],
+      },
+      {
+        title: "Team and oversight",
+        items: [
+          { href: "/ops/sites", label: "Projects and sites" },
+          { href: "/ops/workers", label: "Workers" },
+          { href: "/ops/hse", label: "Health, Safety and Environment incidents" },
         ],
       },
     ],
@@ -1474,7 +1513,7 @@ function PrimaryPanel({
   metrics: OpsOverviewRoleMetrics;
   overview: OpsOverview;
 }) {
-  if (group === "delivery") {
+  if (group === "delivery" || group === "engineering") {
     return <SiteActivityPanel overview={overview} />;
   }
 

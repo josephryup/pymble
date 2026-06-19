@@ -468,6 +468,15 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      <a
+                        className={OPS_SECONDARY_BUTTON_CLASS}
+                        href={`/api/ops/pdf/invoice/${invoice.id}`}
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        <FileText className="size-3" aria-hidden="true" />
+                        Download PDF
+                      </a>
                       {canSendInvoice(auth.profile.role, invoice) ? (
                         <form action={sendInvoiceAction}>
                           <input name="id" type="hidden" value={invoice.id} />

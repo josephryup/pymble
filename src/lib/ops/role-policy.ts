@@ -138,6 +138,16 @@ export const OPS_PRODUCTION_ROLE_POLICY: OpsProductionRolePolicy[] = [
     notes: "Field engineering role with module access only.",
   },
   {
+    role: "engineering_manager",
+    label: "Engineering Manager",
+    accountModel: "many",
+    canInviteStaff: false,
+    canDeactivateStaff: false,
+    visibleInAccessRegister: true,
+    notes:
+      "Oversees the Engineering Department. Receives Daily Site Report, HSE incident, and material request escalations from Engineers. Reports up to Managing Director / General Manager. No executive privilege.",
+  },
+  {
     role: "hse_officer",
     label: "HSE Officer",
     accountModel: "many",
@@ -157,12 +167,12 @@ export const OPS_PRODUCTION_ROLE_POLICY: OpsProductionRolePolicy[] = [
   },
   {
     role: "admin_receptionist",
-    label: "Admin / Receptionist",
+    label: "Administration / Receptionist",
     accountModel: "many",
     canInviteStaff: false,
     canDeactivateStaff: false,
     visibleInAccessRegister: true,
-    notes: "Admin and HR-support visibility role with module access only.",
+    notes: "Admin and Human Resources support visibility role with module access only.",
   },
 ];
 

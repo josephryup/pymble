@@ -5,6 +5,7 @@ import {
   type OpsListState,
   type OpsPaginatedResult,
 } from "@/lib/ops/listing";
+import { logOpsServerError } from "@/lib/ops/log";
 import { canViewAllOpsMaterialRequests } from "@/lib/ops/material-request-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
@@ -251,7 +252,7 @@ type RawMaterialRequestItem = Omit<
   estimated_unit_cost: number | string;
   quantity: number | string;
   supplier_name_freeform: string | null;
-  supplier: { name: string } | { name: string }[] | null;
+  supplier: { legal_name: string } | { legal_name: string }[] | null;
 };
 
 type RawMaterialRequestApproval = {
@@ -279,7 +280,7 @@ function groupItemsByRequestId(items: RawMaterialRequestItem[]) {
   items.forEach((item) => {
     const supplierRel = Array.isArray(item.supplier) ? item.supplier[0] ?? null : item.supplier;
     const supplierName =
-      supplierRel?.name ??
+      supplierRel?.legal_name ??
       (item.supplier_name_freeform && item.supplier_name_freeform.trim().length > 0
         ? item.supplier_name_freeform
         : null);
@@ -335,12 +336,17 @@ async function fetchMaterialRequestItems(requestIds: string[]) {
   const { data, error } = await supabase
     .from("material_request_items")
     .select(
-      "id, request_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, actual_unit_cost, actual_total, notes, created_at, supplier_id, supplier_name_freeform, supplier:suppliers!material_request_items_supplier_id_fkey(name)",
+      "id, request_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, actual_unit_cost, actual_total, notes, created_at, supplier_id, supplier_name_freeform, supplier:suppliers!material_request_items_supplier_id_fkey(legal_name)",
     )
     .in("request_id", requestIds)
     .order("line_number", { ascending: true });
 
   if (error) {
+    logOpsServerError(error, {
+      module: "material_requests",
+      action: "fetchMaterialRequestItems",
+      extra: { requestIdCount: requestIds.length },
+    });
     throw error;
   }
 
@@ -470,4 +476,74 @@ export async function fetchPaginatedOpsMaterialRequests(
 ): Promise<OpsPaginatedResult<OpsMaterialRequestSummary>> {
   const result = await fetchOpsMaterialRequestItems(options, options.listState);
   return toOpsPaginatedResult(result.items, result.count, options.listState);
+}
+
+/**
+ * Fetch a single Material Request by id, with its items + requester + site.
+ * Used by record-detail pages and PDF download routes.
+ */
+export async function fetchOpsMaterialRequestById(
+  id: string,
+): Promise<OpsMaterialRequestSummary | null> {
+  await requireOpsUser();
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("material_requests")
+    .select(
+      [
+        "id",
+        "request_number",
+        "site_id",
+        "requested_by",
+        "title",
+        "description",
+        "priority",
+        "status",
+        "needed_by",
+        "approval_request_id",
+        "submitted_at",
+        "approved_at",
+        "rejected_at",
+        "ordered_at",
+        "closed_at",
+        "priced_at",
+        "priced_by",
+        "created_at",
+        "updated_at",
+        "requester:users!material_requests_requested_by_fkey(id, full_name, role)",
+        "site:sites(id, code, name, location)",
+      ].join(", "),
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    logOpsServerError(error, {
+      module: "material_requests",
+      action: "fetchOpsMaterialRequestById",
+      entityId: id,
+    });
+    throw error;
+  }
+
+  if (!data) return null;
+
+  const request = data as unknown as RawMaterialRequest;
+  const [itemsByRequestId, approvalsByRequestId] = await Promise.all([
+    fetchMaterialRequestItems([request.id]),
+    fetchMaterialRequestApprovals([request.id]),
+  ]);
+  const items = itemsByRequestId.get(request.id) ?? [];
+  const approval = approvalsByRequestId.get(request.id);
+
+  return {
+    ...request,
+    actual_total: calculateOpsMaterialRequestActualTotal(items),
+    approval_request_id: request.approval_request_id ?? approval?.id ?? null,
+    approval_status: approval?.status ?? null,
+    estimated_total: calculateOpsMaterialRequestTotal(items),
+    items,
+    requester: normalizeRelation(request.requester),
+    site: normalizeRelation(request.site),
+  } satisfies OpsMaterialRequestSummary;
 }
