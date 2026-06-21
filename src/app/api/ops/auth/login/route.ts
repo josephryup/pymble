@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { trackOpsEvent } from "@/lib/ops/analytics";
 import { rejectMismatchedOpsOrigin } from "@/lib/ops/api-security";
 import { createOpsCookieSessionClient, getOpsUserProfile } from "@/lib/ops/auth";
 import { OPS_LOCAL_ROLE_PREVIEW_COOKIE } from "@/lib/ops/local-role-preview";
@@ -44,6 +45,8 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+
+  trackOpsEvent("ops.login_succeeded");
 
   const response = NextResponse.json({ ok: true });
 

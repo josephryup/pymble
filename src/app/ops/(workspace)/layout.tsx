@@ -1,6 +1,7 @@
 import { OpsAutoRefresh } from "@/components/ops/OpsAutoRefresh";
 import { OpsFormSubmitGuard } from "@/components/ops/OpsFormSubmitGuard";
 import { OpsServiceWorker } from "@/components/ops/OpsServiceWorker";
+import { OpsSessionTimeout } from "@/components/ops/OpsSessionTimeout";
 import { OpsShell } from "@/components/ops/OpsShell";
 import { OpsSyncIndicator } from "@/components/ops/OpsSyncIndicator";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -33,7 +34,12 @@ export default async function OpsWorkspaceLayout({
       <OpsServiceWorker />
       <OpsFormSubmitGuard />
       <OpsSyncIndicator />
-      {auth.isLocalRolePreview ? null : <OpsAutoRefresh userId={profile.id} />}
+      {auth.isLocalRolePreview ? null : (
+        <>
+          <OpsAutoRefresh userId={profile.id} />
+          <OpsSessionTimeout role={profile.role} />
+        </>
+      )}
       {children}
     </OpsShell>
   );

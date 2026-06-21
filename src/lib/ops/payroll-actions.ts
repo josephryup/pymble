@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { canManageOps } from "@/lib/ops/permissions";
+import { computePayslip } from "@/lib/ops/statutory/calculator";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -186,10 +187,24 @@ export async function createPayrollRunAction(formData: FormData) {
         .reduce((sum, advance) => sum + Number(advance.amount), 0),
     );
 
+    // Apply Zambian statutory deductions (PAYE / NAPSA / WCF) per the rule
+    // set for the payroll period. Numbers are stored on the row so payslips
+    // and historical replays are stable.
+    const statutory = computePayslip(grossPay, parsed.data.period_end);
+    const netPay = roundToTwo(
+      Math.max(statutory.gross - statutory.totalEmployeeDeductions - advanceDeduction, 0),
+    );
+
     return {
       advance_deduction: advanceDeduction,
       gross_pay: grossPay,
-      net_pay: roundToTwo(Math.max(grossPay - advanceDeduction, 0)),
+      net_pay: netPay,
+      paye_amount: statutory.paye,
+      napsa_employee: statutory.napsaEmployee,
+      napsa_employer: statutory.napsaEmployer,
+      wcf_employer: statutory.wcfEmployer,
+      tax_year: statutory.taxYear,
+      statutory_citation: statutory.citation,
       payout_status: "pending" as const,
       worker_id: workerId,
     };

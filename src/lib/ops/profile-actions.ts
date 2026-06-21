@@ -8,6 +8,7 @@ import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { canCreateOpsSelfServiceLeaveRequest } from "@/lib/ops/hr-permissions";
 import { queueOpsNotification } from "@/lib/ops/notifications";
+import { opsPasswordSchema } from "@/lib/ops/password-policy";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsEmployeeStatus, OpsLeaveType, OpsUserRole } from "@/lib/ops/types";
 
@@ -30,7 +31,7 @@ const leaveTypes = [
 const updatePasswordSchema = z
   .object({
     confirm_password: z.string(),
-    password: z.string().min(8, "Password must be at least 8 characters.").max(72),
+    password: opsPasswordSchema.and(z.string().max(72)),
   })
   .refine((value) => value.password === value.confirm_password, {
     message: "Passwords do not match.",

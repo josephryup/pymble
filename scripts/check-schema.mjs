@@ -68,10 +68,25 @@ const REQUIRED_COLUMNS = [
 
   // @mentions on record comments (Phase Q)
   ["record_comments", "mentioned_user_ids"],
+
+  // Sprint 10 offline-first idempotency keys
+  ["daily_site_reports", "client_id"],
+  ["attendance_records", "client_id"],
+  ["material_requests", "client_id"],
+  ["hse_incidents", "client_id"],
 ];
 
 const REQUIRED_TABLES = [
   "hse_weekly_reports", // Phase K2
+  "invoice_number_counters", // Sprint 9 — ZRA-compliant invoice sequence
+  "audit_events_archive", // Sprint 11 — retention policy
+  "notifications_archive", // Sprint 11 — retention policy
+];
+
+const REQUIRED_FUNCTIONS = [
+  "ops_next_invoice_number",
+  "ops_archive_audit_events",
+  "ops_archive_notifications",
 ];
 
 const REQUIRED_REALTIME_PUBLICATIONS = [
@@ -162,7 +177,20 @@ async function main() {
     }
   }
 
-  // 3. Realtime publication
+  // 3. Required functions
+  for (const fnName of REQUIRED_FUNCTIONS) {
+    const { rows } = await client.query(
+      `select 1 from pg_proc p
+       join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname = 'public' and p.proname = $1`,
+      [fnName],
+    );
+    if (rows.length === 0) {
+      issues.push(`MISSING FUNCTION: public.${fnName}`);
+    }
+  }
+
+  // 4. Realtime publication
   const { rows: publishedRows } = await client.query(
     `select tablename from pg_publication_tables
      where pubname = 'supabase_realtime' and schemaname = 'public'`,
@@ -178,7 +206,7 @@ async function main() {
 
   if (issues.length === 0) {
     console.log(
-      `[check-schema] OK — ${REQUIRED_COLUMNS.length} columns, ${REQUIRED_TABLES.length} tables, ${REQUIRED_REALTIME_PUBLICATIONS.length} realtime publications confirmed.`,
+      `[check-schema] OK — ${REQUIRED_COLUMNS.length} columns, ${REQUIRED_TABLES.length} tables, ${REQUIRED_FUNCTIONS.length} functions, ${REQUIRED_REALTIME_PUBLICATIONS.length} realtime publications confirmed.`,
     );
     process.exit(0);
   }

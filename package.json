@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "check-bundle-size": "node scripts/check-bundle-size.mjs",
     "check-schema": "node scripts/check-schema.mjs",
     "optimize:images": "node scripts/optimize-images.mjs",
     "ops:readiness": "node scripts/ops-production-readiness.mjs",

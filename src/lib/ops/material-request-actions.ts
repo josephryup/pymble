@@ -18,6 +18,7 @@ import {
   materialRequestApprovalRecipientRoles,
   materialRequestApprovalSteps,
 } from "@/lib/ops/material-request-permissions";
+import { trackOpsEvent } from "@/lib/ops/analytics";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
@@ -482,6 +483,10 @@ export async function submitMaterialRequestForApprovalAction(formData: FormData)
       }).catch(() => null),
     ),
   );
+
+  trackOpsEvent("ops.material_request.submitted", {
+    request_number: request.request_number,
+  });
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   revalidatePath("/ops/approvals");

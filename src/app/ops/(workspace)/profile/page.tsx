@@ -682,18 +682,21 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                 <input
                   autoComplete="new-password"
                   className={OPS_INPUT_CLASS}
-                  minLength={8}
+                  minLength={12}
                   name="password"
                   required
                   type="password"
                 />
+                <span className="mt-1 block text-xs text-primary-dark/55">
+                  At least 12 characters with an uppercase letter, a lowercase letter, and a digit.
+                </span>
               </label>
               <label className={OPS_LABEL_CLASS}>
                 Confirm password
                 <input
                   autoComplete="new-password"
                   className={OPS_INPUT_CLASS}
-                  minLength={8}
+                  minLength={12}
                   name="confirm_password"
                   required
                   type="password"
