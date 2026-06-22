@@ -18,7 +18,7 @@ type FetchOpsDashboardSnapshotOptions<TRaw, TResult> = {
   fallback: () => Promise<TResult>;
   load: () => Promise<OpsDashboardSnapshotLoadResult<TRaw>>;
   name: string;
-  normalize: (snapshot: TRaw) => TResult;
+  normalize: (snapshot: TRaw) => TResult | Promise<TResult>;
   onFallback?: (reason: OpsDashboardSnapshotFallbackReason) => void;
 };
 
@@ -50,7 +50,7 @@ export async function fetchOpsDashboardSnapshot<TRaw, TResult>({
   const { data, error } = await load();
 
   if (!error && data !== null && data !== undefined) {
-    return normalize(data);
+    return await normalize(data);
   }
 
   onFallback(createOpsDashboardSnapshotFallbackReason(name, error));

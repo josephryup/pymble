@@ -1471,7 +1471,7 @@ function ActivityPanel({ activity }: { activity: OpsOverviewActivity[] }) {
                     <span aria-hidden="true">·</span>
                     <span className="inline-flex items-center gap-1.5 font-semibold text-primary-dark/70">
                       <UserCircle2 className="size-3.5" aria-hidden="true" />
-                      {item.actor_name ?? "System"}
+                      {item.actor_name ?? "Automated task"}
                       {item.actor_role ? (
                         <span className="text-primary-dark/45">
                           · {formatOpsRole(item.actor_role)}

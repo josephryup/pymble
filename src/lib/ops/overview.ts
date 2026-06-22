@@ -6,6 +6,7 @@ import {
   type OrganizationProfile,
 } from "@/lib/ops/organization";
 import { canManageOps } from "@/lib/ops/permissions";
+import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsAttendancePresence,
   OpsBoqStatus,
@@ -141,6 +142,7 @@ type RawActivity = {
   action: string;
   entity_type: string;
   created_at: string;
+  actor_user_id?: string | null;
   actor?: RawActivityActor | RawActivityActor[] | null;
 };
 
@@ -234,7 +236,7 @@ function activityTone(action: string): OpsOverviewActivity["tone"] {
   return "info";
 }
 
-function resolveActivityActor(actor: RawActivity["actor"]) {
+function embeddedActor(actor: RawActivity["actor"]) {
   const resolved = Array.isArray(actor) ? (actor[0] ?? null) : (actor ?? null);
   return {
     name: resolved?.full_name?.trim() || null,
@@ -242,14 +244,61 @@ function resolveActivityActor(actor: RawActivity["actor"]) {
   };
 }
 
-function normalizeActivity(items: RawActivity[] | null | undefined) {
-  return (items ?? []).map((item) => {
-    const actor = resolveActivityActor(item.actor);
+/**
+ * Resolve the activity feed's actor names/roles.
+ *
+ * The timeline must name the person who performed each action. We cannot rely
+ * on a per-row `users` join here: the activity query runs under the viewer's
+ * session, and the `users` RLS policy hides everyone else's row — so a joined
+ * actor comes back null and the UI falls back to a generic label. Since this
+ * feed is already gated to managers and only surfaces audit metadata they may
+ * see, we resolve actor identity once via the service client (bypassing the
+ * per-row users RLS) and map it back by `actor_user_id`.
+ */
+async function normalizeActivity(
+  items: RawActivity[] | null | undefined,
+): Promise<OpsOverviewActivity[]> {
+  const rows = items ?? [];
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const actorIds = [
+    ...new Set(
+      rows
+        .map((item) => item.actor_user_id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ];
+
+  const actorMap = new Map<string, { name: string | null; role: string | null }>();
+  if (actorIds.length > 0) {
+    const service = getOpsSupabaseServiceClient();
+    const { data } = await service
+      .from("users")
+      .select("id, full_name, role")
+      .in("id", actorIds);
+    for (const row of (data ?? []) as Array<{
+      id: string;
+      full_name: string | null;
+      role: string | null;
+    }>) {
+      actorMap.set(row.id, {
+        name: row.full_name?.trim() || null,
+        role: row.role || null,
+      });
+    }
+  }
+
+  return rows.map((item) => {
+    const resolved = item.actor_user_id ? actorMap.get(item.actor_user_id) : null;
+    // Prefer the service-resolved identity; fall back to any embedded actor.
+    const fallback = embeddedActor(item.actor);
     return {
       id: item.id,
       message: formatAction(item.action, item.entity_type),
-      actor_name: actor.name,
-      actor_role: actor.role,
+      actor_name: resolved?.name ?? fallback.name,
+      actor_role: resolved?.role ?? fallback.role,
       tone: activityTone(item.action),
       created_at: item.created_at,
     };
@@ -315,7 +364,7 @@ function normalizeLatestBoq(boq: RawOverviewSnapshotBoq | null | undefined): Ops
     : null;
 }
 
-function normalizeOverviewSnapshot(snapshot: RawOverviewSnapshot) {
+async function normalizeOverviewSnapshot(snapshot: RawOverviewSnapshot) {
   return {
     activeDate: snapshot.activeDate ?? todayInLusaka(),
     profile: normalizeProfile(snapshot.profile),
@@ -330,7 +379,7 @@ function normalizeOverviewSnapshot(snapshot: RawOverviewSnapshot) {
     latestBoq: normalizeLatestBoq(snapshot.latestBoq),
     latestInvoice: normalizeLatestInvoice(snapshot.latestInvoice),
     sitePhotos: snapshot.sitePhotos ?? [],
-    activity: normalizeActivity(snapshot.activity),
+    activity: await normalizeActivity(snapshot.activity),
   };
 }
 
@@ -523,9 +572,7 @@ async function fetchOpsOverviewViaQueries() {
   if (canManageOps(userProfile.role)) {
     let activityQuery = supabase
       .from("audit_events")
-      .select(
-        "id, action, entity_type, module_key, created_at, actor:users!audit_events_actor_user_id_fkey(full_name, role)",
-      )
+      .select("id, action, entity_type, module_key, created_at, actor_user_id")
       .order("created_at", { ascending: false })
       .limit(20);
 
@@ -540,17 +587,9 @@ async function fetchOpsOverviewViaQueries() {
 
     const { data: activityData } = await activityQuery;
 
-    activity = ((activityData ?? []) as unknown as RawActivity[]).slice(0, 6).map((item) => {
-      const actor = resolveActivityActor(item.actor);
-      return {
-        id: item.id,
-        message: formatAction(item.action, item.entity_type),
-        actor_name: actor.name,
-        actor_role: actor.role,
-        tone: activityTone(item.action),
-        created_at: item.created_at,
-      };
-    });
+    activity = await normalizeActivity(
+      ((activityData ?? []) as unknown as RawActivity[]).slice(0, 6),
+    );
   }
 
   const openApprovals = attendancePings.filter((record) => !record.approved_at).length;
