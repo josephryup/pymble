@@ -132,6 +132,16 @@ export function canCancelOpsRfq(role: OpsUserRole, rfq: OpsRfqMutationTarget) {
   return canManageOpsRfq(role) && rfq.status !== "closed" && rfq.status !== "cancelled";
 }
 
+export function canEditOpsPurchaseOrder(
+  role: OpsUserRole,
+  purchaseOrder: OpsPurchaseOrderMutationTarget,
+) {
+  return (
+    canManageOpsRfq(role) &&
+    (purchaseOrder.status === "draft" || purchaseOrder.status === "rejected")
+  );
+}
+
 export function canSubmitOpsPurchaseOrderForApproval(
   role: OpsUserRole,
   purchaseOrder: OpsPurchaseOrderMutationTarget,

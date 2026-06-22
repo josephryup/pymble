@@ -596,3 +596,58 @@ export async function deletePayrollRunAction(formData: FormData) {
   revalidatePath("/ops/payroll");
   redirect("/ops/payroll?updated=deleted");
 }
+
+const cashAdvanceIdSchema = z.object({
+  id: z.string().uuid("Select a cash advance."),
+});
+
+export async function archiveCashAdvanceAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageOps(profile.role)) {
+    payrollError("Your role cannot archive cash advances.");
+  }
+
+  const parsed = cashAdvanceIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    payrollError(parsed.error.issues[0]?.message ?? "Select a cash advance.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { data: advance, error: loadError } = await supabase
+    .from("cash_advances")
+    .select("id, deducted_in_run_id")
+    .eq("id", parsed.data.id)
+    .maybeSingle<{ id: string; deducted_in_run_id: string | null }>();
+
+  if (loadError || !advance) {
+    payrollError("Cash advance was not found.");
+  }
+
+  if (advance.deducted_in_run_id) {
+    payrollError("This advance has already been deducted in a payroll run and cannot be archived.");
+  }
+
+  const { error } = await supabase
+    .from("cash_advances")
+    .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
+    .eq("id", advance.id)
+    .is("deducted_in_run_id", null);
+
+  if (error) {
+    payrollError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "cash_advance.archived",
+    entity_type: "cash_advance",
+    entity_id: advance.id,
+    module_key: "payroll",
+    source_table: "cash_advances",
+    source_id: advance.id,
+  });
+
+  revalidatePath("/ops/payroll");
+  redirect("/ops/payroll?updated=advance_archived");
+}

@@ -17,6 +17,7 @@ import {
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approvePayrollRunAction,
+  archiveCashAdvanceAction,
   completePayrollRunAction,
   createCashAdvanceAction,
   createPayrollRunAction,
@@ -28,6 +29,7 @@ import {
   firstParam,
   formatZmw,
   noticeFromParams,
+  OPS_DANGER_BUTTON_CLASS,
   OPS_INPUT_CLASS,
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
@@ -88,6 +90,13 @@ function payrollNotice(params: OpsSearchParams) {
     return {
       tone: "success" as const,
       message: "Payroll run marked as paid.",
+    };
+  }
+
+  if (firstParam(params.updated) === "advance_archived") {
+    return {
+      tone: "success" as const,
+      message: "Cash advance archived.",
     };
   }
 
@@ -330,15 +339,28 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                     <p className="mt-2 text-sm text-primary-dark/62">
                       {advance.note || "Advance note not recorded"}
                     </p>
-                    <span
-                      className={`mt-3 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${
-                        advance.deducted_in_run_id
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-orange-200 bg-orange-50 text-orange-700"
-                      }`}
-                    >
-                      {advance.deducted_in_run_id ? "Deducted" : "Open"}
-                    </span>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${
+                          advance.deducted_in_run_id
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-orange-200 bg-orange-50 text-orange-700"
+                        }`}
+                      >
+                        {advance.deducted_in_run_id ? "Deducted" : "Open"}
+                      </span>
+                      {canManage && !advance.deducted_in_run_id ? (
+                        <form action={archiveCashAdvanceAction}>
+                          <input name="id" type="hidden" value={advance.id} />
+                          <OpsConfirmSubmitButton
+                            className={OPS_DANGER_BUTTON_CLASS}
+                            confirmText="Confirm archive"
+                          >
+                            Archive
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ))
@@ -448,6 +470,16 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                           <OpsMobileRecordRow label="Gross">
                             {formatZmw(item.gross_pay)}
                           </OpsMobileRecordRow>
+                          {item.overtime_hours > 0 ? (
+                            <OpsMobileRecordRow label="OT Hours">
+                              {item.overtime_hours}h
+                            </OpsMobileRecordRow>
+                          ) : null}
+                          {item.overtime_amount > 0 ? (
+                            <OpsMobileRecordRow label="OT Pay">
+                              {formatZmw(item.overtime_amount)}
+                            </OpsMobileRecordRow>
+                          ) : null}
                           <OpsMobileRecordRow label="Deducted">
                             {formatZmw(item.advance_deduction)}
                           </OpsMobileRecordRow>
@@ -485,6 +517,12 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                             Gross
                           </th>
                           <th className="px-4 py-3" scope="col">
+                            OT Hours
+                          </th>
+                          <th className="px-4 py-3" scope="col">
+                            OT Pay
+                          </th>
+                          <th className="px-4 py-3" scope="col">
                             Deducted
                           </th>
                           <th className="px-4 py-3" scope="col">
@@ -508,6 +546,12 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                             </td>
                             <td className="px-4 py-3 text-primary-dark/70">
                               {formatZmw(item.gross_pay)}
+                            </td>
+                            <td className="px-4 py-3 text-primary-dark/70">
+                              {item.overtime_hours > 0 ? `${item.overtime_hours}h` : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-primary-dark/70">
+                              {item.overtime_amount > 0 ? formatZmw(item.overtime_amount) : "—"}
                             </td>
                             <td className="px-4 py-3 text-primary-dark/70">
                               {formatZmw(item.advance_deduction)}

@@ -29,12 +29,14 @@ import {
   issuePurchaseOrderAction,
   recordSupplierQuoteAction,
   submitPurchaseOrderForApprovalAction,
+  updatePurchaseOrderAction,
 } from "@/lib/ops/rfq-po-actions";
 import {
   canAddOpsRfqItem,
   canAwardOpsSupplierQuote,
   canCancelOpsRfq,
   canCreateOpsRfq,
+  canEditOpsPurchaseOrder,
   canInviteOpsRfqSupplier,
   canIssueOpsPurchaseOrder,
   canManageOpsRfq,
@@ -108,6 +110,7 @@ function rfqPoNotice(params: OpsSearchParams) {
     quote_awarded: "Supplier quote awarded and draft purchase order created.",
     quote_recorded: "Supplier quote recorded.",
     po_issued: "Purchase order issued.",
+    po_updated: "Purchase order updated.",
     rfq_cancelled: "RFQ cancelled.",
     rfq_converted: "RFQ converted into draft purchase orders, grouped by supplier.",
     supplier_invited: "Supplier invited to RFQ.",
@@ -370,45 +373,85 @@ function PurchaseOrderActions({
 }) {
   const canSubmit = canSubmitOpsPurchaseOrderForApproval(role, purchaseOrder);
   const canIssue = canIssueOpsPurchaseOrder(role, purchaseOrder);
+  const canEdit = canEditOpsPurchaseOrder(role, purchaseOrder);
 
-  if (!canSubmit && !canIssue && !purchaseOrder.approval_request_id) {
+  if (!canSubmit && !canIssue && !canEdit && !purchaseOrder.approval_request_id) {
     return null;
   }
 
   return (
-    <div className="mt-3 grid gap-2 min-[520px]:grid-cols-2">
-      {purchaseOrder.approval_request_id ? (
-        <Link
-          className={`${OPS_SECONDARY_BUTTON_CLASS} justify-center`}
-          href={`/ops/approvals/${purchaseOrder.approval_request_id}`}
-        >
-          <ClipboardList className="size-4" aria-hidden="true" />
-          View approval
-        </Link>
-      ) : null}
-      {canSubmit ? (
-        <form action={submitPurchaseOrderForApprovalAction}>
-          <input name="purchase_order_id" type="hidden" value={purchaseOrder.id} />
-          <OpsConfirmSubmitButton
-            className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
-            confirmText="Confirm request"
+    <div className="mt-3 space-y-2">
+      <div className="grid gap-2 min-[520px]:grid-cols-2">
+        {purchaseOrder.approval_request_id ? (
+          <Link
+            className={`${OPS_SECONDARY_BUTTON_CLASS} justify-center`}
+            href={`/ops/approvals/${purchaseOrder.approval_request_id}`}
           >
-            <Send className="size-4" aria-hidden="true" />
-            {purchaseOrder.status === "rejected" ? "Resubmit approval" : "Request approval"}
-          </OpsConfirmSubmitButton>
-        </form>
-      ) : null}
-      {canIssue ? (
-        <form action={issuePurchaseOrderAction}>
-          <input name="purchase_order_id" type="hidden" value={purchaseOrder.id} />
-          <OpsConfirmSubmitButton
-            className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
-            confirmText="Confirm issue"
+            <ClipboardList className="size-4" aria-hidden="true" />
+            View approval
+          </Link>
+        ) : null}
+        {canSubmit ? (
+          <form action={submitPurchaseOrderForApprovalAction}>
+            <input name="purchase_order_id" type="hidden" value={purchaseOrder.id} />
+            <OpsConfirmSubmitButton
+              className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
+              confirmText="Confirm request"
+            >
+              <Send className="size-4" aria-hidden="true" />
+              {purchaseOrder.status === "rejected" ? "Resubmit approval" : "Request approval"}
+            </OpsConfirmSubmitButton>
+          </form>
+        ) : null}
+        {canIssue ? (
+          <form action={issuePurchaseOrderAction}>
+            <input name="purchase_order_id" type="hidden" value={purchaseOrder.id} />
+            <OpsConfirmSubmitButton
+              className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
+              confirmText="Confirm issue"
+            >
+              <FileCheck2 className="size-4" aria-hidden="true" />
+              Issue PO
+            </OpsConfirmSubmitButton>
+          </form>
+        ) : null}
+      </div>
+      {canEdit ? (
+        <details className="rounded-md border border-primary-dark/10">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-primary-dark/65">
+            Edit purchase order
+          </summary>
+          <form
+            action={updatePurchaseOrderAction}
+            className="space-y-3 border-t border-primary-dark/10 p-3"
           >
-            <FileCheck2 className="size-4" aria-hidden="true" />
-            Issue PO
-          </OpsConfirmSubmitButton>
-        </form>
+            <input name="purchase_order_id" type="hidden" value={purchaseOrder.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Title
+              <input
+                className={OPS_INPUT_CLASS}
+                defaultValue={purchaseOrder.title}
+                name="title"
+                required
+              />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Total amount ({purchaseOrder.currency_code})
+              <input
+                className={OPS_INPUT_CLASS}
+                defaultValue={purchaseOrder.total_amount}
+                min="0"
+                name="total_amount"
+                required
+                step="0.01"
+                type="number"
+              />
+            </label>
+            <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
+              Save changes
+            </button>
+          </form>
+        </details>
       ) : null}
     </div>
   );

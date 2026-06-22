@@ -14,6 +14,7 @@ import {
   canAwardOpsSupplierQuote,
   canCancelOpsRfq,
   canCreateOpsRfq,
+  canEditOpsPurchaseOrder,
   canInviteOpsRfqSupplier,
   canIssueOpsPurchaseOrder,
   canRecordOpsSupplierQuote,
@@ -1025,6 +1026,67 @@ export async function submitPurchaseOrderForApprovalAction(formData: FormData) {
   revalidatePath("/ops/approvals");
   revalidatePath("/ops/notifications");
   redirect(`/ops/approvals/${approval.id}?created=purchase_order_approval`);
+}
+
+const updatePurchaseOrderSchema = z.object({
+  purchase_order_id: z.string().uuid("Select a purchase order."),
+  title: z.string().trim().min(2, "PO title is required.").max(200),
+  total_amount: z.coerce.number().min(0, "Total amount cannot be negative."),
+});
+
+export async function updatePurchaseOrderAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const parsed = updatePurchaseOrderSchema.safeParse({
+    purchase_order_id: field(formData, "purchase_order_id"),
+    title: field(formData, "title"),
+    total_amount: field(formData, "total_amount"),
+  });
+
+  if (!parsed.success) {
+    rfqError(parsed.error.issues[0]?.message ?? "Check the purchase order details.");
+  }
+
+  const purchaseOrder = await fetchPurchaseOrderForMutation(parsed.data.purchase_order_id);
+  if (!purchaseOrder) {
+    rfqError("Purchase order was not found.");
+  }
+
+  if (!canEditOpsPurchaseOrder(profile.role, purchaseOrder)) {
+    rfqError("Only draft or rejected purchase orders can be edited.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("purchase_orders")
+    .update({
+      title: parsed.data.title,
+      total_amount: normalizeMoney(parsed.data.total_amount),
+    })
+    .eq("id", purchaseOrder.id)
+    .in("status", ["draft", "rejected"]);
+
+  if (error) {
+    rfqError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "purchase_order.updated",
+    actorUserId: profile.id,
+    entityId: purchaseOrder.id,
+    entityType: "purchase_order",
+    metadata: {
+      po_number: purchaseOrder.po_number,
+      title: parsed.data.title,
+      total_amount: normalizeMoney(parsed.data.total_amount),
+    },
+    moduleKey: "rfq_po",
+    sourceId: purchaseOrder.id,
+    sourceTable: "purchase_orders",
+    summary: `Updated ${purchaseOrder.po_number}`,
+  }).catch(() => null);
+
+  revalidatePath(RFQ_PO_ROUTE);
+  redirect(`${RFQ_PO_ROUTE}?updated=po_updated`);
 }
 
 export async function issuePurchaseOrderAction(formData: FormData) {

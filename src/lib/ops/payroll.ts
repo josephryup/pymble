@@ -28,6 +28,8 @@ export type OpsPayrollRunItem = {
   gross_pay: number;
   advance_deduction: number;
   net_pay: number;
+  overtime_hours: number;
+  overtime_amount: number;
   payout_status: OpsPayoutStatus;
   payout_reference: string | null;
   worker: OpsPayrollWorker | null;
@@ -64,11 +66,13 @@ type RawPayrollRun = Omit<
 
 type RawPayrollRunItem = Omit<
   OpsPayrollRunItem,
-  "advance_deduction" | "gross_pay" | "net_pay" | "worker"
+  "advance_deduction" | "gross_pay" | "net_pay" | "overtime_hours" | "overtime_amount" | "worker"
 > & {
   advance_deduction: number | string;
   gross_pay: number | string;
   net_pay: number | string;
+  overtime_hours: number | string;
+  overtime_amount: number | string;
   worker: Relation<OpsPayrollWorker>;
 };
 
@@ -96,6 +100,7 @@ export async function fetchOpsCashAdvances() {
         worker:workers!cash_advances_worker_id_fkey(id, worker_code, full_name)
       `,
     )
+    .is("archived_at", null)
     .order("issued_at", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(50);
@@ -149,6 +154,8 @@ export async function fetchOpsPayrollRuns() {
         gross_pay,
         advance_deduction,
         net_pay,
+        overtime_hours,
+        overtime_amount,
         payout_status,
         payout_reference,
         worker:workers!payroll_run_items_worker_id_fkey(
@@ -176,6 +183,8 @@ export async function fetchOpsPayrollRuns() {
     advance_deduction: normalizeMoney(item.advance_deduction),
     gross_pay: normalizeMoney(item.gross_pay),
     net_pay: normalizeMoney(item.net_pay),
+    overtime_hours: normalizeMoney(item.overtime_hours),
+    overtime_amount: normalizeMoney(item.overtime_amount),
     worker: normalizeRelation(item.worker),
   }));
 

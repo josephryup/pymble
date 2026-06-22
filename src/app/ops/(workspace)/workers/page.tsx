@@ -1,3 +1,4 @@
+import React from "react";
 import { BadgeDollarSign, Phone, Plus, Users } from "lucide-react";
 import { notFound } from "next/navigation";
 import {
@@ -10,9 +11,10 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
-import { archiveWorkerAction, createWorkerAction } from "@/lib/ops/worker-actions";
+import { archiveWorkerAction, createWorkerAction, updateWorkerAction } from "@/lib/ops/worker-actions";
 import { fetchOpsWorkers } from "@/lib/ops/workers";
 import {
+  firstParam,
   formatZmw,
   noticeFromParams,
   OPS_DANGER_BUTTON_CLASS,
@@ -28,7 +30,7 @@ type PageProps = {
 };
 
 export default async function OpsWorkersPage({ searchParams }: PageProps) {
-  const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({}), requireOpsUser()]);
+  const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({} as OpsSearchParams), requireOpsUser()]);
 
   if (!canAccessOpsHref(auth.profile.role, "/ops/workers")) {
     notFound();
@@ -36,11 +38,11 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
 
   const [workers, siteOptions] = await Promise.all([fetchOpsWorkers(), fetchActiveSiteOptions()]);
   const canManage = canManageOps(auth.profile.role);
-  const notice = noticeFromParams(
-    params,
-    "worker",
-    "Worker created successfully.",
-  );
+  const notice =
+    noticeFromParams(params, "worker", "Worker created successfully.") ??
+    (firstParam(params.updated) === "worker"
+      ? { tone: "success" as const, message: "Worker details updated." }
+      : null);
   const dailyExposure = workers.reduce((sum, worker) => sum + worker.daily_rate, 0);
 
   return (
@@ -248,7 +250,8 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
               </thead>
               <tbody className="divide-y divide-primary-dark/10">
                 {workers.map((worker) => (
-                  <tr key={worker.id}>
+                  <React.Fragment key={worker.id}>
+                  <tr>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-dark text-white">
@@ -286,18 +289,137 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                     </td>
                     {canManage ? (
                       <td className="px-5 py-4">
-                        <form action={archiveWorkerAction}>
-                          <input name="id" type="hidden" value={worker.id} />
-                          <OpsConfirmSubmitButton
-                            className={OPS_DANGER_BUTTON_CLASS}
-                            confirmText="Confirm archive"
-                          >
-                            Archive
-                          </OpsConfirmSubmitButton>
-                        </form>
+                        <div className="flex flex-wrap gap-2">
+                          <form action={archiveWorkerAction}>
+                            <input name="id" type="hidden" value={worker.id} />
+                            <OpsConfirmSubmitButton
+                              className={OPS_DANGER_BUTTON_CLASS}
+                              confirmText="Confirm archive"
+                            >
+                              Archive
+                            </OpsConfirmSubmitButton>
+                          </form>
+                        </div>
                       </td>
                     ) : null}
                   </tr>
+                  {canManage ? (
+                    <tr>
+                      <td className="px-5 pb-4 pt-0" colSpan={6}>
+                        <details className="rounded-md border border-primary-dark/10">
+                          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-primary-dark/65">
+                            Edit worker details
+                          </summary>
+                          <form
+                            action={updateWorkerAction}
+                            className="grid gap-3 border-t border-primary-dark/10 p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
+                          >
+                            <input name="id" type="hidden" value={worker.id} />
+                            <label className={OPS_LABEL_CLASS}>
+                              Code
+                              <input
+                                className={OPS_INPUT_CLASS}
+                                defaultValue={worker.worker_code}
+                                name="worker_code"
+                                required
+                              />
+                            </label>
+                            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                              Full name
+                              <input
+                                className={OPS_INPUT_CLASS}
+                                defaultValue={worker.full_name}
+                                name="full_name"
+                                required
+                              />
+                            </label>
+                            <label className={OPS_LABEL_CLASS}>
+                              Trade
+                              <input
+                                className={OPS_INPUT_CLASS}
+                                defaultValue={worker.trade}
+                                name="trade"
+                                required
+                              />
+                            </label>
+                            <label className={OPS_LABEL_CLASS}>
+                              Phone
+                              <input
+                                className={OPS_INPUT_CLASS}
+                                defaultValue={worker.phone}
+                                name="phone"
+                                required
+                              />
+                            </label>
+                            <label className={OPS_LABEL_CLASS}>
+                              Daily rate (ZMW)
+                              <input
+                                className={OPS_INPUT_CLASS}
+                                defaultValue={worker.daily_rate}
+                                min="1"
+                                name="daily_rate"
+                                required
+                                step="0.01"
+                                type="number"
+                              />
+                            </label>
+                            <label className={OPS_LABEL_CLASS}>
+                              Site assignment
+                              <select
+                                className={OPS_INPUT_CLASS}
+                                defaultValue={worker.site?.id ?? ""}
+                                name="site_id"
+                              >
+                                <option value="">Site assignment not set</option>
+                                {siteOptions.map((site) => (
+                                  <option key={site.id} value={site.id}>
+                                    {site.code} - {site.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className={OPS_LABEL_CLASS}>
+                              Worker type
+                              <select
+                                className={OPS_INPUT_CLASS}
+                                defaultValue={worker.worker_type}
+                                name="worker_type"
+                              >
+                                <option value="casual">Casual</option>
+                                <option value="permanent">Permanent</option>
+                              </select>
+                            </label>
+                            <label className={OPS_LABEL_CLASS}>
+                              MoMo provider
+                              <select
+                                className={OPS_INPUT_CLASS}
+                                defaultValue={worker.momo_provider ?? ""}
+                                name="momo_provider"
+                              >
+                                <option value="">None</option>
+                                <option value="mtn">MTN</option>
+                                <option value="airtel">Airtel</option>
+                              </select>
+                            </label>
+                            <label className={OPS_LABEL_CLASS}>
+                              MoMo number
+                              <input
+                                className={OPS_INPUT_CLASS}
+                                defaultValue={worker.momo_number ?? ""}
+                                name="momo_number"
+                              />
+                            </label>
+                            <div className="flex items-end">
+                              <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
+                                Save
+                              </button>
+                            </div>
+                          </form>
+                        </details>
+                      </td>
+                    </tr>
+                  ) : null}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
