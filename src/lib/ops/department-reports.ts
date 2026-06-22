@@ -186,10 +186,17 @@ export type OpsDeptReportStat = {
 
 /**
  * Returns per-department summary stats for the leadership dashboard.
- * Only callable by leadership (caller must enforce).
+ *
+ * This aggregates EVERY department's reports, so it self-enforces leadership
+ * access as a defense-in-depth backstop: non-leadership callers receive an
+ * empty array rather than a cross-department leak, even if a future caller
+ * forgets the page-level guard.
  */
 export async function fetchOpsDepartmentReportSummary(): Promise<OpsDeptReportStat[]> {
-  await requireOpsUser();
+  const { profile } = await requireOpsUser();
+  if (!isLeadershipRole(profile.role)) {
+    return [];
+  }
   const supabase = getOpsSupabaseServiceClient();
 
   const { data, error } = await supabase
