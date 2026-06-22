@@ -21,6 +21,7 @@ import {
   purchaseOrderApprovalSteps,
 } from "@/lib/ops/rfq-po-permissions";
 import { parseCsvRows, readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
+import { collectOpsLineItems } from "@/lib/ops/line-items";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsMaterialRequestStatus,
@@ -30,13 +31,29 @@ import type {
 
 const RFQ_PO_ROUTE = "/ops/rfq-po";
 
-const headerSchema = z.object({
-  description: z.string().trim().max(800).default(""),
-  due_date: z.string().trim().default(""),
-  material_request_id: z.string().trim().default(""),
-  site_id: z.string().uuid("Select a site."),
-  title: z.string().trim().min(2, "RFQ title is required.").max(160),
-});
+const RFQ_HEADER_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const headerSchema = z
+  .object({
+    description: z.string().trim().max(800).default(""),
+    due_date: z.string().trim().default(""),
+    material_request_id: z.string().trim().default(""),
+    // 'site' requisitions target a project site; 'general' requisitions are
+    // office / overhead purchasing with no site.
+    scope: z.enum(["site", "general"]).default("site"),
+    site_id: z.string().trim().default(""),
+    title: z.string().trim().min(2, "Requisition title is required.").max(160),
+  })
+  .superRefine((value, ctx) => {
+    if (value.scope === "site" && !RFQ_HEADER_UUID_PATTERN.test(value.site_id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a site, or switch the requisition to General.",
+        path: ["site_id"],
+      });
+    }
+  });
 
 const itemSchema = z.object({
   estimated_unit_cost: z.coerce.number().min(0, "Estimated unit cost cannot be negative."),
@@ -66,10 +83,6 @@ const optionalSupplierId = z
   .refine((value) => value === null || UUID_PATTERN.test(value), {
     message: "Select a valid supplier.",
   });
-
-const createRfqSchema = headerSchema.extend(itemSchema.shape).extend({
-  supplier_id: optionalSupplierId,
-});
 
 const rfqIdSchema = z.object({
   rfq_id: z.string().uuid("Select an RFQ."),
@@ -112,7 +125,8 @@ type RfqForMutation = {
   id: string;
   material_request_id: string | null;
   rfq_number: string;
-  site_id: string;
+  scope: "site" | "general";
+  site_id: string | null;
   status: OpsRfqStatus;
   title: string;
 };
@@ -197,7 +211,7 @@ async function fetchRfqForMutation(rfqId: string) {
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("rfqs")
-    .select("id, rfq_number, site_id, material_request_id, title, status")
+    .select("id, rfq_number, scope, site_id, material_request_id, title, status")
     .eq("id", rfqId)
     .maybeSingle<RfqForMutation>();
 
@@ -297,43 +311,48 @@ export async function createRfqAction(formData: FormData) {
     rfqError("Your role cannot create RFQs.");
   }
 
-  const parsed = createRfqSchema.safeParse({
+  const parsed = headerSchema.safeParse({
     description: field(formData, "description"),
     due_date: field(formData, "due_date"),
-    estimated_unit_cost: field(formData, "estimated_unit_cost") || "0",
-    item_name: field(formData, "item_name"),
     material_request_id: field(formData, "material_request_id"),
-    notes: field(formData, "notes"),
-    quantity: field(formData, "quantity"),
+    scope: field(formData, "scope") || "site",
     site_id: field(formData, "site_id"),
-    specification: field(formData, "specification"),
-    supplier_id: field(formData, "supplier_id"),
     title: field(formData, "title"),
-    unit: field(formData, "unit") || "each",
   });
 
   if (!parsed.success) {
-    rfqError(parsed.error.issues[0]?.message ?? "Check the RFQ details.");
+    rfqError(parsed.error.issues[0]?.message ?? "Check the requisition details.");
   }
 
+  const lineItems = collectOpsLineItems(formData);
+  if (!lineItems.ok) {
+    rfqError(lineItems.message);
+  }
+
+  const isGeneral = parsed.data.scope === "general";
   const [site, materialRequest] = await Promise.all([
-    fetchActiveSite(parsed.data.site_id),
+    isGeneral ? Promise.resolve(null) : fetchActiveSite(parsed.data.site_id),
     parsed.data.material_request_id
       ? fetchMaterialRequestForRfq(parsed.data.material_request_id)
       : Promise.resolve(null),
   ]);
 
-  if (!site) {
+  if (!isGeneral && !site) {
     rfqError("Select an active site.");
   }
 
   if (materialRequest) {
     if (!["approved", "ordered", "closed"].includes(materialRequest.status)) {
-      rfqError("Only approved material requests can feed an RFQ.");
+      rfqError("Only approved material requests can feed a requisition.");
     }
 
-    if (materialRequest.site_id !== site.id) {
+    // Site requisitions must match the linked request's site; a general
+    // requisition can only link a general (site-less) request.
+    if (site && materialRequest.site_id !== site.id) {
       rfqError("The selected material request belongs to a different site.");
+    }
+    if (isGeneral && materialRequest.site_id) {
+      rfqError("A general requisition cannot link a site-specific material request.");
     }
   }
 
@@ -345,7 +364,8 @@ export async function createRfqAction(formData: FormData) {
       description: parsed.data.description,
       due_date: normalizeDateInput(parsed.data.due_date),
       material_request_id: normalizeOptionalUuid(parsed.data.material_request_id),
-      site_id: site.id,
+      scope: parsed.data.scope,
+      site_id: isGeneral ? null : site!.id,
       status: "draft",
       title: parsed.data.title,
     })
@@ -356,16 +376,21 @@ export async function createRfqAction(formData: FormData) {
     rfqError(rfqErrorResult?.message ?? "Could not create RFQ.");
   }
 
-  const { error: itemError } = await supabase.from("rfq_items").insert({
-    estimated_unit_cost: parsed.data.estimated_unit_cost,
-    item_name: parsed.data.item_name,
-    line_number: 1,
-    notes: parsed.data.notes,
-    quantity: parsed.data.quantity,
-    rfq_id: rfq.id,
-    specification: parsed.data.specification,
-    unit: parsed.data.unit,
-  });
+  const { error: itemError } = await supabase.from("rfq_items").insert(
+    lineItems.items.map((item, index) => ({
+      estimated_unit_cost: item.estimated_unit_cost,
+      actual_unit_cost: item.actual_unit_cost,
+      item_name: item.item_name,
+      line_number: index + 1,
+      notes: item.notes,
+      quantity: item.quantity,
+      rfq_id: rfq.id,
+      specification: item.specification,
+      supplier_id: item.supplier_id,
+      supplier_name_freeform: item.supplier_name_freeform,
+      unit: item.unit,
+    })),
+  );
 
   if (itemError) {
     await (async () => {
@@ -383,12 +408,13 @@ export async function createRfqAction(formData: FormData) {
     metadata: {
       material_request_id: materialRequest?.id ?? null,
       rfq_number: rfq.rfq_number,
-      site_id: site.id,
+      scope: parsed.data.scope,
+      site_id: site?.id ?? null,
     },
     moduleKey: "rfq_po",
     sourceId: rfq.id,
     sourceTable: "rfqs",
-    summary: `Created RFQ ${rfq.rfq_number}: ${parsed.data.title}`,
+    summary: `Created requisition ${rfq.rfq_number}: ${parsed.data.title}`,
   }).catch(() => null);
 
   revalidatePath(RFQ_PO_ROUTE);
@@ -1114,6 +1140,7 @@ export async function convertRfqToPurchaseOrdersAction(formData: FormData) {
         description: `Purchase order created from ${rfq.rfq_number}.`,
         material_request_id: rfq.material_request_id,
         rfq_id: rfq.id,
+        scope: rfq.scope,
         site_id: rfq.site_id,
         status: "draft",
         supplier_id: bucket.supplierId,

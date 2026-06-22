@@ -19,6 +19,8 @@ import {
   materialRequestApprovalSteps,
 } from "@/lib/ops/material-request-permissions";
 import { trackOpsEvent } from "@/lib/ops/analytics";
+import { parseCsvRows, readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
+import { collectOpsLineItems } from "@/lib/ops/line-items";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
@@ -26,13 +28,28 @@ import type { OpsMaterialRequestStatus, OpsPriority } from "@/lib/ops/types";
 
 const MATERIAL_REQUEST_ROUTE = "/ops/material-requests";
 
-const headerSchema = z.object({
-  description: z.string().trim().max(800).default(""),
-  needed_by: z.string().trim().default(""),
-  priority: z.enum(["low", "normal", "high", "urgent"]),
-  site_id: z.string().uuid("Select a site."),
-  title: z.string().trim().min(2, "Request title is required.").max(160),
-});
+const MR_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const headerSchema = z
+  .object({
+    description: z.string().trim().max(800).default(""),
+    needed_by: z.string().trim().default(""),
+    priority: z.enum(["low", "normal", "high", "urgent"]),
+    // 'site' requests target a project site; 'general' requests are office /
+    // overhead purchasing with no site.
+    scope: z.enum(["site", "general"]).default("site"),
+    site_id: z.string().trim().default(""),
+    title: z.string().trim().min(2, "Request title is required.").max(160),
+  })
+  .superRefine((value, ctx) => {
+    if (value.scope === "site" && !MR_UUID_PATTERN.test(value.site_id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select a site, or switch the request to General.",
+        path: ["site_id"],
+      });
+    }
+  });
 
 const itemSchema = z.object({
   estimated_unit_cost: z.coerce.number().min(0, "Estimated unit cost cannot be negative."),
@@ -51,7 +68,6 @@ const itemSchema = z.object({
   supplier_name_freeform: z.string().trim().max(160).default(""),
 });
 
-const createRequestSchema = headerSchema.extend(itemSchema.shape);
 
 const requestIdSchema = z.object({
   request_id: z.string().uuid("Select a material request."),
@@ -179,26 +195,25 @@ export async function createMaterialRequestAction(formData: FormData) {
     materialRequestError("Your role cannot create material requests.");
   }
 
-  const parsed = createRequestSchema.safeParse({
+  const parsed = headerSchema.safeParse({
     description: field(formData, "description"),
-    estimated_unit_cost: field(formData, "estimated_unit_cost") || "0",
-    item_name: field(formData, "item_name"),
     needed_by: field(formData, "needed_by"),
-    notes: field(formData, "notes"),
     priority: field(formData, "priority") || "normal",
-    quantity: field(formData, "quantity"),
+    scope: field(formData, "scope") || "site",
     site_id: field(formData, "site_id"),
-    specification: field(formData, "specification"),
-    supplier_id: field(formData, "supplier_id"),
-    supplier_name_freeform: field(formData, "supplier_name_freeform"),
     title: field(formData, "title"),
-    unit: field(formData, "unit") || "each",
   });
 
   if (!parsed.success) {
     materialRequestError(parsed.error.issues[0]?.message ?? "Check the material request.");
   }
 
+  const lineItems = collectOpsLineItems(formData);
+  if (!lineItems.ok) {
+    materialRequestError(lineItems.message);
+  }
+
+  const siteId = parsed.data.scope === "general" ? null : parsed.data.site_id;
   const neededBy = normalizeDateInput(parsed.data.needed_by);
   const supabase = getOpsSupabaseServiceClient();
   const { data: request, error: requestError } = await supabase
@@ -208,7 +223,8 @@ export async function createMaterialRequestAction(formData: FormData) {
       needed_by: neededBy,
       priority: parsed.data.priority,
       requested_by: profile.id,
-      site_id: parsed.data.site_id,
+      scope: parsed.data.scope,
+      site_id: siteId,
       status: "draft",
       title: parsed.data.title,
     })
@@ -219,18 +235,20 @@ export async function createMaterialRequestAction(formData: FormData) {
     materialRequestError(requestError?.message ?? "Could not create material request.");
   }
 
-  const { error: itemError } = await supabase.from("material_request_items").insert({
-    estimated_unit_cost: parsed.data.estimated_unit_cost,
-    item_name: parsed.data.item_name,
-    line_number: 1,
-    notes: parsed.data.notes,
-    quantity: parsed.data.quantity,
-    request_id: request.id,
-    specification: parsed.data.specification,
-    supplier_id: parsed.data.supplier_id,
-    supplier_name_freeform: parsed.data.supplier_name_freeform || null,
-    unit: parsed.data.unit,
-  });
+  const { error: itemError } = await supabase.from("material_request_items").insert(
+    lineItems.items.map((item, index) => ({
+      estimated_unit_cost: item.estimated_unit_cost,
+      item_name: item.item_name,
+      line_number: index + 1,
+      notes: item.notes,
+      quantity: item.quantity,
+      request_id: request.id,
+      specification: item.specification,
+      supplier_id: item.supplier_id,
+      supplier_name_freeform: item.supplier_name_freeform,
+      unit: item.unit,
+    })),
+  );
 
   if (itemError) {
     await (async () => {
@@ -247,7 +265,8 @@ export async function createMaterialRequestAction(formData: FormData) {
     metadata: {
       priority: parsed.data.priority,
       request_number: request.request_number,
-      site_id: parsed.data.site_id,
+      scope: parsed.data.scope,
+      site_id: siteId,
     },
     moduleKey: "material_requests",
     sourceId: request.id,
@@ -324,6 +343,238 @@ export async function addMaterialRequestItemAction(formData: FormData) {
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   redirect(`${MATERIAL_REQUEST_ROUTE}?updated=item_added`);
+}
+
+// ===========================================================================
+// Material-request line-item import (CSV / XLSX / PDF). Mirrors the requisition
+// importer: a site team uploads a needs list and the rows become line items
+// with a nominated supplier per line where given.
+// ===========================================================================
+
+const MR_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+const MR_IMPORT_MAX_ROWS = 1000;
+
+const MR_IMPORT_HEADER_ALIASES: Record<string, string> = {
+  item: "item_name",
+  "item name": "item_name",
+  "item description": "item_name",
+  description: "item_name",
+  material: "item_name",
+  unit: "unit",
+  uom: "unit",
+  "unit of measure": "unit",
+  quantity: "quantity",
+  qty: "quantity",
+  estimate: "estimated_unit_cost",
+  estimated: "estimated_unit_cost",
+  "estimated price": "estimated_unit_cost",
+  "estimated unit cost": "estimated_unit_cost",
+  "unit estimate": "estimated_unit_cost",
+  price: "estimated_unit_cost",
+  "unit price": "estimated_unit_cost",
+  rate: "estimated_unit_cost",
+  supplier: "supplier",
+  vendor: "supplier",
+  specification: "specification",
+  spec: "specification",
+  note: "notes",
+  notes: "notes",
+};
+
+const mrImportRowSchema = z.object({
+  item_name: z.string().trim().min(2, "Item name is required.").max(160),
+  unit: z.string().trim().min(1).max(40).default("each"),
+  quantity: z.coerce.number().positive("Quantity must be greater than zero."),
+  estimated_unit_cost: z.coerce.number().min(0).default(0),
+  specification: z.string().trim().max(500).default(""),
+  notes: z.string().trim().max(400).default(""),
+});
+
+export async function importMaterialRequestItemsAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsedId = requestIdSchema.safeParse({ request_id: field(formData, "request_id") });
+  if (!parsedId.success) {
+    materialRequestError("Select a material request to import into.");
+  }
+
+  const request = await fetchMaterialRequestForMutation(parsedId.data.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+  if (!canEditOpsMaterialRequest(profile.id, profile.role, request)) {
+    materialRequestError("You can only edit draft or rejected material requests you manage.");
+  }
+
+  const file = formData.get("file") as File | null;
+  if (!(file instanceof File) || file.size === 0) {
+    materialRequestError("Choose a CSV, XLSX, or PDF file to import.");
+  }
+  if (file.size > MR_IMPORT_MAX_BYTES) {
+    materialRequestError("Import files must be 2 MB or smaller.");
+  }
+
+  const filename = file.name.toLowerCase();
+  let rows: string[][] = [];
+  try {
+    if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+      rows = await readXlsxRows(file);
+    } else if (filename.endsWith(".pdf")) {
+      rows = await readPdfRows(file);
+    } else {
+      rows = parseCsvRows(await file.text());
+    }
+  } catch (importError) {
+    materialRequestError(
+      importError instanceof Error
+        ? `Could not read the file: ${importError.message}`
+        : "Could not read the file.",
+    );
+  }
+
+  rows = rows.filter((row) => row.some((cell) => (cell ?? "").toString().trim().length > 0));
+  if (rows.length < 2) {
+    materialRequestError("The file needs a header row and at least one line item.");
+  }
+
+  const header = rows[0].map((cell) => MR_IMPORT_HEADER_ALIASES[cell.trim().toLowerCase()] ?? "");
+  const columnIndex = (key: string) => header.indexOf(key);
+  const itemIndex = columnIndex("item_name");
+  const unitIndex = columnIndex("unit");
+  const quantityIndex = columnIndex("quantity");
+  const estimateIndex = columnIndex("estimated_unit_cost");
+  const supplierIndex = columnIndex("supplier");
+  const specIndex = columnIndex("specification");
+  const notesIndex = columnIndex("notes");
+
+  if (itemIndex === -1 || quantityIndex === -1) {
+    materialRequestError(
+      "Spreadsheet must include at least item/description and quantity columns.",
+    );
+  }
+
+  const dataRows = rows.slice(1);
+  if (dataRows.length > MR_IMPORT_MAX_ROWS) {
+    materialRequestError(`Import is limited to ${MR_IMPORT_MAX_ROWS} rows at a time.`);
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  const supplierCodeToId = new Map<string, string>();
+  const supplierNameToId = new Map<string, string>();
+  if (supplierIndex !== -1) {
+    const rawValues = Array.from(
+      new Set(
+        dataRows
+          .map((row) => (row[supplierIndex] ?? "").trim())
+          .filter((value) => value.length > 0),
+      ),
+    );
+    if (rawValues.length > 0) {
+      const { data: suppliers, error: supplierError } = await supabase
+        .from("suppliers")
+        .select("id, supplier_code, legal_name")
+        .eq("status", "active");
+      if (supplierError) {
+        materialRequestError(supplierError.message);
+      }
+      for (const supplier of (suppliers ?? []) as Array<{
+        id: string;
+        supplier_code: string | null;
+        legal_name: string;
+      }>) {
+        if (supplier.supplier_code) {
+          supplierCodeToId.set(supplier.supplier_code.toUpperCase(), supplier.id);
+        }
+        supplierNameToId.set(supplier.legal_name.toLowerCase(), supplier.id);
+      }
+    }
+  }
+
+  const startLine = await nextMaterialRequestLineNumber(request.id);
+  const inserts: Array<Record<string, unknown>> = [];
+  const rowErrors: string[] = [];
+  let unmatchedSuppliers = 0;
+
+  dataRows.forEach((row, index) => {
+    const parsed = mrImportRowSchema.safeParse({
+      item_name: row[itemIndex] ?? "",
+      unit: (unitIndex !== -1 ? row[unitIndex] : "")?.trim() || "each",
+      quantity: (row[quantityIndex] ?? "").trim(),
+      estimated_unit_cost: (estimateIndex !== -1 ? row[estimateIndex] : "")?.trim() || "0",
+      specification: specIndex !== -1 ? (row[specIndex] ?? "") : "",
+      notes: notesIndex !== -1 ? (row[notesIndex] ?? "") : "",
+    });
+
+    if (!parsed.success) {
+      rowErrors.push(`Row ${index + 2}: ${parsed.error.issues[0]?.message ?? "invalid"}`);
+      return;
+    }
+
+    let supplierId: string | null = null;
+    let supplierFreeform: string | null = null;
+    if (supplierIndex !== -1) {
+      const raw = (row[supplierIndex] ?? "").trim();
+      if (raw.length > 0) {
+        supplierId =
+          supplierCodeToId.get(raw.toUpperCase()) ??
+          supplierNameToId.get(raw.toLowerCase()) ??
+          null;
+        if (!supplierId) {
+          supplierFreeform = raw;
+          unmatchedSuppliers += 1;
+        }
+      }
+    }
+
+    inserts.push({
+      estimated_unit_cost: parsed.data.estimated_unit_cost,
+      item_name: parsed.data.item_name,
+      line_number: startLine + inserts.length,
+      notes: parsed.data.notes,
+      quantity: parsed.data.quantity,
+      request_id: request.id,
+      specification: parsed.data.specification,
+      supplier_id: supplierId,
+      supplier_name_freeform: supplierFreeform,
+      unit: parsed.data.unit,
+    });
+  });
+
+  if (inserts.length === 0) {
+    materialRequestError(
+      rowErrors[0] ? `No rows imported. ${rowErrors[0]}` : "No valid line items were found.",
+    );
+  }
+
+  const { error: insertError } = await supabase
+    .from("material_request_items")
+    .insert(inserts);
+  if (insertError) {
+    materialRequestError(insertError.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "material_request.items_imported",
+    actorUserId: profile.id,
+    entityId: request.id,
+    entityType: "material_request",
+    metadata: {
+      imported: inserts.length,
+      request_number: request.request_number,
+      skipped: rowErrors.length,
+      unmatched_suppliers: unmatchedSuppliers,
+    },
+    moduleKey: "material_requests",
+    sourceId: request.id,
+    sourceTable: "material_requests",
+    summary: `Imported ${inserts.length} item(s) into ${request.request_number}`,
+  }).catch(() => null);
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  redirect(
+    `${MATERIAL_REQUEST_ROUTE}?updated=items_imported&imported=${inserts.length}&skipped=${rowErrors.length}`,
+  );
 }
 
 export async function submitMaterialRequestForApprovalAction(formData: FormData) {

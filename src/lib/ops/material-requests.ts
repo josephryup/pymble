@@ -66,8 +66,9 @@ export type OpsMaterialRequestSummary = {
   request_number: string;
   requested_by: string | null;
   requester: OpsMaterialRequestUserSummary | null;
+  scope: "site" | "general";
   site: OpsMaterialRequestSiteSummary | null;
-  site_id: string;
+  site_id: string | null;
   status: OpsMaterialRequestStatus;
   submitted_at: string | null;
   title: string;
@@ -78,6 +79,7 @@ export type FetchOpsMaterialRequestsOptions = {
   limit?: number;
   query?: string;
   status?: OpsMaterialRequestStatus;
+  scope?: "site" | "general";
 };
 
 export type FetchPaginatedOpsMaterialRequestsOptions = FetchOpsMaterialRequestsOptions & {
@@ -387,6 +389,7 @@ async function fetchOpsMaterialRequestItems(
       [
         "id",
         "request_number",
+        "scope",
         "site_id",
         "requested_by",
         "title",
@@ -414,6 +417,10 @@ async function fetchOpsMaterialRequestItems(
 
   if (options.status) {
     requestQuery = requestQuery.eq("status", options.status);
+  }
+
+  if (options.scope) {
+    requestQuery = requestQuery.eq("scope", options.scope);
   }
 
   const searchFilter = opsIlikeOrFilter(
@@ -493,6 +500,7 @@ export async function fetchOpsMaterialRequestById(
       [
         "id",
         "request_number",
+        "scope",
         "site_id",
         "requested_by",
         "title",

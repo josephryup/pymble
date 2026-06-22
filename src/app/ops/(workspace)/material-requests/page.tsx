@@ -4,6 +4,7 @@ import {
   ClipboardList,
   Clock,
   FileCheck2,
+  FilePlus2,
   PackagePlus,
   Pencil,
   Plus,
@@ -33,6 +34,7 @@ import {
   createMaterialRequestAction,
   decideMaterialRequestCostAction,
   deleteMaterialRequestItemAction,
+  importMaterialRequestItemsAction,
   submitMaterialRequestForApprovalAction,
   updateMaterialRequestHeaderAction,
   updateMaterialRequestItemAction,
@@ -57,6 +59,8 @@ import { formatOpsUserName } from "@/lib/ops/roles";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import { fetchActiveSupplierOptions } from "@/lib/ops/suppliers";
 import { OpsSupplierPicker } from "@/components/ops/OpsSupplierPicker";
+import { OpsLineItemsEditor } from "@/components/ops/OpsLineItemsEditor";
+import { OpsScopeSitePicker } from "@/components/ops/OpsScopeSitePicker";
 import {
   firstParam,
   formatZmw,
@@ -115,6 +119,17 @@ function materialRequestNotice(params: OpsSearchParams) {
   if (firstParam(params.updated) === "item_added") {
     return {
       message: "Material request item added.",
+      tone: "success" as const,
+    };
+  }
+
+  if (firstParam(params.updated) === "items_imported") {
+    const imported = firstParam(params.imported) ?? "0";
+    const skipped = firstParam(params.skipped) ?? "0";
+    return {
+      message: `Imported ${imported} item${imported === "1" ? "" : "s"}${
+        skipped !== "0" ? ` (${skipped} row${skipped === "1" ? "" : "s"} skipped)` : ""
+      }.`,
       tone: "success" as const,
     };
   }
@@ -464,6 +479,44 @@ function AddItemForm({
   );
 }
 
+function ImportMaterialItemsForm({ requestId }: { requestId: string }) {
+  return (
+    <details className="rounded-md border border-primary-dark/10">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+        <FilePlus2 className="size-4" aria-hidden="true" />
+        Import items (CSV / Excel / PDF)
+      </summary>
+      <form
+        action={importMaterialRequestItemsAction}
+        className="grid gap-3 border-t border-primary-dark/10 p-3"
+      >
+        <input name="request_id" type="hidden" value={requestId} />
+        <p className="text-xs leading-5 text-primary-dark/55">
+          Upload a needs list. Recognised columns: item / description, unit, quantity, estimate,
+          and supplier (code or name — unmatched names are kept as a typed supplier). The first
+          row must be the header.
+        </p>
+        <label className={OPS_LABEL_CLASS}>
+          File
+          <input
+            accept=".csv,.xlsx,.xls,.pdf"
+            className={OPS_INPUT_CLASS}
+            name="file"
+            required
+            type="file"
+          />
+        </label>
+        <div>
+          <button className={`${OPS_SECONDARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
+            <FilePlus2 className="size-4" aria-hidden="true" />
+            Import
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
 function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummary }) {
   return (
     <form
@@ -591,10 +644,13 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
 
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = materialRequestStatusFromParam(firstParam(params.status));
+  const scopeParam = firstParam(params.scope);
+  const scope = scopeParam === "site" || scopeParam === "general" ? scopeParam : undefined;
   const [requestPage, siteOptions, supplierOptions] = await Promise.all([
     fetchPaginatedOpsMaterialRequests({
       listState,
       query: listState.query,
+      scope,
       status: status || undefined,
     }),
     fetchActiveSiteOptions(),
@@ -815,20 +871,8 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
               action={createMaterialRequestAction}
               className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
+              <OpsScopeSitePicker sites={siteOptions} />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Site
-                <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id" required>
-                  <option value="" disabled>
-                    Select Pymble site
-                  </option>
-                  {siteOptions.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.code} - {site.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
                 Request title
                 <input className={OPS_INPUT_CLASS} name="title" required />
               </label>
@@ -850,40 +894,14 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                 Needed by
                 <input className={OPS_INPUT_CLASS} name="needed_by" type="date" />
               </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                First item
-                <input className={OPS_INPUT_CLASS} name="item_name" required />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Quantity
-                <input className={OPS_INPUT_CLASS} min="0.01" name="quantity" required step="0.01" type="number" />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Unit
-                <input className={OPS_INPUT_CLASS} defaultValue="each" name="unit" required />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Unit estimate
-                <input className={OPS_INPUT_CLASS} min="0" name="estimated_unit_cost" step="0.01" type="number" />
-              </label>
-              <div className="lg:col-span-3">
-                <OpsSupplierPicker
-                  helperText="Optional. Each line can nominate its own supplier (pick from list or type a new name)."
-                  suppliers={supplierOptions}
-                />
+              <div className="lg:col-span-6">
+                <p className="mb-2 text-sm font-semibold text-primary-dark">Line items</p>
+                <OpsLineItemsEditor suppliers={supplierOptions} />
               </div>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
-                Specification
-                <input className={OPS_INPUT_CLASS} name="specification" />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Notes
-                <input className={OPS_INPUT_CLASS} name="notes" />
-              </label>
-              <div className="flex items-end lg:col-span-1">
-                <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
+              <div className="flex items-end lg:col-span-6">
+                <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
-                  Create
+                  Create request
                 </button>
               </div>
             </form>
@@ -919,6 +937,16 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
               name: "status",
               options: MATERIAL_REQUEST_STATUS_OPTIONS,
               value: status,
+            },
+            {
+              label: "Type",
+              name: "scope",
+              options: [
+                { label: "All types", value: "" },
+                { label: "Project site", value: "site" },
+                { label: "General / Office", value: "general" },
+              ],
+              value: scope ?? "",
             },
           ]}
           placeholder="Search request number, title, or description"
@@ -980,9 +1008,11 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       </div>
                       <p className="mt-2 font-bold text-primary-dark">{request.title}</p>
                       <p className="mt-1 text-sm leading-6 text-primary-dark/62">
-                        {request.site
-                          ? `${request.site.code} - ${request.site.name}`
-                          : "Site unavailable"}{" "}
+                        {request.scope === "general"
+                          ? "General / Office"
+                          : request.site
+                            ? `${request.site.code} - ${request.site.name}`
+                            : "Site unavailable"}{" "}
                         / needed by {formatDate(request.needed_by)}
                       </p>
                       {request.description ? (
@@ -1067,10 +1097,13 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       supplierOptions={supplierOptions}
                     />
                     {canEdit ? (
-                      <AddItemForm
-                        requestId={request.id}
-                        supplierOptions={supplierOptions}
-                      />
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <AddItemForm
+                          requestId={request.id}
+                          supplierOptions={supplierOptions}
+                        />
+                        <ImportMaterialItemsForm requestId={request.id} />
+                      </div>
                     ) : null}
                     {showPricingForm ? <ProcurementPricingForm request={request} /> : null}
                     {showFinanceDecisionForm ? (

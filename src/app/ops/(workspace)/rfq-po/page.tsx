@@ -18,6 +18,8 @@ import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { OpsLineItemsEditor } from "@/components/ops/OpsLineItemsEditor";
+import { OpsScopeSitePicker } from "@/components/ops/OpsScopeSitePicker";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -121,9 +123,8 @@ function rfqPoNotice(params: OpsSearchParams) {
     quote_recorded: "Supplier quote recorded.",
     po_issued: "Purchase order issued.",
     po_updated: "Purchase order updated.",
-    rfq_cancelled: "RFQ cancelled.",
-    rfq_converted: "RFQ converted into draft purchase orders, grouped by supplier.",
-    supplier_invited: "Supplier invited to RFQ.",
+    rfq_cancelled: "Requisition cancelled.",
+    rfq_converted: "Requisition converted into draft purchase orders, grouped by supplier.",
     attachment: "RFQ attachment uploaded.",
     comment: "RFQ comment added.",
   };
@@ -690,11 +691,14 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = rfqStatusFromParam(firstParam(params.status));
+  const scopeParam = firstParam(params.scope);
+  const scope = scopeParam === "site" || scopeParam === "general" ? scopeParam : undefined;
   const [rfqPage, stats, siteOptions, supplierOptions, materialRequestOptions] =
     await Promise.all([
       fetchPaginatedOpsRfqs({
         listState,
         query: listState.query,
+        scope,
         status: status || undefined,
       }),
       fetchOpsRfqPoStats(),
@@ -731,7 +735,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
   const createRfqHref = `/ops/rfq-po?${createPanelParams.toString()}#rfq-create-panel`;
   const openCreatePanel = firstParam(params.create) === "rfq";
 
-  // Pre-fill values when a Request for Quotation is seeded from another module (e.g. a BOQ line).
+  // Pre-fill values when a requisition is seeded from another module (e.g. a BOQ line).
   const prefillSiteId = firstParam(params.site_id) ?? "";
   const prefillSupplierId = firstParam(params.supplier_id) ?? "";
   const prefillTitle = firstParam(params.title) ?? "";
@@ -744,7 +748,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
     <div className="w-full max-w-none space-y-6">
       <OpsPageHeader
         eyebrow="Procurement workflow"
-        title="Requests for Quotation and Purchase Orders"
+        title="Requisitions and Purchase Orders"
         description="Approved material needs, per-item supplier nomination, draft purchase orders grouped by supplier, approvals, and issue controls. Suppliers are not invited externally — the team records who each line is going to internally."
         actions={
           <>
@@ -759,7 +763,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
             {canCreate ? (
               <a className={OPS_PRIMARY_BUTTON_CLASS} href={createRfqHref}>
                 <FilePlus2 className="size-4" aria-hidden="true" />
-                New Request for Quotation
+                New requisition
               </a>
             ) : null}
           </>
@@ -857,10 +861,10 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               </span>
               <span className="min-w-0">
                 <span className="block font-heading text-lg font-bold text-primary-dark">
-                  Create Request for Quotation
+                  Create requisition
                 </span>
                 <span className="mt-1 block text-sm text-primary-dark/60">
-                  Site, approved request link, supplier deadline, and first package item.
+                  Site, approved request link, deadline, and one or more line items with a supplier each.
                 </span>
               </span>
             </span>
@@ -877,45 +881,12 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               action={createRfqAction}
               className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Site
-                <select
-                  className={OPS_INPUT_CLASS}
-                  defaultValue={
-                    siteOptions.some((site) => site.id === prefillSiteId) ? prefillSiteId : ""
-                  }
-                  name="site_id"
-                  required
-                >
-                  <option value="" disabled>
-                    Select Pymble site
-                  </option>
-                  {siteOptions.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.code} - {site.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Invite supplier (optional)
-                <select
-                  className={OPS_INPUT_CLASS}
-                  defaultValue={
-                    supplierOptions.some((supplier) => supplier.id === prefillSupplierId)
-                      ? prefillSupplierId
-                      : ""
-                  }
-                  name="supplier_id"
-                >
-                  <option value="">No supplier yet</option>
-                  {supplierOptions.map((supplier) => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.supplier_code} - {supplier.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <OpsScopeSitePicker
+                defaultSiteId={
+                  siteOptions.some((site) => site.id === prefillSiteId) ? prefillSiteId : null
+                }
+                sites={siteOptions}
+              />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Approved material request
                 <select className={OPS_INPUT_CLASS} defaultValue="" name="material_request_id">
@@ -940,49 +911,24 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                 Description
                 <input className={OPS_INPUT_CLASS} name="description" />
               </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                First item
-                <input className={OPS_INPUT_CLASS} defaultValue={prefillItemName} name="item_name" required />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Quantity
-                <input
-                  className={OPS_INPUT_CLASS}
-                  defaultValue={prefillQuantity}
-                  min="0.01"
-                  name="quantity"
-                  required
-                  step="0.01"
-                  type="number"
+              <div className="lg:col-span-6">
+                <p className="mb-2 text-sm font-semibold text-primary-dark">Line items</p>
+                <OpsLineItemsEditor
+                  firstItemDefaults={{
+                    estimated_unit_cost: prefillUnitCost || undefined,
+                    item_name: prefillItemName || undefined,
+                    quantity: prefillQuantity || undefined,
+                    supplier_id: prefillSupplierId || null,
+                    unit: prefillUnit || undefined,
+                  }}
+                  suppliers={supplierOptions}
+                  withActualCost
                 />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Unit
-                <input className={OPS_INPUT_CLASS} defaultValue={prefillUnit} name="unit" required />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Unit estimate
-                <input
-                  className={OPS_INPUT_CLASS}
-                  defaultValue={prefillUnitCost}
-                  min="0"
-                  name="estimated_unit_cost"
-                  step="0.01"
-                  type="number"
-                />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
-                Specification
-                <input className={OPS_INPUT_CLASS} name="specification" />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Notes
-                <input className={OPS_INPUT_CLASS} name="notes" />
-              </label>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4 lg:justify-end">
+              </div>
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6 lg:justify-end">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
-                  Create Request for Quotation
+                  Create requisition
                 </button>
               </div>
             </form>
@@ -1010,10 +956,20 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               options: RFQ_STATUS_OPTIONS,
               value: status,
             },
+            {
+              label: "Type",
+              name: "scope",
+              options: [
+                { label: "All types", value: "" },
+                { label: "Project site", value: "site" },
+                { label: "General / Office", value: "general" },
+              ],
+              value: scope ?? "",
+            },
           ]}
-          placeholder="Search RFQ number, title, or description"
+          placeholder="Search requisition number, title, or description"
           query={listState.query}
-          resultLabel="RFQs"
+          resultLabel="requisitions"
         />
 
         {rfqs.length > 0 ? (
@@ -1045,8 +1001,12 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                       </div>
                       <p className="mt-2 font-bold text-primary-dark">{rfq.title}</p>
                       <p className="mt-1 text-sm leading-6 text-primary-dark/62">
-                        {rfq.site ? `${rfq.site.code} - ${rfq.site.name}` : "Site unavailable"} / due{" "}
-                        {formatDate(rfq.due_date)}
+                        {rfq.scope === "general"
+                          ? "General / Office"
+                          : rfq.site
+                            ? `${rfq.site.code} - ${rfq.site.name}`
+                            : "Site unavailable"}{" "}
+                        / due {formatDate(rfq.due_date)}
                       </p>
                       {rfq.material_request ? (
                         <p className="mt-1 text-sm text-primary-dark/55">
@@ -1082,7 +1042,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                             confirmText="Confirm cancel"
                           >
                             <XCircle className="size-4" aria-hidden="true" />
-                            Cancel Request for Quotation
+                            Cancel requisition
                           </OpsConfirmSubmitButton>
                         </form>
                       ) : null}
@@ -1218,7 +1178,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
                 {hasActiveListFilter
-                  ? "Adjust the search or status filter to widen the Request for Quotation register."
+                  ? "Adjust the search or status filter to widen the requisition register."
                   : "Create the first RFQ after the supplier register has active suppliers."}
               </p>
             </div>

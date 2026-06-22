@@ -80,8 +80,9 @@ export type OpsRfqSummary = {
   material_request_id: string | null;
   purchase_orders: OpsPurchaseOrderSummary[];
   rfq_number: string;
+  scope: "site" | "general";
   site: OpsRfqSiteSummary | null;
-  site_id: string;
+  site_id: string | null;
   status: OpsRfqStatus;
   title: string;
   updated_at: string;
@@ -101,6 +102,7 @@ export type FetchOpsRfqsOptions = {
   limit?: number;
   query?: string;
   status?: OpsRfqStatus;
+  scope?: "site" | "general";
 };
 
 export type FetchPaginatedOpsRfqsOptions = FetchOpsRfqsOptions & {
@@ -255,6 +257,7 @@ async function fetchOpsRfqItems(options: FetchOpsRfqsOptions = {}, listState?: O
       [
         "id",
         "rfq_number",
+        "scope",
         "site_id",
         "material_request_id",
         "title",
@@ -277,6 +280,10 @@ async function fetchOpsRfqItems(options: FetchOpsRfqsOptions = {}, listState?: O
 
   if (options.status) {
     rfqQuery = rfqQuery.eq("status", options.status);
+  }
+
+  if (options.scope) {
+    rfqQuery = rfqQuery.eq("scope", options.scope);
   }
 
   const searchFilter = opsIlikeOrFilter(

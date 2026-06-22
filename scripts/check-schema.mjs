@@ -34,6 +34,10 @@ const REQUIRED_COLUMNS = [
   ["rfq_items", "supplier_name_freeform"],
   ["rfq_items", "actual_unit_cost"],
   ["rfq_items", "actual_total"],
+  // General (office) vs site requisitions / material requests
+  ["rfqs", "scope"],
+  ["material_requests", "scope"],
+  ["purchase_orders", "scope"],
   ["purchase_order_items", "supplier_id"],
   ["purchase_order_items", "supplier_name_freeform"],
 
