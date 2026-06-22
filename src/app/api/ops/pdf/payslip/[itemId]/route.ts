@@ -37,6 +37,8 @@ type RawItem = {
   napsa_employee: number | string;
   napsa_employer: number | string;
   wcf_employer: number | string;
+  overtime_hours: number | string;
+  overtime_amount: number | string;
   tax_year: number | null;
   statutory_citation: string | null;
   worker: {
@@ -82,7 +84,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       supabase
         .from("payroll_run_items")
         .select(
-          "id, payroll_run_id, gross_pay, advance_deduction, net_pay, paye_amount, napsa_employee, napsa_employer, wcf_employer, tax_year, statutory_citation, worker:workers!payroll_run_items_worker_id_fkey(worker_code, full_name, trade, phone, momo_provider, momo_number), payroll_run:payroll_runs!payroll_run_items_payroll_run_id_fkey(id, period_label, period_start, period_end)",
+          "id, payroll_run_id, gross_pay, advance_deduction, net_pay, paye_amount, napsa_employee, napsa_employer, wcf_employer, overtime_hours, overtime_amount, tax_year, statutory_citation, worker:workers!payroll_run_items_worker_id_fkey(worker_code, full_name, trade, phone, momo_provider, momo_number), payroll_run:payroll_runs!payroll_run_items_payroll_run_id_fkey(id, period_label, period_start, period_end)",
         )
         .eq("id", itemId)
         .maybeSingle(),
@@ -118,6 +120,8 @@ export async function GET(_request: Request, { params }: RouteContext) {
           napsa_employee: num(raw.napsa_employee),
           napsa_employer: num(raw.napsa_employer),
           wcf_employer: num(raw.wcf_employer),
+          overtime_hours: num(raw.overtime_hours),
+          overtime_amount: num(raw.overtime_amount),
           tax_year: raw.tax_year,
           statutory_citation: raw.statutory_citation,
         },

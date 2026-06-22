@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
+import { computeAttendanceEarnings } from "@/lib/ops/attendance-earnings";
 import { parseCoordinateInput } from "@/lib/ops/coordinates";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
@@ -89,22 +90,38 @@ export async function createAttendanceAction(formData: FormData) {
   }
 
   const supabase = await createOpsServerSessionClient();
-  const { data: worker, error: workerError } = await supabase
-    .from("workers")
-    .select("daily_rate")
-    .eq("id", parsed.data.worker_id)
-    .eq("is_active", true)
-    .single<{ daily_rate: number | string }>();
+  const [workerRes, orgRes] = await Promise.all([
+    supabase
+      .from("workers")
+      .select("daily_rate")
+      .eq("id", parsed.data.worker_id)
+      .eq("is_active", true)
+      .single<{ daily_rate: number | string }>(),
+    supabase
+      .from("organization_profile")
+      .select("standard_daily_hours, overtime_multiplier")
+      .eq("id", 1)
+      .maybeSingle<{ standard_daily_hours: number | string; overtime_multiplier: number | string }>(),
+  ]);
 
-  if (workerError || !worker) {
+  if (workerRes.error || !workerRes.data) {
     attendanceError("The selected worker could not be found.");
   }
+  const worker = workerRes.data;
+
+  // Sprint 14: standard day + overtime live on organization_profile so the
+  // company can adjust once and have it flow through every attendance row.
+  const standardDailyHours = Number(orgRes.data?.standard_daily_hours ?? 8);
+  const overtimeMultiplier = Number(orgRes.data?.overtime_multiplier ?? 1.5);
 
   const hoursWorked = parsed.data.presence === "absent" ? 0 : parsed.data.hours_worked;
-  const amountEarned =
-    parsed.data.presence === "absent"
-      ? 0
-      : Math.round(((Number(worker.daily_rate) / 8) * hoursWorked + Number.EPSILON) * 100) / 100;
+  const earnings = computeAttendanceEarnings({
+    hoursWorked,
+    dailyRate: Number(worker.daily_rate),
+    standardDailyHours,
+    overtimeMultiplier,
+    isAbsent: parsed.data.presence === "absent",
+  });
 
   // Sprint 10 offline support: upsert on the optional client_id so a queued
   // attendance record from a phone that's been offline doesn't double-insert
@@ -118,7 +135,9 @@ export async function createAttendanceAction(formData: FormData) {
       ? combineDateTime(parsed.data.work_date, parsed.data.clock_out_time)
       : null,
     hours_worked: hoursWorked,
-    amount_earned: amountEarned,
+    amount_earned: earnings.totalAmount,
+    overtime_hours: earnings.overtimeHours,
+    overtime_amount: earnings.overtimeAmount,
     presence: parsed.data.presence,
     source: "manual",
     gps_label: parsed.data.gps_label,
@@ -166,7 +185,9 @@ export async function createAttendanceAction(formData: FormData) {
       gps_latitude: parsed.data.gps_latitude,
       gps_longitude: parsed.data.gps_longitude,
       hours_worked: hoursWorked,
-      amount_earned: amountEarned,
+      amount_earned: earnings.totalAmount,
+      overtime_hours: earnings.overtimeHours,
+      overtime_amount: earnings.overtimeAmount,
     },
   });
 

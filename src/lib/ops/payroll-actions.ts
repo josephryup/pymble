@@ -36,6 +36,8 @@ type AttendanceForPayroll = {
   id: string;
   worker_id: string;
   amount_earned: number | string;
+  overtime_hours: number | string;
+  overtime_amount: number | string;
 };
 
 type CashAdvanceForPayroll = {
@@ -146,7 +148,7 @@ export async function createPayrollRunAction(formData: FormData) {
   const supabase = await createOpsServerSessionClient();
   const { data: attendanceData, error: attendanceError } = await supabase
     .from("attendance_records")
-    .select("id, worker_id, amount_earned")
+    .select("id, worker_id, amount_earned, overtime_hours, overtime_amount")
     .eq("is_active", true)
     .not("approved_at", "is", null)
     .is("payroll_run_id", null)
@@ -176,10 +178,23 @@ export async function createPayrollRunAction(formData: FormData) {
 
   const openAdvances = (advanceData ?? []) as CashAdvanceForPayroll[];
   const lineItems = workerIds.map((workerId) => {
+    const workerRecords = approvedRecords.filter(
+      (record) => record.worker_id === workerId,
+    );
     const grossPay = roundToTwo(
-      approvedRecords
-        .filter((record) => record.worker_id === workerId)
-        .reduce((sum, record) => sum + Number(record.amount_earned), 0),
+      workerRecords.reduce((sum, record) => sum + Number(record.amount_earned), 0),
+    );
+    const overtimeHours = roundToTwo(
+      workerRecords.reduce(
+        (sum, record) => sum + Number(record.overtime_hours ?? 0),
+        0,
+      ),
+    );
+    const overtimeAmount = roundToTwo(
+      workerRecords.reduce(
+        (sum, record) => sum + Number(record.overtime_amount ?? 0),
+        0,
+      ),
     );
     const advanceDeduction = roundToTwo(
       openAdvances
@@ -203,6 +218,8 @@ export async function createPayrollRunAction(formData: FormData) {
       napsa_employee: statutory.napsaEmployee,
       napsa_employer: statutory.napsaEmployer,
       wcf_employer: statutory.wcfEmployer,
+      overtime_hours: overtimeHours,
+      overtime_amount: overtimeAmount,
       tax_year: statutory.taxYear,
       statutory_citation: statutory.citation,
       payout_status: "pending" as const,

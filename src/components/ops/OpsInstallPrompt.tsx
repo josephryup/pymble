@@ -37,17 +37,20 @@ function recentlyDismissed() {
 }
 
 export function OpsInstallPrompt() {
-  // iOS and standalone detection happen during lazy state init so they run once
-  // browser-side without the set-state-in-effect anti-pattern.
-  const showIos = useState<boolean>(() =>
-    typeof window !== "undefined" && isIos() && !isStandalone() && !recentlyDismissed(),
-  )[0];
+  // Both start false to match SSR; browser detection happens in useEffect.
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [visible, setVisible] = useState<boolean>(() => showIos);
+  const [visible, setVisible] = useState(false);
+  // Derived: iOS mode = visible but no beforeinstallprompt event fired.
+  const showIos = visible && installEvent === null;
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
     if (isStandalone() || recentlyDismissed()) return;
+
+    if (isIos()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time browser detection; no store to subscribe to
+      setVisible(true);
+      return;
+    }
 
     function handleBeforeInstallPrompt(event: Event) {
       event.preventDefault();

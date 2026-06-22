@@ -7,7 +7,6 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
-import { canManageOps } from "@/lib/ops/permissions";
 import {
   isDeveloperRole,
   isGeneralManagerRole,
@@ -52,8 +51,10 @@ function workerError(message: string): never {
 export async function createWorkerAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
-    workerError("Your role cannot create workers yet.");
+  if (!canEditWorker(profile.role)) {
+    workerError(
+      "Only Leadership, Operations Manager, Projects Manager, Engineering Manager, and Human Resources can add workers.",
+    );
   }
 
   const parsed = createWorkerSchema.safeParse({
@@ -142,6 +143,26 @@ const updateWorkerSchema = createWorkerSchema.extend({
   id: z.string().uuid(),
 });
 
+/**
+ * Worker records. Edit and create are open to the heads who supervise the
+ * people on site: leadership, Operations Manager, Projects Manager,
+ * Engineering Manager, and Human Resources.
+ *
+ * Excludes Procurement / Finance / HSE / Quantity Surveyor — their roles are
+ * to consume worker data (payroll, attendance, incidents), not maintain it.
+ */
+function canEditWorker(role: string) {
+  return (
+    isDeveloperRole(role) ||
+    isManagingDirectorRole(role) ||
+    isGeneralManagerRole(role) ||
+    isHumanResourceRole(role) ||
+    role === "operations_manager" ||
+    role === "projects_manager" ||
+    role === "engineering_manager"
+  );
+}
+
 function canArchiveWorker(role: string) {
   return (
     isDeveloperRole(role) ||
@@ -158,8 +179,10 @@ function canDeleteWorker(role: string) {
 export async function updateWorkerAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
-    workerError("Your role cannot edit workers.");
+  if (!canEditWorker(profile.role)) {
+    workerError(
+      "Only Leadership, Operations Manager, Projects Manager, Engineering Manager, and Human Resources can edit worker records.",
+    );
   }
 
   const parsed = updateWorkerSchema.safeParse({

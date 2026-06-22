@@ -1,0 +1,214 @@
+import { requireOpsUser } from "@/lib/ops/auth";
+import { logOpsServerError } from "@/lib/ops/log";
+import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
+import type { OpsUserRole } from "@/lib/ops/types";
+
+export type OpsProjectTaskStatus =
+  | "planned"
+  | "in_progress"
+  | "completed"
+  | "blocked"
+  | "cancelled";
+
+export type OpsProjectTaskAssignee = {
+  id: string;
+  full_name: string;
+  role: OpsUserRole;
+} | null;
+
+export type OpsProjectTaskSite = {
+  id: string;
+  code: string;
+  name: string;
+} | null;
+
+export type OpsProjectTask = {
+  id: string;
+  site_id: string;
+  parent_task_id: string | null;
+  title: string;
+  description: string;
+  status: OpsProjectTaskStatus;
+  planned_start_date: string;
+  planned_end_date: string;
+  actual_start_date: string | null;
+  actual_end_date: string | null;
+  completion_percent: number;
+  assigned_to: string | null;
+  sort_order: number;
+  notes: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  archived_by: string | null;
+  assignee: OpsProjectTaskAssignee;
+  site: OpsProjectTaskSite;
+  /** Computed: days past planned_end_date when still open. Negative = on time. */
+  days_overdue: number;
+  /** Computed: planned_end_date < today AND status open. */
+  is_overdue: boolean;
+};
+
+type Relation<T> = T | T[] | null;
+
+type RawProjectTask = Omit<
+  OpsProjectTask,
+  "assignee" | "site" | "days_overdue" | "is_overdue"
+> & {
+  assignee: Relation<NonNullable<OpsProjectTaskAssignee>>;
+  site: Relation<NonNullable<OpsProjectTaskSite>>;
+};
+
+function normalizeRel<T>(value: T | T[] | null): T | null {
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function startOfTodayLusaka(): Date {
+  const lusakaDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Lusaka",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  return new Date(`${lusakaDate}T00:00:00+02:00`);
+}
+
+function daysBetween(earlier: string, laterIso: Date): number {
+  const earlierDate = new Date(`${earlier}T00:00:00+02:00`);
+  const diffMs = laterIso.getTime() - earlierDate.getTime();
+  return Math.floor(diffMs / (24 * 60 * 60 * 1000));
+}
+
+function normalize(task: RawProjectTask): OpsProjectTask {
+  const today = startOfTodayLusaka();
+  const daysOverdue = daysBetween(task.planned_end_date, today);
+  const isOpen = task.status !== "completed" && task.status !== "cancelled";
+  return {
+    ...task,
+    assignee: normalizeRel(task.assignee),
+    site: normalizeRel(task.site),
+    days_overdue: daysOverdue,
+    is_overdue: isOpen && daysOverdue > 0,
+  };
+}
+
+const TASK_SELECT = [
+  "id",
+  "site_id",
+  "parent_task_id",
+  "title",
+  "description",
+  "status",
+  "planned_start_date",
+  "planned_end_date",
+  "actual_start_date",
+  "actual_end_date",
+  "completion_percent",
+  "assigned_to",
+  "sort_order",
+  "notes",
+  "created_by",
+  "created_at",
+  "updated_at",
+  "archived_at",
+  "archived_by",
+  "assignee:users!project_tasks_assigned_to_fkey(id, full_name, role)",
+  "site:sites!project_tasks_site_id_fkey(id, code, name)",
+].join(", ");
+
+export async function fetchOpsProjectTasksForSite(siteId: string) {
+  await requireOpsUser();
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("project_tasks")
+    .select(TASK_SELECT)
+    .eq("site_id", siteId)
+    .is("archived_at", null)
+    .order("sort_order", { ascending: true })
+    .order("planned_start_date", { ascending: true });
+
+  if (error) {
+    logOpsServerError(error, {
+      module: "project_tasks",
+      action: "fetchOpsProjectTasksForSite",
+      entityId: siteId,
+    });
+    throw error;
+  }
+
+  return ((data ?? []) as unknown as RawProjectTask[]).map(normalize);
+}
+
+export async function fetchOpsProjectTaskById(taskId: string): Promise<OpsProjectTask | null> {
+  await requireOpsUser();
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("project_tasks")
+    .select(TASK_SELECT)
+    .eq("id", taskId)
+    .maybeSingle();
+  if (error) {
+    logOpsServerError(error, {
+      module: "project_tasks",
+      action: "fetchOpsProjectTaskById",
+      entityId: taskId,
+    });
+    throw error;
+  }
+  return data ? normalize(data as unknown as RawProjectTask) : null;
+}
+
+export async function fetchOpsProjectTasksAssignedTo(userId: string) {
+  await requireOpsUser();
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("project_tasks")
+    .select(TASK_SELECT)
+    .eq("assigned_to", userId)
+    .is("archived_at", null)
+    .not("status", "in", "(completed,cancelled)")
+    .order("planned_end_date", { ascending: true });
+  if (error) {
+    logOpsServerError(error, {
+      module: "project_tasks",
+      action: "fetchOpsProjectTasksAssignedTo",
+    });
+    throw error;
+  }
+  return ((data ?? []) as unknown as RawProjectTask[]).map(normalize);
+}
+
+export type OpsSiteProgressRollup = {
+  totalTasks: number;
+  completedTasks: number;
+  overdueTasks: number;
+  blockedTasks: number;
+  averageCompletion: number;
+};
+
+/**
+ * Site progress from a list of tasks. Averages completion_percent across
+ * non-cancelled tasks. Skips cancelled tasks entirely so they don't drag the
+ * average down.
+ */
+export function computeOpsSiteProgress(tasks: OpsProjectTask[]): OpsSiteProgressRollup {
+  const live = tasks.filter((task) => task.status !== "cancelled");
+  if (live.length === 0) {
+    return {
+      totalTasks: 0,
+      completedTasks: 0,
+      overdueTasks: 0,
+      blockedTasks: 0,
+      averageCompletion: 0,
+    };
+  }
+  const total = live.reduce((sum, task) => sum + task.completion_percent, 0);
+  return {
+    totalTasks: live.length,
+    completedTasks: live.filter((task) => task.status === "completed").length,
+    overdueTasks: live.filter((task) => task.is_overdue).length,
+    blockedTasks: live.filter((task) => task.status === "blocked").length,
+    averageCompletion: Math.round(total / live.length),
+  };
+}

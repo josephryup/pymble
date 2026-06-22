@@ -63,6 +63,10 @@ export type PayslipPdfProps = {
     net_pay: number;
     tax_year: number | null;
     statutory_citation: string | null;
+    /** Hours paid at the overtime rate during this run, summed across the period. */
+    overtime_hours?: number;
+    /** Total ZMW attributable to overtime during this run. */
+    overtime_amount?: number;
   };
   worker: {
     worker_code: string;
@@ -137,6 +141,14 @@ export function PayslipPdf({ run, item, worker, org, generatedBy }: PayslipPdfPr
           ]}
           rows={[
             ["Gross earnings (from approved attendance)", formatPdfMoney(item.gross_pay)],
+            ...(item.overtime_hours && item.overtime_hours > 0
+              ? [
+                  [
+                    `Of which overtime (${item.overtime_hours.toFixed(2)} hours)`,
+                    formatPdfMoney(item.overtime_amount ?? 0),
+                  ] as [string, string],
+                ]
+              : []),
             ["Pay As You Earn (PAYE) — ZRA", formatPdfMoney(item.paye_amount)],
             ["NAPSA — Employee contribution (5%)", formatPdfMoney(item.napsa_employee)],
             ["Cash advance recovery", formatPdfMoney(item.advance_deduction)],

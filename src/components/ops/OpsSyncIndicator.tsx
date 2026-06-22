@@ -1,7 +1,7 @@
 "use client";
 
 import { CloudOff, RefreshCw, CircleCheck, CircleAlert } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore, useState } from "react";
 import {
   flushOutbox,
   listOutbox,
@@ -19,11 +19,25 @@ import {
  * Mounted once in the workspace layout so it can listen to outbox changes
  * globally and trigger a flush whenever the network comes back.
  */
+
+function subscribeNetwork(cb: () => void) {
+  window.addEventListener("online", cb);
+  window.addEventListener("offline", cb);
+  return () => {
+    window.removeEventListener("online", cb);
+    window.removeEventListener("offline", cb);
+  };
+}
+
 export function OpsSyncIndicator() {
   const [items, setItems] = useState<OpsOutboxIntent[]>([]);
   const [busy, setBusy] = useState(false);
-  const [online, setOnline] = useState(
-    typeof navigator === "undefined" ? true : navigator.onLine,
+  // useSyncExternalStore provides the correct server snapshot (true = online)
+  // and subscribes to native online/offline events — no hydration mismatch.
+  const online = useSyncExternalStore(
+    subscribeNetwork,
+    () => navigator.onLine,
+    () => true,
   );
 
   const refresh = useCallback(async () => {
@@ -49,20 +63,14 @@ export function OpsSyncIndicator() {
 
   useEffect(() => {
     refresh();
-    const unsub = subscribeOutbox(() => {
-      refresh();
-    });
-    const onlineHandler = () => {
-      setOnline(true);
-      flush();
-    };
-    const offlineHandler = () => setOnline(false);
-    window.addEventListener("online", onlineHandler);
-    window.addEventListener("offline", offlineHandler);
+    const unsubOutbox = subscribeOutbox(() => refresh());
+    // Flush the outbox whenever we reconnect — called from event callback,
+    // not directly in the effect body, to comply with no-state-in-effect.
+    const onReconnect = () => flush();
+    window.addEventListener("online", onReconnect);
     return () => {
-      unsub();
-      window.removeEventListener("online", onlineHandler);
-      window.removeEventListener("offline", offlineHandler);
+      unsubOutbox();
+      window.removeEventListener("online", onReconnect);
     };
   }, [flush, refresh]);
 

@@ -74,6 +74,32 @@ const REQUIRED_COLUMNS = [
   ["attendance_records", "client_id"],
   ["material_requests", "client_id"],
   ["hse_incidents", "client_id"],
+
+  // Sprint 15 — project schedule
+  ["project_tasks", "site_id"],
+  ["project_tasks", "status"],
+  ["project_tasks", "planned_start_date"],
+  ["project_tasks", "planned_end_date"],
+  ["project_tasks", "completion_percent"],
+  ["project_tasks", "assigned_to"],
+
+  // Sprint 16 — department reporting
+  ["department_reports", "department"],
+  ["department_reports", "period"],
+  ["department_reports", "status"],
+  ["department_reports", "submitted_by"],
+  ["department_reports", "reviewed_by"],
+
+  // Sprint 17 — subcontractor workflow
+  ["subcontractors", "company_name"],
+  ["subcontractors", "status"],
+  ["subcontractors", "retention_percent"],
+  ["subcontractor_assignments", "subcontractor_id"],
+  ["subcontractor_assignments", "site_id"],
+  ["subcontractor_assignments", "status"],
+  ["subcontractor_payments", "assignment_id"],
+  ["subcontractor_payments", "payment_type"],
+  ["subcontractor_payments", "status"],
 ];
 
 const REQUIRED_TABLES = [
@@ -81,6 +107,11 @@ const REQUIRED_TABLES = [
   "invoice_number_counters", // Sprint 9 — ZRA-compliant invoice sequence
   "audit_events_archive", // Sprint 11 — retention policy
   "notifications_archive", // Sprint 11 — retention policy
+  "project_tasks", // Sprint 15 — project schedule
+  "department_reports", // Sprint 16 — department reporting
+  "subcontractors", // Sprint 17
+  "subcontractor_assignments", // Sprint 17
+  "subcontractor_payments", // Sprint 17
 ];
 
 const REQUIRED_FUNCTIONS = [
@@ -100,6 +131,11 @@ const REQUIRED_REALTIME_PUBLICATIONS = [
   "daily_site_reports",
   "hse_incidents",
   "hse_weekly_reports",
+  "project_tasks", // Sprint 15
+  "department_reports", // Sprint 16
+  "subcontractors", // Sprint 17
+  "subcontractor_assignments", // Sprint 17
+  "subcontractor_payments", // Sprint 17
 ];
 
 // ------------------------------------------------------------------

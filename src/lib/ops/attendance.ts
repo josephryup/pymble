@@ -24,6 +24,8 @@ export type OpsAttendanceRecord = {
   clock_out_at: string | null;
   hours_worked: number;
   amount_earned: number;
+  overtime_hours: number;
+  overtime_amount: number;
   presence: OpsAttendancePresence;
   source: OpsAttendanceSource;
   gps_label: string;
@@ -35,10 +37,17 @@ export type OpsAttendanceRecord = {
 
 type RawAttendanceRecord = Omit<
   OpsAttendanceRecord,
-  "amount_earned" | "hours_worked" | "site" | "worker"
+  | "amount_earned"
+  | "hours_worked"
+  | "overtime_amount"
+  | "overtime_hours"
+  | "site"
+  | "worker"
 > & {
   amount_earned: number | string;
   hours_worked: number | string;
+  overtime_amount: number | string;
+  overtime_hours: number | string;
   site: OpsAttendanceRelation | OpsAttendanceRelation[] | null;
   worker: OpsAttendanceRelation | OpsAttendanceRelation[] | null;
 };
@@ -82,6 +91,8 @@ export async function fetchOpsAttendanceRecords() {
         clock_out_at,
         hours_worked,
         amount_earned,
+        overtime_hours,
+        overtime_amount,
         presence,
         source,
         gps_label,
@@ -103,6 +114,8 @@ export async function fetchOpsAttendanceRecords() {
     ...record,
     amount_earned: normalizeMoney(record.amount_earned),
     hours_worked: normalizeMoney(record.hours_worked),
+    overtime_amount: normalizeMoney(record.overtime_amount),
+    overtime_hours: normalizeMoney(record.overtime_hours),
     site: normalizeRelation(record.site),
     worker: normalizeRelation(record.worker),
   }));
