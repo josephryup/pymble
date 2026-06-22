@@ -2,21 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   canAddOpsRfqItem,
-  canAwardOpsSupplierQuote,
   canCreateOpsRfq,
+  canEditOpsRfq,
   canIssueOpsPurchaseOrder,
-  canInviteOpsRfqSupplier,
-  canRecordOpsSupplierQuote,
   canSubmitOpsPurchaseOrderForApproval,
   canViewOpsRfqPo,
   purchaseOrderApprovalRecipientRoles,
   purchaseOrderApprovalSteps,
 } from "../src/lib/ops/rfq-po-permissions";
-import {
-  calculateOpsRfqEstimatedTotal,
-  lowestReceivedSupplierQuote,
-  type OpsSupplierQuoteSummary,
-} from "../src/lib/ops/rfq-po";
+import { calculateOpsRfqEstimatedTotal } from "../src/lib/ops/rfq-po";
 
 describe("RFQ and purchase order guards", () => {
   it("scopes RFQ visibility to procurement, finance, delivery management, and leadership", () => {
@@ -28,43 +22,13 @@ describe("RFQ and purchase order guards", () => {
     assert.equal(canViewOpsRfqPo("human_resource"), false);
   });
 
-  it("lets procurement create RFQs and invite suppliers while draft or issued", () => {
+  it("lets procurement create and edit RFQ lines while draft or issued", () => {
     assert.equal(canCreateOpsRfq("procurement_assistant"), true);
     assert.equal(canCreateOpsRfq("accountant"), false);
     assert.equal(canAddOpsRfqItem("procurement", { status: "draft" }), true);
-    assert.equal(canInviteOpsRfqSupplier("procurement", { status: "issued" }), true);
-    assert.equal(canInviteOpsRfqSupplier("procurement", { status: "awarded" }), false);
-  });
-
-  it("allows quote recording before award and award only for manager roles", () => {
-    assert.equal(
-      canRecordOpsSupplierQuote("procurement_assistant", {
-        rfq_status: "quoted",
-        status: "invited",
-      }),
-      true,
-    );
-    assert.equal(
-      canRecordOpsSupplierQuote("procurement_assistant", {
-        rfq_status: "awarded",
-        status: "received",
-      }),
-      false,
-    );
-    assert.equal(
-      canAwardOpsSupplierQuote("procurement_manager", {
-        rfq_status: "quoted",
-        status: "received",
-      }),
-      true,
-    );
-    assert.equal(
-      canAwardOpsSupplierQuote("procurement_assistant", {
-        rfq_status: "quoted",
-        status: "received",
-      }),
-      false,
-    );
+    assert.equal(canEditOpsRfq("procurement", { status: "issued" }), true);
+    assert.equal(canEditOpsRfq("procurement", { status: "awarded" }), false);
+    assert.equal(canEditOpsRfq("accountant", { status: "draft" }), false);
   });
 
   it("guards purchase order approval and issue transitions by role and status", () => {
@@ -117,27 +81,5 @@ describe("RFQ calculation helpers", () => {
       ]),
       4500.25,
     );
-  });
-
-  it("finds the lowest received supplier quote", () => {
-    const quotes = [
-      {
-        id: "quote-1",
-        quoted_total: 5000,
-        status: "received",
-      },
-      {
-        id: "quote-2",
-        quoted_total: 4300,
-        status: "received",
-      },
-      {
-        id: "quote-3",
-        quoted_total: 2000,
-        status: "invited",
-      },
-    ] as OpsSupplierQuoteSummary[];
-
-    assert.equal(lowestReceivedSupplierQuote(quotes)?.id, "quote-2");
   });
 });

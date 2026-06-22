@@ -29,6 +29,8 @@ export type OpsAttendanceRecord = {
   presence: OpsAttendancePresence;
   source: OpsAttendanceSource;
   gps_label: string;
+  gps_latitude: number | null;
+  gps_longitude: number | null;
   approved_at: string | null;
   created_at: string;
   worker: OpsAttendanceRelation | null;
@@ -80,9 +82,18 @@ export async function fetchAttendanceWorkerOptions() {
   }));
 }
 
-export async function fetchOpsAttendanceRecords() {
+export type OpsAttendanceFilters = {
+  workerId?: string | null;
+  siteId?: string | null;
+  presence?: OpsAttendancePresence | null;
+  approval?: "approved" | "pending" | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+};
+
+export async function fetchOpsAttendanceRecords(filters: OpsAttendanceFilters = {}) {
   const supabase = await createOpsServerSessionClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("attendance_records")
     .select(
       `
@@ -96,6 +107,8 @@ export async function fetchOpsAttendanceRecords() {
         presence,
         source,
         gps_label,
+        gps_latitude,
+        gps_longitude,
         approved_at,
         created_at,
         worker:workers!attendance_records_worker_id_fkey(id, worker_code, full_name, trade),
@@ -103,6 +116,23 @@ export async function fetchOpsAttendanceRecords() {
       `,
     )
     .eq("is_active", true)
+    // Cancelled rows are soft-deleted: keep them out of the working list.
+    .is("cancelled_at", null);
+
+  if (filters.workerId) query = query.eq("worker_id", filters.workerId);
+  if (filters.siteId) query = query.eq("site_id", filters.siteId);
+  if (filters.presence) query = query.eq("presence", filters.presence);
+  if (filters.approval === "approved") query = query.not("approved_at", "is", null);
+  if (filters.approval === "pending") query = query.is("approved_at", null);
+  // Date range is filtered on the local work day (Africa/Lusaka, UTC+02:00).
+  if (filters.dateFrom) {
+    query = query.gte("clock_in_at", `${filters.dateFrom}T00:00:00+02:00`);
+  }
+  if (filters.dateTo) {
+    query = query.lte("clock_in_at", `${filters.dateTo}T23:59:59.999+02:00`);
+  }
+
+  const { data, error } = await query
     .order("clock_in_at", { ascending: false })
     .limit(100);
 

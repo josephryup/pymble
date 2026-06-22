@@ -32,6 +32,8 @@ const REQUIRED_COLUMNS = [
   ["boq_line_items", "supplier_name_freeform"],
   ["rfq_items", "supplier_id"],
   ["rfq_items", "supplier_name_freeform"],
+  ["rfq_items", "actual_unit_cost"],
+  ["rfq_items", "actual_total"],
   ["purchase_order_items", "supplier_id"],
   ["purchase_order_items", "supplier_name_freeform"],
 
@@ -59,6 +61,8 @@ const REQUIRED_COLUMNS = [
   ["payroll_runs", "cancelled_at"],
   ["payroll_runs", "cancelled_by"],
   ["workers", "archived_at"],
+  ["cash_advances", "archived_at"],
+  ["cash_advances", "archived_by"],
   ["attendance_records", "archived_at"],
   ["attendance_records", "cancelled_at"],
   ["equipment", "archived_at"],

@@ -8,7 +8,7 @@ import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { parseCoordinateInput } from "@/lib/ops/coordinates";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
-import { canArchiveSite, canManageSites } from "@/lib/ops/permissions";
+import { canArchiveSite, canManageSites, canViewSiteBudget } from "@/lib/ops/permissions";
 import type { OpsSiteStage, OpsSiteStatus } from "@/lib/ops/types";
 
 const SITE_STAGES = [
@@ -198,13 +198,21 @@ export async function updateSiteAction(formData: FormData) {
 
   const data = parseSiteForm(formData);
   const supabase = await createOpsServerSessionClient();
+  const patch: Record<string, unknown> = {
+    ...data,
+    status: statusFromStage(data.stage),
+    actual_completion_date:
+      data.stage === "completed" ? new Date().toISOString().slice(0, 10) : null,
+  };
+  // Budget is gated to leadership + Finance. Roles that can edit a site but not
+  // see budget never receive the field, so we drop it from the patch to avoid
+  // wiping the stored value to the coerced default of 0.
+  if (!canViewSiteBudget(profile.role)) {
+    delete patch.budget_zmw;
+  }
   const { error } = await supabase
     .from("sites")
-    .update({
-      ...data,
-      status: statusFromStage(data.stage),
-      actual_completion_date: data.stage === "completed" ? new Date().toISOString().slice(0, 10) : null,
-    })
+    .update(patch)
     .eq("id", parsedId.data.id)
     .eq("is_active", true);
 

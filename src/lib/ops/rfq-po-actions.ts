@@ -11,24 +11,21 @@ import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import {
   canAddOpsRfqItem,
-  canAwardOpsSupplierQuote,
   canCancelOpsRfq,
   canCreateOpsRfq,
   canEditOpsPurchaseOrder,
-  canInviteOpsRfqSupplier,
+  canEditOpsRfq,
   canIssueOpsPurchaseOrder,
-  canRecordOpsSupplierQuote,
   canSubmitOpsPurchaseOrderForApproval,
   purchaseOrderApprovalRecipientRoles,
   purchaseOrderApprovalSteps,
 } from "@/lib/ops/rfq-po-permissions";
+import { parseCsvRows, readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsMaterialRequestStatus,
   OpsPurchaseOrderStatus,
   OpsRfqStatus,
-  OpsSupplierQuoteStatus,
-  OpsSupplierStatus,
 } from "@/lib/ops/types";
 
 const RFQ_PO_ROUTE = "/ops/rfq-po";
@@ -43,6 +40,7 @@ const headerSchema = z.object({
 
 const itemSchema = z.object({
   estimated_unit_cost: z.coerce.number().min(0, "Estimated unit cost cannot be negative."),
+  actual_unit_cost: z.coerce.number().min(0, "Actual unit cost cannot be negative.").default(0),
   item_name: z.string().trim().min(2, "Item name is required.").max(160),
   notes: z.string().trim().max(400).default(""),
   quantity: z.coerce.number().positive("Quantity must be greater than zero."),
@@ -77,23 +75,22 @@ const rfqIdSchema = z.object({
   rfq_id: z.string().uuid("Select an RFQ."),
 });
 
-const quoteIdSchema = z.object({
-  quote_id: z.string().uuid("Select a supplier quote."),
-});
-
 const purchaseOrderIdSchema = z.object({
   purchase_order_id: z.string().uuid("Select a purchase order."),
 });
 
-const inviteSupplierSchema = rfqIdSchema.extend({
-  supplier_id: z.string().uuid("Select a supplier."),
+const updateRfqHeaderSchema = rfqIdSchema.extend({
+  title: z.string().trim().min(2, "RFQ title is required.").max(160),
+  description: z.string().trim().max(800).default(""),
+  due_date: z.string().trim().default(""),
 });
 
-const recordQuoteSchema = quoteIdSchema.extend({
-  notes: z.string().trim().max(800).default(""),
-  quote_reference: z.string().trim().max(120).default(""),
-  quoted_total: z.coerce.number().positive("Quote total must be greater than zero."),
-  valid_until: z.string().trim().default(""),
+const rfqItemIdSchema = z.object({
+  rfq_item_id: z.string().uuid("Select an RFQ item."),
+});
+
+const updateRfqItemSchema = rfqItemIdSchema.extend(itemSchema.shape).extend({
+  supplier_id: optionalSupplierId,
 });
 
 type SiteForMutation = {
@@ -120,26 +117,6 @@ type RfqForMutation = {
   title: string;
 };
 
-type SupplierForRfq = {
-  id: string;
-  legal_name: string;
-  status: OpsSupplierStatus;
-  supplier_code: string;
-};
-
-type SupplierQuoteForMutation = {
-  id: string;
-  quote_number: string;
-  quoted_total: number | string;
-  rfq_id: string;
-  status: OpsSupplierQuoteStatus;
-  supplier_id: string;
-};
-
-type PurchaseOrderInsertResult = {
-  id: string;
-  po_number: string;
-};
 
 type PurchaseOrderForMutation = {
   approval_request_id: string | null;
@@ -231,28 +208,13 @@ async function fetchRfqForMutation(rfqId: string) {
   return data;
 }
 
-async function fetchSupplierForRfq(supplierId: string) {
+async function fetchRfqItemForMutation(itemId: string) {
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
-    .from("suppliers")
-    .select("id, supplier_code, legal_name, status")
-    .eq("id", supplierId)
-    .maybeSingle<SupplierForRfq>();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
-}
-
-async function fetchSupplierQuoteForMutation(quoteId: string) {
-  const supabase = getOpsSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("supplier_quotes")
-    .select("id, quote_number, rfq_id, supplier_id, status, quoted_total")
-    .eq("id", quoteId)
-    .maybeSingle<SupplierQuoteForMutation>();
+    .from("rfq_items")
+    .select("id, rfq_id, line_number, item_name")
+    .eq("id", itemId)
+    .maybeSingle<{ id: string; rfq_id: string; line_number: number; item_name: string }>();
 
   if (error) {
     throw error;
@@ -276,21 +238,6 @@ async function nextRfqLineNumber(rfqId: string) {
   }
 
   return (data?.line_number ?? 0) + 1;
-}
-
-async function fetchExistingPurchaseOrderForQuote(quoteId: string) {
-  const supabase = getOpsSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("purchase_orders")
-    .select("id, po_number")
-    .eq("supplier_quote_id", quoteId)
-    .maybeSingle<PurchaseOrderInsertResult>();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
 }
 
 async function fetchPurchaseOrderForMutation(purchaseOrderId: string) {
@@ -427,50 +374,6 @@ export async function createRfqAction(formData: FormData) {
     rfqError(itemError.message);
   }
 
-  // Best-effort: when the RFQ is seeded from a BOQ line (or any flow that
-  // pre-fills a supplier), auto-invite that supplier so the package is ready to
-  // quote. Failures here must never void the created RFQ.
-  if (parsed.data.supplier_id && canInviteOpsRfqSupplier(profile.role, { status: "draft" })) {
-    try {
-      const supplier = await fetchSupplierForRfq(parsed.data.supplier_id);
-
-      if (supplier && supplier.status === "active") {
-        const { error: inviteError } = await supabase.from("supplier_quotes").insert({
-          created_by: profile.id,
-          rfq_id: rfq.id,
-          supplier_id: supplier.id,
-        });
-
-        if (!inviteError) {
-          await supabase
-            .from("rfqs")
-            .update({ issued_at: new Date().toISOString(), status: "issued" })
-            .eq("id", rfq.id)
-            .eq("status", "draft");
-
-          await recordOpsAuditEvent({
-            action: "rfq.supplier_invited",
-            actorUserId: profile.id,
-            entityId: rfq.id,
-            entityType: "rfq",
-            metadata: {
-              auto_invited: true,
-              rfq_number: rfq.rfq_number,
-              supplier_code: supplier.supplier_code,
-              supplier_id: supplier.id,
-              source: "boq_line",
-            },
-            moduleKey: "rfq_po",
-            sourceId: rfq.id,
-            sourceTable: "rfqs",
-            summary: `Auto-invited ${supplier.supplier_code} to ${rfq.rfq_number}`,
-          }).catch(() => null);
-        }
-      }
-    } catch {
-      // Swallow: the RFQ is still valid without the supplier pre-invite.
-    }
-  }
 
   await recordOpsAuditEvent({
     action: "rfq.created",
@@ -496,6 +399,7 @@ export async function addRfqItemAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   const parsed = rfqIdSchema.extend(itemSchema.shape).safeParse({
     estimated_unit_cost: field(formData, "estimated_unit_cost") || "0",
+    actual_unit_cost: field(formData, "actual_unit_cost") || "0",
     item_name: field(formData, "item_name"),
     notes: field(formData, "notes"),
     quantity: field(formData, "quantity"),
@@ -524,6 +428,7 @@ export async function addRfqItemAction(formData: FormData) {
   const supabase = getOpsSupabaseServiceClient();
   const { error } = await supabase.from("rfq_items").insert({
     estimated_unit_cost: parsed.data.estimated_unit_cost,
+    actual_unit_cost: parsed.data.actual_unit_cost,
     item_name: parsed.data.item_name,
     line_number: lineNumber,
     notes: parsed.data.notes,
@@ -559,305 +464,130 @@ export async function addRfqItemAction(formData: FormData) {
   redirect(`${RFQ_PO_ROUTE}?updated=item_added`);
 }
 
-export async function inviteSupplierToRfqAction(formData: FormData) {
+export async function updateRfqAction(formData: FormData) {
   const { profile } = await requireOpsUser();
-  const parsed = inviteSupplierSchema.safeParse({
+  const parsed = updateRfqHeaderSchema.safeParse({
     rfq_id: field(formData, "rfq_id"),
-    supplier_id: field(formData, "supplier_id"),
+    title: field(formData, "title"),
+    description: field(formData, "description"),
+    due_date: field(formData, "due_date"),
   });
 
   if (!parsed.success) {
-    rfqError(parsed.error.issues[0]?.message ?? "Check the RFQ supplier.");
+    rfqError(parsed.error.issues[0]?.message ?? "Check the RFQ details.");
   }
 
-  const [rfq, supplier] = await Promise.all([
-    fetchRfqForMutation(parsed.data.rfq_id),
-    fetchSupplierForRfq(parsed.data.supplier_id),
-  ]);
-
+  const rfq = await fetchRfqForMutation(parsed.data.rfq_id);
   if (!rfq) {
     rfqError("RFQ was not found.");
   }
 
-  if (!supplier || supplier.status !== "active") {
-    rfqError("Select an active supplier.");
-  }
-
-  if (!canInviteOpsRfqSupplier(profile.role, rfq)) {
-    rfqError("Your role cannot invite suppliers to this RFQ.");
+  if (!canEditOpsRfq(profile.role, rfq)) {
+    rfqError("This RFQ can no longer be edited.");
   }
 
   const supabase = getOpsSupabaseServiceClient();
-  const { data: quote, error } = await supabase
-    .from("supplier_quotes")
-    .insert({
-      created_by: profile.id,
-      rfq_id: rfq.id,
-      supplier_id: supplier.id,
-    })
-    .select("id, quote_number")
-    .single<{ id: string; quote_number: string }>();
-
-  if (error || !quote) {
-    rfqError(error?.code === "23505" ? "This supplier is already invited." : error?.message ?? "Could not invite supplier.");
-  }
-
-  if (rfq.status === "draft") {
-    const { error: statusError } = await supabase
-      .from("rfqs")
-      .update({
-        issued_at: new Date().toISOString(),
-        status: "issued",
-      })
-      .eq("id", rfq.id)
-      .eq("status", "draft");
-
-    if (statusError) {
-      rfqError(statusError.message);
-    }
-  }
-
-  await recordOpsAuditEvent({
-    action: "rfq.supplier_invited",
-    actorUserId: profile.id,
-    entityId: quote.id,
-    entityType: "supplier_quote",
-    metadata: {
-      quote_number: quote.quote_number,
-      rfq_number: rfq.rfq_number,
-      supplier_code: supplier.supplier_code,
-      supplier_id: supplier.id,
-    },
-    moduleKey: "rfq_po",
-    sourceId: rfq.id,
-    sourceTable: "rfqs",
-    summary: `Invited ${supplier.supplier_code} to ${rfq.rfq_number}`,
-  }).catch(() => null);
-
-  revalidatePath(RFQ_PO_ROUTE);
-  redirect(`${RFQ_PO_ROUTE}?updated=supplier_invited`);
-}
-
-export async function recordSupplierQuoteAction(formData: FormData) {
-  const { profile } = await requireOpsUser();
-  const parsed = recordQuoteSchema.safeParse({
-    notes: field(formData, "notes"),
-    quote_id: field(formData, "quote_id"),
-    quote_reference: field(formData, "quote_reference"),
-    quoted_total: field(formData, "quoted_total"),
-    valid_until: field(formData, "valid_until"),
-  });
-
-  if (!parsed.success) {
-    rfqError(parsed.error.issues[0]?.message ?? "Check the supplier quote.");
-  }
-
-  const quote = await fetchSupplierQuoteForMutation(parsed.data.quote_id);
-
-  if (!quote) {
-    rfqError("Supplier quote was not found.");
-  }
-
-  const rfq = await fetchRfqForMutation(quote.rfq_id);
-
-  if (!rfq) {
-    rfqError("RFQ was not found.");
-  }
-
-  if (!canRecordOpsSupplierQuote(profile.role, { rfq_status: rfq.status, status: quote.status })) {
-    rfqError("Your role cannot record this supplier quote.");
-  }
-
-  const supabase = getOpsSupabaseServiceClient();
-  const now = new Date().toISOString();
   const { error } = await supabase
-    .from("supplier_quotes")
+    .from("rfqs")
     .update({
-      notes: parsed.data.notes,
-      quote_reference: parsed.data.quote_reference,
-      quoted_total: parsed.data.quoted_total,
-      status: "received",
-      submitted_at: now,
-      valid_until: normalizeDateInput(parsed.data.valid_until),
+      title: parsed.data.title,
+      description: parsed.data.description,
+      due_date: normalizeDateInput(parsed.data.due_date),
     })
-    .eq("id", quote.id)
-    .in("status", ["invited", "received"]);
+    .eq("id", rfq.id)
+    .in("status", ["draft", "issued"]);
 
   if (error) {
     rfqError(error.message);
   }
 
-  if (rfq.status === "draft" || rfq.status === "issued") {
-    const { error: rfqStatusError } = await supabase
-      .from("rfqs")
-      .update({ status: "quoted" })
-      .eq("id", rfq.id)
-      .in("status", ["draft", "issued"]);
-
-    if (rfqStatusError) {
-      rfqError(rfqStatusError.message);
-    }
-  }
-
   await recordOpsAuditEvent({
-    action: "rfq.quote_recorded",
+    action: "rfq.updated",
     actorUserId: profile.id,
-    entityId: quote.id,
-    entityType: "supplier_quote",
-    metadata: {
-      quote_number: quote.quote_number,
-      quoted_total: parsed.data.quoted_total,
-      rfq_number: rfq.rfq_number,
-      supplier_id: quote.supplier_id,
-    },
+    entityId: rfq.id,
+    entityType: "rfq",
+    metadata: { rfq_number: rfq.rfq_number, title: parsed.data.title },
     moduleKey: "rfq_po",
     sourceId: rfq.id,
     sourceTable: "rfqs",
-    summary: `Recorded quote for ${rfq.rfq_number}`,
+    summary: `Updated RFQ ${rfq.rfq_number}`,
   }).catch(() => null);
 
   revalidatePath(RFQ_PO_ROUTE);
-  redirect(`${RFQ_PO_ROUTE}?updated=quote_recorded`);
+  redirect(`${RFQ_PO_ROUTE}?updated=rfq_updated`);
 }
 
-export async function awardSupplierQuoteAction(formData: FormData) {
+export async function updateRfqItemAction(formData: FormData) {
   const { profile } = await requireOpsUser();
-  const parsed = quoteIdSchema.safeParse({
-    quote_id: field(formData, "quote_id"),
+  const parsed = updateRfqItemSchema.safeParse({
+    rfq_item_id: field(formData, "rfq_item_id"),
+    estimated_unit_cost: field(formData, "estimated_unit_cost") || "0",
+    actual_unit_cost: field(formData, "actual_unit_cost") || "0",
+    item_name: field(formData, "item_name"),
+    notes: field(formData, "notes"),
+    quantity: field(formData, "quantity"),
+    specification: field(formData, "specification"),
+    supplier_id: field(formData, "supplier_id"),
+    supplier_name_freeform: field(formData, "supplier_name_freeform"),
+    unit: field(formData, "unit") || "each",
   });
 
   if (!parsed.success) {
-    rfqError(parsed.error.issues[0]?.message ?? "Select a supplier quote.");
+    rfqError(parsed.error.issues[0]?.message ?? "Check the RFQ item.");
   }
 
-  const quote = await fetchSupplierQuoteForMutation(parsed.data.quote_id);
-
-  if (!quote) {
-    rfqError("Supplier quote was not found.");
+  const item = await fetchRfqItemForMutation(parsed.data.rfq_item_id);
+  if (!item) {
+    rfqError("RFQ item was not found.");
   }
 
-  const [rfq, supplier, existingPurchaseOrder] = await Promise.all([
-    fetchRfqForMutation(quote.rfq_id),
-    fetchSupplierForRfq(quote.supplier_id),
-    fetchExistingPurchaseOrderForQuote(quote.id),
-  ]);
-
+  const rfq = await fetchRfqForMutation(item.rfq_id);
   if (!rfq) {
     rfqError("RFQ was not found.");
   }
 
-  if (!supplier || supplier.status === "archived") {
-    rfqError("Supplier is not available.");
-  }
-
-  if (existingPurchaseOrder) {
-    redirect(`${RFQ_PO_ROUTE}?updated=po_exists`);
-  }
-
-  if (!canAwardOpsSupplierQuote(profile.role, { rfq_status: rfq.status, status: quote.status })) {
-    rfqError("Your role cannot award this supplier quote.");
-  }
-
-  const quotedTotal = normalizeMoney(quote.quoted_total);
-
-  if (quotedTotal <= 0) {
-    rfqError("Record a positive quote total before awarding.");
+  if (!canEditOpsRfq(profile.role, rfq)) {
+    rfqError("This RFQ can no longer be edited.");
   }
 
   const supabase = getOpsSupabaseServiceClient();
-  const now = new Date().toISOString();
-  const { data: purchaseOrder, error: poError } = await supabase
-    .from("purchase_orders")
-    .insert({
-      created_by: profile.id,
-      description: `Draft purchase order created from ${rfq.rfq_number}.`,
-      material_request_id: rfq.material_request_id,
-      rfq_id: rfq.id,
-      site_id: rfq.site_id,
-      status: "draft",
-      supplier_id: supplier.id,
-      supplier_quote_id: quote.id,
-      title: `PO from ${rfq.rfq_number} - ${supplier.legal_name}`,
-      total_amount: quotedTotal,
+  const { error } = await supabase
+    .from("rfq_items")
+    .update({
+      estimated_unit_cost: parsed.data.estimated_unit_cost,
+      actual_unit_cost: parsed.data.actual_unit_cost,
+      item_name: parsed.data.item_name,
+      notes: parsed.data.notes,
+      quantity: parsed.data.quantity,
+      specification: parsed.data.specification,
+      supplier_id: parsed.data.supplier_id,
+      supplier_name_freeform: parsed.data.supplier_name_freeform || null,
+      unit: parsed.data.unit,
     })
-    .select("id, po_number")
-    .single<PurchaseOrderInsertResult>();
+    .eq("id", item.id);
 
-  if (poError || !purchaseOrder) {
-    rfqError(poError?.message ?? "Could not create draft purchase order.");
-  }
-
-  const { error: itemError } = await supabase.from("purchase_order_items").insert({
-    item_name: `RFQ award package - ${rfq.rfq_number}`,
-    line_number: 1,
-    notes: `Supplier quote ${quote.quote_number}`,
-    purchase_order_id: purchaseOrder.id,
-    quantity: 1,
-    specification: rfq.title,
-    unit: "lot",
-    unit_cost: quotedTotal,
-  });
-
-  if (itemError) {
-    await (async () => {
-      await supabase.from("purchase_orders").delete().eq("id", purchaseOrder.id);
-    })().catch(() => null);
-    rfqError(itemError.message);
-  }
-
-  const [{ error: awardError }, { error: rejectError }, { error: rfqUpdateError }] =
-    await Promise.all([
-      supabase
-        .from("supplier_quotes")
-        .update({
-          awarded_at: now,
-          status: "awarded",
-        })
-        .eq("id", quote.id),
-      supabase
-        .from("supplier_quotes")
-        .update({ status: "rejected" })
-        .eq("rfq_id", rfq.id)
-        .neq("id", quote.id)
-        .in("status", ["invited", "received"]),
-      supabase
-        .from("rfqs")
-        .update({
-          awarded_quote_id: quote.id,
-          status: "awarded",
-        })
-        .eq("id", rfq.id),
-    ]);
-
-  if (awardError || rejectError || rfqUpdateError) {
-    rfqError(
-      awardError?.message ??
-        rejectError?.message ??
-        rfqUpdateError?.message ??
-        "Could not mark RFQ as awarded.",
-    );
+  if (error) {
+    rfqError(error.message);
   }
 
   await recordOpsAuditEvent({
-    action: "rfq.quote_awarded",
+    action: "rfq.item_updated",
     actorUserId: profile.id,
-    entityId: purchaseOrder.id,
-    entityType: "purchase_order",
+    entityId: rfq.id,
+    entityType: "rfq",
     metadata: {
-      po_number: purchaseOrder.po_number,
-      quote_number: quote.quote_number,
-      quoted_total: quotedTotal,
+      item_name: parsed.data.item_name,
+      line_number: item.line_number,
       rfq_number: rfq.rfq_number,
-      supplier_id: supplier.id,
     },
     moduleKey: "rfq_po",
     sourceId: rfq.id,
     sourceTable: "rfqs",
-    summary: `Awarded ${rfq.rfq_number} and created ${purchaseOrder.po_number}`,
+    summary: `Updated item on ${rfq.rfq_number}`,
   }).catch(() => null);
 
   revalidatePath(RFQ_PO_ROUTE);
-  redirect(`${RFQ_PO_ROUTE}?updated=quote_awarded`);
+  redirect(`${RFQ_PO_ROUTE}?updated=item_updated`);
 }
 
 export async function submitPurchaseOrderForApprovalAction(formData: FormData) {
@@ -1198,25 +928,18 @@ export async function cancelRfqAction(formData: FormData) {
 
   const now = new Date().toISOString();
   const supabase = getOpsSupabaseServiceClient();
-  const [{ error: rfqUpdateError }, { error: quoteUpdateError }] = await Promise.all([
-    supabase
-      .from("rfqs")
-      .update({
-        cancelled_at: now,
-        status: "cancelled",
-      })
-      .eq("id", rfq.id)
-      .neq("status", "closed")
-      .neq("status", "cancelled"),
-    supabase
-      .from("supplier_quotes")
-      .update({ status: "rejected" })
-      .eq("rfq_id", rfq.id)
-      .in("status", ["invited", "received"]),
-  ]);
+  const { error: rfqUpdateError } = await supabase
+    .from("rfqs")
+    .update({
+      cancelled_at: now,
+      status: "cancelled",
+    })
+    .eq("id", rfq.id)
+    .neq("status", "closed")
+    .neq("status", "cancelled");
 
-  if (rfqUpdateError || quoteUpdateError) {
-    rfqError(rfqUpdateError?.message ?? quoteUpdateError?.message ?? "Could not cancel RFQ.");
+  if (rfqUpdateError) {
+    rfqError(rfqUpdateError.message ?? "Could not cancel RFQ.");
   }
 
   await recordOpsAuditEvent({
@@ -1255,10 +978,21 @@ type RfqItemForConversion = {
   unit: string;
   quantity: number | string;
   estimated_unit_cost: number | string;
+  actual_unit_cost: number | string;
   notes: string;
   supplier_id: string | null;
   supplier_name_freeform: string | null;
 };
+
+/**
+ * The PO price for a line is the actual price the procurement office recorded
+ * from the supplier. We fall back to the estimate only when no actual price has
+ * been entered yet, so a half-priced RFQ still converts to a sensible PO.
+ */
+function conversionUnitCost(item: RfqItemForConversion) {
+  const actual = Number(item.actual_unit_cost ?? 0);
+  return actual > 0 ? actual : Number(item.estimated_unit_cost ?? 0);
+}
 
 export async function convertRfqToPurchaseOrdersAction(formData: FormData) {
   const { profile } = await requireOpsUser();
@@ -1281,7 +1015,7 @@ export async function convertRfqToPurchaseOrdersAction(formData: FormData) {
   const { data: itemRows, error: itemsError } = await supabase
     .from("rfq_items")
     .select(
-      "id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, notes, supplier_id, supplier_name_freeform",
+      "id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, actual_unit_cost, notes, supplier_id, supplier_name_freeform",
     )
     .eq("rfq_id", rfq.id)
     .order("line_number");
@@ -1369,8 +1103,7 @@ export async function convertRfqToPurchaseOrdersAction(formData: FormData) {
   for (const bucket of buckets.values()) {
     if (!bucket.supplierId) continue; // already filtered out above
     const total = bucket.items.reduce(
-      (sum, item) =>
-        sum + Number(item.quantity ?? 0) * Number(item.estimated_unit_cost ?? 0),
+      (sum, item) => sum + Number(item.quantity ?? 0) * conversionUnitCost(item),
       0,
     );
 
@@ -1405,7 +1138,7 @@ export async function convertRfqToPurchaseOrdersAction(formData: FormData) {
       supplier_id: bucket.supplierId,
       supplier_name_freeform: null,
       unit: item.unit,
-      unit_cost: Number(item.estimated_unit_cost ?? 0),
+      unit_cost: conversionUnitCost(item),
     }));
     const { error: itemError } = await supabase
       .from("purchase_order_items")
@@ -1465,4 +1198,242 @@ export async function convertRfqToPurchaseOrdersAction(formData: FormData) {
   revalidatePath(RFQ_PO_ROUTE);
   revalidatePath("/ops/notifications");
   redirect(`${RFQ_PO_ROUTE}?updated=rfq_converted`);
+}
+
+// ===========================================================================
+// RFQ line-item import (CSV / XLSX / PDF). Mirrors the BOQ importer: the
+// procurement office uploads a supplier price list / requisition and the rows
+// become RFQ line items with their actual price and supplier already set.
+// ===========================================================================
+
+const RFQ_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+const RFQ_IMPORT_MAX_ROWS = 1000;
+
+const RFQ_IMPORT_HEADER_ALIASES: Record<string, string> = {
+  item: "item_name",
+  "item name": "item_name",
+  "item description": "item_name",
+  description: "item_name",
+  material: "item_name",
+  unit: "unit",
+  uom: "unit",
+  "unit of measure": "unit",
+  quantity: "quantity",
+  qty: "quantity",
+  estimate: "estimated_unit_cost",
+  estimated: "estimated_unit_cost",
+  "estimated price": "estimated_unit_cost",
+  "estimated unit cost": "estimated_unit_cost",
+  "unit estimate": "estimated_unit_cost",
+  price: "actual_unit_cost",
+  "actual price": "actual_unit_cost",
+  "actual unit price": "actual_unit_cost",
+  "unit price": "actual_unit_cost",
+  "unit price (k)": "actual_unit_cost",
+  rate: "actual_unit_cost",
+  "unit rate": "actual_unit_cost",
+  amount: "actual_unit_cost",
+  supplier: "supplier",
+  vendor: "supplier",
+  specification: "specification",
+  spec: "specification",
+  note: "notes",
+  notes: "notes",
+};
+
+const rfqImportRowSchema = z.object({
+  item_name: z.string().trim().min(2, "Item name is required.").max(160),
+  unit: z.string().trim().min(1).max(40).default("each"),
+  quantity: z.coerce.number().positive("Quantity must be greater than zero."),
+  estimated_unit_cost: z.coerce.number().min(0).default(0),
+  actual_unit_cost: z.coerce.number().min(0).default(0),
+  specification: z.string().trim().max(500).default(""),
+  notes: z.string().trim().max(400).default(""),
+});
+
+export async function importRfqItemsAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsedId = rfqIdSchema.safeParse({ rfq_id: field(formData, "rfq_id") });
+  if (!parsedId.success) {
+    rfqError("Select an RFQ to import into.");
+  }
+
+  const rfq = await fetchRfqForMutation(parsedId.data.rfq_id);
+  if (!rfq) {
+    rfqError("RFQ was not found.");
+  }
+  if (!canEditOpsRfq(profile.role, rfq)) {
+    rfqError("This RFQ can no longer accept imported items.");
+  }
+
+  const file = formData.get("file") as File | null;
+  if (!(file instanceof File) || file.size === 0) {
+    rfqError("Choose a CSV, XLSX, or PDF file to import.");
+  }
+  if (file.size > RFQ_IMPORT_MAX_BYTES) {
+    rfqError("Import files must be 2 MB or smaller.");
+  }
+
+  const filename = file.name.toLowerCase();
+  let rows: string[][] = [];
+  try {
+    if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+      rows = await readXlsxRows(file);
+    } else if (filename.endsWith(".pdf")) {
+      rows = await readPdfRows(file);
+    } else {
+      rows = parseCsvRows(await file.text());
+    }
+  } catch (importError) {
+    rfqError(
+      importError instanceof Error
+        ? `Could not read the file: ${importError.message}`
+        : "Could not read the file.",
+    );
+  }
+
+  rows = rows.filter((row) => row.some((cell) => (cell ?? "").toString().trim().length > 0));
+  if (rows.length < 2) {
+    rfqError("The file needs a header row and at least one line item.");
+  }
+
+  const header = rows[0].map((cell) => RFQ_IMPORT_HEADER_ALIASES[cell.trim().toLowerCase()] ?? "");
+  const columnIndex = (key: string) => header.indexOf(key);
+  const itemIndex = columnIndex("item_name");
+  const unitIndex = columnIndex("unit");
+  const quantityIndex = columnIndex("quantity");
+  const estimateIndex = columnIndex("estimated_unit_cost");
+  const actualIndex = columnIndex("actual_unit_cost");
+  const supplierIndex = columnIndex("supplier");
+  const specIndex = columnIndex("specification");
+  const notesIndex = columnIndex("notes");
+
+  if (itemIndex === -1 || quantityIndex === -1) {
+    rfqError("Spreadsheet must include at least item/description and quantity columns.");
+  }
+
+  const dataRows = rows.slice(1);
+  if (dataRows.length > RFQ_IMPORT_MAX_ROWS) {
+    rfqError(`Import is limited to ${RFQ_IMPORT_MAX_ROWS} rows at a time.`);
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  // Resolve supplier references once (code or legal name -> id; otherwise free text).
+  const supplierCodeToId = new Map<string, string>();
+  const supplierNameToId = new Map<string, string>();
+  if (supplierIndex !== -1) {
+    const rawValues = Array.from(
+      new Set(
+        dataRows
+          .map((row) => (row[supplierIndex] ?? "").trim())
+          .filter((value) => value.length > 0),
+      ),
+    );
+    if (rawValues.length > 0) {
+      const { data: suppliers, error: supplierError } = await supabase
+        .from("suppliers")
+        .select("id, supplier_code, legal_name")
+        .eq("status", "active");
+      if (supplierError) {
+        rfqError(supplierError.message);
+      }
+      for (const supplier of (suppliers ?? []) as Array<{
+        id: string;
+        supplier_code: string | null;
+        legal_name: string;
+      }>) {
+        if (supplier.supplier_code) {
+          supplierCodeToId.set(supplier.supplier_code.toUpperCase(), supplier.id);
+        }
+        supplierNameToId.set(supplier.legal_name.toLowerCase(), supplier.id);
+      }
+    }
+  }
+
+  const startLine = await nextRfqLineNumber(rfq.id);
+  const inserts: Array<Record<string, unknown>> = [];
+  const rowErrors: string[] = [];
+  let unmatchedSuppliers = 0;
+
+  dataRows.forEach((row, index) => {
+    const parsed = rfqImportRowSchema.safeParse({
+      item_name: row[itemIndex] ?? "",
+      unit: (unitIndex !== -1 ? row[unitIndex] : "")?.trim() || "each",
+      quantity: (row[quantityIndex] ?? "").trim(),
+      estimated_unit_cost: (estimateIndex !== -1 ? row[estimateIndex] : "")?.trim() || "0",
+      actual_unit_cost: (actualIndex !== -1 ? row[actualIndex] : "")?.trim() || "0",
+      specification: specIndex !== -1 ? (row[specIndex] ?? "") : "",
+      notes: notesIndex !== -1 ? (row[notesIndex] ?? "") : "",
+    });
+
+    if (!parsed.success) {
+      rowErrors.push(`Row ${index + 2}: ${parsed.error.issues[0]?.message ?? "invalid"}`);
+      return;
+    }
+
+    let supplierId: string | null = null;
+    let supplierFreeform: string | null = null;
+    if (supplierIndex !== -1) {
+      const raw = (row[supplierIndex] ?? "").trim();
+      if (raw.length > 0) {
+        supplierId =
+          supplierCodeToId.get(raw.toUpperCase()) ??
+          supplierNameToId.get(raw.toLowerCase()) ??
+          null;
+        if (!supplierId) {
+          supplierFreeform = raw;
+          unmatchedSuppliers += 1;
+        }
+      }
+    }
+
+    inserts.push({
+      actual_unit_cost: parsed.data.actual_unit_cost,
+      estimated_unit_cost: parsed.data.estimated_unit_cost,
+      item_name: parsed.data.item_name,
+      line_number: startLine + inserts.length,
+      notes: parsed.data.notes,
+      quantity: parsed.data.quantity,
+      rfq_id: rfq.id,
+      specification: parsed.data.specification,
+      supplier_id: supplierId,
+      supplier_name_freeform: supplierFreeform,
+      unit: parsed.data.unit,
+    });
+  });
+
+  if (inserts.length === 0) {
+    rfqError(
+      rowErrors[0] ? `No rows imported. ${rowErrors[0]}` : "No valid line items were found.",
+    );
+  }
+
+  const { error: insertError } = await supabase.from("rfq_items").insert(inserts);
+  if (insertError) {
+    rfqError(insertError.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "rfq.items_imported",
+    actorUserId: profile.id,
+    entityId: rfq.id,
+    entityType: "rfq",
+    metadata: {
+      imported: inserts.length,
+      rfq_number: rfq.rfq_number,
+      skipped: rowErrors.length,
+      unmatched_suppliers: unmatchedSuppliers,
+    },
+    moduleKey: "rfq_po",
+    sourceId: rfq.id,
+    sourceTable: "rfqs",
+    summary: `Imported ${inserts.length} item(s) into ${rfq.rfq_number}`,
+  }).catch(() => null);
+
+  revalidatePath(RFQ_PO_ROUTE);
+  redirect(
+    `${RFQ_PO_ROUTE}?updated=items_imported&imported=${inserts.length}&skipped=${rowErrors.length}`,
+  );
 }

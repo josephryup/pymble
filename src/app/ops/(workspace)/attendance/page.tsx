@@ -1,4 +1,15 @@
-import { BadgeDollarSign, CalendarDays, Check, ClipboardCheck, Clock, Plus } from "lucide-react";
+import {
+  BadgeDollarSign,
+  CalendarDays,
+  Check,
+  ClipboardCheck,
+  Clock,
+  Filter,
+  Pencil,
+  Plus,
+} from "lucide-react";
+import React from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import {
@@ -11,14 +22,17 @@ import {
   approveAttendanceAction,
   cancelAttendanceAction,
   createAttendanceAction,
+  updateAttendanceAction,
 } from "@/lib/ops/attendance-actions";
 import {
   fetchAttendanceWorkerOptions,
   fetchOpsAttendanceRecords,
+  type OpsAttendanceFilters,
   type OpsAttendanceRecord,
 } from "@/lib/ops/attendance";
 import { canAccessOpsHref, canRecordAttendance } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
+import type { OpsAttendancePresence } from "@/lib/ops/types";
 import {
   firstParam,
   formatZmw,
@@ -83,18 +97,227 @@ function attendanceNotice(params: OpsSearchParams) {
     };
   }
 
+  if (firstParam(params.updated) === "record") {
+    return {
+      tone: "success" as const,
+      message: "Attendance record updated.",
+    };
+  }
+
+  if (firstParam(params.updated) === "cancelled") {
+    return {
+      tone: "success" as const,
+      message: "Attendance record cancelled.",
+    };
+  }
+
   return null;
 }
 
+const PRESENCE_OPTIONS: Array<{ label: string; value: OpsAttendancePresence }> = [
+  { label: "Present", value: "present" },
+  { label: "Late", value: "late" },
+  { label: "Absent", value: "absent" },
+];
+
+function presenceFromParam(value: string | undefined): OpsAttendancePresence | null {
+  return PRESENCE_OPTIONS.some((option) => option.value === value)
+    ? (value as OpsAttendancePresence)
+    : null;
+}
+
+function approvalFromParam(value: string | undefined): "approved" | "pending" | null {
+  return value === "approved" || value === "pending" ? value : null;
+}
+
+function dateParam(value: string | undefined): string | null {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+/**
+ * Pull the clock time (HH:MM, Africa/Lusaka) back out of a stored timestamp so
+ * the inline edit form can pre-fill the time inputs.
+ */
+function lusakaTimeValue(value: string | null) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Africa/Lusaka",
+  }).format(new Date(value));
+}
+
+function lusakaDateValue(value: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Africa/Lusaka",
+  }).format(new Date(value));
+}
+
+type AttendanceWorkerOption = { id: string; worker_code: string; full_name: string };
+type AttendanceSiteOption = { id: string; code: string; name: string };
+
+function AttendanceEditPanel({
+  record,
+  siteOptions,
+  workerOptions,
+}: {
+  record: OpsAttendanceRecord;
+  siteOptions: AttendanceSiteOption[];
+  workerOptions: AttendanceWorkerOption[];
+}) {
+  return (
+    <details className="rounded-md border border-primary-dark/10">
+      <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-semibold text-primary-dark/65">
+        <Pencil className="size-3.5" aria-hidden="true" />
+        Edit / correct fields
+      </summary>
+      <form
+        action={updateAttendanceAction}
+        className="grid gap-3 border-t border-primary-dark/10 p-4 md:grid-cols-2 lg:grid-cols-4"
+      >
+        <input name="id" type="hidden" value={record.id} />
+        {/* Preserve stored coordinates so an edit does not wipe them. */}
+        <input
+          name="gps_latitude"
+          type="hidden"
+          value={record.gps_latitude ?? ""}
+        />
+        <input
+          name="gps_longitude"
+          type="hidden"
+          value={record.gps_longitude ?? ""}
+        />
+        <label className={OPS_LABEL_CLASS}>
+          Worker
+          <select
+            className={OPS_INPUT_CLASS}
+            defaultValue={record.worker?.id ?? ""}
+            name="worker_id"
+            required
+          >
+            {workerOptions.map((worker) => (
+              <option key={worker.id} value={worker.id}>
+                {worker.worker_code} - {worker.full_name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Site
+          <select
+            className={OPS_INPUT_CLASS}
+            defaultValue={record.site?.id ?? ""}
+            name="site_id"
+            required
+          >
+            {siteOptions.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.code} - {site.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Date
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={lusakaDateValue(record.clock_in_at)}
+            name="work_date"
+            required
+            type="date"
+          />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Presence
+          <select
+            className={OPS_INPUT_CLASS}
+            defaultValue={record.presence}
+            name="presence"
+          >
+            {PRESENCE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Clock in
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={lusakaTimeValue(record.clock_in_at)}
+            name="clock_in_time"
+            required
+            type="time"
+          />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Clock out
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={lusakaTimeValue(record.clock_out_at)}
+            name="clock_out_time"
+            type="time"
+          />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Hours
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={record.hours_worked}
+            max="24"
+            min="0"
+            name="hours_worked"
+            required
+            step="0.25"
+            type="number"
+          />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          GPS or site note
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={record.gps_label}
+            name="gps_label"
+          />
+        </label>
+        <div className="flex items-end lg:col-span-4">
+          <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
+            <Pencil className="size-4" aria-hidden="true" />
+            Save corrections
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
 export default async function OpsAttendancePage({ searchParams }: PageProps) {
-  const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({}), requireOpsUser()]);
+  const [params, auth] = await Promise.all([
+    searchParams ?? Promise.resolve({} as OpsSearchParams),
+    requireOpsUser(),
+  ]);
 
   if (!canAccessOpsHref(auth.profile.role, "/ops/attendance")) {
     notFound();
   }
 
+  const filters: OpsAttendanceFilters = {
+    siteId: firstParam(params.site_id) || null,
+    workerId: firstParam(params.worker_id) || null,
+    presence: presenceFromParam(firstParam(params.presence)),
+    approval: approvalFromParam(firstParam(params.approval)),
+    dateFrom: dateParam(firstParam(params.date_from)),
+    dateTo: dateParam(firstParam(params.date_to)),
+  };
+  const hasActiveFilter = Object.values(filters).some(Boolean);
+
   const [records, workerOptions, siteOptions] = await Promise.all([
-    fetchOpsAttendanceRecords(),
+    fetchOpsAttendanceRecords(filters),
     fetchAttendanceWorkerOptions(),
     fetchActiveSiteOptions(),
   ]);
@@ -292,6 +515,94 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
         <div className="border-b border-primary-dark/10 p-5">
           <h2 className="font-heading text-xl font-bold text-primary-dark">Recent attendance</h2>
         </div>
+        <form
+          action="/ops/attendance"
+          className="grid gap-3 border-b border-primary-dark/10 bg-primary-dark/[0.02] p-5 md:grid-cols-2 lg:grid-cols-6"
+          method="get"
+        >
+          <label className={OPS_LABEL_CLASS}>
+            Site
+            <select className={OPS_INPUT_CLASS} defaultValue={filters.siteId ?? ""} name="site_id">
+              <option value="">All sites</option>
+              {siteOptions.map((site) => (
+                <option key={site.id} value={site.id}>
+                  {site.code} - {site.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Worker
+            <select
+              className={OPS_INPUT_CLASS}
+              defaultValue={filters.workerId ?? ""}
+              name="worker_id"
+            >
+              <option value="">All workers</option>
+              {workerOptions.map((worker) => (
+                <option key={worker.id} value={worker.id}>
+                  {worker.worker_code} - {worker.full_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Presence
+            <select
+              className={OPS_INPUT_CLASS}
+              defaultValue={filters.presence ?? ""}
+              name="presence"
+            >
+              <option value="">All</option>
+              {PRESENCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Approval
+            <select
+              className={OPS_INPUT_CLASS}
+              defaultValue={filters.approval ?? ""}
+              name="approval"
+            >
+              <option value="">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+            </select>
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            From
+            <input
+              className={OPS_INPUT_CLASS}
+              defaultValue={filters.dateFrom ?? ""}
+              name="date_from"
+              type="date"
+            />
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            To
+            <input
+              className={OPS_INPUT_CLASS}
+              defaultValue={filters.dateTo ?? ""}
+              name="date_to"
+              type="date"
+            />
+          </label>
+          <div className="flex flex-wrap items-end gap-2 md:col-span-2 lg:col-span-6">
+            <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+              <Filter className="size-4" aria-hidden="true" />
+              Apply filters
+            </button>
+            {hasActiveFilter ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/attendance">
+                Clear
+              </Link>
+            ) : null}
+          </div>
+        </form>
         {records.length > 0 ? (
           <>
             <OpsMobileRecordList>
@@ -325,6 +636,19 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                       maximumFractionDigits: 2,
                     })}
                   </OpsMobileRecordRow>
+                  {record.overtime_hours > 0 ? (
+                    <OpsMobileRecordRow label="OT Hours">
+                      {record.overtime_hours.toLocaleString("en-ZM", {
+                        maximumFractionDigits: 2,
+                      })}
+                      h
+                    </OpsMobileRecordRow>
+                  ) : null}
+                  {record.overtime_amount > 0 ? (
+                    <OpsMobileRecordRow label="OT Pay">
+                      {formatZmw(record.overtime_amount)}
+                    </OpsMobileRecordRow>
+                  ) : null}
                   <OpsMobileRecordRow label="Earned">
                     {formatZmw(record.amount_earned)}
                   </OpsMobileRecordRow>
@@ -335,20 +659,38 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                         Approved
                       </span>
                     ) : canRecord ? (
-                      <form action={approveAttendanceAction}>
-                        <input name="id" type="hidden" value={record.id} />
-                        <OpsConfirmSubmitButton
-                          className={OPS_SECONDARY_BUTTON_CLASS}
-                          confirmText="Confirm approval"
-                        >
-                          <Check className="size-3" aria-hidden="true" />
-                          Approve
-                        </OpsConfirmSubmitButton>
-                      </form>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <form action={approveAttendanceAction}>
+                          <input name="id" type="hidden" value={record.id} />
+                          <OpsConfirmSubmitButton
+                            className={OPS_SECONDARY_BUTTON_CLASS}
+                            confirmText="Confirm approval"
+                          >
+                            <Check className="size-3" aria-hidden="true" />
+                            Approve
+                          </OpsConfirmSubmitButton>
+                        </form>
+                        <form action={cancelAttendanceAction}>
+                          <input name="id" type="hidden" value={record.id} />
+                          <OpsConfirmSubmitButton
+                            className={OPS_DANGER_BUTTON_CLASS}
+                            confirmText="Confirm cancel"
+                          >
+                            Cancel
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      </div>
                     ) : (
                       <span className="text-primary-dark/50">Pending</span>
                     )}
                   </OpsMobileRecordRow>
+                  {canRecord && !record.approved_at ? (
+                    <AttendanceEditPanel
+                      record={record}
+                      siteOptions={siteOptions}
+                      workerOptions={workerOptions}
+                    />
+                  ) : null}
                 </OpsMobileRecordCard>
               ))}
             </OpsMobileRecordList>
@@ -376,6 +718,12 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                     Hours
                   </th>
                   <th className="px-5 py-3" scope="col">
+                    OT Hours
+                  </th>
+                  <th className="px-5 py-3" scope="col">
+                    OT Pay
+                  </th>
+                  <th className="px-5 py-3" scope="col">
                     Earned
                   </th>
                   <th className="px-5 py-3" scope="col">
@@ -388,7 +736,8 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
               </thead>
               <tbody className="divide-y divide-primary-dark/10">
                 {records.map((record) => (
-                  <tr key={record.id}>
+                  <React.Fragment key={record.id}>
+                  <tr>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-dark text-white">
@@ -419,6 +768,16 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                       {record.hours_worked.toLocaleString("en-ZM", {
                         maximumFractionDigits: 2,
                       })}
+                    </td>
+                    <td className="px-5 py-4 text-primary-dark/70">
+                      {record.overtime_hours > 0
+                        ? `${record.overtime_hours.toLocaleString("en-ZM", {
+                            maximumFractionDigits: 2,
+                          })}h`
+                        : "—"}
+                    </td>
+                    <td className="px-5 py-4 text-primary-dark/70">
+                      {record.overtime_amount > 0 ? formatZmw(record.overtime_amount) : "—"}
                     </td>
                     <td className="px-5 py-4 font-semibold text-primary-dark">
                       <span className="inline-flex items-center gap-2">
@@ -466,6 +825,18 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                       )}
                     </td>
                   </tr>
+                  {canRecord && !record.approved_at ? (
+                    <tr>
+                      <td className="px-5 pb-4 pt-0" colSpan={9}>
+                        <AttendanceEditPanel
+                          record={record}
+                          siteOptions={siteOptions}
+                          workerOptions={workerOptions}
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -476,10 +847,12 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
             <CalendarDays className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
               <p className="font-heading text-xl font-bold text-primary-dark">
-                No attendance records yet
+                {hasActiveFilter ? "No matching attendance records" : "No attendance records yet"}
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
-                Attendance records will appear here after the first timesheet is captured.
+                {hasActiveFilter
+                  ? "Adjust or clear the filters above to widen the attendance list."
+                  : "Attendance records will appear here after the first timesheet is captured."}
               </p>
             </div>
           </div>

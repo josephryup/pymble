@@ -13,7 +13,12 @@ import { formatCoordinateValue } from "@/lib/ops/coordinates";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { archiveSiteAction, createSiteAction, updateSiteAction } from "@/lib/ops/site-actions";
 import { fetchPaginatedOpsSites, type OpsSite } from "@/lib/ops/sites";
-import { canAccessOpsHref, canArchiveSite, canManageSites } from "@/lib/ops/permissions";
+import {
+  canAccessOpsHref,
+  canArchiveSite,
+  canManageSites,
+  canViewSiteBudget,
+} from "@/lib/ops/permissions";
 import type { OpsSiteStage } from "@/lib/ops/types";
 import {
   firstParam,
@@ -129,7 +134,7 @@ function StageBadge({ stage }: { stage: OpsSiteStage }) {
   );
 }
 
-function SiteFields({ site }: { site?: OpsSite }) {
+function SiteFields({ site, canSeeBudget }: { site?: OpsSite; canSeeBudget: boolean }) {
   return (
     <>
       <label className={OPS_LABEL_CLASS}>
@@ -187,17 +192,19 @@ function SiteFields({ site }: { site?: OpsSite }) {
           name="client_name"
         />
       </label>
-      <label className={OPS_LABEL_CLASS}>
-        Budget ZMW
-        <input
-          className={OPS_INPUT_CLASS}
-          defaultValue={site ? String(site.budget_zmw) : ""}
-          min="0"
-          name="budget_zmw"
-          step="0.01"
-          type="number"
-        />
-      </label>
+      {canSeeBudget ? (
+        <label className={OPS_LABEL_CLASS}>
+          Budget ZMW
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={site ? String(site.budget_zmw) : ""}
+            min="0"
+            name="budget_zmw"
+            step="0.01"
+            type="number"
+          />
+        </label>
+      ) : null}
       <label className={OPS_LABEL_CLASS}>
         Latitude
         <input
@@ -220,7 +227,15 @@ function SiteFields({ site }: { site?: OpsSite }) {
   );
 }
 
-function SiteManagePanel({ canArchive, site }: { canArchive: boolean; site: OpsSite }) {
+function SiteManagePanel({
+  canArchive,
+  canSeeBudget,
+  site,
+}: {
+  canArchive: boolean;
+  canSeeBudget: boolean;
+  site: OpsSite;
+}) {
   return (
     <details className="rounded-md border border-primary-dark/10">
       <summary
@@ -235,7 +250,7 @@ function SiteManagePanel({ canArchive, site }: { canArchive: boolean; site: OpsS
       <div className="border-t border-primary-dark/10 p-4">
         <form action={updateSiteAction} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           <input name="id" type="hidden" value={site.id} />
-          <SiteFields site={site} />
+          <SiteFields canSeeBudget={canSeeBudget} site={site} />
           <div className="flex items-end sm:col-span-2 lg:col-span-6">
             <OpsSubmitButton
               className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`}
@@ -284,6 +299,7 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
   const hasActiveListFilter = listState.query.length > 0 || Boolean(stage);
   const canManage = canManageSites(auth.profile.role);
   const canArchive = canArchiveSite(auth.profile.role);
+  const canSeeBudget = canViewSiteBudget(auth.profile.role);
   const notice = siteNotice(params);
   const totalBudget = sites.reduce((sum, site) => sum + site.budget_zmw, 0);
   const avgCompletion =
@@ -324,14 +340,16 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                 {avgCompletion}%
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
-                Shown budget
-              </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
-                {formatZmw(totalBudget)}
-              </p>
-            </div>
+            {canSeeBudget ? (
+              <div className="rounded-md border border-primary-dark/10 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+                  Shown budget
+                </p>
+                <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+                  {formatZmw(totalBudget)}
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -363,7 +381,7 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
             </div>
           </div>
           <form action={createSiteAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-            <SiteFields />
+            <SiteFields canSeeBudget={canSeeBudget} />
             <div className="flex items-end sm:col-span-2 lg:col-span-2">
               <OpsSubmitButton
                 className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
@@ -429,10 +447,18 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                         )}`
                       : "Coordinates not set"}
                   </OpsMobileRecordRow>
-                  <OpsMobileRecordRow label="Budget">
-                    {formatZmw(site.budget_zmw)}
-                  </OpsMobileRecordRow>
-                  {canManage ? <SiteManagePanel canArchive={canArchive} site={site} /> : null}
+                  {canSeeBudget ? (
+                    <OpsMobileRecordRow label="Budget">
+                      {formatZmw(site.budget_zmw)}
+                    </OpsMobileRecordRow>
+                  ) : null}
+                  {canManage ? (
+                    <SiteManagePanel
+                      canArchive={canArchive}
+                      canSeeBudget={canSeeBudget}
+                      site={site}
+                    />
+                  ) : null}
                   <OpsRecordActivityPanel
                     canManage={canManage}
                     sourceId={site.id}
@@ -467,9 +493,11 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                     <th className="px-5 py-3" scope="col">
                       Supervisor
                     </th>
-                    <th className="px-5 py-3" scope="col">
-                      Budget
-                    </th>
+                    {canSeeBudget ? (
+                      <th className="px-5 py-3" scope="col">
+                        Budget
+                      </th>
+                    ) : null}
                     {canManage ? (
                       <th className="px-5 py-3" scope="col">
                         Manage
@@ -508,12 +536,18 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                       <td className="px-5 py-4 text-primary-dark/70">
                         {site.supervisor_name || "Supervisor not assigned"}
                       </td>
-                      <td className="px-5 py-4 font-semibold text-primary-dark">
-                        {formatZmw(site.budget_zmw)}
-                      </td>
+                      {canSeeBudget ? (
+                        <td className="px-5 py-4 font-semibold text-primary-dark">
+                          {formatZmw(site.budget_zmw)}
+                        </td>
+                      ) : null}
                       {canManage ? (
                         <td className="min-w-[26rem] px-5 py-4 align-top">
-                          <SiteManagePanel canArchive={canArchive} site={site} />
+                          <SiteManagePanel
+                            canArchive={canArchive}
+                            canSeeBudget={canSeeBudget}
+                            site={site}
+                          />
                         </td>
                       ) : null}
                     </tr>

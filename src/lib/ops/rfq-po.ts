@@ -11,8 +11,6 @@ import type {
   OpsMaterialRequestStatus,
   OpsPurchaseOrderStatus,
   OpsRfqStatus,
-  OpsSupplierQuoteStatus,
-  OpsSupplierStatus,
 } from "@/lib/ops/types";
 
 export type OpsRfqSiteSummary = {
@@ -33,18 +31,12 @@ export type OpsRfqMaterialRequestOption = OpsRfqMaterialRequestSummary & {
   site_id: string;
 };
 
-export type OpsRfqSupplierSummary = {
-  id: string;
-  legal_name: string;
-  status: OpsSupplierStatus;
-  supplier_code: string;
-  trading_name: string;
-};
-
 export type OpsRfqItemSummary = {
   created_at: string;
   estimated_total: number;
   estimated_unit_cost: number;
+  actual_total: number;
+  actual_unit_cost: number;
   id: string;
   item_name: string;
   line_number: number;
@@ -52,24 +44,9 @@ export type OpsRfqItemSummary = {
   quantity: number;
   rfq_id: string;
   specification: string;
+  supplier_id: string | null;
+  supplier_name_freeform: string | null;
   unit: string;
-};
-
-export type OpsSupplierQuoteSummary = {
-  awarded_at: string | null;
-  created_at: string;
-  currency_code: string;
-  id: string;
-  notes: string;
-  quote_number: string;
-  quote_reference: string;
-  quoted_total: number;
-  rfq_id: string;
-  status: OpsSupplierQuoteStatus;
-  submitted_at: string | null;
-  supplier: OpsRfqSupplierSummary | null;
-  supplier_id: string;
-  valid_until: string | null;
 };
 
 export type OpsPurchaseOrderSummary = {
@@ -83,13 +60,11 @@ export type OpsPurchaseOrderSummary = {
   rfq_id: string | null;
   status: OpsPurchaseOrderStatus;
   supplier_id: string;
-  supplier_quote_id: string | null;
   title: string;
   total_amount: number;
 };
 
 export type OpsRfqSummary = {
-  awarded_quote_id: string | null;
   cancelled_at: string | null;
   closed_at: string | null;
   created_at: string;
@@ -104,7 +79,6 @@ export type OpsRfqSummary = {
   material_request: OpsRfqMaterialRequestSummary | null;
   material_request_id: string | null;
   purchase_orders: OpsPurchaseOrderSummary[];
-  quotes: OpsSupplierQuoteSummary[];
   rfq_number: string;
   site: OpsRfqSiteSummary | null;
   site_id: string;
@@ -118,6 +92,8 @@ export type OpsRfqPoStats = {
   draftPurchaseOrders: number;
   issuedRfqs: number;
   openRfqs: number;
+  // Retained for the executive dashboard contract; always 0 now that the
+  // supplier-quote subsystem is retired in favour of per-item actual pricing.
   receivedQuotes: number;
 };
 
@@ -133,7 +109,7 @@ export type FetchPaginatedOpsRfqsOptions = FetchOpsRfqsOptions & {
 
 type RawRfq = Omit<
   OpsRfqSummary,
-  "estimated_total" | "items" | "material_request" | "purchase_orders" | "quotes" | "site"
+  "estimated_total" | "items" | "material_request" | "purchase_orders" | "site"
 > & {
   material_request:
     | OpsRfqMaterialRequestSummary
@@ -144,16 +120,13 @@ type RawRfq = Omit<
 
 type RawRfqItem = Omit<
   OpsRfqItemSummary,
-  "estimated_total" | "estimated_unit_cost" | "quantity"
+  "estimated_total" | "estimated_unit_cost" | "actual_total" | "actual_unit_cost" | "quantity"
 > & {
   estimated_total: number | string;
   estimated_unit_cost: number | string;
+  actual_total: number | string;
+  actual_unit_cost: number | string;
   quantity: number | string;
-};
-
-type RawSupplierQuote = Omit<OpsSupplierQuoteSummary, "quoted_total" | "supplier"> & {
-  quoted_total: number | string;
-  supplier: OpsRfqSupplierSummary | OpsRfqSupplierSummary[] | null;
 };
 
 type RawPurchaseOrder = Omit<OpsPurchaseOrderSummary, "total_amount"> & {
@@ -184,26 +157,12 @@ function groupRfqItems(items: RawRfqItem[]) {
       ...item,
       estimated_total: normalizeMoney(item.estimated_total),
       estimated_unit_cost: normalizeMoney(item.estimated_unit_cost),
+      actual_total: normalizeMoney(item.actual_total),
+      actual_unit_cost: normalizeMoney(item.actual_unit_cost),
       quantity: normalizeMoney(item.quantity),
     };
 
     grouped.set(item.rfq_id, [...(grouped.get(item.rfq_id) ?? []), normalized]);
-  });
-
-  return grouped;
-}
-
-function groupSupplierQuotes(quotes: RawSupplierQuote[]) {
-  const grouped = new Map<string, OpsSupplierQuoteSummary[]>();
-
-  quotes.forEach((quote) => {
-    const normalized = {
-      ...quote,
-      quoted_total: normalizeMoney(quote.quoted_total),
-      supplier: normalizeRelation(quote.supplier),
-    };
-
-    grouped.set(quote.rfq_id, [...(grouped.get(quote.rfq_id) ?? []), normalized]);
   });
 
   return grouped;
@@ -237,12 +196,6 @@ export function calculateOpsRfqEstimatedTotal(
   return items.reduce((sum, item) => sum + normalizeMoney(item.estimated_total), 0);
 }
 
-export function lowestReceivedSupplierQuote(quotes: OpsSupplierQuoteSummary[]) {
-  return quotes
-    .filter((quote) => quote.status === "received" && quote.quoted_total > 0)
-    .sort((a, b) => a.quoted_total - b.quoted_total)[0] ?? null;
-}
-
 async function fetchRfqItems(rfqIds: string[]) {
   if (rfqIds.length === 0) {
     return new Map<string, OpsRfqItemSummary[]>();
@@ -252,7 +205,7 @@ async function fetchRfqItems(rfqIds: string[]) {
   const { data, error } = await supabase
     .from("rfq_items")
     .select(
-      "id, rfq_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, notes, created_at",
+      "id, rfq_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, actual_unit_cost, actual_total, notes, supplier_id, supplier_name_freeform, created_at",
     )
     .in("rfq_id", rfqIds)
     .order("line_number", { ascending: true });
@@ -264,42 +217,6 @@ async function fetchRfqItems(rfqIds: string[]) {
   return groupRfqItems((data ?? []) as unknown as RawRfqItem[]);
 }
 
-async function fetchSupplierQuotes(rfqIds: string[]) {
-  if (rfqIds.length === 0) {
-    return new Map<string, OpsSupplierQuoteSummary[]>();
-  }
-
-  const supabase = getOpsSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("supplier_quotes")
-    .select(
-      [
-        "id",
-        "quote_number",
-        "rfq_id",
-        "supplier_id",
-        "quote_reference",
-        "status",
-        "quoted_total",
-        "currency_code",
-        "valid_until",
-        "notes",
-        "submitted_at",
-        "awarded_at",
-        "created_at",
-        "supplier:suppliers!supplier_quotes_supplier_id_fkey(id, supplier_code, legal_name, trading_name, status)",
-      ].join(", "),
-    )
-    .in("rfq_id", rfqIds)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw error;
-  }
-
-  return groupSupplierQuotes((data ?? []) as unknown as RawSupplierQuote[]);
-}
-
 async function fetchPurchaseOrders(rfqIds: string[]) {
   if (rfqIds.length === 0) {
     return new Map<string, OpsPurchaseOrderSummary[]>();
@@ -309,7 +226,7 @@ async function fetchPurchaseOrders(rfqIds: string[]) {
   const { data, error } = await supabase
     .from("purchase_orders")
     .select(
-      "id, po_number, rfq_id, supplier_quote_id, supplier_id, title, status, currency_code, total_amount, approval_request_id, approved_at, issued_at, created_at",
+      "id, po_number, rfq_id, supplier_id, title, status, currency_code, total_amount, approval_request_id, approved_at, issued_at, created_at",
     )
     .in("rfq_id", rfqIds)
     .order("created_at", { ascending: false });
@@ -349,7 +266,6 @@ async function fetchOpsRfqItems(options: FetchOpsRfqsOptions = {}, listState?: O
         "issued_at",
         "closed_at",
         "cancelled_at",
-        "awarded_quote_id",
         "created_at",
         "updated_at",
         "site:sites(id, code, name)",
@@ -382,9 +298,8 @@ async function fetchOpsRfqItems(options: FetchOpsRfqsOptions = {}, listState?: O
 
   const rfqs = (data ?? []) as unknown as RawRfq[];
   const rfqIds = rfqs.map((rfq) => rfq.id);
-  const [itemsByRfqId, quotesByRfqId, purchaseOrdersByRfqId] = await Promise.all([
+  const [itemsByRfqId, purchaseOrdersByRfqId] = await Promise.all([
     fetchRfqItems(rfqIds),
-    fetchSupplierQuotes(rfqIds),
     fetchPurchaseOrders(rfqIds),
   ]);
 
@@ -399,7 +314,6 @@ async function fetchOpsRfqItems(options: FetchOpsRfqsOptions = {}, listState?: O
         items,
         material_request: normalizeRelation(rfq.material_request),
         purchase_orders: purchaseOrdersByRfqId.get(rfq.id) ?? [],
-        quotes: quotesByRfqId.get(rfq.id) ?? [],
         site: normalizeRelation(rfq.site),
       } satisfies OpsRfqSummary;
     }),
@@ -410,20 +324,6 @@ async function countRfqByStatus(status: OpsRfqStatus) {
   const supabase = getOpsSupabaseServiceClient();
   const { count, error } = await supabase
     .from("rfqs")
-    .select("id", { count: "exact", head: true })
-    .eq("status", status);
-
-  if (error) {
-    throw error;
-  }
-
-  return count ?? 0;
-}
-
-async function countSupplierQuotesByStatus(status: OpsSupplierQuoteStatus) {
-  const supabase = getOpsSupabaseServiceClient();
-  const { count, error } = await supabase
-    .from("supplier_quotes")
     .select("id", { count: "exact", head: true })
     .eq("status", status);
 
@@ -473,13 +373,12 @@ export async function fetchOpsRfqPoStats(): Promise<OpsRfqPoStats> {
     };
   }
 
-  const [draftRfqs, issuedRfqs, quotedRfqs, awardedRfqs, receivedQuotes, draftPurchaseOrders] =
+  const [draftRfqs, issuedRfqs, quotedRfqs, awardedRfqs, draftPurchaseOrders] =
     await Promise.all([
       countRfqByStatus("draft"),
       countRfqByStatus("issued"),
       countRfqByStatus("quoted"),
       countRfqByStatus("awarded"),
-      countSupplierQuotesByStatus("received"),
       countPurchaseOrdersByStatus("draft"),
     ]);
 
@@ -488,7 +387,7 @@ export async function fetchOpsRfqPoStats(): Promise<OpsRfqPoStats> {
     draftPurchaseOrders,
     issuedRfqs,
     openRfqs: draftRfqs + issuedRfqs + quotedRfqs,
-    receivedQuotes,
+    receivedQuotes: 0,
   };
 }
 

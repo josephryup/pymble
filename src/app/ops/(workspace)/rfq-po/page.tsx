@@ -3,11 +3,13 @@ import {
   FileCheck2,
   FilePlus2,
   PackagePlus,
+  Pencil,
   Plus,
   Send,
   ShoppingCart,
   XCircle,
 } from "lucide-react";
+import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
@@ -21,43 +23,38 @@ import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import {
   addRfqItemAction,
-  awardSupplierQuoteAction,
   cancelRfqAction,
   convertRfqToPurchaseOrdersAction,
   createRfqAction,
-  inviteSupplierToRfqAction,
+  importRfqItemsAction,
   issuePurchaseOrderAction,
-  recordSupplierQuoteAction,
   submitPurchaseOrderForApprovalAction,
   updatePurchaseOrderAction,
+  updateRfqAction,
+  updateRfqItemAction,
 } from "@/lib/ops/rfq-po-actions";
 import {
   canAddOpsRfqItem,
-  canAwardOpsSupplierQuote,
   canCancelOpsRfq,
   canCreateOpsRfq,
   canEditOpsPurchaseOrder,
-  canInviteOpsRfqSupplier,
+  canEditOpsRfq,
   canIssueOpsPurchaseOrder,
   canManageOpsRfq,
-  canRecordOpsSupplierQuote,
   canSubmitOpsPurchaseOrderForApproval,
 } from "@/lib/ops/rfq-po-permissions";
 import {
   fetchApprovedMaterialRequestOptions,
   fetchOpsRfqPoStats,
   fetchPaginatedOpsRfqs,
-  lowestReceivedSupplierQuote,
   type OpsPurchaseOrderSummary,
   type OpsRfqSummary,
-  type OpsSupplierQuoteSummary,
 } from "@/lib/ops/rfq-po";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import { fetchActiveSupplierOptions } from "@/lib/ops/suppliers";
 import type {
   OpsPurchaseOrderStatus,
   OpsRfqStatus,
-  OpsSupplierQuoteStatus,
   OpsUserRole,
 } from "@/lib/ops/types";
 import {
@@ -104,8 +101,21 @@ function rfqPoNotice(params: OpsSearchParams) {
 
   const updated = firstParam(params.updated);
 
+  if (updated === "items_imported") {
+    const imported = firstParam(params.imported) ?? "0";
+    const skipped = firstParam(params.skipped) ?? "0";
+    return {
+      message: `Imported ${imported} RFQ item${imported === "1" ? "" : "s"}${
+        skipped !== "0" ? ` (${skipped} row${skipped === "1" ? "" : "s"} skipped)` : ""
+      }.`,
+      tone: "success" as const,
+    };
+  }
+
   const messages: Record<string, string> = {
     item_added: "RFQ item added.",
+    item_updated: "RFQ item updated.",
+    rfq_updated: "RFQ updated.",
     po_exists: "This quote already has a draft purchase order.",
     quote_awarded: "Supplier quote awarded and draft purchase order created.",
     quote_recorded: "Supplier quote recorded.",
@@ -140,22 +150,6 @@ function statusClass(status: OpsRfqStatus) {
   }
 
   if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function quoteStatusClass(status: OpsSupplierQuoteStatus) {
-  if (status === "awarded") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "received") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "rejected" || status === "declined") {
     return "border-red-200 bg-red-50 text-red-700";
   }
 
@@ -216,7 +210,143 @@ function RfqValueMetric({ label, value }: RfqValueMetricProps) {
   );
 }
 
-function RfqItems({ rfq }: { rfq: OpsRfqSummary }) {
+type RfqSupplierOption = { id: string; label: string; supplier_code: string };
+
+function itemSupplierLabel(
+  item: OpsRfqSummary["items"][number],
+  supplierOptions: RfqSupplierOption[],
+) {
+  if (item.supplier_id) {
+    const match = supplierOptions.find((option) => option.id === item.supplier_id);
+    return match ? match.label : "Selected supplier";
+  }
+  if (item.supplier_name_freeform) {
+    return `${item.supplier_name_freeform} (manual)`;
+  }
+  return "No supplier nominated";
+}
+
+function EditRfqItemForm({
+  item,
+  supplierOptions,
+}: {
+  item: OpsRfqSummary["items"][number];
+  supplierOptions: RfqSupplierOption[];
+}) {
+  return (
+    <details className="rounded-md border border-primary-dark/10">
+      <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-semibold text-primary-dark/65">
+        <Pencil className="size-3.5" aria-hidden="true" />
+        Edit line
+      </summary>
+      <form
+        action={updateRfqItemAction}
+        className="grid gap-3 border-t border-primary-dark/10 p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+      >
+        <input name="rfq_item_id" type="hidden" value={item.id} />
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Item
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={item.item_name}
+            name="item_name"
+            required
+          />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Quantity
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={item.quantity}
+            min="0.01"
+            name="quantity"
+            required
+            step="0.01"
+            type="number"
+          />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Unit
+          <input className={OPS_INPUT_CLASS} defaultValue={item.unit} name="unit" required />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Unit estimate
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={item.estimated_unit_cost}
+            min="0"
+            name="estimated_unit_cost"
+            step="0.01"
+            type="number"
+          />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Actual unit price
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={item.actual_unit_cost}
+            min="0"
+            name="actual_unit_cost"
+            step="0.01"
+            type="number"
+          />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+          Supplier
+          <select
+            className={OPS_INPUT_CLASS}
+            defaultValue={item.supplier_id ?? ""}
+            name="supplier_id"
+          >
+            <option value="">No master-list supplier</option>
+            {supplierOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.supplier_code} - {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+          Or type a supplier (if not on the list)
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={item.supplier_name_freeform ?? ""}
+            name="supplier_name_freeform"
+            placeholder="Manual supplier name"
+          />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
+          Specification
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={item.specification}
+            name="specification"
+          />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Notes
+          <input className={OPS_INPUT_CLASS} defaultValue={item.notes} name="notes" />
+        </label>
+        <div className="flex items-end lg:col-span-6">
+          <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
+            <Pencil className="size-4" aria-hidden="true" />
+            Save line
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
+function RfqItems({
+  rfq,
+  canEdit,
+  supplierOptions,
+}: {
+  rfq: OpsRfqSummary;
+  canEdit: boolean;
+  supplierOptions: RfqSupplierOption[];
+}) {
   if (rfq.items.length === 0) {
     return (
       <p className="rounded-md border border-orange-200 bg-orange-50 px-3 py-3 text-sm text-orange-800">
@@ -238,31 +368,61 @@ function RfqItems({ rfq }: { rfq: OpsRfqSummary }) {
               Quantity
             </th>
             <th className="px-3 py-3" scope="col">
+              Supplier
+            </th>
+            <th className="px-3 py-3" scope="col">
               Estimate
+            </th>
+            <th className="px-3 py-3" scope="col">
+              Actual
             </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-primary-dark/10">
           {rfq.items.map((item) => (
-            <tr key={item.id}>
-              <td className="px-3 py-3 align-top">
-                <p className="font-bold text-primary-dark">{item.item_name}</p>
-                {item.specification ? (
-                  <p className="mt-1 max-w-lg text-xs leading-5 text-primary-dark/55">
-                    {item.specification}
+            <Fragment key={item.id}>
+              <tr>
+                <td className="px-3 py-3 align-top">
+                  <p className="font-bold text-primary-dark">{item.item_name}</p>
+                  {item.specification ? (
+                    <p className="mt-1 max-w-lg text-xs leading-5 text-primary-dark/55">
+                      {item.specification}
+                    </p>
+                  ) : null}
+                </td>
+                <td className="px-3 py-3 align-top font-semibold text-primary-dark/70">
+                  {item.quantity.toLocaleString("en-ZM")} {item.unit}
+                </td>
+                <td className="px-3 py-3 align-top text-primary-dark/70">
+                  {itemSupplierLabel(item, supplierOptions)}
+                </td>
+                <td className="px-3 py-3 align-top">
+                  <p className="font-bold text-primary-dark">{formatZmw(item.estimated_total)}</p>
+                  <p className="mt-1 text-xs text-primary-dark/45">
+                    {formatZmw(item.estimated_unit_cost)} per {item.unit}
                   </p>
-                ) : null}
-              </td>
-              <td className="px-3 py-3 align-top font-semibold text-primary-dark/70">
-                {item.quantity.toLocaleString("en-ZM")} {item.unit}
-              </td>
-              <td className="px-3 py-3 align-top">
-                <p className="font-bold text-primary-dark">{formatZmw(item.estimated_total)}</p>
-                <p className="mt-1 text-xs text-primary-dark/45">
-                  {formatZmw(item.estimated_unit_cost)} per {item.unit}
-                </p>
-              </td>
-            </tr>
+                </td>
+                <td className="px-3 py-3 align-top">
+                  {item.actual_unit_cost > 0 ? (
+                    <>
+                      <p className="font-bold text-primary-dark">{formatZmw(item.actual_total)}</p>
+                      <p className="mt-1 text-xs text-primary-dark/45">
+                        {formatZmw(item.actual_unit_cost)} per {item.unit}
+                      </p>
+                    </>
+                  ) : (
+                    <span className="text-xs text-primary-dark/45">Not priced</span>
+                  )}
+                </td>
+              </tr>
+              {canEdit ? (
+                <tr>
+                  <td className="px-3 pb-3 pt-0" colSpan={5}>
+                    <EditRfqItemForm item={item} supplierOptions={supplierOptions} />
+                  </td>
+                </tr>
+              ) : null}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -270,7 +430,57 @@ function RfqItems({ rfq }: { rfq: OpsRfqSummary }) {
   );
 }
 
-function AddRfqItemForm({ rfqId }: { rfqId: string }) {
+function EditRfqForm({ rfq }: { rfq: OpsRfqSummary }) {
+  return (
+    <details className="rounded-md border border-primary-dark/10">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+        <Pencil className="size-4" aria-hidden="true" />
+        Edit RFQ details
+      </summary>
+      <form
+        action={updateRfqAction}
+        className="grid gap-3 border-t border-primary-dark/10 p-3 lg:grid-cols-6"
+      >
+        <input name="rfq_id" type="hidden" value={rfq.id} />
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+          Title
+          <input className={OPS_INPUT_CLASS} defaultValue={rfq.title} name="title" required />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+          Due date
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={rfq.due_date ?? ""}
+            name="due_date"
+            type="date"
+          />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>
+          Description
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={rfq.description}
+            name="description"
+          />
+        </label>
+        <div className="flex items-end lg:col-span-6">
+          <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
+            <Pencil className="size-4" aria-hidden="true" />
+            Save RFQ
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
+function AddRfqItemForm({
+  rfqId,
+  supplierOptions,
+}: {
+  rfqId: string;
+  supplierOptions: RfqSupplierOption[];
+}) {
   return (
     <details className="rounded-md border border-primary-dark/10">
       <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
@@ -298,6 +508,29 @@ function AddRfqItemForm({ rfqId }: { rfqId: string }) {
           Unit estimate
           <input className={OPS_INPUT_CLASS} min="0" name="estimated_unit_cost" step="0.01" type="number" />
         </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Actual unit price
+          <input className={OPS_INPUT_CLASS} min="0" name="actual_unit_cost" step="0.01" type="number" />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+          Supplier
+          <select className={OPS_INPUT_CLASS} defaultValue="" name="supplier_id">
+            <option value="">No master-list supplier</option>
+            {supplierOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.supplier_code} - {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+          Or type a supplier (if not on the list)
+          <input
+            className={OPS_INPUT_CLASS}
+            name="supplier_name_freeform"
+            placeholder="Manual supplier name"
+          />
+        </label>
         <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-3`}>
           Specification
           <input className={OPS_INPUT_CLASS} name="specification" />
@@ -317,46 +550,34 @@ function AddRfqItemForm({ rfqId }: { rfqId: string }) {
   );
 }
 
-function RecordQuoteForm({ quote }: { quote: OpsSupplierQuoteSummary }) {
+function ImportRfqItemsForm({ rfqId }: { rfqId: string }) {
   return (
     <details className="rounded-md border border-primary-dark/10">
       <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
-        <FileCheck2 className="size-4" aria-hidden="true" />
-        Record quote
+        <FilePlus2 className="size-4" aria-hidden="true" />
+        Import items (CSV / Excel / PDF)
       </summary>
-      <form
-        action={recordSupplierQuoteAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-3 min-[520px]:grid-cols-2"
-      >
-        <input name="quote_id" type="hidden" value={quote.id} />
+      <form action={importRfqItemsAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+        <input name="rfq_id" type="hidden" value={rfqId} />
+        <p className="text-xs leading-5 text-primary-dark/55">
+          Upload a supplier price list or requisition. Recognised columns: item / description,
+          unit, quantity, estimate, actual price, and supplier (code or name — unmatched names are
+          kept as a typed supplier). The first row must be the header.
+        </p>
         <label className={OPS_LABEL_CLASS}>
-          Quote reference
-          <input className={OPS_INPUT_CLASS} defaultValue={quote.quote_reference} name="quote_reference" />
-        </label>
-        <label className={OPS_LABEL_CLASS}>
-          Quote total
+          File
           <input
+            accept=".csv,.xlsx,.xls,.pdf"
             className={OPS_INPUT_CLASS}
-            defaultValue={quote.quoted_total || ""}
-            min="0.01"
-            name="quoted_total"
+            name="file"
             required
-            step="0.01"
-            type="number"
+            type="file"
           />
         </label>
-        <label className={OPS_LABEL_CLASS}>
-          Valid until
-          <input className={OPS_INPUT_CLASS} defaultValue={quote.valid_until ?? ""} name="valid_until" type="date" />
-        </label>
-        <label className={OPS_LABEL_CLASS}>
-          Notes
-          <input className={OPS_INPUT_CLASS} defaultValue={quote.notes} name="notes" />
-        </label>
-        <div className="min-[520px]:col-span-2">
-          <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
-            <FileCheck2 className="size-4" aria-hidden="true" />
-            Save quote
+        <div>
+          <button className={`${OPS_SECONDARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
+            <FilePlus2 className="size-4" aria-hidden="true" />
+            Import
           </button>
         </div>
       </form>
@@ -487,11 +708,10 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
   const notice = rfqPoNotice(params);
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const pageEstimatedTotal = rfqs.reduce((sum, rfq) => sum + rfq.estimated_total, 0);
-  const pageSupplierInvitations = rfqs.reduce((sum, rfq) => sum + rfq.quotes.length, 0);
-  const pageBestQuoteTotal = rfqs.reduce((sum, rfq) => {
-    const bestQuote = lowestReceivedSupplierQuote(rfq.quotes);
-    return sum + (bestQuote?.quoted_total ?? 0);
-  }, 0);
+  const pageActualTotal = rfqs.reduce(
+    (sum, rfq) => sum + rfq.items.reduce((s, item) => s + item.actual_total, 0),
+    0,
+  );
   const pagePurchaseOrderTotal = rfqs.reduce(
     (sum, rfq) =>
       sum + rfq.purchase_orders.reduce((poSum, purchaseOrder) => poSum + purchaseOrder.total_amount, 0),
@@ -569,11 +789,11 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
           value={stats.openRfqs.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
-          href="/ops/rfq-po?status=quoted"
+          href="/ops/rfq-po?status=issued"
           icon={Send}
-          label="Quotes received"
-          trend="Compare"
-          value={stats.receivedQuotes.toLocaleString("en-ZM")}
+          label="Issued RFQs"
+          trend="In progress"
+          value={stats.issuedRfqs.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
           href="/ops/rfq-po"
@@ -597,11 +817,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
         <OpsDashboardPanel eyebrow="Visible values" title="Current procurement selection">
           <dl className="grid gap-3 min-[520px]:grid-cols-2 xl:grid-cols-4">
             <RfqValueMetric label="Estimate shown" value={formatZmw(pageEstimatedTotal)} />
-            <RfqValueMetric
-              label="Supplier invites"
-              value={pageSupplierInvitations.toLocaleString("en-ZM")}
-            />
-            <RfqValueMetric label="Best quote shown" value={formatZmw(pageBestQuoteTotal)} />
+            <RfqValueMetric label="Actual shown" value={formatZmw(pageActualTotal)} />
             <RfqValueMetric label="PO value shown" value={formatZmw(pagePurchaseOrderTotal)} />
           </dl>
         </OpsDashboardPanel>
@@ -803,10 +1019,13 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
         {rfqs.length > 0 ? (
           <div className="divide-y divide-primary-dark/10">
             {rfqs.map((rfq) => {
-              const bestQuote = lowestReceivedSupplierQuote(rfq.quotes);
               const canAddItem = canAddOpsRfqItem(auth.profile.role, rfq);
-              const canInvite = canInviteOpsRfqSupplier(auth.profile.role, rfq);
               const canCancel = canCancelOpsRfq(auth.profile.role, rfq);
+              const canEditRfq = canEditOpsRfq(auth.profile.role, rfq);
+              const rfqActualTotal = rfq.items.reduce((sum, item) => sum + item.actual_total, 0);
+              const nominatedSuppliers = rfq.items.filter(
+                (item) => item.supplier_id || item.supplier_name_freeform,
+              ).length;
 
               return (
                 <article className="p-5" key={rfq.id}>
@@ -887,16 +1106,18 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                     </div>
                     <div className="rounded-md border border-primary-dark/10 px-3 py-2">
                       <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
-                        Suppliers
+                        Suppliers set
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">{rfq.quotes.length}</dd>
+                      <dd className="mt-1 font-bold text-primary-dark">
+                        {nominatedSuppliers} / {rfq.items.length}
+                      </dd>
                     </div>
                     <div className="rounded-md border border-primary-dark/10 px-3 py-2">
                       <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
-                        Best quote
+                        Actual total
                       </dt>
                       <dd className="mt-1 font-bold text-primary-dark">
-                        {bestQuote ? formatZmw(bestQuote.quoted_total) : "Not recorded"}
+                        {rfqActualTotal > 0 ? formatZmw(rfqActualTotal) : "Not priced"}
                       </dd>
                     </div>
                     <div className="rounded-md border border-primary-dark/10 px-3 py-2">
@@ -910,121 +1131,17 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                   </dl>
 
                   <div className="mt-4 grid gap-4">
-                    <RfqItems rfq={rfq} />
-                    {canAddItem ? <AddRfqItemForm rfqId={rfq.id} /> : null}
-                  </div>
-
-                  <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_20rem]">
-                    <section className="min-w-0">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Send className="size-4 text-primary-blue" aria-hidden="true" />
-                        <h4 className="font-heading text-base font-bold text-primary-dark">
-                          Supplier quotes
-                        </h4>
+                    {canEditRfq ? <EditRfqForm rfq={rfq} /> : null}
+                    <RfqItems
+                      canEdit={canEditRfq}
+                      rfq={rfq}
+                      supplierOptions={supplierOptions}
+                    />
+                    {canAddItem ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <AddRfqItemForm rfqId={rfq.id} supplierOptions={supplierOptions} />
+                        <ImportRfqItemsForm rfqId={rfq.id} />
                       </div>
-                      {rfq.quotes.length > 0 ? (
-                        <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
-                          {rfq.quotes.map((quote) => {
-                            const canRecord = canRecordOpsSupplierQuote(auth.profile.role, {
-                              rfq_status: rfq.status,
-                              status: quote.status,
-                            });
-                            const canAward = canAwardOpsSupplierQuote(auth.profile.role, {
-                              rfq_status: rfq.status,
-                              status: quote.status,
-                            });
-
-                            return (
-                              <li className="grid gap-3 px-3 py-3" key={quote.id}>
-                                <div className="flex flex-col gap-2 min-[640px]:flex-row min-[640px]:items-start min-[640px]:justify-between">
-                                  <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <p className="font-bold text-primary-dark">
-                                        {quote.supplier
-                                          ? `${quote.supplier.supplier_code} - ${quote.supplier.legal_name}`
-                                          : "Supplier unavailable"}
-                                      </p>
-                                      <span
-                                        className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${quoteStatusClass(
-                                          quote.status,
-                                        )}`}
-                                      >
-                                        {formatLabel(quote.status)}
-                                      </span>
-                                    </div>
-                                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
-                                      {quote.quote_reference || quote.quote_number}
-                                    </p>
-                                  </div>
-                                  <div className="text-left min-[640px]:text-right">
-                                    <p className="font-bold text-primary-dark">
-                                      {quote.quoted_total > 0
-                                        ? formatZmw(quote.quoted_total)
-                                        : "Awaiting quote"}
-                                    </p>
-                                    <p className="mt-1 text-xs text-primary-dark/45">
-                                      Valid until {formatDate(quote.valid_until)}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="grid gap-2 min-[640px]:grid-cols-2">
-                                  {canRecord ? <RecordQuoteForm quote={quote} /> : null}
-                                  {canAward ? (
-                                    <form action={awardSupplierQuoteAction}>
-                                      <input name="quote_id" type="hidden" value={quote.id} />
-                                      <OpsConfirmSubmitButton
-                                        className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
-                                        confirmText="Confirm award"
-                                      >
-                                        <FileCheck2 className="size-4" aria-hidden="true" />
-                                        Award quote
-                                      </OpsConfirmSubmitButton>
-                                    </form>
-                                  ) : null}
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      ) : (
-                        <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
-                          No suppliers invited yet.
-                        </p>
-                      )}
-                    </section>
-
-                    {canInvite ? (
-                      <section className="rounded-md border border-primary-dark/10 p-3">
-                        <h4 className="font-heading text-base font-bold text-primary-dark">
-                          Invite supplier
-                        </h4>
-                        {supplierOptions.length === 0 ? (
-                          <p className="mt-3 text-sm leading-6 text-primary-dark/60">
-                            Add an active supplier before sending RFQs.
-                          </p>
-                        ) : (
-                          <form action={inviteSupplierToRfqAction} className="mt-3 grid gap-3">
-                            <input name="rfq_id" type="hidden" value={rfq.id} />
-                            <label className={OPS_LABEL_CLASS}>
-                              Supplier
-                              <select className={OPS_INPUT_CLASS} defaultValue="" name="supplier_id" required>
-                                <option value="" disabled>
-                                  Select supplier
-                                </option>
-                                {supplierOptions.map((supplier) => (
-                                  <option key={supplier.id} value={supplier.id}>
-                                    {supplier.supplier_code} - {supplier.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
-                              <Send className="size-4" aria-hidden="true" />
-                              Invite
-                            </button>
-                          </form>
-                        )}
-                      </section>
                     ) : null}
                   </div>
 

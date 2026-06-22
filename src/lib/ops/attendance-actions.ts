@@ -296,11 +296,60 @@ export async function updateAttendanceAction(formData: FormData) {
     attendanceError(parsed.error.issues[0]?.message ?? "Check the attendance entry.");
   }
 
+  if ((parsed.data.gps_latitude === null) !== (parsed.data.gps_longitude === null)) {
+    attendanceError("Enter both GPS latitude and longitude, or leave both blank.");
+  }
+
   const { id, ...patch } = parsed.data;
   const supabase = await createOpsServerSessionClient();
+
+  // Recompute earnings from the (possibly changed) worker and hours so an edit
+  // never leaves amount_earned / overtime stale ahead of payroll.
+  const [workerRes, orgRes] = await Promise.all([
+    supabase
+      .from("workers")
+      .select("daily_rate")
+      .eq("id", patch.worker_id)
+      .eq("is_active", true)
+      .single<{ daily_rate: number | string }>(),
+    supabase
+      .from("organization_profile")
+      .select("standard_daily_hours, overtime_multiplier")
+      .eq("id", 1)
+      .maybeSingle<{ standard_daily_hours: number | string; overtime_multiplier: number | string }>(),
+  ]);
+
+  if (workerRes.error || !workerRes.data) {
+    attendanceError("The selected worker could not be found.");
+  }
+
+  const hoursWorked = patch.presence === "absent" ? 0 : patch.hours_worked;
+  const earnings = computeAttendanceEarnings({
+    hoursWorked,
+    dailyRate: Number(workerRes.data.daily_rate),
+    standardDailyHours: Number(orgRes.data?.standard_daily_hours ?? 8),
+    overtimeMultiplier: Number(orgRes.data?.overtime_multiplier ?? 1.5),
+    isAbsent: patch.presence === "absent",
+  });
+
   const { error } = await supabase
     .from("attendance_records")
-    .update(patch)
+    .update({
+      worker_id: patch.worker_id,
+      site_id: patch.site_id,
+      clock_in_at: combineDateTime(patch.work_date, patch.clock_in_time),
+      clock_out_at: patch.clock_out_time
+        ? combineDateTime(patch.work_date, patch.clock_out_time)
+        : null,
+      hours_worked: hoursWorked,
+      amount_earned: earnings.totalAmount,
+      overtime_hours: earnings.overtimeHours,
+      overtime_amount: earnings.overtimeAmount,
+      presence: patch.presence,
+      gps_label: patch.gps_label,
+      gps_latitude: patch.gps_latitude,
+      gps_longitude: patch.gps_longitude,
+    })
     .eq("id", id)
     .is("approved_at", null)
     .is("cancelled_at", null);

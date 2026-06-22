@@ -1,6 +1,58 @@
 import * as XLSX from "xlsx";
 
 /**
+ * Minimal RFC-4180-ish CSV parser shared by the spreadsheet importers. Handles
+ * quoted cells, escaped quotes, and CRLF. Returns a 2D string grid.
+ */
+export function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          cell += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cell += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+    } else if (char === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (char === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else if (char === "\r") {
+      // ignore; handled by the \n branch
+    } else {
+      cell += char;
+    }
+  }
+
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+/**
  * Parse an XLSX/XLS workbook into a 2D string grid. We always read the first
  * sheet — multi-sheet workbooks would need a separate UI step to pick one.
  *

@@ -1,18 +1,12 @@
 import type {
   OpsPurchaseOrderStatus,
   OpsRfqStatus,
-  OpsSupplierQuoteStatus,
   OpsUserRole,
 } from "@/lib/ops/types";
 import { formatOpsRole } from "@/lib/ops/roles";
 
 export type OpsRfqMutationTarget = {
   status: OpsRfqStatus;
-};
-
-export type OpsSupplierQuoteMutationTarget = {
-  rfq_status: OpsRfqStatus;
-  status: OpsSupplierQuoteStatus;
 };
 
 export type OpsPurchaseOrderMutationTarget = {
@@ -73,15 +67,6 @@ const RFQ_PO_MANAGER_ROLES: OpsUserRole[] = [
   "manager",
 ];
 
-const RFQ_PO_AWARD_ROLES: OpsUserRole[] = [
-  "developer",
-  "managing_director",
-  "general_manager",
-  "procurement_manager",
-  "owner",
-  "manager",
-];
-
 export function canViewOpsRfqPo(role: OpsUserRole) {
   return RFQ_PO_VIEW_ROLES.includes(role);
 }
@@ -98,34 +83,13 @@ export function canAddOpsRfqItem(role: OpsUserRole, rfq: OpsRfqMutationTarget) {
   return canCreateOpsRfq(role) && (rfq.status === "draft" || rfq.status === "issued");
 }
 
-export function canInviteOpsRfqSupplier(role: OpsUserRole, rfq: OpsRfqMutationTarget) {
+/**
+ * Editing an RFQ header or its line items is allowed for creators while the
+ * RFQ has not yet been awarded/closed (draft or issued). Mirrors the add-item
+ * gate so edit and add stay consistent.
+ */
+export function canEditOpsRfq(role: OpsUserRole, rfq: OpsRfqMutationTarget) {
   return canCreateOpsRfq(role) && (rfq.status === "draft" || rfq.status === "issued");
-}
-
-export function canRecordOpsSupplierQuote(
-  role: OpsUserRole,
-  quote: OpsSupplierQuoteMutationTarget,
-) {
-  return (
-    canCreateOpsRfq(role) &&
-    quote.rfq_status !== "cancelled" &&
-    quote.rfq_status !== "closed" &&
-    quote.rfq_status !== "awarded" &&
-    (quote.status === "invited" || quote.status === "received")
-  );
-}
-
-export function canAwardOpsSupplierQuote(
-  role: OpsUserRole,
-  quote: OpsSupplierQuoteMutationTarget,
-) {
-  return (
-    RFQ_PO_AWARD_ROLES.includes(role) &&
-    quote.rfq_status !== "cancelled" &&
-    quote.rfq_status !== "closed" &&
-    quote.rfq_status !== "awarded" &&
-    quote.status === "received"
-  );
 }
 
 export function canCancelOpsRfq(role: OpsUserRole, rfq: OpsRfqMutationTarget) {
