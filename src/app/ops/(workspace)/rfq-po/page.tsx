@@ -20,6 +20,7 @@ import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { OpsLineItemsEditor } from "@/components/ops/OpsLineItemsEditor";
 import { OpsScopeSitePicker } from "@/components/ops/OpsScopeSitePicker";
+import { OpsImportTemplateLinks } from "@/components/ops/OpsImportTemplateLinks";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -565,6 +566,7 @@ function ImportRfqItemsForm({ rfqId }: { rfqId: string }) {
           unit, quantity, estimate, actual price, and supplier (code or name — unmatched names are
           kept as a typed supplier). The first row must be the header.
         </p>
+        <OpsImportTemplateLinks kind="requisitions" />
         <label className={OPS_LABEL_CLASS}>
           File
           <input

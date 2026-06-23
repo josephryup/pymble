@@ -61,6 +61,7 @@ import { fetchActiveSupplierOptions } from "@/lib/ops/suppliers";
 import { OpsSupplierPicker } from "@/components/ops/OpsSupplierPicker";
 import { OpsLineItemsEditor } from "@/components/ops/OpsLineItemsEditor";
 import { OpsScopeSitePicker } from "@/components/ops/OpsScopeSitePicker";
+import { OpsImportTemplateLinks } from "@/components/ops/OpsImportTemplateLinks";
 import {
   firstParam,
   formatZmw,
@@ -496,6 +497,7 @@ function ImportMaterialItemsForm({ requestId }: { requestId: string }) {
           and supplier (code or name — unmatched names are kept as a typed supplier). The first
           row must be the header.
         </p>
+        <OpsImportTemplateLinks kind="material-requests" />
         <label className={OPS_LABEL_CLASS}>
           File
           <input

@@ -3,12 +3,32 @@ import { describe, it } from "node:test";
 import { OPS_MODULES } from "../src/lib/ops/constants";
 import {
   canAccessOpsHref,
+  canViewOpsBackoffice,
   canViewSiteActualBudget,
   canViewSiteBudget,
   visibleOpsModuleRegistry,
   visibleOpsModules,
   visibleOpsRouteModules,
 } from "../src/lib/ops/permissions";
+
+describe("back-office oversight access", () => {
+  it("is leadership, manager, and the operations manager only", () => {
+    for (const role of [
+      "developer",
+      "managing_director",
+      "general_manager",
+      "owner",
+      "manager",
+      "operations_manager",
+    ] as const) {
+      assert.equal(canViewOpsBackoffice(role), true, role);
+    }
+    assert.equal(canViewOpsBackoffice("projects_manager"), false);
+    assert.equal(canViewOpsBackoffice("finance_manager"), false);
+    assert.equal(canViewOpsBackoffice("engineer"), false);
+    assert.equal(canViewOpsBackoffice("crew"), false);
+  });
+});
 import { canCreateOpsRfq, canManageOpsRfq } from "../src/lib/ops/rfq-po-permissions";
 
 describe("site budget visibility", () => {

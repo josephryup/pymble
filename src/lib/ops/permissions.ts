@@ -93,6 +93,15 @@ export function canOverrideApprovalDecision(role: OpsUserRole) {
   return isDeveloperRole(role);
 }
 
+/**
+ * Back-office oversight tools (the system Activity Log and the Archive viewer):
+ * leadership, the Operations Manager, and the Developer. These surface
+ * company-wide records, so they sit above the usual per-department scoping.
+ */
+export function canViewOpsBackoffice(role: OpsUserRole) {
+  return isLeadershipRole(role) || role === "operations_manager";
+}
+
 export function canCreateStaffRole(actorRole: OpsUserRole, targetRole: OpsAssignableStaffRole) {
   if (isDeveloperRole(actorRole) || isManagingDirectorRole(actorRole)) {
     return true;

@@ -47,6 +47,14 @@ const OPS_EXECUTIVE_ROLES: OpsUserRole[] = [
   "manager",
 ];
 
+// Back-office oversight tools (Activity Log, Archive): leadership + manager +
+// Operations Manager. Mirrors canViewOpsBackoffice in permissions.ts.
+const OPS_BACKOFFICE_ROLES: OpsUserRole[] = [
+  ...OPS_LEADERSHIP_ROLES,
+  "manager",
+  "operations_manager",
+];
+
 const OPS_SITE_DELIVERY_ROLES: OpsUserRole[] = [
   ...OPS_LEADERSHIP_ROLES,
   "operations_manager",
@@ -445,6 +453,28 @@ export const OPS_MODULES: OpsModule[] = [
     roles: OPS_STAFF_ROLES,
     status: "ready",
     title: "Staff",
+  },
+  {
+    description: "Every recorded action across the workspace — who did what, when, and in which module. Oversight for leadership and the Operations Manager.",
+    group: "records",
+    href: "/ops/activity",
+    id: "activity-log",
+    navigationRoles: OPS_BACKOFFICE_ROLES,
+    phase: "Phase 7",
+    roles: OPS_BACKOFFICE_ROLES,
+    status: "ready",
+    title: "Activity Log",
+  },
+  {
+    description: "Archived records across the workspace — workers, sites, suppliers, requests, equipment and more. Leadership and the Operations Manager can restore them.",
+    group: "records",
+    href: "/ops/archive",
+    id: "archive",
+    navigationRoles: OPS_BACKOFFICE_ROLES,
+    phase: "Phase 7",
+    roles: OPS_BACKOFFICE_ROLES,
+    status: "ready",
+    title: "Archive",
   },
   {
     description: "Maintain company details, headquarters coordinates, invoice defaults, and approval thresholds.",

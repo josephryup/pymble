@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
+  Archive,
   BarChart3,
   Bell,
   Boxes,
@@ -68,6 +70,8 @@ function currentModuleTitle(pathname: string, modules: OpsReadyModule[]) {
 
 const NAV_ICON_BY_HREF: Record<string, LucideIcon> = {
   "/ops": LayoutDashboard,
+  "/ops/activity": Activity,
+  "/ops/archive": Archive,
   "/ops/approvals": ClipboardCheck,
   "/ops/attendance": ClipboardCheck,
   "/ops/boq": BarChart3,

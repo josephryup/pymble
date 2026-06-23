@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsImportTemplateLinks } from "@/components/ops/OpsImportTemplateLinks";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
@@ -650,6 +651,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                         form-style sheets (Item No, Quantity, Unit of Measure, Description, Unit Price, Total,
                         Supplier Name), the importer skips title rows and picks up the header automatically.
                       </p>
+                      <OpsImportTemplateLinks kind="boq" />
                       <label className={OPS_LABEL_CLASS}>
                         Bill of Quantities file
                         <input
