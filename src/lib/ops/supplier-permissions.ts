@@ -77,6 +77,10 @@ export function canArchiveOpsSupplier(role: OpsUserRole, supplier: OpsSupplierMu
   return canManageOpsSupplier(role) && supplier.status !== "archived";
 }
 
+export function canReactivateOpsSupplier(role: OpsUserRole, supplier: OpsSupplierMutationTarget) {
+  return canManageOpsSupplier(role) && supplier.status === "archived";
+}
+
 export function canUpdateOpsSupplierStatus(
   role: OpsUserRole,
   supplier: OpsSupplierMutationTarget,

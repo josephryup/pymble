@@ -11,6 +11,7 @@ import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import {
   canAddOpsRfqItem,
+  canArchiveOpsRfq,
   canCancelOpsRfq,
   canCreateOpsRfq,
   canEditOpsPurchaseOrder,
@@ -985,6 +986,51 @@ export async function cancelRfqAction(formData: FormData) {
 
   revalidatePath(RFQ_PO_ROUTE);
   redirect(`${RFQ_PO_ROUTE}?updated=rfq_cancelled`);
+}
+
+export async function archiveRfqAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const parsed = rfqIdSchema.safeParse({ rfq_id: field(formData, "rfq_id") });
+
+  if (!parsed.success) {
+    rfqError(parsed.error.issues[0]?.message ?? "Select a requisition.");
+  }
+
+  if (!canArchiveOpsRfq(profile.role)) {
+    rfqError("Your role cannot archive requisitions.");
+  }
+
+  const rfq = await fetchRfqForMutation(parsed.data.rfq_id);
+
+  if (!rfq) {
+    rfqError("Requisition was not found.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("rfqs")
+    .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
+    .eq("id", rfq.id)
+    .is("archived_at", null);
+
+  if (error) {
+    rfqError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "rfq.archived",
+    actorUserId: profile.id,
+    entityId: rfq.id,
+    entityType: "rfq",
+    metadata: { rfq_number: rfq.rfq_number },
+    moduleKey: "rfq_po",
+    sourceId: rfq.id,
+    sourceTable: "rfqs",
+    summary: `Archived requisition ${rfq.rfq_number}`,
+  }).catch(() => null);
+
+  revalidatePath(RFQ_PO_ROUTE);
+  redirect(`${RFQ_PO_ROUTE}?updated=rfq_archived`);
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ import {
   canArchiveOpsSupplier,
   canCreateOpsSupplier,
   canCreateOpsSupplierPerformanceEvent,
+  canReactivateOpsSupplier,
   canUpdateOpsSupplierStatus,
 } from "@/lib/ops/supplier-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
@@ -520,4 +521,54 @@ export async function archiveSupplierAction(formData: FormData) {
 
   revalidatePath(SUPPLIER_ROUTE);
   redirect(`${SUPPLIER_ROUTE}?updated=archived`);
+}
+
+export async function reactivateSupplierAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const parsed = supplierIdSchema.safeParse({
+    supplier_id: field(formData, "supplier_id"),
+  });
+
+  if (!parsed.success) {
+    supplierError(parsed.error.issues[0]?.message ?? "Select a supplier.");
+  }
+
+  const supplier = await fetchSupplierForMutation(parsed.data.supplier_id);
+
+  if (!supplier) {
+    supplierError("Supplier was not found.");
+  }
+
+  if (!canReactivateOpsSupplier(profile.role, supplier)) {
+    supplierError("This supplier is not archived, or your role cannot reactivate it.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("suppliers")
+    .update({
+      archived_at: null,
+      status: "active",
+    })
+    .eq("id", supplier.id)
+    .eq("status", "archived");
+
+  if (error) {
+    supplierError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "supplier.reactivated",
+    actorUserId: profile.id,
+    entityId: supplier.id,
+    entityType: "supplier",
+    metadata: { supplier_code: supplier.supplier_code },
+    moduleKey: "suppliers",
+    sourceId: supplier.id,
+    sourceTable: "suppliers",
+    summary: `Reactivated supplier ${supplier.supplier_code}: ${supplier.legal_name}`,
+  }).catch(() => null);
+
+  revalidatePath(SUPPLIER_ROUTE);
+  redirect(`${SUPPLIER_ROUTE}?updated=reactivated`);
 }

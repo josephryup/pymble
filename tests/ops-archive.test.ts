@@ -14,10 +14,17 @@ describe("archive adapter registry", () => {
     assert.equal(isOpsArchiveType("nope"), false);
   });
 
-  it("excludes requisitions and financial records from v1", () => {
-    for (const type of ["rfqs", "requisitions", "invoices", "payroll_runs", "payment_requests"]) {
+  it("includes requisitions but excludes financial records from v1", () => {
+    assert.equal(isOpsArchiveType("requisitions"), true);
+    for (const type of ["rfqs", "invoices", "payroll_runs", "payment_requests"]) {
       assert.equal(isOpsArchiveType(type), false, type);
     }
+  });
+
+  it("restores suppliers back to active status (not just un-archived)", () => {
+    // Regression guard: clearing archived_at alone leaves status='archived'.
+    assert.equal(OPS_ARCHIVE_ADAPTERS.suppliers.restorePatch.status, "active");
+    assert.equal(OPS_ARCHIVE_ADAPTERS.suppliers.restorePatch.archived_at, null);
   });
 
   it("every type has a complete adapter", () => {

@@ -1,4 +1,5 @@
 import {
+  Archive,
   ClipboardList,
   FileCheck2,
   FilePlus2,
@@ -26,6 +27,7 @@ import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import {
   addRfqItemAction,
+  archiveRfqAction,
   cancelRfqAction,
   convertRfqToPurchaseOrdersAction,
   createRfqAction,
@@ -38,6 +40,7 @@ import {
 } from "@/lib/ops/rfq-po-actions";
 import {
   canAddOpsRfqItem,
+  canArchiveOpsRfq,
   canCancelOpsRfq,
   canCreateOpsRfq,
   canEditOpsPurchaseOrder,
@@ -125,6 +128,7 @@ function rfqPoNotice(params: OpsSearchParams) {
     po_issued: "Purchase order issued.",
     po_updated: "Purchase order updated.",
     rfq_cancelled: "Requisition cancelled.",
+    rfq_archived: "Requisition archived. Restore it from the Archive.",
     rfq_converted: "Requisition converted into draft purchase orders, grouped by supplier.",
     attachment: "RFQ attachment uploaded.",
     comment: "RFQ comment added.",
@@ -979,6 +983,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
             {rfqs.map((rfq) => {
               const canAddItem = canAddOpsRfqItem(auth.profile.role, rfq);
               const canCancel = canCancelOpsRfq(auth.profile.role, rfq);
+              const canArchive = canArchiveOpsRfq(auth.profile.role);
               const canEditRfq = canEditOpsRfq(auth.profile.role, rfq);
               const rfqActualTotal = rfq.items.reduce((sum, item) => sum + item.actual_total, 0);
               const nominatedSuppliers = rfq.items.filter(
@@ -1045,6 +1050,18 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                           >
                             <XCircle className="size-4" aria-hidden="true" />
                             Cancel requisition
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                      {canArchive ? (
+                        <form action={archiveRfqAction}>
+                          <input name="rfq_id" type="hidden" value={rfq.id} />
+                          <OpsConfirmSubmitButton
+                            className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`}
+                            confirmText="Confirm archive"
+                          >
+                            <Archive className="size-4" aria-hidden="true" />
+                            Archive
                           </OpsConfirmSubmitButton>
                         </form>
                       ) : null}

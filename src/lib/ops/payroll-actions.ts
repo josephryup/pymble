@@ -651,3 +651,131 @@ export async function archiveCashAdvanceAction(formData: FormData) {
   revalidatePath("/ops/payroll");
   redirect("/ops/payroll?updated=advance_archived");
 }
+
+const updateCashAdvanceSchema = cashAdvanceIdSchema.merge(cashAdvanceSchema);
+
+export async function updateCashAdvanceAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageOps(profile.role)) {
+    payrollError("Your role cannot edit cash advances.");
+  }
+
+  const parsed = updateCashAdvanceSchema.safeParse({
+    id: field(formData, "id"),
+    worker_id: field(formData, "worker_id"),
+    amount: field(formData, "amount"),
+    note: field(formData, "note"),
+    issued_at: field(formData, "issued_at"),
+  });
+
+  if (!parsed.success) {
+    payrollError(parsed.error.issues[0]?.message ?? "Check the cash advance details.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { data: advance, error: loadError } = await supabase
+    .from("cash_advances")
+    .select("id, deducted_in_run_id, archived_at")
+    .eq("id", parsed.data.id)
+    .maybeSingle<{ id: string; deducted_in_run_id: string | null; archived_at: string | null }>();
+
+  if (loadError || !advance) {
+    payrollError("Cash advance was not found.");
+  }
+
+  if (advance.deducted_in_run_id) {
+    payrollError("This advance has already been deducted in a payroll run and can no longer be edited.");
+  }
+
+  if (advance.archived_at) {
+    payrollError("Restore this advance before editing it.");
+  }
+
+  const { error } = await supabase
+    .from("cash_advances")
+    .update({
+      worker_id: parsed.data.worker_id,
+      amount: roundToTwo(parsed.data.amount),
+      note: parsed.data.note,
+      issued_at: parsed.data.issued_at,
+    })
+    .eq("id", advance.id)
+    .is("deducted_in_run_id", null);
+
+  if (error) {
+    payrollError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "cash_advance.updated",
+    entity_type: "cash_advance",
+    entity_id: advance.id,
+    module_key: "payroll",
+    source_table: "cash_advances",
+    source_id: advance.id,
+    metadata: { amount: parsed.data.amount, worker_id: parsed.data.worker_id },
+  });
+
+  revalidatePath("/ops/payroll");
+  redirect("/ops/payroll?updated=advance_updated");
+}
+
+const updatePayrollRunSchema = payrollRunIdSchema.extend({
+  period_label: z.string().trim().min(3, "Period label is required.").max(80),
+});
+
+export async function updatePayrollRunAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageOps(profile.role)) {
+    payrollError("Your role cannot edit payroll runs.");
+  }
+
+  const parsed = updatePayrollRunSchema.safeParse({
+    id: field(formData, "id"),
+    period_label: field(formData, "period_label"),
+  });
+
+  if (!parsed.success) {
+    payrollError(parsed.error.issues[0]?.message ?? "Check the payroll run details.");
+  }
+
+  const run = await fetchPayrollRunStatus(parsed.data.id);
+
+  if (!run) {
+    payrollError("Payroll run was not found.");
+  }
+
+  // Amounts are computed from approved attendance, so only the label is editable
+  // and only while the run is still a draft.
+  if (run.status !== "draft") {
+    payrollError("Only draft payroll runs can be edited.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { error } = await supabase
+    .from("payroll_runs")
+    .update({ period_label: parsed.data.period_label })
+    .eq("id", run.id)
+    .eq("status", "draft");
+
+  if (error) {
+    payrollError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "payroll_run.updated",
+    entity_type: "payroll_run",
+    entity_id: run.id,
+    module_key: "payroll",
+    source_table: "payroll_runs",
+    source_id: run.id,
+    metadata: { period_label: parsed.data.period_label },
+  });
+
+  revalidatePath("/ops/payroll");
+  redirect("/ops/payroll?updated=run_updated");
+}

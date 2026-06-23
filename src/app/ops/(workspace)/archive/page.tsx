@@ -1,11 +1,14 @@
-import { ArchiveRestore, ArrowUpRight, Boxes } from "lucide-react";
+import { ArchiveRestore, ArrowUpRight, Boxes, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsPaginationControls } from "@/components/ops/OpsListControls";
-import { restoreOpsArchivedItemAction } from "@/lib/ops/archive-actions";
+import {
+  deleteOpsArchivedItemAction,
+  restoreOpsArchivedItemAction,
+} from "@/lib/ops/archive-actions";
 import {
   fetchOpsArchiveSummary,
   fetchOpsArchivedItems,
@@ -15,9 +18,10 @@ import {
 } from "@/lib/ops/archive";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
-import { canViewOpsBackoffice } from "@/lib/ops/permissions";
+import { canDeleteOpsArchived, canViewOpsBackoffice } from "@/lib/ops/permissions";
 import {
   firstParam,
+  OPS_DANGER_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
 } from "@/lib/ops/ui";
@@ -55,8 +59,11 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
   const listState = parseOpsListState(search, { defaultPageSize: 20 });
   const result = await fetchOpsArchivedItems(selectedType, listState);
   const activeEntry = summary.find((entry) => entry.type === selectedType);
+  const canDelete = canDeleteOpsArchived(profile.role);
 
-  const restored = firstParam(search.updated) === "restored";
+  const updated = firstParam(search.updated);
+  const restored = updated === "restored";
+  const deleted = updated === "deleted";
   const error = firstParam(search.error);
 
   const paginationFilters = [
@@ -77,6 +84,14 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
           role="status"
         >
           Record restored. It is active again in its module.
+        </div>
+      ) : null}
+      {deleted ? (
+        <div
+          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+          role="status"
+        >
+          Record permanently deleted.
         </div>
       ) : null}
       {error ? (
@@ -150,17 +165,32 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
                     Archived {formatWhen(item.archivedAt)}
                   </p>
                 </div>
-                <form action={restoreOpsArchivedItemAction} className="shrink-0">
-                  <input name="type" type="hidden" value={item.type} />
-                  <input name="id" type="hidden" value={item.id} />
-                  <OpsConfirmSubmitButton
-                    className={`${OPS_SECONDARY_BUTTON_CLASS} w-full min-[640px]:w-auto`}
-                    confirmText="Confirm restore"
-                  >
-                    <ArchiveRestore className="size-4" aria-hidden="true" />
-                    Restore
-                  </OpsConfirmSubmitButton>
-                </form>
+                <div className="flex shrink-0 flex-col gap-2 min-[640px]:flex-row">
+                  <form action={restoreOpsArchivedItemAction}>
+                    <input name="type" type="hidden" value={item.type} />
+                    <input name="id" type="hidden" value={item.id} />
+                    <OpsConfirmSubmitButton
+                      className={`${OPS_SECONDARY_BUTTON_CLASS} w-full min-[640px]:w-auto`}
+                      confirmText="Confirm restore"
+                    >
+                      <ArchiveRestore className="size-4" aria-hidden="true" />
+                      Restore
+                    </OpsConfirmSubmitButton>
+                  </form>
+                  {canDelete ? (
+                    <form action={deleteOpsArchivedItemAction}>
+                      <input name="type" type="hidden" value={item.type} />
+                      <input name="id" type="hidden" value={item.id} />
+                      <OpsConfirmSubmitButton
+                        className={`${OPS_DANGER_BUTTON_CLASS} w-full min-[640px]:w-auto`}
+                        confirmText="Delete permanently"
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                        Delete
+                      </OpsConfirmSubmitButton>
+                    </form>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>

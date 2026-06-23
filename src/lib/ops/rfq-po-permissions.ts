@@ -98,6 +98,11 @@ export function canCancelOpsRfq(role: OpsUserRole, rfq: OpsRfqMutationTarget) {
   return canManageOpsRfq(role) && rfq.status !== "closed" && rfq.status !== "cancelled";
 }
 
+/** Archiving a requisition is a reversible tidy-up available to manager roles. */
+export function canArchiveOpsRfq(role: OpsUserRole) {
+  return canManageOpsRfq(role);
+}
+
 export function canEditOpsPurchaseOrder(
   role: OpsUserRole,
   purchaseOrder: OpsPurchaseOrderMutationTarget,

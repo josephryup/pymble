@@ -24,6 +24,7 @@ export const OPS_ARCHIVE_TYPES = [
   "sites",
   "suppliers",
   "material_requests",
+  "requisitions",
   "equipment",
   "subcontractors",
   "department_reports",
@@ -110,7 +111,8 @@ export const OPS_ARCHIVE_ADAPTERS: Record<OpsArchiveType, OpsArchiveAdapter> = {
     mechanism: "archived_at",
     columns: "id, legal_name, supplier_code, archived_at",
     moduleHref: "/ops/suppliers",
-    restorePatch: { archived_at: null },
+    // Suppliers are archived with status = 'archived'; restore returns them to active.
+    restorePatch: { archived_at: null, status: "active" },
     auditEntityType: "supplier",
     auditModuleKey: "suppliers",
     toItem: (row) => ({
@@ -132,6 +134,22 @@ export const OPS_ARCHIVE_ADAPTERS: Record<OpsArchiveType, OpsArchiveAdapter> = {
     toItem: (row) => ({
       title: text(row, "title") || text(row, "request_number") || "Material request",
       subtitle: text(row, "request_number"),
+      archivedAt: timestamp(row, "archived_at"),
+    }),
+  },
+  requisitions: {
+    label: "Requisitions",
+    singular: "requisition",
+    table: "rfqs",
+    mechanism: "archived_at",
+    columns: "id, rfq_number, title, archived_at",
+    moduleHref: "/ops/rfq-po",
+    restorePatch: { archived_at: null, archived_by: null },
+    auditEntityType: "rfq",
+    auditModuleKey: "rfq_po",
+    toItem: (row) => ({
+      title: text(row, "title") || text(row, "rfq_number") || "Requisition",
+      subtitle: text(row, "rfq_number"),
       archivedAt: timestamp(row, "archived_at"),
     }),
   },

@@ -276,6 +276,7 @@ async function fetchOpsRfqItems(options: FetchOpsRfqsOptions = {}, listState?: O
       ].join(", "),
       listState ? { count: "exact" } : undefined,
     )
+    .is("archived_at", null)
     .order("created_at", { ascending: false });
 
   if (options.status) {

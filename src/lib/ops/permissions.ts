@@ -102,6 +102,15 @@ export function canViewOpsBackoffice(role: OpsUserRole) {
   return isLeadershipRole(role) || role === "operations_manager";
 }
 
+/**
+ * Permanently deleting an archived record is irreversible and can collide with
+ * foreign-key history, so it is restricted to the Developer — matching the
+ * other hard-delete actions (payroll runs, BOQ documents).
+ */
+export function canDeleteOpsArchived(role: OpsUserRole) {
+  return isDeveloperRole(role);
+}
+
 export function canCreateStaffRole(actorRole: OpsUserRole, targetRole: OpsAssignableStaffRole) {
   if (isDeveloperRole(actorRole) || isManagingDirectorRole(actorRole)) {
     return true;

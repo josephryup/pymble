@@ -38,6 +38,8 @@ const REQUIRED_COLUMNS = [
   ["sites", "actual_budget_zmw"],
   // General (office) vs site requisitions / material requests
   ["rfqs", "scope"],
+  ["rfqs", "archived_at"],
+  ["rfqs", "archived_by"],
   ["material_requests", "scope"],
   ["purchase_orders", "scope"],
   ["purchase_order_items", "supplier_id"],

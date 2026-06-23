@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { OPS_MODULES } from "../src/lib/ops/constants";
 import {
   canAccessOpsHref,
+  canDeleteOpsArchived,
   canViewOpsBackoffice,
   canViewSiteActualBudget,
   canViewSiteBudget,
@@ -10,6 +11,15 @@ import {
   visibleOpsModules,
   visibleOpsRouteModules,
 } from "../src/lib/ops/permissions";
+
+describe("permanent archive delete", () => {
+  it("is restricted to the Developer", () => {
+    assert.equal(canDeleteOpsArchived("developer"), true);
+    assert.equal(canDeleteOpsArchived("managing_director"), false);
+    assert.equal(canDeleteOpsArchived("operations_manager"), false);
+    assert.equal(canDeleteOpsArchived("owner"), false);
+  });
+});
 
 describe("back-office oversight access", () => {
   it("is leadership, manager, and the operations manager only", () => {

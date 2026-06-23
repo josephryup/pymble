@@ -1,5 +1,6 @@
 import {
   Archive,
+  ArchiveRestore,
   Boxes,
   Building2,
   CalendarDays,
@@ -30,6 +31,7 @@ import {
   addSupplierContactAction,
   archiveSupplierAction,
   createSupplierAction,
+  reactivateSupplierAction,
   updateSupplierStatusAction,
 } from "@/lib/ops/supplier-actions";
 import {
@@ -166,6 +168,13 @@ function supplierNotice(params: OpsSearchParams) {
   if (firstParam(params.updated) === "archived") {
     return {
       message: "Supplier archived.",
+      tone: "success" as const,
+    };
+  }
+
+  if (firstParam(params.updated) === "reactivated") {
+    return {
+      message: "Supplier reactivated and set to active.",
       tone: "success" as const,
     };
   }
@@ -704,6 +713,7 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
             {suppliers.map((supplier) => {
               const contact = primaryContact(supplier);
               const canMutate = canManage && supplier.status !== "archived";
+              const canReactivate = canManage && supplier.status === "archived";
               const canAddContact = canCreate && supplier.status !== "archived";
               const canAddPerformance = canLogPerformance && supplier.status !== "archived";
 
@@ -773,6 +783,18 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
                           >
                             <Archive className="size-4" aria-hidden="true" />
                             Archive
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
+                      {canReactivate ? (
+                        <form action={reactivateSupplierAction}>
+                          <input name="supplier_id" type="hidden" value={supplier.id} />
+                          <OpsConfirmSubmitButton
+                            className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`}
+                            confirmText="Confirm reactivate"
+                          >
+                            <ArchiveRestore className="size-4" aria-hidden="true" />
+                            Reactivate
                           </OpsConfirmSubmitButton>
                         </form>
                       ) : null}

@@ -3,6 +3,7 @@ import {
   Banknote,
   Check,
   CircleDollarSign,
+  Pencil,
   Plus,
   ReceiptText,
   Send,
@@ -21,6 +22,8 @@ import {
   completePayrollRunAction,
   createCashAdvanceAction,
   createPayrollRunAction,
+  updateCashAdvanceAction,
+  updatePayrollRunAction,
 } from "@/lib/ops/payroll-actions";
 import { fetchOpsCashAdvances, fetchOpsPayrollRuns, type OpsPayrollRun } from "@/lib/ops/payroll";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
@@ -98,6 +101,14 @@ function payrollNotice(params: OpsSearchParams) {
       tone: "success" as const,
       message: "Cash advance archived.",
     };
+  }
+
+  if (firstParam(params.updated) === "advance_updated") {
+    return { tone: "success" as const, message: "Cash advance updated." };
+  }
+
+  if (firstParam(params.updated) === "run_updated") {
+    return { tone: "success" as const, message: "Payroll run updated." };
   }
 
   return null;
@@ -361,6 +372,71 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                         </form>
                       ) : null}
                     </div>
+                    {canManage && !advance.deducted_in_run_id ? (
+                      <details className="mt-3 rounded-md border border-primary-dark/10">
+                        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                          <Pencil className="size-4" aria-hidden="true" />
+                          Edit advance
+                        </summary>
+                        <form
+                          action={updateCashAdvanceAction}
+                          className="grid gap-3 border-t border-primary-dark/10 p-3 md:grid-cols-2"
+                        >
+                          <input name="id" type="hidden" value={advance.id} />
+                          <label className={OPS_LABEL_CLASS}>
+                            Worker
+                            <select
+                              className={OPS_INPUT_CLASS}
+                              defaultValue={advance.worker_id}
+                              name="worker_id"
+                              required
+                            >
+                              {workerOptions.map((worker) => (
+                                <option key={worker.id} value={worker.id}>
+                                  {worker.worker_code} - {worker.full_name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className={OPS_LABEL_CLASS}>
+                            Amount (ZMW)
+                            <input
+                              className={OPS_INPUT_CLASS}
+                              defaultValue={String(advance.amount)}
+                              min="0.01"
+                              name="amount"
+                              required
+                              step="0.01"
+                              type="number"
+                            />
+                          </label>
+                          <label className={OPS_LABEL_CLASS}>
+                            Issued on
+                            <input
+                              className={OPS_INPUT_CLASS}
+                              defaultValue={advance.issued_at}
+                              name="issued_at"
+                              required
+                              type="date"
+                            />
+                          </label>
+                          <label className={OPS_LABEL_CLASS}>
+                            Note
+                            <input
+                              className={OPS_INPUT_CLASS}
+                              defaultValue={advance.note}
+                              name="note"
+                            />
+                          </label>
+                          <div className="md:col-span-2">
+                            <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                              <Pencil className="size-4" aria-hidden="true" />
+                              Save changes
+                            </button>
+                          </div>
+                        </form>
+                      </details>
+                    ) : null}
                   </div>
                 </div>
               ))
@@ -427,6 +503,35 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                       ) : null}
                     </div>
                   </div>
+
+                  {canManage && run.status === "draft" ? (
+                    <details className="mt-3 rounded-md border border-primary-dark/10">
+                      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                        <Pencil className="size-4" aria-hidden="true" />
+                        Edit period label
+                      </summary>
+                      <form
+                        action={updatePayrollRunAction}
+                        className="flex flex-col gap-3 border-t border-primary-dark/10 p-3 sm:flex-row sm:items-end"
+                      >
+                        <input name="id" type="hidden" value={run.id} />
+                        <label className={`${OPS_LABEL_CLASS} flex-1`}>
+                          Period label
+                          <input
+                            className={OPS_INPUT_CLASS}
+                            defaultValue={run.period_label}
+                            maxLength={80}
+                            name="period_label"
+                            required
+                          />
+                        </label>
+                        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                          <Pencil className="size-4" aria-hidden="true" />
+                          Save
+                        </button>
+                      </form>
+                    </details>
+                  ) : null}
 
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
                     <div className="rounded-md border border-primary-dark/10 px-3 py-2">
