@@ -58,14 +58,27 @@ export function canDeleteSite(role: OpsUserRole) {
 }
 
 /**
- * Site budget (ZMW) is commercially sensitive. Only leadership and Finance
- * (Finance Manager + Accountant) may see budget figures; other roles that can
- * otherwise manage sites still do not see the money column or field.
+ * Site budget (ZMW) is commercially sensitive. Leadership, the Operations
+ * Manager, and Finance (Finance Manager + Accountant) may see the budget
+ * figure; other roles that can otherwise manage sites still do not see the
+ * money column or field.
  */
 export function canViewSiteBudget(role: OpsUserRole) {
   return (
-    isLeadershipRole(role) || role === "finance_manager" || role === "accountant"
+    isLeadershipRole(role) ||
+    role === "operations_manager" ||
+    role === "finance_manager" ||
+    role === "accountant"
   );
+}
+
+/**
+ * The project's actual budget is even more sensitive than the planned budget —
+ * only leadership (Developer, Managing Director, General Manager, Owner) may
+ * see or set it.
+ */
+export function canViewSiteActualBudget(role: OpsUserRole) {
+  return isLeadershipRole(role);
 }
 
 export function canViewSensitiveOpsFoundation(role: OpsUserRole) {

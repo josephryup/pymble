@@ -1,10 +1,11 @@
-import { createOpsServerSessionClient } from "@/lib/ops/auth";
+import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import {
   opsIlikeOrFilter,
   toOpsPaginatedResult,
   type OpsListState,
   type OpsPaginatedResult,
 } from "@/lib/ops/listing";
+import { canViewSiteActualBudget, canViewSiteBudget } from "@/lib/ops/permissions";
 import type { OpsSiteStage, OpsSiteStatus } from "@/lib/ops/types";
 
 export type OpsSite = {
@@ -14,7 +15,10 @@ export type OpsSite = {
   location: string;
   supervisor_name: string;
   client_name: string;
-  budget_zmw: number;
+  // Budget figures are commercially sensitive — the data layer returns null for
+  // roles that may not see them (see canViewSiteBudget / canViewSiteActualBudget).
+  budget_zmw: number | null;
+  actual_budget_zmw: number | null;
   latitude: number | null;
   longitude: number | null;
   status: OpsSiteStatus;
@@ -48,11 +52,14 @@ function normalizeCoordinate(value: number | string | null) {
 }
 
 async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?: OpsListState) {
+  const { profile } = await requireOpsUser();
+  const showBudget = canViewSiteBudget(profile.role);
+  const showActualBudget = canViewSiteActualBudget(profile.role);
   const supabase = await createOpsServerSessionClient();
   let query = supabase
     .from("sites")
     .select(
-      "id, code, name, location, supervisor_name, client_name, budget_zmw, latitude, longitude, status, stage, progress_percent, is_active, created_at",
+      "id, code, name, location, supervisor_name, client_name, budget_zmw, actual_budget_zmw, latitude, longitude, status, stage, progress_percent, is_active, created_at",
       listState ? { count: "exact" } : undefined,
     )
     .eq("is_active", true)
@@ -81,8 +88,12 @@ async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?:
 
   const items = (
     (data ?? []) as Array<
-      Omit<OpsSite, "budget_zmw" | "latitude" | "longitude" | "progress_percent"> & {
+      Omit<
+        OpsSite,
+        "budget_zmw" | "actual_budget_zmw" | "latitude" | "longitude" | "progress_percent"
+      > & {
         budget_zmw: number | string;
+        actual_budget_zmw: number | string;
         latitude: number | string | null;
         longitude: number | string | null;
         progress_percent: number | string;
@@ -90,7 +101,10 @@ async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?:
     >
   ).map((site) => ({
     ...site,
-    budget_zmw: normalizeMoney(site.budget_zmw),
+    // Strip sensitive budget figures for roles that may not see them, so the
+    // numbers never reach the client payload.
+    budget_zmw: showBudget ? normalizeMoney(site.budget_zmw) : null,
+    actual_budget_zmw: showActualBudget ? normalizeMoney(site.actual_budget_zmw) : null,
     latitude: normalizeCoordinate(site.latitude),
     longitude: normalizeCoordinate(site.longitude),
     progress_percent: normalizeMoney(site.progress_percent),

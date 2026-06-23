@@ -240,9 +240,11 @@ export function OpsOverviewMapPanel({
                 </Badge>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Badge className="h-auto border-border bg-background px-3 py-1 text-xs font-semibold text-foreground/70" variant="outline">
-                  {formatZmw(selectedSite.budget_zmw)} budget
-                </Badge>
+                {selectedSite.budget_zmw !== null ? (
+                  <Badge className="h-auto border-border bg-background px-3 py-1 text-xs font-semibold text-foreground/70" variant="outline">
+                    {formatZmw(selectedSite.budget_zmw)} budget
+                  </Badge>
+                ) : null}
                 <Badge className="h-auto border-border bg-background px-3 py-1 text-xs font-semibold text-foreground/70" variant="outline">
                   {selectedSite.client_name || "Client not recorded"}
                 </Badge>

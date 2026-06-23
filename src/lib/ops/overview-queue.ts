@@ -24,7 +24,12 @@ const PROCUREMENT: OpsUserRole[] = [
 ];
 const FINANCE: OpsUserRole[] = [...LEADERSHIP, "finance_manager", "accountant"];
 const HR: OpsUserRole[] = [...LEADERSHIP, "human_resource", "hr", "admin_receptionist"];
-const APPROVERS: OpsUserRole[] = [...LEADERSHIP, "finance_manager", "procurement_manager"];
+const APPROVERS: OpsUserRole[] = [
+  ...LEADERSHIP,
+  "finance_manager",
+  "procurement_manager",
+  "operations_manager",
+];
 
 type QueueTask = {
   key: string;
@@ -51,14 +56,18 @@ export async function fetchOpsMyQueue(role: OpsUserRole, userId: string): Promis
   if (APPROVERS.includes(role)) {
     tasks.push({
       key: "approvals",
-      label: "Approvals awaiting a decision",
+      label: "Approvals awaiting your decision",
       href: "/ops/approvals",
       tone: "warn",
+      // Role-specific: count only pending approval steps assigned to this
+      // viewer's role (or directly to them), so each approver sees their own
+      // queue rather than a global pending total.
       run: count(
         supabase
-          .from("approval_requests")
-          .select("id", { count: "exact", head: true })
-          .in("status", ["submitted", "in_review"]),
+          .from("approval_steps")
+          .select("approval_request_id", { count: "exact", head: true })
+          .eq("status", "pending")
+          .or(`approver_user_id.eq.${userId},approver_role.eq.${role}`),
       ),
     });
   }

@@ -5,7 +5,7 @@ import {
   fetchOpsOrganizationProfile,
   type OrganizationProfile,
 } from "@/lib/ops/organization";
-import { canManageOps } from "@/lib/ops/permissions";
+import { canManageOps, canViewSiteBudget } from "@/lib/ops/permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsAttendancePresence,
@@ -22,7 +22,8 @@ export type OpsOverviewSite = {
   location: string;
   supervisor_name: string;
   client_name: string;
-  budget_zmw: number;
+  // Null for roles that may not see the site budget (canViewSiteBudget).
+  budget_zmw: number | null;
   latitude: number | null;
   longitude: number | null;
   status: OpsSiteStatus;
@@ -384,15 +385,23 @@ async function normalizeOverviewSnapshot(snapshot: RawOverviewSnapshot) {
 }
 
 export async function fetchOpsOverview() {
-  await requireOpsUser();
+  const { profile } = await requireOpsUser();
 
   const supabase = await createOpsServerSessionClient();
-  return fetchOpsDashboardSnapshot({
+  const overview = await fetchOpsDashboardSnapshot({
     fallback: fetchOpsOverviewViaQueries,
     load: async () => supabase.rpc("ops_overview_snapshot"),
     name: "overview",
     normalize: (data) => normalizeOverviewSnapshot(data as RawOverviewSnapshot),
   });
+
+  // Defence in depth: never let the site budget reach a client whose role may
+  // not see it, even though the snapshot RPC returns it for everyone.
+  if (!canViewSiteBudget(profile.role)) {
+    overview.sites = overview.sites.map((site) => ({ ...site, budget_zmw: null }));
+  }
+
+  return overview;
 }
 
 export type OpsOverview = Awaited<ReturnType<typeof fetchOpsOverview>>;
@@ -511,9 +520,10 @@ async function fetchOpsOverviewViaQueries() {
     throw new Error("Pymble organization profile was not found.");
   }
 
+  const showBudget = canViewSiteBudget(userProfile.role);
   const sites = ((sitesResult.data ?? []) as RawOverviewSite[]).map((site) => ({
     ...site,
-    budget_zmw: normalizeNumber(site.budget_zmw),
+    budget_zmw: showBudget ? normalizeNumber(site.budget_zmw) : null,
     latitude: normalizeCoordinate(site.latitude),
     longitude: normalizeCoordinate(site.longitude),
   }));

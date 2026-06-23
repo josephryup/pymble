@@ -34,6 +34,8 @@ const REQUIRED_COLUMNS = [
   ["rfq_items", "supplier_name_freeform"],
   ["rfq_items", "actual_unit_cost"],
   ["rfq_items", "actual_total"],
+  // Leadership-only actual project budget on sites
+  ["sites", "actual_budget_zmw"],
   // General (office) vs site requisitions / material requests
   ["rfqs", "scope"],
   ["material_requests", "scope"],

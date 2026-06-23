@@ -3,10 +3,47 @@ import { describe, it } from "node:test";
 import { OPS_MODULES } from "../src/lib/ops/constants";
 import {
   canAccessOpsHref,
+  canViewSiteActualBudget,
+  canViewSiteBudget,
   visibleOpsModuleRegistry,
   visibleOpsModules,
   visibleOpsRouteModules,
 } from "../src/lib/ops/permissions";
+import { canCreateOpsRfq, canManageOpsRfq } from "../src/lib/ops/rfq-po-permissions";
+
+describe("site budget visibility", () => {
+  it("shows the planned budget to leadership, the operations manager, and finance", () => {
+    for (const role of [
+      "developer",
+      "managing_director",
+      "general_manager",
+      "owner",
+      "operations_manager",
+      "finance_manager",
+      "accountant",
+    ] as const) {
+      assert.equal(canViewSiteBudget(role), true, role);
+    }
+    assert.equal(canViewSiteBudget("engineer"), false);
+    assert.equal(canViewSiteBudget("projects_manager"), false);
+    assert.equal(canViewSiteBudget("crew"), false);
+  });
+
+  it("restricts the actual budget to leadership only", () => {
+    assert.equal(canViewSiteActualBudget("managing_director"), true);
+    assert.equal(canViewSiteActualBudget("owner"), true);
+    assert.equal(canViewSiteActualBudget("operations_manager"), false);
+    assert.equal(canViewSiteActualBudget("finance_manager"), false);
+    assert.equal(canViewSiteActualBudget("accountant"), false);
+  });
+});
+
+describe("operations manager requisition rights", () => {
+  it("can create and manage requisitions", () => {
+    assert.equal(canCreateOpsRfq("operations_manager"), true);
+    assert.equal(canManageOpsRfq("operations_manager"), true);
+  });
+});
 
 describe("ops module visibility", () => {
   it("gives Developer every route and every planned registry module", () => {

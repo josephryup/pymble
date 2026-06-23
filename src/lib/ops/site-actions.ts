@@ -8,7 +8,12 @@ import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { parseCoordinateInput } from "@/lib/ops/coordinates";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
-import { canArchiveSite, canManageSites, canViewSiteBudget } from "@/lib/ops/permissions";
+import {
+  canArchiveSite,
+  canManageSites,
+  canViewSiteActualBudget,
+  canViewSiteBudget,
+} from "@/lib/ops/permissions";
 import type { OpsSiteStage, OpsSiteStatus } from "@/lib/ops/types";
 
 const SITE_STAGES = [
@@ -47,6 +52,10 @@ const siteCoreSchema = z.object({
   supervisor_name: z.string().trim().max(120).default(""),
   client_name: z.string().trim().max(140).default(""),
   budget_zmw: z.coerce.number().min(0, "Budget cannot be negative.").default(0),
+  actual_budget_zmw: z.coerce
+    .number()
+    .min(0, "Actual budget cannot be negative.")
+    .default(0),
   latitude: z.number().min(-90).max(90).nullable(),
   longitude: z.number().min(-180).max(180).nullable(),
   stage: z.enum(SITE_STAGES).default("planning"),
@@ -95,6 +104,7 @@ function parseSiteForm(formData: FormData) {
     supervisor_name: field(formData, "supervisor_name"),
     client_name: field(formData, "client_name"),
     budget_zmw: field(formData, "budget_zmw"),
+    actual_budget_zmw: field(formData, "actual_budget_zmw"),
     latitude,
     longitude,
     stage: field(formData, "stage") || "planning",
@@ -116,6 +126,14 @@ export async function createSiteAction(formData: FormData) {
   }
 
   const data = parseSiteForm(formData);
+  // Budget figures may only be set by roles allowed to see them; otherwise the
+  // column keeps its default of 0.
+  if (!canViewSiteBudget(profile.role)) {
+    data.budget_zmw = 0;
+  }
+  if (!canViewSiteActualBudget(profile.role)) {
+    data.actual_budget_zmw = 0;
+  }
   const supabase = await createOpsServerSessionClient();
   const { data: created, error } = await supabase
     .from("sites")
@@ -204,11 +222,14 @@ export async function updateSiteAction(formData: FormData) {
     actual_completion_date:
       data.stage === "completed" ? new Date().toISOString().slice(0, 10) : null,
   };
-  // Budget is gated to leadership + Finance. Roles that can edit a site but not
-  // see budget never receive the field, so we drop it from the patch to avoid
-  // wiping the stored value to the coerced default of 0.
+  // Budget is gated. Roles that can edit a site but not see a budget figure
+  // never receive that field, so we drop it from the patch to avoid wiping the
+  // stored value to the coerced default of 0.
   if (!canViewSiteBudget(profile.role)) {
     delete patch.budget_zmw;
+  }
+  if (!canViewSiteActualBudget(profile.role)) {
+    delete patch.actual_budget_zmw;
   }
   const { error } = await supabase
     .from("sites")
