@@ -85,6 +85,7 @@ const NAV_ICON_BY_HREF: Record<string, LucideIcon> = {
   "/ops/material-requests": PackageSearch,
   "/ops/notifications": Bell,
   "/ops/payroll": BriefcaseBusiness,
+  "/ops/staff-payroll": BriefcaseBusiness,
   "/ops/photos": Images,
   "/ops/rfq-po": ShoppingCart,
   "/ops/settings": Settings,

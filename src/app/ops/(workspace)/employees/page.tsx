@@ -273,10 +273,18 @@ function formatDate(value: string | null) {
     return "Not set";
   }
 
+  // Accept either a date-only column ("YYYY-MM-DD") or a full timestamptz; for
+  // the latter the leading YYYY-MM-DD slice is what we want to display.
+  const datePart = value.length >= 10 ? value.slice(0, 10) : value;
+  const parsed = new Date(`${datePart}T00:00:00+02:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Not set";
+  }
+
   return new Intl.DateTimeFormat("en-ZM", {
     dateStyle: "medium",
     timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
+  }).format(parsed);
 }
 
 function formatLabel(value: string) {

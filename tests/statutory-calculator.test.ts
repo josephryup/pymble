@@ -3,8 +3,11 @@ import { strict as assert } from "node:assert";
 import {
   computeNapsaEmployee,
   computeNapsaEmployer,
+  computeNhimaEmployee,
+  computeNhimaEmployer,
   computePaye,
   computePayslip,
+  computeStaffPayslip,
   computeWcfEmployer,
 } from "@/lib/ops/statutory/calculator";
 import {
@@ -75,4 +78,49 @@ test("resolveZambianTaxYear falls back to the most recent year for unknown years
   // mention the fallback in the citation
   assert.equal(future.year, 2025);
   assert.match(future.citation, /not yet confirmed/i);
+});
+
+const RATES_2025 = ZAMBIAN_TAX_YEARS["2025"];
+const AUGUST_2025 = new Date("2025-08-15T00:00:00+02:00");
+
+test("NHIMA helpers compute 1/1 of gross under 2025 rates", () => {
+  assert.equal(computeNhimaEmployee(31_000, RATES_2025), 310);
+  assert.equal(computeNhimaEmployer(31_000, RATES_2025), 310);
+  assert.equal(computeNhimaEmployee(0, RATES_2025), 0);
+});
+
+test("PAYE for 2025 uses the 37% top band (PCL August 2025 sample)", () => {
+  // From the PCL Aug 2025 payslip: gross K31,000 → PAYE K9,096
+  assert.equal(computePaye(31_000, RATES_2025), 9_096);
+});
+
+test("computeStaffPayslip reproduces the PCL August 2025 payslip", () => {
+  const slip = computeStaffPayslip({
+    basic: 20_000,
+    housing: 11_000,
+    periodDate: AUGUST_2025,
+  });
+  assert.equal(slip.taxYear, 2025);
+  assert.equal(slip.basic, 20_000);
+  assert.equal(slip.housing, 11_000);
+  assert.equal(slip.otherAllowances, 0);
+  assert.equal(slip.gross, 31_000);
+  assert.equal(slip.paye, 9_096);
+  assert.equal(slip.napsaEmployee, 1_342);
+  assert.equal(slip.nhimaEmployee, 310);
+  assert.equal(slip.advanceDeduction, 0);
+  assert.equal(slip.totalEmployeeDeductions, 10_748);
+  assert.equal(slip.net, 20_252);
+});
+
+test("computeStaffPayslip never lets a staff advance push net below zero", () => {
+  const slip = computeStaffPayslip({
+    basic: 20_000,
+    housing: 11_000,
+    advanceDeduction: 100_000, // far more than remaining pay
+    periodDate: AUGUST_2025,
+  });
+  // Statutory deductions take K10,748. Advance is capped at the remainder.
+  assert.equal(slip.advanceDeduction, 31_000 - 10_748);
+  assert.equal(slip.net, 0);
 });

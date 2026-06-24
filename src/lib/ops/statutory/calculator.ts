@@ -33,6 +33,32 @@ export type PayslipBreakdown = {
   employerTotalCost: number;
 };
 
+export type StaffPayslipInput = {
+  /** Contract basic pay. */
+  basic: number;
+  /** Housing allowance. */
+  housing: number;
+  /** All other monthly allowances (transport, phone, etc.) totalled. */
+  otherAllowances?: number;
+  /** Open staff advances applied to this run (deducted from net). */
+  advanceDeduction?: number;
+  /** Payroll period date used to pick the right ZRA rates. */
+  periodDate: Date | string;
+};
+
+export type StaffPayslipBreakdown = PayslipBreakdown & {
+  /** Earnings breakdown (sum equals gross). */
+  basic: number;
+  housing: number;
+  otherAllowances: number;
+  /** NHIMA employee contribution (deducted from worker, 1% of gross). */
+  nhimaEmployee: number;
+  /** NHIMA employer contribution (paid on top, not deducted). */
+  nhimaEmployer: number;
+  /** Staff advance applied this run (deducted from net pay). */
+  advanceDeduction: number;
+};
+
 function roundToCents(amount: number) {
   return Math.round((amount + Number.EPSILON) * 100) / 100;
 }
@@ -84,6 +110,22 @@ export function computeWcfEmployer(
   return roundToCents(monthlyGross * rates.wcfEmployerRate);
 }
 
+export function computeNhimaEmployee(
+  monthlyGross: number,
+  rates: ZambianTaxYearRates,
+): number {
+  if (monthlyGross <= 0) return 0;
+  return roundToCents(monthlyGross * rates.nhimaEmployeeRate);
+}
+
+export function computeNhimaEmployer(
+  monthlyGross: number,
+  rates: ZambianTaxYearRates,
+): number {
+  if (monthlyGross <= 0) return 0;
+  return roundToCents(monthlyGross * rates.nhimaEmployerRate);
+}
+
 /**
  * One-shot helper for a single worker's payslip. Pass the gross pay for the
  * period plus the period date (used to resolve which tax year's rules apply).
@@ -110,6 +152,59 @@ export function computePayslip(
     napsaEmployee,
     napsaEmployer,
     wcfEmployer,
+    totalEmployeeDeductions,
+    net,
+    employerTotalCost,
+  };
+}
+
+/**
+ * Compute a full staff payslip: earnings (basic + housing + other) plus every
+ * statutory deduction the PCL payslip shows — PAYE, NAPSA (employee), NHIMA
+ * (employee) — plus the staff advance applied this run. NAPSA-employer, NHIMA-
+ * employer, and WCF are tracked separately for company-cost reporting.
+ */
+export function computeStaffPayslip(input: StaffPayslipInput): StaffPayslipBreakdown {
+  const rates = resolveZambianTaxYear(input.periodDate);
+
+  const basic = roundToCents(Math.max(input.basic, 0));
+  const housing = roundToCents(Math.max(input.housing, 0));
+  const otherAllowances = roundToCents(Math.max(input.otherAllowances ?? 0, 0));
+  const gross = roundToCents(basic + housing + otherAllowances);
+
+  const paye = computePaye(gross, rates);
+  const napsaEmployee = computeNapsaEmployee(gross, rates);
+  const napsaEmployer = computeNapsaEmployer(gross, rates);
+  const nhimaEmployee = computeNhimaEmployee(gross, rates);
+  const nhimaEmployer = computeNhimaEmployer(gross, rates);
+  const wcfEmployer = computeWcfEmployer(gross, rates);
+
+  const requestedAdvance = roundToCents(Math.max(input.advanceDeduction ?? 0, 0));
+  const statutoryDeductions = roundToCents(paye + napsaEmployee + nhimaEmployee);
+  // Don't let an advance push net below zero — cap at remaining pay.
+  const advanceDeduction = Math.min(
+    requestedAdvance,
+    roundToCents(Math.max(gross - statutoryDeductions, 0)),
+  );
+
+  const totalEmployeeDeductions = roundToCents(statutoryDeductions + advanceDeduction);
+  const net = roundToCents(gross - totalEmployeeDeductions);
+  const employerTotalCost = roundToCents(gross + napsaEmployer + nhimaEmployer + wcfEmployer);
+
+  return {
+    taxYear: rates.year,
+    citation: rates.citation,
+    gross,
+    basic,
+    housing,
+    otherAllowances,
+    paye,
+    napsaEmployee,
+    napsaEmployer,
+    nhimaEmployee,
+    nhimaEmployer,
+    wcfEmployer,
+    advanceDeduction,
     totalEmployeeDeductions,
     net,
     employerTotalCost,

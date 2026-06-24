@@ -1,0 +1,444 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
+import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { requireOpsUser } from "@/lib/ops/auth";
+import { canManageOpsStaffPayroll } from "@/lib/ops/staff-payroll";
+import { computeStaffPayslip } from "@/lib/ops/statutory/calculator";
+import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
+
+const STAFF_PAYROLL_ROUTE = "/ops/staff-payroll";
+
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a valid date.");
+
+const createRunSchema = z
+  .object({
+    period_label: z.string().trim().min(3, "Period label is required.").max(80),
+    period_start: dateSchema,
+    period_end: dateSchema,
+  })
+  .refine((value) => value.period_end >= value.period_start, {
+    message: "Period end must be the same day or later than the start date.",
+    path: ["period_end"],
+  });
+
+const runIdSchema = z.object({ id: z.string().uuid("Select a payroll run.") });
+
+const advanceSchema = z.object({
+  employee_id: z.string().uuid("Select an employee."),
+  amount: z.coerce.number().positive("Amount must be greater than zero."),
+  note: z.string().trim().max(200).default(""),
+  issued_at: dateSchema,
+});
+
+const advanceIdSchema = z.object({ id: z.string().uuid("Select an advance.") });
+
+function field(formData: FormData, name: string) {
+  const value = formData.get(name);
+  return typeof value === "string" ? value : "";
+}
+
+function staffPayrollError(message: string): never {
+  redirect(
+    `${STAFF_PAYROLL_ROUTE}?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`,
+  );
+}
+
+type EmployeeForPayroll = {
+  id: string;
+  employee_number: string;
+  full_name: string;
+  job_title: string;
+  department: string;
+  nrc_number: string;
+  napsa_number: string;
+  status: string;
+  current_contract:
+    | {
+        basic_pay: number | string;
+        housing_allowance: number | string;
+        other_allowances: unknown;
+        status: string;
+      }
+    | Array<{
+        basic_pay: number | string;
+        housing_allowance: number | string;
+        other_allowances: unknown;
+        status: string;
+      }>
+    | null;
+};
+
+function sumOtherAllowances(value: unknown): number {
+  if (!Array.isArray(value)) return 0;
+  let total = 0;
+  for (const entry of value as Array<{ amount?: number | string }>) {
+    const amount = Number(entry?.amount ?? 0);
+    if (Number.isFinite(amount) && amount > 0) {
+      total += amount;
+    }
+  }
+  return total;
+}
+
+function pickRelation<T>(value: T | T[] | null): T | null {
+  return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
+}
+
+/**
+ * Create a staff payroll run and compute one item per active employee that has
+ * an active contract. Open staff advances are applied to net pay automatically
+ * and the advance is linked to this run so it can't be deducted again.
+ */
+export async function createStaffPayrollRunAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    staffPayrollError("Your role cannot create staff payroll runs.");
+  }
+
+  const parsed = createRunSchema.safeParse({
+    period_label: field(formData, "period_label"),
+    period_start: field(formData, "period_start"),
+    period_end: field(formData, "period_end"),
+  });
+
+  if (!parsed.success) {
+    staffPayrollError(parsed.error.issues[0]?.message ?? "Check the payroll period.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  // Active employees with their current active contract (pay structure).
+  const { data: employeesData, error: employeesError } = await supabase
+    .from("employees")
+    .select(
+      [
+        "id",
+        "employee_number",
+        "full_name",
+        "job_title",
+        "department",
+        "nrc_number",
+        "napsa_number",
+        "status",
+        "current_contract:employee_contracts!employee_contracts_employee_id_fkey(basic_pay, housing_allowance, other_allowances, status)",
+      ].join(", "),
+    )
+    .eq("status", "active");
+
+  if (employeesError) {
+    staffPayrollError(employeesError.message);
+  }
+
+  const employees = (employeesData ?? []) as unknown as EmployeeForPayroll[];
+  const payable = employees
+    .map((employee) => ({
+      employee,
+      contract: pickRelation(employee.current_contract),
+    }))
+    .filter((row) => row.contract && row.contract.status === "active");
+
+  if (payable.length === 0) {
+    staffPayrollError(
+      "No active employees with an active contract were found. Add or activate a contract first.",
+    );
+  }
+
+  // Open advances per employee (deducted in this run).
+  const employeeIds = payable.map((row) => row.employee.id);
+  const { data: advanceData, error: advanceError } = await supabase
+    .from("staff_advances")
+    .select("id, employee_id, amount")
+    .in("employee_id", employeeIds)
+    .is("deducted_in_run_id", null)
+    .is("archived_at", null);
+
+  if (advanceError) {
+    staffPayrollError(advanceError.message);
+  }
+
+  const openAdvancesByEmployeeId = new Map<
+    string,
+    Array<{ id: string; amount: number }>
+  >();
+  for (const advance of (advanceData ?? []) as Array<{
+    id: string;
+    employee_id: string;
+    amount: number | string;
+  }>) {
+    const list = openAdvancesByEmployeeId.get(advance.employee_id) ?? [];
+    list.push({ id: advance.id, amount: Number(advance.amount) });
+    openAdvancesByEmployeeId.set(advance.employee_id, list);
+  }
+
+  // Create the run header first; items reference it.
+  const { data: run, error: runError } = await supabase
+    .from("staff_payroll_runs")
+    .insert({
+      period_label: parsed.data.period_label,
+      period_start: parsed.data.period_start,
+      period_end: parsed.data.period_end,
+      status: "draft",
+      created_by: profile.id,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (runError || !run) {
+    staffPayrollError(runError?.message ?? "The payroll run could not be created.");
+  }
+
+  let totalBasic = 0;
+  let totalGross = 0;
+  let totalAdvances = 0;
+  let totalNet = 0;
+  const advanceIdsToLink: string[] = [];
+  const inserts: Array<Record<string, unknown>> = [];
+
+  for (const { employee, contract } of payable) {
+    if (!contract) continue;
+    const advances = openAdvancesByEmployeeId.get(employee.id) ?? [];
+    const advanceTotal = advances.reduce((sum, item) => sum + item.amount, 0);
+
+    const slip = computeStaffPayslip({
+      basic: Number(contract.basic_pay),
+      housing: Number(contract.housing_allowance),
+      otherAllowances: sumOtherAllowances(contract.other_allowances),
+      advanceDeduction: advanceTotal,
+      periodDate: parsed.data.period_end,
+    });
+
+    totalBasic += slip.basic;
+    totalGross += slip.gross;
+    totalAdvances += slip.advanceDeduction;
+    totalNet += slip.net;
+    advances.forEach((advance) => advanceIdsToLink.push(advance.id));
+
+    inserts.push({
+      staff_payroll_run_id: run.id,
+      employee_id: employee.id,
+      employee_number: employee.employee_number ?? "",
+      full_name: employee.full_name ?? "",
+      job_title: employee.job_title ?? "",
+      department: employee.department ?? "",
+      nrc_number: employee.nrc_number ?? "",
+      napsa_number: employee.napsa_number ?? "",
+      basic_pay: slip.basic,
+      housing_allowance: slip.housing,
+      other_allowances: slip.otherAllowances,
+      gross_pay: slip.gross,
+      paye_amount: slip.paye,
+      napsa_employee: slip.napsaEmployee,
+      napsa_employer: slip.napsaEmployer,
+      nhima_employee: slip.nhimaEmployee,
+      nhima_employer: slip.nhimaEmployer,
+      wcf_employer: slip.wcfEmployer,
+      advance_deduction: slip.advanceDeduction,
+      net_pay: slip.net,
+      tax_year: slip.taxYear,
+      statutory_citation: slip.citation,
+    });
+  }
+
+  if (inserts.length === 0) {
+    // Clean up the orphan run header.
+    await supabase.from("staff_payroll_runs").delete().eq("id", run.id);
+    staffPayrollError("No staff items could be computed for this run.");
+  }
+
+  const { error: itemError } = await supabase.from("staff_payroll_items").insert(inserts);
+  if (itemError) {
+    await supabase.from("staff_payroll_runs").delete().eq("id", run.id);
+    staffPayrollError(itemError.message);
+  }
+
+  // Link the open advances to this run (they're now considered deducted).
+  if (advanceIdsToLink.length > 0) {
+    const { error: linkError } = await supabase
+      .from("staff_advances")
+      .update({ deducted_in_run_id: run.id })
+      .in("id", advanceIdsToLink);
+    if (linkError) {
+      staffPayrollError(linkError.message);
+    }
+  }
+
+  await supabase
+    .from("staff_payroll_runs")
+    .update({
+      total_basic: totalBasic,
+      total_gross: totalGross,
+      total_advances: totalAdvances,
+      total_net: totalNet,
+    })
+    .eq("id", run.id);
+
+  await recordOpsAuditEvent({
+    action: "staff_payroll_run.created",
+    actorUserId: profile.id,
+    entityId: run.id,
+    entityType: "staff_payroll_run",
+    metadata: {
+      period_label: parsed.data.period_label,
+      employees: inserts.length,
+      total_net: Math.round(totalNet * 100) / 100,
+    },
+    moduleKey: "staff_payroll",
+    sourceId: run.id,
+    sourceTable: "staff_payroll_runs",
+    summary: `Created staff payroll run ${parsed.data.period_label} (${inserts.length} employees)`,
+  }).catch(() => null);
+
+  revalidatePath(STAFF_PAYROLL_ROUTE);
+  redirect(`${STAFF_PAYROLL_ROUTE}?created=run`);
+}
+
+/** Approve a draft staff payroll run (manager+leadership only). */
+export async function approveStaffPayrollRunAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    staffPayrollError("Your role cannot approve staff payroll runs.");
+  }
+  const parsed = runIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    staffPayrollError("Select a staff payroll run.");
+  }
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("staff_payroll_runs")
+    .update({
+      status: "approved",
+      approved_at: new Date().toISOString(),
+      approved_by: profile.id,
+    })
+    .eq("id", parsed.data.id)
+    .eq("status", "draft");
+  if (error) {
+    staffPayrollError(error.message);
+  }
+  await recordOpsAuditEvent({
+    action: "staff_payroll_run.approved",
+    actorUserId: profile.id,
+    entityId: parsed.data.id,
+    entityType: "staff_payroll_run",
+    moduleKey: "staff_payroll",
+    sourceId: parsed.data.id,
+    sourceTable: "staff_payroll_runs",
+    summary: "Approved staff payroll run",
+  }).catch(() => null);
+  revalidatePath(STAFF_PAYROLL_ROUTE);
+  redirect(`${STAFF_PAYROLL_ROUTE}?updated=approved`);
+}
+
+/** Mark an approved run as paid. */
+export async function completeStaffPayrollRunAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    staffPayrollError("Your role cannot mark staff payroll runs paid.");
+  }
+  const parsed = runIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    staffPayrollError("Select a staff payroll run.");
+  }
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("staff_payroll_runs")
+    .update({
+      status: "completed",
+      disbursed_at: new Date().toISOString(),
+      disbursed_by: profile.id,
+    })
+    .eq("id", parsed.data.id)
+    .eq("status", "approved");
+  if (error) {
+    staffPayrollError(error.message);
+  }
+  // Mark every line item paid in one go.
+  await supabase
+    .from("staff_payroll_items")
+    .update({ payout_status: "sent" })
+    .eq("staff_payroll_run_id", parsed.data.id);
+  await recordOpsAuditEvent({
+    action: "staff_payroll_run.completed",
+    actorUserId: profile.id,
+    entityId: parsed.data.id,
+    entityType: "staff_payroll_run",
+    moduleKey: "staff_payroll",
+    sourceId: parsed.data.id,
+    sourceTable: "staff_payroll_runs",
+    summary: "Marked staff payroll run paid",
+  }).catch(() => null);
+  revalidatePath(STAFF_PAYROLL_ROUTE);
+  redirect(`${STAFF_PAYROLL_ROUTE}?updated=completed`);
+}
+
+export async function createStaffAdvanceAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    staffPayrollError("Your role cannot record staff advances.");
+  }
+  const parsed = advanceSchema.safeParse({
+    employee_id: field(formData, "employee_id"),
+    amount: field(formData, "amount"),
+    note: field(formData, "note"),
+    issued_at: field(formData, "issued_at"),
+  });
+  if (!parsed.success) {
+    staffPayrollError(parsed.error.issues[0]?.message ?? "Check the advance.");
+  }
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("staff_advances")
+    .insert({
+      employee_id: parsed.data.employee_id,
+      amount: parsed.data.amount,
+      note: parsed.data.note,
+      issued_at: parsed.data.issued_at,
+      created_by: profile.id,
+    })
+    .select("id")
+    .single<{ id: string }>();
+  if (error || !data) {
+    staffPayrollError(error?.message ?? "The advance could not be recorded.");
+  }
+  await recordOpsAuditEvent({
+    action: "staff_advance.created",
+    actorUserId: profile.id,
+    entityId: data.id,
+    entityType: "staff_advance",
+    metadata: { amount: parsed.data.amount, employee_id: parsed.data.employee_id },
+    moduleKey: "staff_payroll",
+    sourceId: data.id,
+    sourceTable: "staff_advances",
+    summary: "Recorded staff advance",
+  }).catch(() => null);
+  revalidatePath(STAFF_PAYROLL_ROUTE);
+  redirect(`${STAFF_PAYROLL_ROUTE}?created=advance`);
+}
+
+export async function archiveStaffAdvanceAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    staffPayrollError("Your role cannot archive staff advances.");
+  }
+  const parsed = advanceIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    staffPayrollError("Select an advance.");
+  }
+  const supabase = getOpsSupabaseServiceClient();
+  // Only archive advances that haven't been deducted yet.
+  const { error } = await supabase
+    .from("staff_advances")
+    .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
+    .eq("id", parsed.data.id)
+    .is("deducted_in_run_id", null);
+  if (error) {
+    staffPayrollError(error.message);
+  }
+  revalidatePath(STAFF_PAYROLL_ROUTE);
+  redirect(`${STAFF_PAYROLL_ROUTE}?updated=advance_archived`);
+}

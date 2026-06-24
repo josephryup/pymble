@@ -1,6 +1,10 @@
  
-import { Text, View, StyleSheet } from "@react-pdf/renderer";
-import { PYMBLE_PDF_THEME, formatPdfDateTime } from "@/lib/ops/pdf/theme";
+import { Image, Text, View, StyleSheet } from "@react-pdf/renderer";
+import {
+  PYMBLE_LOGO_DATA_URL,
+  PYMBLE_PDF_THEME,
+  formatPdfDateTime,
+} from "@/lib/ops/pdf/theme";
 
 const { colors, typography, spacing, ruler } = PYMBLE_PDF_THEME;
 
@@ -13,6 +17,16 @@ const sharedStyles = StyleSheet.create({
     paddingBottom: spacing.row,
     borderBottomWidth: ruler.medium,
     borderBottomColor: colors.primary,
+  },
+  brandIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  brandLogo: {
+    width: 44,
+    height: 32,
+    objectFit: "contain",
   },
   brandStack: {
     flexDirection: "column",
@@ -186,26 +200,33 @@ type BrandHeaderProps = {
 export function BrandHeader({ org, documentKind, documentNumber, documentDateLabel }: BrandHeaderProps) {
   return (
     <View style={sharedStyles.brandRow}>
-      <View style={sharedStyles.brandStack}>
-        <Text style={sharedStyles.brandName}>
-          {org.legal_name ?? "Pymble Construction Limited"}
-        </Text>
-        {org.trading_name ? (
-          <Text style={sharedStyles.brandSubtitle}>
-            Trading as {org.trading_name}
+      <View style={sharedStyles.brandIdentity}>
+        {PYMBLE_LOGO_DATA_URL ? (
+          // This is a react-pdf <Image>, not an HTML img — no alt attr exists.
+          // eslint-disable-next-line jsx-a11y/alt-text
+          <Image src={PYMBLE_LOGO_DATA_URL} style={sharedStyles.brandLogo} />
+        ) : null}
+        <View style={sharedStyles.brandStack}>
+          <Text style={sharedStyles.brandName}>
+            {org.legal_name ?? "Pymble Construction Limited"}
           </Text>
-        ) : null}
-        {org.headquarters_address ? (
-          <Text style={sharedStyles.brandSubtitle}>{org.headquarters_address}</Text>
-        ) : null}
-        {org.tpin ? (
-          <Text style={sharedStyles.brandSubtitle}>TPIN: {org.tpin}</Text>
-        ) : null}
-        {org.vat_registration_number ? (
-          <Text style={sharedStyles.brandSubtitle}>
-            VAT Reg: {org.vat_registration_number}
-          </Text>
-        ) : null}
+          {org.trading_name ? (
+            <Text style={sharedStyles.brandSubtitle}>
+              Trading as {org.trading_name}
+            </Text>
+          ) : null}
+          {org.headquarters_address ? (
+            <Text style={sharedStyles.brandSubtitle}>{org.headquarters_address}</Text>
+          ) : null}
+          {org.tpin ? (
+            <Text style={sharedStyles.brandSubtitle}>TPIN: {org.tpin}</Text>
+          ) : null}
+          {org.vat_registration_number ? (
+            <Text style={sharedStyles.brandSubtitle}>
+              VAT Reg: {org.vat_registration_number}
+            </Text>
+          ) : null}
+        </View>
       </View>
       <View style={sharedStyles.docMetaStack}>
         <Text style={sharedStyles.docKind}>{documentKind}</Text>

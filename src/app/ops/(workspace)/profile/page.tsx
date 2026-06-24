@@ -14,6 +14,7 @@ import { OpsLogoutButton } from "@/components/ops/OpsLogoutButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { uploadEmployeeDocumentAction } from "@/lib/ops/hr-actions";
 import { fetchMyOpsEmployeeSelfServiceProfile, type OpsEmployeeDocumentSummary } from "@/lib/ops/hr";
+import { fetchMyStaffPayslips } from "@/lib/ops/staff-payroll";
 import {
   createMyLeaveRequestAction,
   updateMyPasswordAction,
@@ -196,11 +197,20 @@ function DetailMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatZmwShort(value: number) {
+  return new Intl.NumberFormat("en-ZM", {
+    style: "currency",
+    currency: "ZMW",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 export default async function OpsProfilePage({ searchParams }: PageProps) {
-  const [params, auth, selfService] = await Promise.all([
+  const [params, auth, selfService, myPayslips] = await Promise.all([
     searchParams ?? Promise.resolve({}),
     requireOpsUser(),
     fetchMyOpsEmployeeSelfServiceProfile(),
+    fetchMyStaffPayslips(),
   ]);
   const notice = profileNotice(params);
   const profileName = formatOpsProfileName(auth.profile.full_name, auth.profile.role);
@@ -467,6 +477,51 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                     </div>
                   )}
                 </div>
+              </section>
+
+              <section className="scroll-mt-24 rounded-md border border-primary-dark/10 lg:col-span-2" id="my-payslips">
+                <div className="flex items-center gap-3 border-b border-primary-dark/10 p-4">
+                  <div className="flex size-9 items-center justify-center rounded-md bg-primary-blue/10 text-primary-blue">
+                    <Download className="size-5" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h3 className="font-heading text-lg font-bold text-primary-dark">
+                      My payslips
+                    </h3>
+                    <p className="text-sm text-primary-dark/58">
+                      Download your monthly payslip PDFs. Only you and HR / Finance / Leadership can see them.
+                    </p>
+                  </div>
+                </div>
+                {myPayslips.length === 0 ? (
+                  <p className="p-4 text-sm text-primary-dark/55">
+                    No payslips yet. Once your monthly staff payroll run is created, your payslip will appear here.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-primary-dark/10">
+                    {myPayslips.map((slip) => (
+                      <li
+                        className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
+                        key={slip.id}
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold text-primary-dark">{slip.period_label}</p>
+                          <p className="mt-0.5 text-xs text-primary-dark/55">
+                            Gross {formatZmwShort(slip.gross_pay)} · Net{" "}
+                            <span className="font-semibold text-primary-dark">{formatZmwShort(slip.net_pay)}</span>
+                          </p>
+                        </div>
+                        <a
+                          className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`}
+                          href={`/api/ops/pdf/staff-payslip/${slip.id}`}
+                        >
+                          <Download className="size-4" aria-hidden="true" />
+                          Download
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </section>
 
               <section className="scroll-mt-24 rounded-md border border-primary-dark/10 lg:col-span-2" id="my-documents">

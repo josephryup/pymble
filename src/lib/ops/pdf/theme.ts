@@ -1,6 +1,29 @@
 // Single source of truth for PDF visual tokens. Templates import from here so
 // brand colors, fonts, and spacing stay consistent across every document.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * Pymble logo encoded as a data URL once at module load. @react-pdf/renderer's
+ * Image component accepts data URLs across runtimes (Node + edge during build),
+ * so this works without relying on filesystem paths at render time.
+ *
+ * Falls back to null if the asset can't be read — templates check before
+ * rendering, so a missing logo never breaks the PDF.
+ */
+function loadPymbleLogoDataUrl(): string | null {
+  try {
+    const path = join(process.cwd(), "public", "logo.png");
+    const buffer = readFileSync(path);
+    return `data:image/png;base64,${buffer.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+export const PYMBLE_LOGO_DATA_URL: string | null = loadPymbleLogoDataUrl();
+
 export const PYMBLE_PDF_THEME = {
   colors: {
     primary: "#0B5394", // Pymble brand blue

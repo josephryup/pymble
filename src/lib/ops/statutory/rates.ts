@@ -45,6 +45,14 @@ export type ZambianTaxYearRates = {
    */
   napsaMonthlyCeiling: number;
   /**
+   * National Health Insurance Scheme (NHIMA) employee contribution rate.
+   * Applied on gross pay per Pymble's policy decision and the PCL payslip
+   * convention.
+   */
+  nhimaEmployeeRate: number;
+  /** NHIMA employer contribution rate (paid on top, not deducted). */
+  nhimaEmployerRate: number;
+  /**
    * Workers' Compensation Fund employer rate. Construction-industry default.
    * Update if the WCF reassessment moves Pymble into a different band.
    */
@@ -74,26 +82,35 @@ export const ZAMBIAN_TAX_YEARS: Record<string, ZambianTaxYearRates> = {
     napsaEmployeeRate: 0.05,
     napsaEmployerRate: 0.05,
     napsaMonthlyCeiling: 1_377.3,
+    nhimaEmployeeRate: 0.01,
+    nhimaEmployerRate: 0.01,
     wcfEmployerRate: 0.02,
     vatRate: 0.16,
     citation:
-      "PAYE per ZRA 2024 budget; NAPSA 5/5 capped at K1,377.30; WCF construction 2%; VAT 16%.",
+      "PAYE per ZRA 2024 budget; NAPSA 5/5 capped at K1,377.30; NHIMA 1/1 on gross; WCF construction 2%; VAT 16%.",
   },
   "2025": {
     year: 2025,
+    // 2025 ZRA budget: same bracket boundaries, top marginal rate reduced
+    // from 37.5% to 37%. Reconciled against the August 2025 PCL payslip
+    // sample (gross K31,000 → PAYE K9,096).
     payeMonthlyBands: [
       { from: 0, to: 5_100, rate: 0 },
       { from: 5_100, to: 7_100, rate: 0.2 },
       { from: 7_100, to: 9_200, rate: 0.3 },
-      { from: 9_200, to: Number.POSITIVE_INFINITY, rate: 0.375 },
+      { from: 9_200, to: Number.POSITIVE_INFINITY, rate: 0.37 },
     ],
     napsaEmployeeRate: 0.05,
     napsaEmployerRate: 0.05,
-    napsaMonthlyCeiling: 1_377.3,
+    // 2025 NAPSA contribution ceiling (5% of an insurable-earnings cap of
+    // K26,840). Reconciled against the PCL payslip sample (NAPSA K1,342).
+    napsaMonthlyCeiling: 1_342,
+    nhimaEmployeeRate: 0.01,
+    nhimaEmployerRate: 0.01,
     wcfEmployerRate: 0.02,
     vatRate: 0.16,
     citation:
-      "PAYE per ZRA 2025 budget; NAPSA 5/5 capped at K1,377.30; WCF construction 2%; VAT 16%. Verify against the latest ZRA Practice Note before payroll run.",
+      "PAYE per ZRA 2025 budget (top band 37%); NAPSA 5/5 capped at K1,342; NHIMA 1/1 on gross; WCF construction 2%; VAT 16%.",
   },
 };
 

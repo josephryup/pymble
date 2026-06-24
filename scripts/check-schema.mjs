@@ -36,6 +36,12 @@ const REQUIRED_COLUMNS = [
   ["rfq_items", "actual_total"],
   // Leadership-only actual project budget on sites
   ["sites", "actual_budget_zmw"],
+  // Staff payslip identity + contract pay structure
+  ["employees", "nrc_number"],
+  ["employees", "napsa_number"],
+  ["employee_contracts", "basic_pay"],
+  ["employee_contracts", "housing_allowance"],
+  ["employee_contracts", "leave_rate_per_month"],
   // General (office) vs site requisitions / material requests
   ["rfqs", "scope"],
   ["rfqs", "archived_at"],
@@ -124,6 +130,9 @@ const REQUIRED_TABLES = [
   "subcontractors", // Sprint 17
   "subcontractor_assignments", // Sprint 17
   "subcontractor_payments", // Sprint 17
+  "staff_payroll_runs", // Staff payslips (Phase 8)
+  "staff_payroll_items",
+  "staff_advances",
 ];
 
 const REQUIRED_FUNCTIONS = [

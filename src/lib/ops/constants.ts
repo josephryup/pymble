@@ -378,6 +378,17 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Payroll",
   },
   {
+    description: "Generate monthly staff payslips (basic + housing + allowances, with PAYE / NAPSA / NHIMA). Employees self-download from their profile.",
+    group: "operations",
+    href: "/ops/staff-payroll",
+    id: "staff-payroll",
+    navigationRoles: [...OPS_LEADERSHIP_ROLES, ...OPS_HR_ROLES, ...OPS_FINANCE_ROLES],
+    phase: "Phase 8",
+    roles: [...OPS_LEADERSHIP_ROLES, ...OPS_HR_ROLES, ...OPS_FINANCE_ROLES],
+    status: "ready",
+    title: "Staff Payroll",
+  },
+  {
     description: "Build project Bills of Quantities, track line items, compare quantities, and prepare exportable records.",
     group: "commercial",
     href: "/ops/boq",
