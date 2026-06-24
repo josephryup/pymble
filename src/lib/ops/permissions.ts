@@ -73,12 +73,12 @@ export function canViewSiteBudget(role: OpsUserRole) {
 }
 
 /**
- * The project's actual budget is even more sensitive than the planned budget —
- * only leadership (Developer, Managing Director, General Manager, Owner) may
- * see or set it.
+ * The project's actual budget is more sensitive than the planned budget —
+ * limited to leadership and the Operations Manager, who owns delivery against
+ * that budget.
  */
 export function canViewSiteActualBudget(role: OpsUserRole) {
-  return isLeadershipRole(role);
+  return isLeadershipRole(role) || role === "operations_manager";
 }
 
 export function canViewSensitiveOpsFoundation(role: OpsUserRole) {

@@ -59,12 +59,13 @@ describe("site budget visibility", () => {
     assert.equal(canViewSiteBudget("crew"), false);
   });
 
-  it("restricts the actual budget to leadership only", () => {
+  it("restricts the actual budget to leadership and the operations manager", () => {
     assert.equal(canViewSiteActualBudget("managing_director"), true);
     assert.equal(canViewSiteActualBudget("owner"), true);
-    assert.equal(canViewSiteActualBudget("operations_manager"), false);
+    assert.equal(canViewSiteActualBudget("operations_manager"), true);
     assert.equal(canViewSiteActualBudget("finance_manager"), false);
     assert.equal(canViewSiteActualBudget("accountant"), false);
+    assert.equal(canViewSiteActualBudget("engineer"), false);
   });
 });
 

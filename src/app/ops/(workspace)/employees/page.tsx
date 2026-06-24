@@ -49,6 +49,7 @@ import {
   rejectEmployeeDocumentAction,
   startEmployeeOnboardingItemAction,
   submitLeaveRequestAction,
+  updateEmployeeContractStatusAction,
   updateEmployeeStatusAction,
   updateRecruitmentRequisitionStatusAction,
   uploadEmployeeDocumentAction,
@@ -63,6 +64,7 @@ import {
   canCompleteOpsLeaveRequest,
   canCreateOpsEmployee,
   canCreateOpsEmployeeContract,
+  canManageOpsEmployeeContract,
   canCreateOpsEmployeeOnboardingItem,
   canCreateOpsLeaveRequest,
   canCreateOpsPerformanceAppraisal,
@@ -88,6 +90,7 @@ import {
   fetchPaginatedOpsEmployees,
   fetchRecentHrTrainingRenewals,
   fetchRecentRecruitmentRequisitions,
+  type OpsEmployeeContractSummary,
   type OpsEmployeeDocumentSummary,
   type OpsEmployeeOnboardingItemSummary,
   type OpsEmployeeSummary,
@@ -591,6 +594,101 @@ function EmployeeDocumentReviewControls({
   );
 }
 
+function contractStatusClass(status: OpsEmployeeContractStatus) {
+  if (status === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "draft") return "border-sky-200 bg-sky-50 text-sky-700";
+  if (status === "terminated" || status === "cancelled")
+    return "border-red-200 bg-red-50 text-red-700";
+  return "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65";
+}
+
+function EmployeeContractsPanel({
+  contracts,
+  canManage,
+}: {
+  contracts: OpsEmployeeContractSummary[];
+  canManage: boolean;
+}) {
+  if (contracts.length === 0) {
+    return (
+      <div className="mt-4 rounded-md border border-primary-dark/10 px-4 py-3 text-sm text-primary-dark/60">
+        No employment contracts recorded yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      {contracts.map((contract) => (
+        <article className="rounded-md border border-primary-dark/10 p-4" key={contract.id}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                {contract.contract_number}
+              </p>
+              <h4 className="mt-1 font-bold text-primary-dark">
+                {contract.title || formatLabel(contract.contract_type)}
+              </h4>
+            </div>
+            <span
+              className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${contractStatusClass(contract.status)}`}
+            >
+              {formatLabel(contract.status)}
+            </span>
+          </div>
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+            <HrMetric label="Type" value={formatLabel(contract.contract_type)} />
+            <HrMetric
+              label="Salary"
+              value={`ZMW ${formatNumber(contract.salary_amount)} / ${formatLabel(contract.pay_frequency)}`}
+            />
+            <HrMetric label="Start" value={formatDate(contract.start_date)} />
+            <HrMetric label="End" value={formatDate(contract.end_date)} />
+            <HrMetric label="Probation end" value={formatDate(contract.probation_end_date)} />
+            <HrMetric label="Signed" value={formatDate(contract.signed_at)} />
+          </dl>
+          {contract.termination_reason ? (
+            <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-800">
+              {contract.termination_reason}
+            </p>
+          ) : contract.notes ? (
+            <p className="mt-3 text-sm leading-6 text-primary-dark/65">{contract.notes}</p>
+          ) : null}
+          {canManage && contract.status !== "cancelled" ? (
+            <form
+              action={updateEmployeeContractStatusAction}
+              className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
+            >
+              <input name="contract_id" type="hidden" value={contract.id} />
+              <label className={`${OPS_LABEL_CLASS} flex-1`}>
+                Update status
+                <select className={OPS_INPUT_CLASS} defaultValue={contract.status} name="status">
+                  {CONTRACT_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`${OPS_LABEL_CLASS} flex-1`}>
+                Termination reason
+                <input
+                  className={OPS_INPUT_CLASS}
+                  name="termination_reason"
+                  placeholder="Required when terminating"
+                />
+              </label>
+              <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                Save
+              </button>
+            </form>
+          ) : null}
+        </article>
+      ))}
+    </div>
+  );
+}
+
 function EmployeeDocumentsPanel({
   categories,
   documents,
@@ -873,6 +971,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
   const canCreateLeave = canCreateOpsLeaveRequest(auth.profile.role);
   const canCreateRecruitment = canCreateOpsRecruitmentRequisition(auth.profile.role);
   const canCreateContract = canCreateOpsEmployeeContract(auth.profile.role);
+  const canViewContracts = canManageOpsEmployeeContract(auth.profile.role);
   const canCreateAppraisal = canCreateOpsPerformanceAppraisal(auth.profile.role);
   const canCreateOnboarding = canCreateOpsEmployeeOnboardingItem(auth.profile.role);
   const canManageLeaveBalance = canManageOpsLeaveBalance(auth.profile.role);
@@ -2103,6 +2202,18 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                     value={`${requiredDocumentCoverage(employee, hrDocumentCategories).covered}/${requiredDocumentCoverage(employee, hrDocumentCategories).total} required`}
                   />
                 </dl>
+
+                {canViewContracts ? (
+                  <div className="mt-4">
+                    <h3 className="font-heading text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/55">
+                      Employment contracts
+                    </h3>
+                    <EmployeeContractsPanel
+                      canManage={canViewContracts}
+                      contracts={employee.contracts}
+                    />
+                  </div>
+                ) : null}
 
                 {canManageHrCategory ? (
                   <EmployeeDocumentsPanel
