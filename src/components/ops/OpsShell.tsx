@@ -4,35 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity,
-  Archive,
-  BarChart3,
   Bell,
-  Boxes,
-  BriefcaseBusiness,
-  Building2,
-  Bus,
-  ChartNoAxesCombined,
   ChevronDown,
-  ClipboardCheck,
-  FolderOpen,
-  HardHat,
-  Images,
   KeyRound,
-  LayoutDashboard,
   LogOut,
   Menu,
-  ShieldPlus,
-  PackageSearch,
-  ReceiptText,
-  Settings,
-  ShieldCheck,
-  ShoppingCart,
   UserCircle,
-  Warehouse,
   X,
-  type LucideIcon,
 } from "lucide-react";
+import { OPS_NAV_ICONS } from "@/lib/ops/nav-icons";
 import { OpsNavLink } from "@/components/ops/OpsNavLink";
 import { OpsBrandMark } from "@/components/ops/OpsBrandMark";
 import { OpsLocalRolePreviewGuard } from "@/components/ops/OpsLocalRolePreviewGuard";
@@ -68,33 +48,9 @@ function currentModuleTitle(pathname: string, modules: OpsReadyModule[]) {
   return current?.title ?? "Operations Workspace";
 }
 
-const NAV_ICON_BY_HREF: Record<string, LucideIcon> = {
-  "/ops": LayoutDashboard,
-  "/ops/activity": Activity,
-  "/ops/archive": Archive,
-  "/ops/approvals": ClipboardCheck,
-  "/ops/attendance": ClipboardCheck,
-  "/ops/boq": BarChart3,
-  "/ops/commercial": ChartNoAxesCombined,
-  "/ops/documents": FolderOpen,
-  "/ops/employees": BriefcaseBusiness,
-  "/ops/fleet-logistics": Bus,
-  "/ops/hse": ShieldPlus,
-  "/ops/hse-compliance": ShieldCheck,
-  "/ops/invoices": ReceiptText,
-  "/ops/material-requests": PackageSearch,
-  "/ops/notifications": Bell,
-  "/ops/payroll": BriefcaseBusiness,
-  "/ops/staff-payroll": BriefcaseBusiness,
-  "/ops/photos": Images,
-  "/ops/rfq-po": ShoppingCart,
-  "/ops/settings": Settings,
-  "/ops/sites": Building2,
-  "/ops/staff": ShieldCheck,
-  "/ops/stores-inventory": Warehouse,
-  "/ops/suppliers": Boxes,
-  "/ops/workers": HardHat,
-};
+// Alias the shared icon map. Source of truth is `lib/ops/nav-icons.ts` so
+// tests can pin module coverage without dragging in the OpsShell client tree.
+const NAV_ICON_BY_HREF = OPS_NAV_ICONS;
 
 function badgeFor(
   href: string,

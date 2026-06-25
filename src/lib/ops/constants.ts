@@ -232,21 +232,17 @@ const OPS_STAFF_ROLES: OpsUserRole[] = [
   "manager",
 ];
 
+/**
+ * Nav buckets ordered from doing the work → tracking it → oversight, so the
+ * sidebar reads as a delivery flow rather than an alphabetical pile. The `id`
+ * of each group is stable (used in module assignments + permission paths) —
+ * only `title` / `description` / order may change.
+ */
 export const OPS_MODULE_GROUPS: OpsModuleGroup[] = [
   {
     id: "operations",
     title: "Operations",
-    description: "Run day-to-day site work, approvals, attendance, payroll, and field requests.",
-  },
-  {
-    id: "commercial",
-    title: "Commercial",
-    description: "Manage project value from BOQ through invoices, claims, variations, and contracts.",
-  },
-  {
-    id: "records",
-    title: "Records",
-    description: "Keep company records, documents, staff access, photos, and settings organized.",
+    description: "Run day-to-day site work, attendance, approvals, and field coordination.",
   },
   {
     id: "engineering",
@@ -256,7 +252,17 @@ export const OPS_MODULE_GROUPS: OpsModuleGroup[] = [
   {
     id: "procurement",
     title: "Procurement and Stores",
-    description: "Move materials from supplier selection through purchasing, delivery, and stock control.",
+    description: "Material requests, supplier records, requisitions, purchase orders, deliveries, and stock control.",
+  },
+  {
+    id: "fleet",
+    title: "Fleet and Equipment",
+    description: "Coordinate equipment, fuel, maintenance, transport, accommodation, and site logistics.",
+  },
+  {
+    id: "commercial",
+    title: "Commercial",
+    description: "Manage project value from BOQ through invoices, claims, variations, and contracts.",
   },
   {
     id: "finance",
@@ -264,9 +270,9 @@ export const OPS_MODULE_GROUPS: OpsModuleGroup[] = [
     description: "Track budgets, payment requests, supplier ageing, cashflow, and project costs.",
   },
   {
-    id: "fleet",
-    title: "Operations and Fleet",
-    description: "Coordinate equipment, fuel, maintenance, transport, accommodation, and site logistics.",
+    id: "hr",
+    title: "Human Resources",
+    description: "Manage employee records, contracts, payroll, recruitment, leave, appraisals, and HR documents.",
   },
   {
     id: "hse",
@@ -274,9 +280,9 @@ export const OPS_MODULE_GROUPS: OpsModuleGroup[] = [
     description: "Record incidents, Personal Protective Equipment, toolbox talks, inspections, training, and corrective actions.",
   },
   {
-    id: "hr",
-    title: "Administration and Human Resources",
-    description: "Manage employee records, recruitment, leave, contracts, appraisals, and Human Resources documents.",
+    id: "records",
+    title: "Records",
+    description: "Cross-cutting tools — documents, photos, glossary, activity log, archive, and settings.",
   },
   {
     id: "executive",
@@ -365,7 +371,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Manage advances, approved payroll runs, and payout progress for site labour.",
-    group: "operations",
+    group: "hr",
     href: "/ops/payroll",
     id: "payroll",
     navigationRoles: [...OPS_LEADERSHIP_ROLES, ...OPS_HR_ROLES, ...OPS_FINANCE_ROLES],
@@ -379,7 +385,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Generate monthly staff payslips (basic + housing + allowances, with PAYE / NAPSA / NHIMA). Employees self-download from their profile.",
-    group: "operations",
+    group: "hr",
     href: "/ops/staff-payroll",
     id: "staff-payroll",
     navigationRoles: [...OPS_LEADERSHIP_ROLES, ...OPS_HR_ROLES, ...OPS_FINANCE_ROLES],
@@ -456,7 +462,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Create invite-only Pymble staff accounts and manage internal access roles.",
-    group: "records",
+    group: "hr",
     href: "/ops/staff",
     id: "staff",
     navigationRoles: OPS_STAFF_ROLES,
@@ -511,7 +517,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Raise site material needs, add line items, and move approved requests into procurement.",
-    group: "operations",
+    group: "procurement",
     href: "/ops/material-requests",
     id: "material-requests",
     navigationRoles: OPS_MATERIAL_REQUEST_ROLES,
@@ -544,7 +550,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Maintain supplier profiles, contacts, compliance status, and performance evidence.",
-    group: "records",
+    group: "procurement",
     href: "/ops/suppliers",
     id: "suppliers",
     navigationRoles: OPS_SUPPLIER_ROLES,
@@ -555,7 +561,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Raise purchasing requisitions, nominate a supplier per line, record actual prices, convert to draft purchase orders, and manage Purchase Order approvals.",
-    group: "operations",
+    group: "procurement",
     href: "/ops/rfq-po",
     id: "rfq-po",
     navigationRoles: OPS_RFQ_PO_ROLES,
@@ -566,7 +572,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Post deliveries, monitor store balances, and record stock issues, transfers, and adjustments.",
-    group: "operations",
+    group: "procurement",
     href: "/ops/stores-inventory",
     id: "stores-inventory",
     navigationRoles: OPS_STORES_INVENTORY_ROLES,
@@ -577,7 +583,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Log delivery problems, assign follow-up, and close shortages or damage with evidence.",
-    group: "operations",
+    group: "procurement",
     href: "/ops/delivery-exceptions",
     id: "delivery-exceptions",
     navigationRoles: OPS_DELIVERY_EXCEPTION_ROLES,
