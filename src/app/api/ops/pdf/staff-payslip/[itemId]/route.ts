@@ -155,10 +155,13 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const periodYear = Number(run.period_end.slice(0, 4));
     const ytd = await fetchOpsStaffPayslipYtd(raw.employee_id, periodYear);
     const rates = resolveZambianTaxYear(run.period_end);
-    const monthsElapsed = Number(run.period_end.slice(5, 7));
     const freePayBand = rates.payeMonthlyBands.find((band) => band.rate === 0);
     const freePayMonthly = freePayBand ? freePayBand.to - freePayBand.from : 0;
-    const freePayYtd = Math.round(freePayMonthly * monthsElapsed * 100) / 100;
+    // Free Pay YTD = ZRA tax-free band × number of YTD runs this employee
+    // actually has. Mid-year hires accrue free pay only for months they
+    // were paid, not calendar months.
+    const freePayYtd =
+      Math.round(freePayMonthly * Math.max(ytd.runsCounted, 1) * 100) / 100;
 
     // Leave snapshot — query the current year's annual leave balance.
     const { data: leaveRow } = await supabase
@@ -212,8 +215,11 @@ export async function GET(_request: Request, { params }: RouteContext) {
           wcf_employer: num(raw.wcf_employer),
           advance_deduction: num(raw.advance_deduction),
           net_pay: num(raw.net_pay),
-          tax_year: raw.tax_year,
-          statutory_citation: raw.statutory_citation,
+          // Derive tax year from the period end at render time so the slip
+          // always reflects the period's calendar year, even if rates were
+          // re-cited later. The stored field stays for traceability.
+          tax_year: rates.year,
+          statutory_citation: rates.citation,
         },
         ytd: { ...ytd, freePayYtd },
         leave,

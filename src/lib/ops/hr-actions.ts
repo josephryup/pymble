@@ -131,6 +131,13 @@ const createEmployeeSchema = z.object({
   start_date: z.string().trim().default(""),
   status: z.enum(employeeStatuses),
   user_id: z.string().trim().default(""),
+  // Payslip identity fields (PCL convention). Both shown on the staff payslip.
+  nrc_number: z.string().trim().max(32).default(""),
+  napsa_number: z.string().trim().max(32).default(""),
+});
+
+const updateEmployeeSchema = createEmployeeSchema.extend({
+  employee_id: z.string().uuid("Select an employee."),
 });
 
 const employeeStatusSchema = z.object({
@@ -181,10 +188,28 @@ const employeeContractSchema = z.object({
   notes: z.string().trim().max(1000).default(""),
   pay_frequency: z.enum(payFrequencies),
   probation_end_date: z.string().trim().default(""),
-  salary_amount: z.coerce.number().min(0, "Salary cannot be negative.").default(0),
+  // Pay structure used by the staff payslip. salary_amount stays as a derived
+  // total for backwards compatibility (basic + housing + other).
+  basic_pay: z.coerce.number().min(0, "Basic pay cannot be negative.").default(0),
+  housing_allowance: z.coerce
+    .number()
+    .min(0, "Housing allowance cannot be negative.")
+    .default(0),
+  other_allowances_amount: z.coerce
+    .number()
+    .min(0, "Other allowances cannot be negative.")
+    .default(0),
+  leave_rate_per_month: z.coerce
+    .number()
+    .min(0, "Leave rate cannot be negative.")
+    .default(2.5),
   start_date: z.string().trim(),
   status: z.enum(contractStatuses),
   title: z.string().trim().max(180).default(""),
+});
+
+const employeeContractEditSchema = employeeContractSchema.extend({
+  contract_id: z.string().uuid("Select a contract."),
 });
 
 const employeeContractStatusSchema = z.object({
@@ -557,6 +582,8 @@ export async function createEmployeeAction(formData: FormData) {
     start_date: field(formData, "start_date"),
     status: field(formData, "status") || "active",
     user_id: field(formData, "user_id"),
+    nrc_number: field(formData, "nrc_number"),
+    napsa_number: field(formData, "napsa_number"),
   });
 
   if (!parsed.success) {
@@ -585,6 +612,8 @@ export async function createEmployeeAction(formData: FormData) {
       start_date: normalizeDate(parsed.data.start_date || today(), "Use a valid start date."),
       status: parsed.data.status,
       user_id: normalizeOptionalUuid(parsed.data.user_id),
+      nrc_number: parsed.data.nrc_number,
+      napsa_number: parsed.data.napsa_number,
     })
     .select("id, employee_number")
     .single<{ employee_number: string; id: string }>();
@@ -607,6 +636,87 @@ export async function createEmployeeAction(formData: FormData) {
 
   revalidatePath(HR_ROUTE);
   redirect(`${HR_ROUTE}?created=employee`);
+}
+
+/**
+ * Edit an existing employee's profile. Same schema as create — lets HR fix
+ * missing NRC / NAPSA Security No. fields on existing records so the staff
+ * payslip stops showing "—" for those identity lines.
+ */
+export async function updateEmployeeAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canCreateOpsEmployee(profile.role)) {
+    hrError("Your role cannot update employee records.");
+  }
+
+  const parsed = updateEmployeeSchema.safeParse({
+    employee_id: field(formData, "employee_id"),
+    department: field(formData, "department"),
+    email: field(formData, "email"),
+    emergency_contact_name: field(formData, "emergency_contact_name"),
+    emergency_contact_phone: field(formData, "emergency_contact_phone"),
+    employment_type: field(formData, "employment_type") || "full_time",
+    full_name: field(formData, "full_name"),
+    job_title: field(formData, "job_title"),
+    notes: field(formData, "notes"),
+    phone: field(formData, "phone"),
+    site_id: field(formData, "site_id"),
+    start_date: field(formData, "start_date"),
+    status: field(formData, "status") || "active",
+    user_id: field(formData, "user_id"),
+    nrc_number: field(formData, "nrc_number"),
+    napsa_number: field(formData, "napsa_number"),
+  });
+
+  if (!parsed.success) {
+    hrError(parsed.error.issues[0]?.message ?? "Check the employee record.");
+  }
+
+  if (parsed.data.site_id) {
+    await assertActiveSite(parsed.data.site_id);
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("employees")
+    .update({
+      department: parsed.data.department,
+      email: parsed.data.email || "",
+      emergency_contact_name: parsed.data.emergency_contact_name,
+      emergency_contact_phone: parsed.data.emergency_contact_phone,
+      employment_type: parsed.data.employment_type,
+      full_name: parsed.data.full_name,
+      job_title: parsed.data.job_title,
+      notes: parsed.data.notes,
+      phone: parsed.data.phone,
+      site_id: normalizeOptionalUuid(parsed.data.site_id),
+      start_date: normalizeDate(parsed.data.start_date || today(), "Use a valid start date."),
+      status: parsed.data.status,
+      user_id: normalizeOptionalUuid(parsed.data.user_id),
+      nrc_number: parsed.data.nrc_number,
+      napsa_number: parsed.data.napsa_number,
+    })
+    .eq("id", parsed.data.employee_id);
+
+  if (error) {
+    hrError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "employee.updated",
+    actorUserId: profile.id,
+    entityId: parsed.data.employee_id,
+    entityType: "employee",
+    metadata: { full_name: parsed.data.full_name },
+    moduleKey: "employees",
+    sourceId: parsed.data.employee_id,
+    sourceTable: "employees",
+    summary: `Updated employee ${parsed.data.full_name}`,
+  });
+
+  revalidatePath(HR_ROUTE);
+  redirect(`${HR_ROUTE}?updated=employee`);
 }
 
 export async function createEmployeeOnboardingItemAction(formData: FormData) {
@@ -960,7 +1070,10 @@ export async function createEmployeeContractAction(formData: FormData) {
     notes: field(formData, "notes"),
     pay_frequency: field(formData, "pay_frequency") || "monthly",
     probation_end_date: field(formData, "probation_end_date"),
-    salary_amount: field(formData, "salary_amount") || "0",
+    basic_pay: field(formData, "basic_pay") || "0",
+    housing_allowance: field(formData, "housing_allowance") || "0",
+    other_allowances_amount: field(formData, "other_allowances_amount") || "0",
+    leave_rate_per_month: field(formData, "leave_rate_per_month") || "2.5",
     start_date: field(formData, "start_date"),
     status: field(formData, "status") || "draft",
     title: field(formData, "title"),
@@ -999,7 +1112,15 @@ export async function createEmployeeContractAction(formData: FormData) {
       notes: parsed.data.notes,
       pay_frequency: parsed.data.pay_frequency,
       probation_end_date: probationEndDate,
-      salary_amount: parsed.data.salary_amount,
+      basic_pay: parsed.data.basic_pay,
+      housing_allowance: parsed.data.housing_allowance,
+      other_allowances: [
+        { label: "Other allowances", amount: parsed.data.other_allowances_amount },
+      ],
+      leave_rate_per_month: parsed.data.leave_rate_per_month,
+      // salary_amount stored as the derived total so legacy reports stay valid.
+      salary_amount:
+        parsed.data.basic_pay + parsed.data.housing_allowance + parsed.data.other_allowances_amount,
       signed_at: parsed.data.status === "active" ? new Date().toISOString() : null,
       start_date: startDate,
       status: parsed.data.status,
@@ -1081,6 +1202,105 @@ export async function updateEmployeeContractStatusAction(formData: FormData) {
 
   revalidatePath(HR_ROUTE);
   redirect(`${HR_ROUTE}?updated=contract_status`);
+}
+
+/**
+ * Edit an existing employee contract's pay structure + header fields. Only
+ * roles allowed to manage the contract (HR + leadership + developer) may use
+ * this; cancelled contracts are not editable.
+ */
+export async function updateEmployeeContractAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = employeeContractEditSchema.safeParse({
+    contract_id: field(formData, "contract_id"),
+    contract_type: field(formData, "contract_type") || "full_time",
+    employee_id: field(formData, "employee_id"),
+    end_date: field(formData, "end_date"),
+    notes: field(formData, "notes"),
+    pay_frequency: field(formData, "pay_frequency") || "monthly",
+    probation_end_date: field(formData, "probation_end_date"),
+    basic_pay: field(formData, "basic_pay") || "0",
+    housing_allowance: field(formData, "housing_allowance") || "0",
+    other_allowances_amount: field(formData, "other_allowances_amount") || "0",
+    leave_rate_per_month: field(formData, "leave_rate_per_month") || "2.5",
+    start_date: field(formData, "start_date"),
+    status: field(formData, "status") || "draft",
+    title: field(formData, "title"),
+  });
+
+  if (!parsed.success) {
+    hrError(parsed.error.issues[0]?.message ?? "Check the employee contract.");
+  }
+
+  const contract = await fetchEmployeeContract(parsed.data.contract_id);
+  if (!contract) {
+    hrError("Employee contract was not found.");
+  }
+  if (!canManageOpsEmployeeContract(profile.role, contract)) {
+    hrError("Your role cannot update this contract.");
+  }
+
+  const startDate = normalizeDate(
+    parsed.data.start_date || today(),
+    "Use a valid contract start date.",
+  );
+  const endDate = normalizeOptionalDate(parsed.data.end_date);
+  const probationEndDate = normalizeOptionalDate(parsed.data.probation_end_date);
+
+  if (endDate && endDate < startDate) {
+    hrError("Contract end date cannot be before start date.");
+  }
+  if (probationEndDate && probationEndDate < startDate) {
+    hrError("Probation end date cannot be before start date.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("employee_contracts")
+    .update({
+      contract_type: parsed.data.contract_type,
+      end_date: endDate,
+      notes: parsed.data.notes,
+      pay_frequency: parsed.data.pay_frequency,
+      probation_end_date: probationEndDate,
+      basic_pay: parsed.data.basic_pay,
+      housing_allowance: parsed.data.housing_allowance,
+      other_allowances: [
+        { label: "Other allowances", amount: parsed.data.other_allowances_amount },
+      ],
+      leave_rate_per_month: parsed.data.leave_rate_per_month,
+      salary_amount:
+        parsed.data.basic_pay +
+        parsed.data.housing_allowance +
+        parsed.data.other_allowances_amount,
+      start_date: startDate,
+      title: parsed.data.title,
+    })
+    .eq("id", contract.id);
+
+  if (error) {
+    hrError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "employee_contract.updated",
+    actorUserId: profile.id,
+    entityId: contract.id,
+    entityType: "employee_contract",
+    metadata: {
+      contract_number: contract.contract_number,
+      basic_pay: parsed.data.basic_pay,
+      housing_allowance: parsed.data.housing_allowance,
+    },
+    moduleKey: "employees",
+    sourceId: contract.id,
+    sourceTable: "employee_contracts",
+    summary: `Updated contract ${contract.contract_number} pay structure`,
+  });
+
+  revalidatePath(HR_ROUTE);
+  redirect(`${HR_ROUTE}?updated=contract`);
 }
 
 export async function createPerformanceAppraisalAction(formData: FormData) {

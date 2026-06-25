@@ -135,16 +135,38 @@ export async function createStaffPayrollRunAction(formData: FormData) {
   }
 
   const employees = (employeesData ?? []) as unknown as EmployeeForPayroll[];
-  const payable = employees
+  const withActiveContract = employees
     .map((employee) => ({
       employee,
       contract: pickRelation(employee.current_contract),
     }))
     .filter((row) => row.contract && row.contract.status === "active");
 
-  if (payable.length === 0) {
+  if (withActiveContract.length === 0) {
     staffPayrollError(
       "No active employees with an active contract were found. Add or activate a contract first.",
+    );
+  }
+
+  // Drop employees whose contract has no pay structure — silently writing K0
+  // line items would produce useless payslips.
+  const skippedZeroPay: string[] = [];
+  const payable = withActiveContract.filter(({ employee, contract }) => {
+    if (!contract) return false;
+    const totalPay =
+      Number(contract.basic_pay) +
+      Number(contract.housing_allowance) +
+      sumOtherAllowances(contract.other_allowances);
+    if (totalPay <= 0) {
+      skippedZeroPay.push(employee.full_name || employee.employee_number);
+      return false;
+    }
+    return true;
+  });
+
+  if (payable.length === 0) {
+    staffPayrollError(
+      `Payroll not generated — every active employee's contract has zero pay set. Open each contract and enter basic pay + housing allowance first. (${skippedZeroPay.join(", ")})`,
     );
   }
 
@@ -294,7 +316,9 @@ export async function createStaffPayrollRunAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(STAFF_PAYROLL_ROUTE);
-  redirect(`${STAFF_PAYROLL_ROUTE}?created=run`);
+  redirect(
+    `${STAFF_PAYROLL_ROUTE}?created=run&included=${payable.length}&skipped=${skippedZeroPay.length}`,
+  );
 }
 
 /** Approve a draft staff payroll run (manager+leadership only). */

@@ -153,7 +153,7 @@ export function StaffPayslipPdf({
             <SectionTitle>Year to date</SectionTitle>
             <Field label="Gross pay YTD" value={formatPdfMoney(ytd.grossYtd)} />
             <Field label="Taxable YTD" value={formatPdfMoney(ytd.taxableYtd)} />
-            <Field label="Free pay YTD" value={formatPdfMoney(ytd.freePayYtd)} />
+            <Field label="Free pay YTD (ZRA tax-free band)" value={formatPdfMoney(ytd.freePayYtd)} />
             <Field label="Tax paid YTD" value={formatPdfMoney(ytd.paye_ytd)} />
           </Column>
           <Column>

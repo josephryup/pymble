@@ -115,10 +115,28 @@ export const ZAMBIAN_TAX_YEARS: Record<string, ZambianTaxYearRates> = {
 };
 
 /**
- * Year used by default for new payroll runs. Bump when a new budget lands
- * and the rates have been confirmed.
+ * Year used by default when a payroll period date can't be parsed.
+ *
+ * Computed dynamically: it's the highest year present in
+ * `ZAMBIAN_TAX_YEARS` that is not in the future. When 2026 rates are added,
+ * this automatically follows once the calendar tips over — no annual code
+ * bump. Until then it stays on 2025 (the most recent confirmed year).
  */
-export const CURRENT_TAX_YEAR = "2025";
+export function currentTaxYear(): string {
+  const today = new Date().getFullYear();
+  const known = Object.keys(ZAMBIAN_TAX_YEARS)
+    .map((key) => Number(key))
+    .filter((year) => year <= today)
+    .sort((a, b) => b - a);
+  // Fall back to the highest known year if every entry is in the future
+  // (shouldn't happen, but keeps the result well-defined).
+  const resolved =
+    known[0] ?? Math.max(...Object.keys(ZAMBIAN_TAX_YEARS).map((k) => Number(k)));
+  return String(resolved);
+}
+
+/** @deprecated Use {@link currentTaxYear} — kept for backwards compatibility. */
+export const CURRENT_TAX_YEAR = currentTaxYear();
 
 /**
  * Resolve the rate table for a given payroll period.
@@ -130,7 +148,7 @@ export const CURRENT_TAX_YEAR = "2025";
 export function resolveZambianTaxYear(forDate: Date | string): ZambianTaxYearRates {
   const date = typeof forDate === "string" ? new Date(forDate) : forDate;
   const year = String(
-    Number.isNaN(date.getTime()) ? Number(CURRENT_TAX_YEAR) : date.getFullYear(),
+    Number.isNaN(date.getTime()) ? Number(currentTaxYear()) : date.getFullYear(),
   );
   if (year in ZAMBIAN_TAX_YEARS) {
     return ZAMBIAN_TAX_YEARS[year];

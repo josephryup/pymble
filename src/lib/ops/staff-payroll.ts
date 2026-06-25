@@ -241,6 +241,11 @@ export type OpsStaffPayslipYtd = {
   grossYtd: number;
   taxableYtd: number;
   paye_ytd: number;
+  /**
+   * Number of YTD runs counted (used by the PDF to compute Free Pay YTD —
+   * threshold × number of months actually paid, instead of calendar month).
+   */
+  runsCounted: number;
 };
 
 /**
@@ -330,7 +335,7 @@ export async function fetchOpsStaffPayslipYtd(
   const { data, error } = await supabase
     .from("staff_payroll_items")
     .select(
-      "gross_pay, paye_amount, staff_payroll_run:staff_payroll_runs!staff_payroll_items_staff_payroll_run_id_fkey(period_end, archived_at, cancelled_at)",
+      "gross_pay, paye_amount, staff_payroll_run:staff_payroll_runs!staff_payroll_items_staff_payroll_run_id_fkey(period_end, archived_at, cancelled_at, status)",
     )
     .eq("employee_id", employeeId);
 
@@ -338,21 +343,36 @@ export async function fetchOpsStaffPayslipYtd(
     throw error;
   }
 
+  // Approved+ runs only — drafts should not move YTD figures during testing.
+  const PAID_STATUSES = new Set(["approved", "disbursing", "completed"]);
   let grossYtd = 0;
   let payeYtd = 0;
+  let runsCounted = 0;
   for (const row of (data ?? []) as Array<{
     gross_pay: number | string;
     paye_amount: number | string;
     staff_payroll_run:
-      | { period_end: string; archived_at: string | null; cancelled_at: string | null }
-      | Array<{ period_end: string; archived_at: string | null; cancelled_at: string | null }>
+      | {
+          period_end: string;
+          archived_at: string | null;
+          cancelled_at: string | null;
+          status: string;
+        }
+      | Array<{
+          period_end: string;
+          archived_at: string | null;
+          cancelled_at: string | null;
+          status: string;
+        }>
       | null;
   }>) {
     const run = normalizeRelation(row.staff_payroll_run);
     if (!run || run.archived_at || run.cancelled_at) continue;
+    if (!PAID_STATUSES.has(run.status)) continue;
     if (run.period_end < yearStart || run.period_end > yearEnd) continue;
     grossYtd += num(row.gross_pay);
     payeYtd += num(row.paye_amount);
+    runsCounted += 1;
   }
 
   return {
@@ -360,5 +380,6 @@ export async function fetchOpsStaffPayslipYtd(
     // In the current model Gross = Taxable (no non-taxable allowances yet)
     taxableYtd: Math.round(grossYtd * 100) / 100,
     paye_ytd: Math.round(payeYtd * 100) / 100,
+    runsCounted,
   };
 }

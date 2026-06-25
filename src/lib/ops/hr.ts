@@ -77,6 +77,12 @@ export type OpsEmployeeContractSummary = {
   pay_frequency: OpsPayFrequency;
   probation_end_date: string | null;
   salary_amount: number;
+  /** Pay structure used by the staff payslip. */
+  basic_pay: number;
+  housing_allowance: number;
+  /** Sum of any other allowance entries; itemised list stays in the row. */
+  other_allowances_total: number;
+  leave_rate_per_month: number;
   signed_at: string | null;
   start_date: string;
   status: OpsEmployeeContractStatus;
@@ -192,6 +198,10 @@ export type OpsEmployeeSummary = {
   leave_requests: OpsLeaveRequestSummary[];
   documents: OpsEmployeeDocumentSummary[];
   notes: string;
+  /** NRC identity number shown on the staff payslip. */
+  nrc_number: string;
+  /** NAPSA Security number shown on the staff payslip. */
+  napsa_number: string;
   onboarding_items: OpsEmployeeOnboardingItemSummary[];
   phone: string;
   site: OpsHrSiteSummary | null;
@@ -377,8 +387,15 @@ type RawLeaveRequest = Omit<OpsLeaveRequestSummary, "days_requested"> & {
   days_requested: number | string;
 };
 
-type RawEmployeeContract = Omit<OpsEmployeeContractSummary, "salary_amount"> & {
+type RawEmployeeContract = Omit<
+  OpsEmployeeContractSummary,
+  "salary_amount" | "basic_pay" | "housing_allowance" | "other_allowances_total" | "leave_rate_per_month"
+> & {
   salary_amount: number | string;
+  basic_pay: number | string | null;
+  housing_allowance: number | string | null;
+  other_allowances: Array<{ amount?: number | string; label?: string }> | null;
+  leave_rate_per_month: number | string | null;
 };
 
 type RawPerformanceAppraisal = Omit<OpsPerformanceAppraisalSummary, "overall_rating" | "reviewer"> & {
@@ -484,6 +501,20 @@ function groupLeaveRequests(requests: RawLeaveRequest[]) {
   return grouped;
 }
 
+function sumOtherAllowances(
+  value: RawEmployeeContract["other_allowances"],
+): number {
+  if (!Array.isArray(value)) return 0;
+  let total = 0;
+  for (const entry of value) {
+    const amount = Number(entry?.amount ?? 0);
+    if (Number.isFinite(amount) && amount > 0) {
+      total += amount;
+    }
+  }
+  return total;
+}
+
 function groupEmployeeContracts(contracts: RawEmployeeContract[]) {
   const grouped = new Map<string, OpsEmployeeContractSummary[]>();
 
@@ -493,6 +524,10 @@ function groupEmployeeContracts(contracts: RawEmployeeContract[]) {
       {
         ...contract,
         salary_amount: normalizeNumber(contract.salary_amount),
+        basic_pay: normalizeNumber(contract.basic_pay),
+        housing_allowance: normalizeNumber(contract.housing_allowance),
+        other_allowances_total: sumOtherAllowances(contract.other_allowances),
+        leave_rate_per_month: normalizeNumber(contract.leave_rate_per_month),
       },
     ]);
   });
@@ -644,6 +679,10 @@ async function fetchEmployeeContractsByEmployeeIds(employeeIds: string[]) {
         "end_date",
         "probation_end_date",
         "salary_amount",
+        "basic_pay",
+        "housing_allowance",
+        "other_allowances",
+        "leave_rate_per_month",
         "pay_frequency",
         "signed_at",
         "terminated_at",
@@ -866,6 +905,8 @@ export async function fetchPaginatedOpsEmployees(
         "end_date",
         "emergency_contact_name",
         "emergency_contact_phone",
+        "nrc_number",
+        "napsa_number",
         "notes",
         "created_at",
         "updated_at",
@@ -1249,6 +1290,8 @@ export async function fetchMyOpsEmployeeSelfServiceProfile(): Promise<OpsEmploye
         "end_date",
         "emergency_contact_name",
         "emergency_contact_phone",
+        "nrc_number",
+        "napsa_number",
         "notes",
         "created_at",
         "updated_at",

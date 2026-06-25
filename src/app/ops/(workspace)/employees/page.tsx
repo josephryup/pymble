@@ -13,6 +13,7 @@ import {
   GraduationCap,
   ListChecks,
   NotebookTabs,
+  Pencil,
   Plus,
   Send,
   Star,
@@ -49,6 +50,8 @@ import {
   rejectEmployeeDocumentAction,
   startEmployeeOnboardingItemAction,
   submitLeaveRequestAction,
+  updateEmployeeAction,
+  updateEmployeeContractAction,
   updateEmployeeContractStatusAction,
   updateEmployeeStatusAction,
   updateRecruitmentRequisitionStatusAction,
@@ -227,8 +230,9 @@ function hrNotice(params: OpsSearchParams) {
     appraisal: "Performance appraisal created.",
     appraisal_completed: "Performance appraisal completed.",
     comment: "HR comment added.",
-    contract: "Employee contract created.",
+    contract: "Employee contract saved.",
     contract_status: "Employee contract status updated.",
+    employee: "Employee record updated.",
     employee_status: "Employee status updated.",
     employee_document: "Employee document uploaded.",
     employee_document_archived: "Employee document archived.",
@@ -647,8 +651,21 @@ function EmployeeContractsPanel({
           <dl className="mt-4 grid gap-3 sm:grid-cols-2">
             <HrMetric label="Type" value={formatLabel(contract.contract_type)} />
             <HrMetric
-              label="Salary"
+              label="Total salary"
               value={`ZMW ${formatNumber(contract.salary_amount)} / ${formatLabel(contract.pay_frequency)}`}
+            />
+            <HrMetric label="Basic pay" value={`ZMW ${formatNumber(contract.basic_pay)}`} />
+            <HrMetric
+              label="Housing allowance"
+              value={`ZMW ${formatNumber(contract.housing_allowance)}`}
+            />
+            <HrMetric
+              label="Other allowances"
+              value={`ZMW ${formatNumber(contract.other_allowances_total)}`}
+            />
+            <HrMetric
+              label="Leave rate"
+              value={`${formatNumber(contract.leave_rate_per_month)} days / month`}
             />
             <HrMetric label="Start" value={formatDate(contract.start_date)} />
             <HrMetric label="End" value={formatDate(contract.end_date)} />
@@ -661,6 +678,143 @@ function EmployeeContractsPanel({
             </p>
           ) : contract.notes ? (
             <p className="mt-3 text-sm leading-6 text-primary-dark/65">{contract.notes}</p>
+          ) : null}
+          {canManage && contract.status !== "cancelled" ? (
+            <details className="mt-3 rounded-md border border-primary-dark/10">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                <Pencil className="size-4" aria-hidden="true" />
+                Edit pay structure
+              </summary>
+              <form
+                action={updateEmployeeContractAction}
+                className="grid gap-3 border-t border-primary-dark/10 p-3 sm:grid-cols-2"
+              >
+                <input name="contract_id" type="hidden" value={contract.id} />
+                <input name="employee_id" type="hidden" value={contract.employee_id} />
+                <input name="status" type="hidden" value={contract.status} />
+                <label className={OPS_LABEL_CLASS}>
+                  Basic pay (ZMW)
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={String(contract.basic_pay)}
+                    min="0"
+                    name="basic_pay"
+                    required
+                    step="0.01"
+                    type="number"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Housing allowance (ZMW)
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={String(contract.housing_allowance)}
+                    min="0"
+                    name="housing_allowance"
+                    step="0.01"
+                    type="number"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Other allowances total (ZMW)
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={String(contract.other_allowances_total)}
+                    min="0"
+                    name="other_allowances_amount"
+                    step="0.01"
+                    type="number"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Leave rate (days / month)
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={String(contract.leave_rate_per_month)}
+                    min="0"
+                    name="leave_rate_per_month"
+                    step="0.01"
+                    type="number"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Type
+                  <select
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={contract.contract_type}
+                    name="contract_type"
+                  >
+                    <option value="full_time">Full-time</option>
+                    <option value="part_time">Part-time</option>
+                    <option value="contractor">Contractor</option>
+                    <option value="intern">Intern</option>
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Pay frequency
+                  <select
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={contract.pay_frequency}
+                    name="pay_frequency"
+                  >
+                    {PAY_FREQUENCY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Title
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={contract.title}
+                    name="title"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Start date
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={contract.start_date}
+                    name="start_date"
+                    type="date"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  End date
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={contract.end_date ?? ""}
+                    name="end_date"
+                    type="date"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Probation end
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={contract.probation_end_date ?? ""}
+                    name="probation_end_date"
+                    type="date"
+                  />
+                </label>
+                <label className={`${OPS_LABEL_CLASS} sm:col-span-2`}>
+                  Notes
+                  <textarea
+                    className={`${OPS_INPUT_CLASS} min-h-20`}
+                    defaultValue={contract.notes}
+                    name="notes"
+                  />
+                </label>
+                <div className="sm:col-span-2">
+                  <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                    <Pencil className="size-4" aria-hidden="true" />
+                    Save contract
+                  </button>
+                </div>
+              </form>
+            </details>
           ) : null}
           {canManage && contract.status !== "cancelled" ? (
             <form
@@ -1231,6 +1385,14 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               Emergency phone
               <input className={OPS_INPUT_CLASS} name="emergency_contact_phone" />
             </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              NRC No.
+              <input className={OPS_INPUT_CLASS} maxLength={32} name="nrc_number" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              NAPSA Security No.
+              <input className={OPS_INPUT_CLASS} maxLength={32} name="napsa_number" />
+            </label>
             <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
               Notes
               <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="notes" />
@@ -1509,8 +1671,46 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                   </select>
                 </label>
                 <label className={OPS_LABEL_CLASS}>
-                  Salary amount
-                  <input className={OPS_INPUT_CLASS} min="0" name="salary_amount" step="0.01" type="number" />
+                  Basic pay (ZMW)
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    min="0"
+                    name="basic_pay"
+                    required
+                    step="0.01"
+                    type="number"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Housing allowance (ZMW)
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    min="0"
+                    name="housing_allowance"
+                    step="0.01"
+                    type="number"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Other allowances total (ZMW)
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    min="0"
+                    name="other_allowances_amount"
+                    step="0.01"
+                    type="number"
+                  />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Leave rate (days per month)
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue="2.5"
+                    min="0"
+                    name="leave_rate_per_month"
+                    step="0.01"
+                    type="number"
+                  />
                 </label>
                 <label className={OPS_LABEL_CLASS}>
                   Title
@@ -2182,7 +2382,154 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                   <HrMetric label="Email" value={employee.email || "Not recorded"} />
                   <HrMetric label="Emergency" value={employee.emergency_contact_name || "Not recorded"} />
                   <HrMetric label="Emergency phone" value={employee.emergency_contact_phone || "Not recorded"} />
+                  <HrMetric label="NRC No." value={employee.nrc_number || "Not recorded"} />
+                  <HrMetric label="NAPSA Security No." value={employee.napsa_number || "Not recorded"} />
                 </dl>
+
+                {canUpdateStatus ? (
+                  <details className="mt-3 rounded-md border border-primary-dark/10">
+                    <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                      <Pencil className="size-4" aria-hidden="true" />
+                      Edit employee details
+                    </summary>
+                    <form
+                      action={updateEmployeeAction}
+                      className="grid gap-3 border-t border-primary-dark/10 p-3 sm:grid-cols-2 lg:grid-cols-3"
+                    >
+                      <input name="employee_id" type="hidden" value={employee.id} />
+                      <input name="status" type="hidden" value={employee.status} />
+                      <input name="user_id" type="hidden" value={employee.user?.id ?? ""} />
+                      <label className={OPS_LABEL_CLASS}>
+                        Full name
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.full_name}
+                          name="full_name"
+                          required
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Job title
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.job_title}
+                          name="job_title"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Department
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.department}
+                          name="department"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Employment type
+                        <select
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.employment_type}
+                          name="employment_type"
+                        >
+                          {EMPLOYMENT_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Phone
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.phone}
+                          name="phone"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Email
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.email}
+                          name="email"
+                          type="email"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        NRC No.
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.nrc_number}
+                          maxLength={32}
+                          name="nrc_number"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        NAPSA Security No.
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.napsa_number}
+                          maxLength={32}
+                          name="napsa_number"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Emergency contact
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.emergency_contact_name}
+                          name="emergency_contact_name"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Emergency phone
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.emergency_contact_phone}
+                          name="emergency_contact_phone"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Start date
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.start_date}
+                          name="start_date"
+                          type="date"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Site
+                        <select
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.site_id ?? ""}
+                          name="site_id"
+                        >
+                          <option value="">Unassigned</option>
+                          {siteOptions.map((site) => (
+                            <option key={site.id} value={site.id}>
+                              {site.code} - {site.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-3`}>
+                        Notes
+                        <textarea
+                          className={`${OPS_INPUT_CLASS} min-h-20`}
+                          defaultValue={employee.notes}
+                          name="notes"
+                        />
+                      </label>
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                          <Pencil className="size-4" aria-hidden="true" />
+                          Save employee
+                        </button>
+                      </div>
+                    </form>
+                  </details>
+                ) : null}
 
                 <dl className="mt-3 grid gap-3 md:grid-cols-5">
                   <HrMetric

@@ -66,7 +66,17 @@ function pageNotice(params: OpsSearchParams) {
   const updated = firstParam(params.updated);
   const error = firstParam(params.error);
   if (error) return { tone: "error" as const, message: error };
-  if (created === "run") return { tone: "success" as const, message: "Staff payroll run created." };
+  if (created === "run") {
+    const included = firstParam(params.included) ?? "0";
+    const skipped = firstParam(params.skipped) ?? "0";
+    return {
+      tone: "success" as const,
+      message:
+        skipped !== "0"
+          ? `Staff payroll run created with ${included} employees. ${skipped} employee${skipped === "1" ? "" : "s"} skipped — pay structure not set on their contract.`
+          : `Staff payroll run created with ${included} employees.`,
+    };
+  }
   if (created === "advance") return { tone: "success" as const, message: "Staff advance recorded." };
   if (updated === "approved") return { tone: "success" as const, message: "Staff payroll run approved." };
   if (updated === "completed") return { tone: "success" as const, message: "Staff payroll run marked paid." };
