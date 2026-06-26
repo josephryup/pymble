@@ -121,6 +121,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   "/ops/archive": Archive,
   "/ops/settings": Settings,
   "/ops/it/helpdesk/mine": Headset,
+  "/ops/it/handbook": BookOpen,
 
   // Information Technology
   "/ops/it": MonitorCog,

@@ -984,4 +984,15 @@ export const OPS_MODULES: OpsModule[] = [
     status: "ready",
     title: "Get IT Help",
   },
+  {
+    description: "Read and acknowledge company IT policies, and browse IT how-to guides. Available to every staff member.",
+    group: "records",
+    href: "/ops/it/handbook",
+    id: "it-handbook",
+    navigationRoles: OPS_OPERATIONAL_ROLES,
+    phase: "Phase IT-3",
+    roles: OPS_OPERATIONAL_ROLES,
+    status: "ready",
+    title: "IT Policies & Guides",
+  },
 ];

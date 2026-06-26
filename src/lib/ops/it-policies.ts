@@ -65,6 +65,59 @@ export async function fetchOpsItPolicies(): Promise<OpsItPolicySummary[]> {
   return rows.map((row) => ({ ...row, ack_count: counts.get(row.id) ?? 0 }));
 }
 
+/**
+ * Published policies for the staff handbook, with whether the current user has
+ * acknowledged each. Open to every staff member (not IT-gated).
+ */
+export async function fetchPublishedItPoliciesForStaff(
+  userId: string,
+): Promise<OpsItPolicyDetail[]> {
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: policies, error } = await supabase
+    .from("it_policies")
+    .select("id, title, category, version, body, status, published_at, archived_at, created_at")
+    .eq("status", "published")
+    .is("archived_at", null)
+    .order("category", { ascending: true })
+    .returns<Omit<OpsItPolicyDetail, "ack_count" | "acknowledged_by_me">[]>();
+
+  if (error) {
+    throw error;
+  }
+  const rows = policies ?? [];
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const { data: acks, error: ackError } = await supabase
+    .from("it_policy_acknowledgements")
+    .select("policy_id, user_id")
+    .in(
+      "policy_id",
+      rows.map((row) => row.id),
+    )
+    .returns<{ policy_id: string; user_id: string }[]>();
+
+  if (ackError) {
+    throw ackError;
+  }
+
+  const ackCounts = new Map<string, number>();
+  const myAcks = new Set<string>();
+  for (const ack of acks ?? []) {
+    ackCounts.set(ack.policy_id, (ackCounts.get(ack.policy_id) ?? 0) + 1);
+    if (ack.user_id === userId) {
+      myAcks.add(ack.policy_id);
+    }
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    ack_count: ackCounts.get(row.id) ?? 0,
+    acknowledged_by_me: myAcks.has(row.id),
+  }));
+}
+
 export async function fetchOpsItPolicy(
   policyId: string,
   userId: string,

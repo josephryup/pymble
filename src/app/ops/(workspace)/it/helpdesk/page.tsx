@@ -1,4 +1,4 @@
-import { AlertTriangle, LifeBuoy, MonitorCog, Plus, UserPlus } from "lucide-react";
+import { AlertTriangle, Download, LifeBuoy, MonitorCog, Plus, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
@@ -60,6 +60,10 @@ export default async function OpsItHelpdeskPage({ searchParams }: PageProps) {
               <LifeBuoy className="size-4" aria-hidden="true" />
               Open only
             </Link>
+            <a className={OPS_SECONDARY_BUTTON_CLASS} href="/api/ops/pdf/it-ticket-report">
+              <Download className="size-4" aria-hidden="true" />
+              Export PDF
+            </a>
             <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/it/helpdesk/new">
               <Plus className="size-4" aria-hidden="true" />
               Raise a ticket

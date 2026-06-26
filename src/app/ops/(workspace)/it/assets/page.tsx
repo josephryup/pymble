@@ -1,4 +1,4 @@
-import { Laptop, Plus, ShieldCheck, Wrench } from "lucide-react";
+import { Download, Laptop, Plus, ShieldCheck, Wrench } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -101,12 +101,18 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
         title="Asset Management"
         description="Every company computer, laptop, printer, phone, and network device — assignment, condition, warranty, and location."
         actions={
-          canManage ? (
-            <a className={OPS_PRIMARY_BUTTON_CLASS} href="#asset-create-panel">
-              <Plus className="size-4" aria-hidden="true" />
-              Register asset
+          <>
+            <a className={OPS_SECONDARY_BUTTON_CLASS} href="/api/ops/pdf/it-asset-register">
+              <Download className="size-4" aria-hidden="true" />
+              Export PDF
             </a>
-          ) : undefined
+            {canManage ? (
+              <a className={OPS_PRIMARY_BUTTON_CLASS} href="#asset-create-panel">
+                <Plus className="size-4" aria-hidden="true" />
+                Register asset
+              </a>
+            ) : null}
+          </>
         }
       />
 
