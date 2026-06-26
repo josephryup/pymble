@@ -14,6 +14,7 @@ export type OpsDepartmentKey =
   | "commercial"
   | "hse"
   | "hr"
+  | "it"
   | "executive";
 
 export const OPS_DEPARTMENT_LABELS: Record<OpsDepartmentKey, string> = {
@@ -24,6 +25,7 @@ export const OPS_DEPARTMENT_LABELS: Record<OpsDepartmentKey, string> = {
   commercial: "Commercial",
   hse: "Health, Safety and Environment",
   hr: "Human Resources",
+  it: "Information Technology",
   executive: "Executive",
 };
 
@@ -49,6 +51,7 @@ const ROLE_DEPARTMENT_MAP: Partial<Record<OpsUserRole, OpsDepartmentKey>> = {
   hse_assistant_officer: "hse",
   human_resource: "hr",
   hr: "hr",
+  it_manager: "it",
   managing_director: "executive",
   owner: "executive",
   general_manager: "executive",
@@ -74,6 +77,7 @@ const DEPARTMENT_HEAD_ROLES: OpsUserRole[] = [
   "human_resource",
   "hr",
   "quantity_surveyor",
+  "it_manager",
 ];
 
 export function canSubmitDepartmentReport(role: OpsUserRole) {

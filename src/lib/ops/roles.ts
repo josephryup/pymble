@@ -13,6 +13,7 @@ export const OPS_ROLE_LABELS: Record<OpsUserRole, string> = {
   hse_assistant_officer: "Health, Safety and Environment Assistant Officer",
   hse_officer: "Health, Safety and Environment Officer",
   human_resource: "Human Resources",
+  it_manager: "IT Manager",
   manager: "General Manager",
   managing_director: "Managing Director",
   operations_manager: "Operations Manager",
@@ -42,6 +43,7 @@ export const OPS_STAFF_ROLE_OPTIONS = [
   { value: "hse_officer", label: "Health, Safety and Environment Officer" },
   { value: "hse_assistant_officer", label: "Health, Safety and Environment Assistant Officer" },
   { value: "admin_receptionist", label: "Administration / Receptionist" },
+  { value: "it_manager", label: "IT Manager" },
 ] as const;
 
 export const OPS_STAFF_ROLE_VALUES = [
@@ -61,6 +63,7 @@ export const OPS_STAFF_ROLE_VALUES = [
   "hse_officer",
   "hse_assistant_officer",
   "admin_receptionist",
+  "it_manager",
 ] as const;
 
 export type OpsAssignableStaffRole = (typeof OPS_STAFF_ROLE_VALUES)[number];
@@ -119,6 +122,10 @@ export function isOperationsManagerRole(role?: string | null) {
 
 export function isEngineeringManagerRole(role?: string | null) {
   return role === "engineering_manager";
+}
+
+export function isItManagerRole(role?: string | null) {
+  return role === "it_manager";
 }
 
 /**

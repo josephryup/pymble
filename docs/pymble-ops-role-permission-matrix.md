@@ -24,6 +24,7 @@ This document records the approved production role model for Pymble Operations. 
 | HSE Officer | Many | None for staff accounts | Cannot deactivate staff accounts | Visible |
 | HSE Assistant Officer | Many | None for staff accounts | Cannot deactivate staff accounts | Visible |
 | Admin / Receptionist | Many | None for staff accounts | Cannot deactivate staff accounts | Visible |
+| IT Manager | Many | None for staff accounts | Cannot deactivate staff accounts | Visible |
 
 ## Module Visibility Rule
 
@@ -32,6 +33,7 @@ This document records the approved production role model for Pymble Operations. 
 - General Manager sees executive and operational oversight modules required for management.
 - Human Resource sees HR, staff, profile, fleet people logistics, and relevant administrative controls.
 - Each department role sees only the modules needed for its operational workflow.
+- IT Manager sees the role-isolated Information Technology area (assets, help desk, software, access, policies) and nothing from other departments; the Managing Director retains IT oversight. The help desk's ticket-raising surface is the one IT page open to all staff.
 - Planned or registry-only modules do not appear in the daily sidebar.
 - `/ops/modules` remains a role-aware registry, not a sidebar item.
 

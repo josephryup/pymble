@@ -4,6 +4,7 @@ export type OpsGlossaryCategory =
   | "finance"
   | "hse"
   | "engineering"
+  | "it"
   | "general";
 
 export type OpsGlossaryEntry = {
@@ -20,10 +21,51 @@ export const OPS_GLOSSARY_CATEGORY_LABELS: Record<OpsGlossaryCategory, string> =
   finance: "Finance and Accounts",
   hse: "Health, Safety and Environment",
   engineering: "Engineering and Site Delivery",
+  it: "Information Technology",
   general: "General",
 };
 
 export const OPS_GLOSSARY: OpsGlossaryEntry[] = [
+  {
+    term: "SLA",
+    fullForm: "Service Level Agreement",
+    category: "it",
+    plain:
+      "The target time IT aims to respond to and resolve a support ticket, set by how urgent the problem is. It keeps support fair and predictable.",
+    example: "Urgent tickets have a four-hour response SLA.",
+  },
+  {
+    term: "EDR",
+    fullForm: "Endpoint Detection and Response",
+    category: "it",
+    plain:
+      "Security software on computers that watches for threats, raises alerts, and helps IT respond to attacks — a step beyond basic antivirus.",
+    example: "Microsoft Defender provides EDR on every company laptop.",
+  },
+  {
+    term: "NAS",
+    fullForm: "Network Attached Storage",
+    category: "it",
+    plain:
+      "A shared storage box on the office network used to keep files and on-site backup copies that staff and IT can reach over the network.",
+    example: "The nightly backup also writes to the office NAS.",
+  },
+  {
+    term: "BYOD",
+    fullForm: "Bring Your Own Device",
+    category: "it",
+    plain:
+      "A policy covering staff using personal phones or laptops for work, including the security rules they must follow before they connect.",
+    example: "BYOD phones must have a screen lock before accessing email.",
+  },
+  {
+    term: "KB",
+    fullForm: "Knowledge Base",
+    category: "it",
+    plain:
+      "A library of short how-to articles staff can read to solve common IT problems themselves without raising a ticket.",
+    example: "The KB article on Wi-Fi setup deflects a lot of tickets.",
+  },
   {
     term: "BOQ",
     fullForm: "Bill of Quantities",

@@ -174,6 +174,16 @@ export const OPS_PRODUCTION_ROLE_POLICY: OpsProductionRolePolicy[] = [
     visibleInAccessRegister: true,
     notes: "Admin and Human Resources support visibility role with module access only.",
   },
+  {
+    role: "it_manager",
+    label: "IT Manager",
+    accountModel: "many",
+    canInviteStaff: false,
+    canDeactivateStaff: false,
+    visibleInAccessRegister: true,
+    notes:
+      "Runs the role-isolated Information Technology area (assets, help desk, software, access). Reports to the Managing Director; module access only.",
+  },
 ];
 
 export function getOpsProductionRolePolicy(role: OpsUserRole) {

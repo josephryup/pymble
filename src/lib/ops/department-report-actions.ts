@@ -28,6 +28,7 @@ const departmentEnum = z.enum([
   "commercial",
   "hse",
   "hr",
+  "it",
   "executive",
 ]);
 const periodEnum = z.enum(["weekly", "monthly", "quarterly", "ad_hoc"]);

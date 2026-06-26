@@ -16,6 +16,7 @@ export type OpsUserRole =
   | "hse_officer"
   | "hse_assistant_officer"
   | "admin_receptionist"
+  | "it_manager"
   | "owner"
   | "hr"
   | "manager"
@@ -509,9 +510,78 @@ export type OpsModuleGroupId =
   | "fleet"
   | "hse"
   | "hr"
+  | "it"
   | "executive";
 
 export type OpsModuleStatus = "ready" | "planned";
+
+// Information Technology module enums (Phase IT-1).
+export type OpsItAssetType =
+  | "laptop"
+  | "desktop"
+  | "printer"
+  | "phone"
+  | "tablet"
+  | "monitor"
+  | "network"
+  | "server"
+  | "other";
+export type OpsItAssetStatus =
+  | "in_use"
+  | "spare"
+  | "repair"
+  | "retired"
+  | "disposed"
+  | "lost";
+export type OpsItTicketCategory =
+  | "hardware"
+  | "software"
+  | "network"
+  | "email"
+  | "access"
+  | "printing"
+  | "site_connectivity"
+  | "security"
+  | "other";
+export type OpsItTicketPriority = "low" | "normal" | "high" | "urgent";
+export type OpsItTicketStatus =
+  | "open"
+  | "in_progress"
+  | "on_hold"
+  | "awaiting_user"
+  | "resolved"
+  | "closed"
+  | "cancelled";
+
+// Information Technology module enums (Phase IT-2).
+export type OpsItLicenseStatus = "active" | "cancelled";
+export type OpsItLicenseBilling = "monthly" | "annual" | "one_time";
+export type OpsItAccessStatus = "active" | "revoked";
+export type OpsItChecklistKind = "onboarding" | "offboarding";
+export type OpsItChecklistStatus = "in_progress" | "completed";
+export type OpsItPolicyCategory =
+  | "acceptable_use"
+  | "password"
+  | "byod"
+  | "cybersecurity"
+  | "data_retention"
+  | "other";
+export type OpsItPolicyStatus = "draft" | "published" | "archived";
+
+// Information Technology module enums (Phase IT-3).
+export type OpsItNetworkDeviceType =
+  | "router"
+  | "switch"
+  | "access_point"
+  | "firewall"
+  | "server"
+  | "isp_link"
+  | "other";
+export type OpsItNetworkStatus = "online" | "offline" | "maintenance" | "retired";
+export type OpsItIncidentSeverity = "low" | "medium" | "high" | "critical";
+export type OpsItIncidentStatus = "open" | "investigating" | "resolved";
+export type OpsItBackupStatus = "success" | "failed" | "in_progress";
+export type OpsItKbStatus = "draft" | "published" | "archived";
 
 export type OpsModuleGroup = {
   description: string;
