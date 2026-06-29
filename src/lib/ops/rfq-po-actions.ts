@@ -422,6 +422,141 @@ export async function createRfqAction(formData: FormData) {
   redirect(`${RFQ_PO_ROUTE}?created=rfq`);
 }
 
+const createRfqFromMaterialRequestSchema = z.object({
+  material_request_id: z.string().uuid("Select an approved material request."),
+});
+
+type MaterialRequestItemForRfq = {
+  item_name: string;
+  specification: string | null;
+  unit: string;
+  quantity: number | string;
+  estimated_unit_cost: number | string;
+  actual_unit_cost: number | string;
+  notes: string | null;
+  supplier_id: string | null;
+  supplier_name_freeform: string | null;
+  line_number: number;
+};
+
+/**
+ * One-click requisition: pick a finance-approved material request and copy its
+ * site, line items, and prices straight into a new draft RFQ. Procurement then
+ * nominates a supplier per line and converts it into purchase orders.
+ */
+export async function createRfqFromMaterialRequestAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canCreateOpsRfq(profile.role)) {
+    rfqError("Your role cannot create requisitions.");
+  }
+
+  const parsed = createRfqFromMaterialRequestSchema.safeParse({
+    material_request_id: field(formData, "material_request_id"),
+  });
+
+  if (!parsed.success) {
+    rfqError(parsed.error.issues[0]?.message ?? "Select an approved material request.");
+  }
+
+  const materialRequest = await fetchMaterialRequestForRfq(parsed.data.material_request_id);
+
+  if (!materialRequest) {
+    rfqError("Material request was not found.");
+  }
+
+  if (materialRequest.status !== "approved") {
+    rfqError(
+      materialRequest.status === "ordered" || materialRequest.status === "closed"
+        ? "That material request has already been procured."
+        : "Only finance-approved material requests can be turned into a requisition.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: itemRows, error: itemsError } = await supabase
+    .from("material_request_items")
+    .select(
+      "item_name, specification, unit, quantity, estimated_unit_cost, actual_unit_cost, notes, supplier_id, supplier_name_freeform, line_number",
+    )
+    .eq("request_id", materialRequest.id)
+    .order("line_number", { ascending: true });
+
+  if (itemsError) {
+    rfqError(itemsError.message);
+  }
+
+  const items = (itemRows ?? []) as MaterialRequestItemForRfq[];
+  if (items.length === 0) {
+    rfqError("That material request has no line items to procure.");
+  }
+
+  const siteId = materialRequest.site_id || null;
+  const scope: "site" | "general" = siteId ? "site" : "general";
+
+  const { data: rfq, error: rfqInsertError } = await supabase
+    .from("rfqs")
+    .insert({
+      created_by: profile.id,
+      description: `Requisition built from approved material request ${materialRequest.request_number}.`,
+      due_date: null,
+      material_request_id: materialRequest.id,
+      scope,
+      site_id: siteId,
+      status: "draft",
+      title: `Requisition for ${materialRequest.request_number} — ${materialRequest.title}`,
+    })
+    .select("id, rfq_number")
+    .single<{ id: string; rfq_number: string }>();
+
+  if (rfqInsertError || !rfq) {
+    rfqError(rfqInsertError?.message ?? "Could not create the requisition.");
+  }
+
+  const { error: itemInsertError } = await supabase.from("rfq_items").insert(
+    items.map((item, index) => ({
+      estimated_unit_cost: normalizeMoney(item.estimated_unit_cost),
+      actual_unit_cost: normalizeMoney(item.actual_unit_cost),
+      item_name: item.item_name,
+      line_number: index + 1,
+      notes: item.notes ?? "",
+      quantity: normalizeMoney(item.quantity),
+      rfq_id: rfq.id,
+      specification: item.specification ?? "",
+      supplier_id: item.supplier_id,
+      supplier_name_freeform: item.supplier_name_freeform,
+      unit: item.unit,
+    })),
+  );
+
+  if (itemInsertError) {
+    await (async () => {
+      await supabase.from("rfqs").delete().eq("id", rfq.id);
+    })().catch(() => null);
+    rfqError(itemInsertError.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "rfq.created_from_material_request",
+    actorUserId: profile.id,
+    entityId: rfq.id,
+    entityType: "rfq",
+    metadata: {
+      rfq_number: rfq.rfq_number,
+      material_request_id: materialRequest.id,
+      request_number: materialRequest.request_number,
+      item_count: items.length,
+    },
+    moduleKey: "rfq_po",
+    sourceId: rfq.id,
+    sourceTable: "rfqs",
+    summary: `Built requisition ${rfq.rfq_number} from ${materialRequest.request_number}`,
+  }).catch(() => null);
+
+  revalidatePath(RFQ_PO_ROUTE);
+  redirect(`${RFQ_PO_ROUTE}?created=rfq`);
+}
+
 export async function addRfqItemAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   const parsed = rfqIdSchema.extend(itemSchema.shape).safeParse({
@@ -1233,6 +1368,18 @@ export async function convertRfqToPurchaseOrdersAction(formData: FormData) {
     .update({ status: "closed", closed_at: new Date().toISOString() })
     .eq("id", rfq.id);
 
+  // The requisition is complete once it has been converted into purchase
+  // orders, so close out the originating material request.
+  if (rfq.material_request_id) {
+    await (async () => {
+      await supabase
+        .from("material_requests")
+        .update({ status: "closed", closed_at: new Date().toISOString() })
+        .eq("id", rfq.material_request_id!)
+        .in("status", ["approved", "ordered"]);
+    })().catch(() => null);
+  }
+
   await recordOpsAuditEvent({
     action: "rfq.converted_to_purchase_orders",
     actorUserId: profile.id,
@@ -1269,6 +1416,7 @@ export async function convertRfqToPurchaseOrdersAction(formData: FormData) {
   );
 
   revalidatePath(RFQ_PO_ROUTE);
+  revalidatePath("/ops/material-requests");
   revalidatePath("/ops/notifications");
   redirect(`${RFQ_PO_ROUTE}?updated=rfq_converted`);
 }

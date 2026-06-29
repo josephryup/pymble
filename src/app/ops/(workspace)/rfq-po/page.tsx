@@ -31,6 +31,7 @@ import {
   cancelRfqAction,
   convertRfqToPurchaseOrdersAction,
   createRfqAction,
+  createRfqFromMaterialRequestAction,
   importRfqItemsAction,
   issuePurchaseOrderAction,
   submitPurchaseOrderForApprovalAction,
@@ -715,6 +716,11 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
   const rfqs = rfqPage.items;
   const canCreate = canCreateOpsRfq(auth.profile.role);
   const canManage = canManageOpsRfq(auth.profile.role);
+  // Only finance-approved requests can seed a brand-new requisition; ordered /
+  // closed ones have already been procured.
+  const approvableRequests = materialRequestOptions.filter(
+    (request) => request.status === "approved",
+  );
   const notice = rfqPoNotice(params);
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const pageEstimatedTotal = rfqs.reduce((sum, rfq) => sum + rfq.estimated_total, 0);
@@ -853,6 +859,54 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
           </div>
         </OpsDashboardPanel>
       </div>
+
+      {canCreate && approvableRequests.length > 0 ? (
+        <section className="rounded-lg border border-primary-blue/30 bg-primary-blue/[0.03] p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
+              <FilePlus2 className="size-5" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="font-heading text-lg font-bold text-primary-dark">
+                Procure an approved material request
+              </h2>
+              <p className="mt-1 text-sm text-primary-dark/60">
+                Pick a finance-approved request — its site, every line item, and its
+                prices are pulled in automatically. Then nominate a supplier per line
+                and convert it into purchase orders. The request closes on conversion.
+              </p>
+            </div>
+          </div>
+          <form
+            action={createRfqFromMaterialRequestAction}
+            className="grid gap-3 min-[520px]:grid-cols-[1fr_auto] min-[520px]:items-end"
+          >
+            <label className={OPS_LABEL_CLASS}>
+              Approved material request
+              <select
+                className={OPS_INPUT_CLASS}
+                defaultValue=""
+                name="material_request_id"
+                required
+              >
+                <option value="" disabled>
+                  Select an approved material request
+                </option>
+                {approvableRequests.map((request) => (
+                  <option key={request.id} value={request.id}>
+                    {request.request_number} - {request.title}
+                    {request.site ? ` / ${request.site.code}` : " / general"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+              <FilePlus2 className="size-4" aria-hidden="true" />
+              Build requisition
+            </button>
+          </form>
+        </section>
+      ) : null}
 
       {canCreate ? (
         <details
