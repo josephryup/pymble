@@ -88,6 +88,21 @@ test("non-default 7-hour standard day with 2x overtime multiplier", () => {
   assert.equal(result.totalAmount, 330);
 });
 
+test("full day pays the daily rate exactly even when the hourly rate is not exact", () => {
+  // 100 / 3 = 33.333... per hour. Rounding the hourly rate before multiplying
+  // would pay 3 * 33.33 = 99.99; the money math must use the full-precision rate
+  // so a full standard day always pays the daily rate exactly.
+  const result = computeAttendanceEarnings({
+    hoursWorked: 3,
+    dailyRate: 100,
+    standardDailyHours: 3,
+    overtimeMultiplier: 1.5,
+  });
+  assert.equal(result.regularAmount, 100);
+  assert.equal(result.totalAmount, 100);
+  assert.equal(result.hourlyRate, 33.33); // display value stays rounded
+});
+
 test("rounds to cents", () => {
   // Awkward rate K100/day, 8h standard → hourly K12.50
   // 9 hours = 8*12.5 + 1*12.5*1.5 = 100 + 18.75 = 118.75

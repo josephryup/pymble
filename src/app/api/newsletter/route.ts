@@ -31,7 +31,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ ok: true });
         }
 
-        if (!email || !isValidEmail(email)) {
+        if (!email || email.length > 320 || !isValidEmail(email)) {
             return NextResponse.json(
                 { error: "Please enter a valid email address." },
                 { status: 400 }

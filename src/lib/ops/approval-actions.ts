@@ -246,7 +246,7 @@ export async function decideOpsApprovalAction(formData: FormData) {
 
   const now = new Date().toISOString();
   const nextStepStatus = parsed.data.action === "approve" ? "approved" : "rejected";
-  const { error: updateStepError } = await supabase
+  const { data: decidedStep, error: updateStepError } = await supabase
     .from("approval_steps")
     .update({
       comments: parsed.data.comment,
@@ -255,10 +255,20 @@ export async function decideOpsApprovalAction(formData: FormData) {
       status: nextStepStatus,
     })
     .eq("id", step.id)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle<{ id: string }>();
 
   if (updateStepError) {
     approvalError(request.id, updateStepError.message);
+  }
+
+  // The `status = pending` guard above is atomic, but a 0-row update returns no
+  // error — so without this check a second concurrent approver would proceed to
+  // re-advance the request, re-notify, and re-audit a step that was already
+  // decided. Treat "no row updated" as "already decided".
+  if (!decidedStep) {
+    approvalError(request.id, "This approval step was already decided by someone else.");
   }
 
   if (parsed.data.comment) {

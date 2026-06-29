@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getOpsEnvironmentStatus, OPS_ENV_REQUIREMENTS } from "@/lib/ops/env";
+import { timingSafeEqualString } from "@/lib/ops/secure-compare";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isAuthorizedReadinessRequest(request: Request, cronSecret: string) {
-  return request.headers.get("authorization") === `Bearer ${cronSecret}`;
+  return timingSafeEqualString(request.headers.get("authorization") ?? "", `Bearer ${cronSecret}`);
 }
 
 export async function GET(request: Request) {

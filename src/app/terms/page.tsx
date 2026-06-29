@@ -145,7 +145,7 @@ export default function TermsPage() {
 
                             <TermsSection title="11. Contact">
                                 <p>For questions about these Terms, please contact:</p>
-                                <div className="mt-4 p-6 bg-neutral-50 border border-black/5 rounded-2xl space-y-1 text-sm not-prose">
+                                 <div className="mt-4 p-6 bg-neutral-50 border border-black/5 rounded-2xl space-y-1 text-sm not-prose">
                                     <p className="font-bold text-primary-dark">{COMPANY.legalName}</p>
                                     <p>{CONTACT.address.full}</p>
                                     <p>

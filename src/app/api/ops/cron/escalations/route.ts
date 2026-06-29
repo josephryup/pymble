@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runOpsScheduledEscalationSweep } from "@/lib/ops/escalations";
+import { timingSafeEqualString } from "@/lib/ops/secure-compare";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
     );
   }
 
-  if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  if (!timingSafeEqualString(request.headers.get("authorization") ?? "", `Bearer ${cronSecret}`)) {
     return NextResponse.json({ error: "Unauthorized", ok: false }, { status: 401 });
   }
 

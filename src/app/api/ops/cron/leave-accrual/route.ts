@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { logOpsServerError } from "@/lib/ops/log";
+import { timingSafeEqualString } from "@/lib/ops/secure-compare";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 /**
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
       { status: 503 },
     );
   }
-  if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  if (!timingSafeEqualString(request.headers.get("authorization") ?? "", `Bearer ${cronSecret}`)) {
     return NextResponse.json({ error: "Unauthorized", ok: false }, { status: 401 });
   }
 

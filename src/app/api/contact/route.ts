@@ -15,6 +15,21 @@ function getRequiredString(value: unknown) {
     return typeof value === "string" ? value.trim() : "";
 }
 
+function isValidEmail(value: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+// Bound every field so a malicious client can't push a multi-megabyte payload
+// into the outbound email. Keep the limits generous for legitimate enquiries.
+const FIELD_LIMITS: Record<string, number> = {
+    name: 200,
+    email: 320,
+    phone: 60,
+    projectType: 120,
+    company: 200,
+    message: 5000,
+};
+
 export async function POST(request: Request) {
     if (!isEmailConfigured()) {
         return NextResponse.json(
@@ -40,6 +55,23 @@ export async function POST(request: Request) {
         if (!name || !email || !message) {
             return NextResponse.json(
                 { error: "Name, email, and message are required." },
+                { status: 400 }
+            );
+        }
+
+        if (!isValidEmail(email)) {
+            return NextResponse.json(
+                { error: "Please enter a valid email address." },
+                { status: 400 }
+            );
+        }
+
+        const overLimit = Object.entries({ name, email, phone, projectType, company, message }).find(
+            ([key, value]) => value.length > (FIELD_LIMITS[key] ?? 1000)
+        );
+        if (overLimit) {
+            return NextResponse.json(
+                { error: "One of the fields is too long." },
                 { status: 400 }
             );
         }

@@ -83,11 +83,24 @@ function shouldApplyOpsSecurityHeaders(host: string, pathname: string) {
   );
 }
 
+function applyBaselineSecurityHeaders(response: NextResponse) {
+  // Applied to every response, including the public marketing site, so the
+  // whole origin gets clickjacking + MIME-sniffing + HSTS protection. The
+  // stricter ops-only headers (CSP, no-store, noindex) are layered on top.
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  return response;
+}
+
 function applyOpsSecurityHeaders(
   response: NextResponse,
   host: string,
   pathname: string,
 ) {
+  applyBaselineSecurityHeaders(response);
+
   if (!shouldApplyOpsSecurityHeaders(host, pathname)) {
     return response;
   }
@@ -95,10 +108,6 @@ function applyOpsSecurityHeaders(
   response.headers.set("Cache-Control", "no-store, max-age=0");
   response.headers.set("Content-Security-Policy", opsContentSecurityPolicy());
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Robots-Tag", "noindex, nofollow");
 
   return response;

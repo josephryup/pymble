@@ -15,7 +15,16 @@ const OPS_LOCAL_ROLE_PREVIEW_VALUES = new Set<OpsUserRole>(
 );
 
 export function isOpsLocalRolePreviewRuntime() {
-  return process.env.VERCEL !== "1" && !process.env.VERCEL_ENV;
+  // Require BOTH a non-production NODE_ENV AND the absence of Vercel's runtime
+  // markers. The positive NODE_ENV check is the important one: it guarantees a
+  // production build (next start) can never enable role impersonation + the
+  // RLS-bypassing service client, even if this app is ever ported off Vercel
+  // (self-host/Docker/etc.) where VERCEL/VERCEL_ENV are unset.
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.VERCEL !== "1" &&
+    !process.env.VERCEL_ENV
+  );
 }
 
 export function isOpsLocalRolePreviewHost(host: string | null | undefined) {

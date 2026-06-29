@@ -292,10 +292,12 @@ export async function createStaffPayrollRunAction(formData: FormData) {
   await supabase
     .from("staff_payroll_runs")
     .update({
-      total_basic: totalBasic,
-      total_gross: totalGross,
-      total_advances: totalAdvances,
-      total_net: totalNet,
+      // Round the accumulated totals so stored figures match the sum of the
+      // (already-rounded) line items exactly and don't carry float drift.
+      total_basic: Math.round(totalBasic * 100) / 100,
+      total_gross: Math.round(totalGross * 100) / 100,
+      total_advances: Math.round(totalAdvances * 100) / 100,
+      total_net: Math.round(totalNet * 100) / 100,
     })
     .eq("id", run.id);
 

@@ -51,7 +51,12 @@ export function computeAttendanceEarnings(
   const standardHours = Math.max(input.standardDailyHours, 0.01);
   const multiplier = Math.max(input.overtimeMultiplier, 1);
   const dailyRate = Math.max(input.dailyRate, 0);
-  const hourlyRate = roundCents(dailyRate / standardHours);
+  // Keep the full-precision rate for the money math and only expose a rounded
+  // value for display. Rounding the hourly rate *before* multiplying loses (or
+  // gains) cents whenever dailyRate / standardHours isn't exact — e.g.
+  // 100 / 3 = 33.33 -> a full 3h day would pay 99.99 instead of 100.
+  const exactHourlyRate = dailyRate / standardHours;
+  const hourlyRate = roundCents(exactHourlyRate);
 
   if (input.isAbsent || input.hoursWorked <= 0) {
     return {
@@ -66,8 +71,8 @@ export function computeAttendanceEarnings(
 
   const regularHours = Math.min(input.hoursWorked, standardHours);
   const overtimeHours = Math.max(input.hoursWorked - standardHours, 0);
-  const regularAmount = roundCents(regularHours * hourlyRate);
-  const overtimeAmount = roundCents(overtimeHours * hourlyRate * multiplier);
+  const regularAmount = roundCents(regularHours * exactHourlyRate);
+  const overtimeAmount = roundCents(overtimeHours * exactHourlyRate * multiplier);
   const totalAmount = roundCents(regularAmount + overtimeAmount);
 
   return {

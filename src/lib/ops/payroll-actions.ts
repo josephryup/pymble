@@ -170,6 +170,7 @@ export async function createPayrollRunAction(formData: FormData) {
     .from("cash_advances")
     .select("id, worker_id, amount")
     .is("deducted_in_run_id", null)
+    .is("archived_at", null)
     .in("worker_id", workerIds);
 
   if (advanceError) {
@@ -263,16 +264,35 @@ export async function createPayrollRunAction(formData: FormData) {
     payrollError(itemsError.message);
   }
 
-  const { error: attendanceUpdateError } = await supabase
+  const { data: claimedAttendance, error: attendanceUpdateError } = await supabase
     .from("attendance_records")
     .update({ payroll_run_id: createdRun.id })
+    .is("payroll_run_id", null)
     .in(
       "id",
       approvedRecords.map((record) => record.id),
-    );
+    )
+    .select("id");
 
   if (attendanceUpdateError) {
     payrollError(attendanceUpdateError.message);
+  }
+
+  if ((claimedAttendance?.length ?? 0) !== approvedRecords.length) {
+    // A concurrent (or double-submitted) payroll run claimed some of this
+    // attendance between our read and this write. Roll back the run we just
+    // created so the same attendance is never paid in two runs, then ask the
+    // operator to retry. The `payroll_run_id IS NULL` guard above guarantees we
+    // only ever claim still-unpaid rows, so releasing ours is safe.
+    await supabase
+      .from("attendance_records")
+      .update({ payroll_run_id: null })
+      .eq("payroll_run_id", createdRun.id);
+    await supabase.from("payroll_run_items").delete().eq("payroll_run_id", createdRun.id);
+    await supabase.from("payroll_runs").delete().eq("id", createdRun.id);
+    payrollError(
+      "Some attendance was already included in another payroll run. No changes were saved — please retry.",
+    );
   }
 
   if (openAdvances.length > 0) {
