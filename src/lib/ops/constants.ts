@@ -86,6 +86,11 @@ const OPS_MATERIAL_REQUEST_ROLES: OpsUserRole[] = [
   "engineer",
   "manager",
   "supervisor",
+  // HSE raise PPE / safety-equipment requisitions through the same flow, so the
+  // nav entry + page access must match canCreateOpsMaterialRequest, which
+  // already allows these roles.
+  "hse_officer",
+  "hse_assistant_officer",
 ];
 
 const OPS_SUPPLIER_ROLES: OpsUserRole[] = [

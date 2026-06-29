@@ -12,6 +12,7 @@ import {
   isOperationsManagerRole,
 } from "@/lib/ops/roles";
 import { getOpsApprovalsDepartmentsForRole } from "@/lib/ops/approvals-departments";
+import { canCreateOpsMaterialRequest } from "@/lib/ops/material-request-permissions";
 import type { OpsUserRole } from "@/lib/ops/types";
 
 /**
@@ -168,6 +169,34 @@ test("Department managers never see the 'all' tab on approvals", () => {
       false,
       `${role} (department manager) must NOT see the 'all' tab`,
     );
+  }
+});
+
+test("HSE can reach Material Requests to raise PPE requisitions", () => {
+  // HSE orders PPE / safety equipment through the material request flow, so the
+  // nav + page access must be granted, not just the create permission.
+  for (const role of ["hse_officer", "hse_assistant_officer"] as OpsUserRole[]) {
+    assert.equal(
+      canAccessOpsHref(role, "/ops/material-requests"),
+      true,
+      `${role} should be able to open Material Requests`,
+    );
+  }
+});
+
+test("Every material-request creator role can reach the page", () => {
+  // The bug that hid PPE requisitions from HSE: a role could create a material
+  // request (backend permission) but not open the page (nav/access list).
+  // Guard the invariant — create permission implies page access. (Viewers like
+  // engineering_manager may have access without create; that direction is fine.)
+  for (const role of [...LEADERSHIP, ...NON_LEADERSHIP_ROLES]) {
+    if (canCreateOpsMaterialRequest(role)) {
+      assert.equal(
+        canAccessOpsHref(role, "/ops/material-requests"),
+        true,
+        `${role} can create material requests but cannot open the page`,
+      );
+    }
   }
 });
 

@@ -132,11 +132,15 @@ describe("ops module visibility", () => {
     assert.equal(canAccessOpsHref("managing_director", "/ops/modules"), true);
   });
 
-  it("shows material requests to operational roles but hides it from unrelated roles", () => {
+  it("shows material requests to operational + HSE roles but hides it from unrelated roles", () => {
     assert.equal(canAccessOpsHref("engineer", "/ops/material-requests"), true);
     assert.equal(canAccessOpsHref("procurement_manager", "/ops/material-requests"), true);
+    // HSE raise PPE / safety-equipment requisitions through this flow.
+    assert.equal(canAccessOpsHref("hse_officer", "/ops/material-requests"), true);
+    assert.equal(canAccessOpsHref("hse_assistant_officer", "/ops/material-requests"), true);
+    // Finance/admin roles still have no material-request access.
     assert.equal(canAccessOpsHref("accountant", "/ops/material-requests"), false);
-    assert.equal(canAccessOpsHref("hse_officer", "/ops/material-requests"), false);
+    assert.equal(canAccessOpsHref("admin_receptionist", "/ops/material-requests"), false);
   });
 
   it("shows suppliers to procurement, finance, and delivery management roles", () => {
