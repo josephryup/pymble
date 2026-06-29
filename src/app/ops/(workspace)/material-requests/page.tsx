@@ -1032,6 +1032,19 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       >
                         Download PDF
                       </a>
+                      {request.status === "approved" ||
+                      request.status === "ordered" ||
+                      request.status === "closed" ? (
+                        <a
+                          className={OPS_PRIMARY_BUTTON_CLASS}
+                          href={`/api/ops/pdf/material-request-po/${request.id}`}
+                          target="_blank"
+                          rel="noopener"
+                        >
+                          <FileCheck2 className="size-4" aria-hidden="true" />
+                          Purchase Order PDF
+                        </a>
+                      ) : null}
                       {request.approval_request_id ? (
                         <Link
                           className={OPS_SECONDARY_BUTTON_CLASS}

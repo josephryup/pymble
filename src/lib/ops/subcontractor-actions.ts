@@ -36,7 +36,8 @@ function subError(message: string): never {
 }
 
 const subSchema = z.object({
-  company_name: z.string().trim().min(2, "Company name is required.").max(200),
+  kind: z.enum(["company", "general"]).default("company"),
+  company_name: z.string().trim().min(2, "Name is required.").max(200),
   trade_specialty: z.string().trim().max(200).default(""),
   contact_name: z.string().trim().max(200).default(""),
   contact_phone: z.string().trim().max(40).default(""),
@@ -72,6 +73,7 @@ export async function createSubcontractorAction(formData: FormData) {
     subError("Your role cannot manage subcontractors.");
   }
   const parsed = subSchema.safeParse({
+    kind: field(formData, "kind") || "company",
     company_name: field(formData, "company_name"),
     trade_specialty: field(formData, "trade_specialty"),
     contact_name: field(formData, "contact_name"),
@@ -110,7 +112,7 @@ export async function createSubcontractorAction(formData: FormData) {
     actorUserId: profile.id,
     entityId: data.id,
     entityType: "subcontractor",
-    metadata: { company_name: parsed.data.company_name },
+    metadata: { company_name: parsed.data.company_name, kind: parsed.data.kind },
     moduleKey: "subcontractors",
     sourceId: data.id,
     sourceTable: "subcontractors",
@@ -128,6 +130,7 @@ export async function updateSubcontractorAction(formData: FormData) {
   }
   const parsed = updateSubSchema.safeParse({
     id: field(formData, "id"),
+    kind: field(formData, "kind") || "company",
     company_name: field(formData, "company_name"),
     trade_specialty: field(formData, "trade_specialty"),
     contact_name: field(formData, "contact_name"),

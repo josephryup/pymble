@@ -2,6 +2,8 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import { logOpsServerError } from "@/lib/ops/log";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
+export type OpsSubcontractorKind = "company" | "general";
+
 export type OpsSubcontractorStatus =
   | "prospect"
   | "kyc_pending"
@@ -29,6 +31,7 @@ export type OpsSubcontractorPaymentStatus =
 
 export type OpsSubcontractor = {
   id: string;
+  kind: OpsSubcontractorKind;
   company_name: string;
   trade_specialty: string;
   contact_name: string;
@@ -89,7 +92,7 @@ function pickRel<T>(value: T | T[] | null): T | null {
 }
 
 const SUB_SELECT =
-  "id, company_name, trade_specialty, contact_name, contact_phone, contact_email, tpin, registration_number, bank_name, bank_account_number, status, kyc_notes, performance_rating, performance_notes, retention_percent, created_at, updated_at, archived_at";
+  "id, kind, company_name, trade_specialty, contact_name, contact_phone, contact_email, tpin, registration_number, bank_name, bank_account_number, status, kyc_notes, performance_rating, performance_notes, retention_percent, created_at, updated_at, archived_at";
 
 const ASSIGNMENT_SELECT = [
   "id",

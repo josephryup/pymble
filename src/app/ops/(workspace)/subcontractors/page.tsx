@@ -54,7 +54,7 @@ export default async function OpsSubcontractorsPage({ searchParams }: PageProps)
       <OpsPageHeader
         eyebrow="Subcontractors"
         title="Subcontractor register"
-        description="Onboard subcontractor companies, capture KYC details, allocate them to project tasks, and track interim and retention payments."
+        description="Onboard subcontractor companies and general (individual) subcontractors, capture KYC details, allocate them to project tasks, and track interim and retention payments."
       />
 
       {error ? (
@@ -78,9 +78,21 @@ export default async function OpsSubcontractorsPage({ searchParams }: PageProps)
             action={createSubcontractorAction}
             className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-3"
           >
+            <label className={OPS_LABEL_CLASS}>
+              Type
+              <select className={OPS_INPUT_CLASS} defaultValue="company" name="kind">
+                <option value="company">Company</option>
+                <option value="general">General (individual)</option>
+              </select>
+            </label>
             <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
-              Company name
-              <input className={OPS_INPUT_CLASS} name="company_name" required />
+              Name
+              <input
+                className={OPS_INPUT_CLASS}
+                name="company_name"
+                placeholder="Company or individual name"
+                required
+              />
             </label>
             <label className={OPS_LABEL_CLASS}>
               Trade specialty
@@ -173,6 +185,11 @@ export default async function OpsSubcontractorsPage({ searchParams }: PageProps)
               >
                 {sub.status.replace("_", " ")}
               </span>
+              {sub.kind === "general" ? (
+                <span className="mt-2 ml-2 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-indigo-700">
+                  Individual
+                </span>
+              ) : null}
               <p className="mt-2 text-xs text-primary-dark/55">
                 Retention {sub.retention_percent}% · {sub.contact_name || "no contact"}
               </p>

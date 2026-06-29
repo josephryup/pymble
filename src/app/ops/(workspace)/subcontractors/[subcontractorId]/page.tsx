@@ -81,9 +81,9 @@ export default async function OpsSubcontractorDetailPage({
         tables={["subcontractors", "subcontractor_assignments", "subcontractor_payments"]}
       />
       <OpsPageHeader
-        eyebrow={sub.trade_specialty || "Subcontractor"}
+        eyebrow={sub.kind === "general" ? "Individual subcontractor" : sub.trade_specialty || "Subcontractor"}
         title={sub.company_name}
-        description={`Status: ${sub.status.replace("_", " ")} · Retention ${sub.retention_percent}%`}
+        description={`${sub.kind === "general" ? "General (individual)" : "Company"} · Status: ${sub.status.replace("_", " ")} · Retention ${sub.retention_percent}%`}
         actions={
           <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/subcontractors">
             All subcontractors
@@ -120,12 +120,20 @@ export default async function OpsSubcontractorDetailPage({
             className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-3"
           >
             <input name="id" type="hidden" value={sub.id} />
+            <label className={OPS_LABEL_CLASS}>
+              Type
+              <select className={OPS_INPUT_CLASS} defaultValue={sub.kind} name="kind">
+                <option value="company">Company</option>
+                <option value="general">General (individual)</option>
+              </select>
+            </label>
             <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
-              Company name
+              Name
               <input
                 className={OPS_INPUT_CLASS}
                 defaultValue={sub.company_name}
                 name="company_name"
+                placeholder="Company or individual name"
                 required
               />
             </label>
