@@ -11,6 +11,7 @@ import {
   canOverrideApprovalDecision,
   canViewSensitiveOpsFoundation,
 } from "@/lib/ops/permissions";
+import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { formatOpsRole } from "@/lib/ops/roles";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
@@ -282,17 +283,24 @@ export async function decideOpsApprovalAction(formData: FormData) {
   let nextRequestStatus: OpsApprovalStatus = "rejected";
   let nextCurrentStep = step.step_number;
   let resolvedAt: string | null = now;
+  let nextPendingApprover:
+    | { approver_role: OpsUserRole; approver_user_id: string | null; step_number: number }
+    | null = null;
 
   if (parsed.data.action === "approve") {
     const { data: nextPendingStep, error: nextStepError } = await supabase
       .from("approval_steps")
-      .select("step_number")
+      .select("step_number, approver_role, approver_user_id")
       .eq("approval_request_id", request.id)
       .eq("status", "pending")
       .order("step_number", { ascending: true })
       .order("approver_sequence", { ascending: true })
       .limit(1)
-      .maybeSingle<{ step_number: number }>();
+      .maybeSingle<{
+        step_number: number;
+        approver_role: OpsUserRole;
+        approver_user_id: string | null;
+      }>();
 
     if (nextStepError) {
       approvalError(request.id, nextStepError.message);
@@ -302,6 +310,7 @@ export async function decideOpsApprovalAction(formData: FormData) {
       nextRequestStatus = "in_review";
       nextCurrentStep = nextPendingStep.step_number;
       resolvedAt = null;
+      nextPendingApprover = nextPendingStep;
     } else {
       nextRequestStatus = "approved";
     }
@@ -374,6 +383,36 @@ export async function decideOpsApprovalAction(formData: FormData) {
         ? `Rejected: ${request.title}`
         : `Approved: ${request.title}`,
     }).catch(() => null);
+  }
+
+  // When the chain advances to another pending step, tell that step's approver
+  // it now needs their decision. A specifically-assigned approver is notified
+  // directly; otherwise the step's role is resolved via the workflow fallback
+  // chain so an unfilled seat doesn't drop the alert.
+  if (parsed.data.action === "approve" && nextPendingApprover) {
+    const pending = nextPendingApprover;
+    const recipientIds = pending.approver_user_id
+      ? [pending.approver_user_id]
+      : (
+          await fanoutToOpsRoles([pending.approver_role], {
+            excludeUserIds: [profile.id],
+          })
+        ).map((user) => user.id);
+
+    await Promise.all(
+      recipientIds.map((recipientId) =>
+        queueOpsNotification({
+          actionHref: `/ops/approvals/${request.id}`,
+          body: `${request.title} now needs your approval.`,
+          idempotencyKey: `approval-step-pending:${request.id}:${pending.step_number}:${recipientId}`,
+          moduleKey: request.module_key,
+          recipientId,
+          sourceId: request.id,
+          sourceTable: "approval_requests",
+          title: `Approval needed: ${request.title}`,
+        }).catch(() => null),
+      ),
+    );
   }
 
   revalidatePath("/ops/approvals");
