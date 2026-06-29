@@ -1,5 +1,7 @@
 import { OpsAutoRefresh } from "@/components/ops/OpsAutoRefresh";
 import { OpsFormSubmitGuard } from "@/components/ops/OpsFormSubmitGuard";
+import { OpsNotificationDock } from "@/components/ops/OpsNotificationDock";
+import { OpsNotificationToaster } from "@/components/ops/OpsNotificationToaster";
 import { OpsServiceWorker } from "@/components/ops/OpsServiceWorker";
 import { OpsSessionTimeout } from "@/components/ops/OpsSessionTimeout";
 import { OpsShell } from "@/components/ops/OpsShell";
@@ -38,6 +40,8 @@ export default async function OpsWorkspaceLayout({
         <>
           <OpsAutoRefresh userId={profile.id} />
           <OpsSessionTimeout role={profile.role} />
+          <OpsNotificationToaster userId={profile.id} />
+          <OpsNotificationDock />
         </>
       )}
       {children}

@@ -3,10 +3,13 @@ import { canViewSensitiveOpsFoundation } from "@/lib/ops/permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsNotificationStatus } from "@/lib/ops/types";
 
+export type OpsNotificationCategory = "action" | "info";
+
 export type OpsNotification = {
   action_href: string | null;
   archived_at: string | null;
   body: string;
+  category: OpsNotificationCategory;
   created_at: string;
   id: string;
   module_key: string;
@@ -18,6 +21,16 @@ export type OpsNotification = {
   title: string;
 };
 
+// Action = the recipient must do something (decide an approval, deal with a
+// rejected or overdue item). Everything else is FYI. Derived centrally so every
+// producer is categorised consistently; a call site may override via `category`.
+const ACTION_NOTIFICATION_TITLE =
+  /\bapproval\b|rejected:|overdue|escalation|requires your|awaiting your|action needed/i;
+
+export function deriveOpsNotificationCategory(title: string): OpsNotificationCategory {
+  return ACTION_NOTIFICATION_TITLE.test(title) ? "action" : "info";
+}
+
 export type FetchOpsNotificationsOptions = {
   limit?: number;
   recipientId?: string;
@@ -27,6 +40,7 @@ export type FetchOpsNotificationsOptions = {
 export type QueueOpsNotificationInput = {
   actionHref?: string | null;
   body?: string;
+  category?: OpsNotificationCategory;
   idempotencyKey?: string | null;
   moduleKey?: string;
   recipientId: string;
@@ -75,7 +89,7 @@ export async function fetchOpsNotifications(options: FetchOpsNotificationsOption
   let query = supabase
     .from("notifications")
     .select(
-      "id, recipient_id, module_key, source_table, source_id, title, body, status, action_href, read_at, archived_at, created_at",
+      "id, recipient_id, module_key, source_table, source_id, title, body, category, status, action_href, read_at, archived_at, created_at",
     )
     .eq("recipient_id", recipientId)
     .order("created_at", { ascending: false })
@@ -174,6 +188,7 @@ export async function queueOpsNotification(input: QueueOpsNotificationInput) {
     {
       action_href: input.actionHref ?? null,
       body: input.body ?? "",
+      category: input.category ?? deriveOpsNotificationCategory(input.title),
       idempotency_key: input.idempotencyKey ?? null,
       module_key: input.moduleKey ?? "ops",
       recipient_id: input.recipientId,
