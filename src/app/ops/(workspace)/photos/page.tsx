@@ -1,12 +1,15 @@
-import { Camera, ExternalLink, Plus } from "lucide-react";
+import { Camera, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { notFound } from "next/navigation";
-import { uploadSitePhotoAction } from "@/lib/ops/photo-actions";
+import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { deleteSitePhotoAction, uploadSitePhotoAction } from "@/lib/ops/photo-actions";
 import { fetchOpsSitePhotos, type OpsSitePhoto } from "@/lib/ops/photos";
 import { requireOpsUser } from "@/lib/ops/auth";
-import { canAccessOpsHref, canRecordAttendance } from "@/lib/ops/permissions";
+import { canAccessOpsHref, canManageSites, canRecordAttendance } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import {
+  firstParam,
   noticeFromParams,
+  OPS_DANGER_BUTTON_CLASS,
   OPS_FOCUS_CLASS,
   OPS_INPUT_CLASS,
   OPS_LABEL_CLASS,
@@ -39,7 +42,10 @@ function formatDateTime(value: string) {
 }
 
 export default async function OpsPhotosPage({ searchParams }: PageProps) {
-  const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({}), requireOpsUser()]);
+  const [params, auth] = await Promise.all([
+    searchParams ?? Promise.resolve({} as OpsSearchParams),
+    requireOpsUser(),
+  ]);
 
   if (!canAccessOpsHref(auth.profile.role, "/ops/photos")) {
     notFound();
@@ -50,7 +56,12 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
     fetchActiveSiteOptions(),
   ]);
   const canUpload = canRecordAttendance(auth.profile.role);
-  const notice = noticeFromParams(params, "photo", "Photo uploaded successfully.");
+  const canManagePhotos = canManageSites(auth.profile.role);
+  const notice =
+    noticeFromParams(params, "photo", "Photo uploaded successfully.") ??
+    (firstParam(params.deleted) === "photo"
+      ? { tone: "success" as const, message: "Photo deleted." }
+      : null);
   const safetyCount = photos.filter((photo) => photo.tag === "safety").length;
   const deliveryCount = photos.filter((photo) => photo.tag === "delivery").length;
 
@@ -227,6 +238,18 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
                     Open photo
                     <ExternalLink className="size-4" aria-hidden="true" />
                   </a>
+                  {photo.uploaded_by === auth.profile.id || canManagePhotos ? (
+                    <form action={deleteSitePhotoAction} className="mt-3">
+                      <input name="id" type="hidden" value={photo.id} />
+                      <OpsConfirmSubmitButton
+                        className={OPS_DANGER_BUTTON_CLASS}
+                        confirmText="Confirm delete"
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                        Delete photo
+                      </OpsConfirmSubmitButton>
+                    </form>
+                  ) : null}
                 </div>
               </article>
             ))}

@@ -17,6 +17,7 @@ export type OpsSitePhoto = {
   mime_type: string;
   taken_at: string;
   created_at: string;
+  uploaded_by: string | null;
   site: OpsPhotoSite | null;
   signed_url: string;
 };
@@ -45,6 +46,7 @@ export async function fetchOpsSitePhotos() {
         mime_type,
         taken_at,
         created_at,
+        uploaded_by,
         site:sites!site_photos_site_id_fkey(id, code, name)
       `,
     )
