@@ -51,6 +51,7 @@ const siteCoreSchema = z.object({
   location: z.string().trim().min(2, "Location is required.").max(180),
   supervisor_name: z.string().trim().max(120).default(""),
   client_name: z.string().trim().max(140).default(""),
+  contract_value: z.coerce.number().min(0, "Contract value cannot be negative.").default(0),
   budget_zmw: z.coerce.number().min(0, "Budget cannot be negative.").default(0),
   actual_budget_zmw: z.coerce
     .number()
@@ -103,6 +104,7 @@ function parseSiteForm(formData: FormData) {
     location: field(formData, "location"),
     supervisor_name: field(formData, "supervisor_name"),
     client_name: field(formData, "client_name"),
+    contract_value: field(formData, "contract_value"),
     budget_zmw: field(formData, "budget_zmw"),
     actual_budget_zmw: field(formData, "actual_budget_zmw"),
     latitude,
@@ -130,6 +132,7 @@ export async function createSiteAction(formData: FormData) {
   // column keeps its default of 0.
   if (!canViewSiteBudget(profile.role)) {
     data.budget_zmw = 0;
+    data.contract_value = 0;
   }
   if (!canViewSiteActualBudget(profile.role)) {
     data.actual_budget_zmw = 0;
@@ -227,6 +230,7 @@ export async function updateSiteAction(formData: FormData) {
   // stored value to the coerced default of 0.
   if (!canViewSiteBudget(profile.role)) {
     delete patch.budget_zmw;
+    delete patch.contract_value;
   }
   if (!canViewSiteActualBudget(profile.role)) {
     delete patch.actual_budget_zmw;

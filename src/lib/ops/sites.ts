@@ -15,8 +15,10 @@ export type OpsSite = {
   location: string;
   supervisor_name: string;
   client_name: string;
-  // Budget figures are commercially sensitive — the data layer returns null for
-  // roles that may not see them (see canViewSiteBudget / canViewSiteActualBudget).
+  // Budget + contract figures are commercially sensitive — the data layer
+  // returns null for roles that may not see them (see canViewSiteBudget /
+  // canViewSiteActualBudget). contract_value is the agreed client contract sum.
+  contract_value: number | null;
   budget_zmw: number | null;
   actual_budget_zmw: number | null;
   latitude: number | null;
@@ -59,7 +61,7 @@ async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?:
   let query = supabase
     .from("sites")
     .select(
-      "id, code, name, location, supervisor_name, client_name, budget_zmw, actual_budget_zmw, latitude, longitude, status, stage, progress_percent, is_active, created_at",
+      "id, code, name, location, supervisor_name, client_name, contract_value, budget_zmw, actual_budget_zmw, latitude, longitude, status, stage, progress_percent, is_active, created_at",
       listState ? { count: "exact" } : undefined,
     )
     .eq("is_active", true)
@@ -90,8 +92,9 @@ async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?:
     (data ?? []) as Array<
       Omit<
         OpsSite,
-        "budget_zmw" | "actual_budget_zmw" | "latitude" | "longitude" | "progress_percent"
+        "contract_value" | "budget_zmw" | "actual_budget_zmw" | "latitude" | "longitude" | "progress_percent"
       > & {
+        contract_value: number | string;
         budget_zmw: number | string;
         actual_budget_zmw: number | string;
         latitude: number | string | null;
@@ -101,8 +104,9 @@ async function fetchOpsSiteItems(options: FetchOpsSitesOptions = {}, listState?:
     >
   ).map((site) => ({
     ...site,
-    // Strip sensitive budget figures for roles that may not see them, so the
-    // numbers never reach the client payload.
+    // Strip sensitive budget / contract figures for roles that may not see
+    // them, so the numbers never reach the client payload.
+    contract_value: showBudget ? normalizeMoney(site.contract_value) : null,
     budget_zmw: showBudget ? normalizeMoney(site.budget_zmw) : null,
     actual_budget_zmw: showActualBudget ? normalizeMoney(site.actual_budget_zmw) : null,
     latitude: normalizeCoordinate(site.latitude),

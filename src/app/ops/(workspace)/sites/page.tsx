@@ -203,6 +203,19 @@ function SiteFields({
       </label>
       {canSeeBudget ? (
         <label className={OPS_LABEL_CLASS}>
+          Contract value ZMW
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={site?.contract_value != null ? String(site.contract_value) : ""}
+            min="0"
+            name="contract_value"
+            step="0.01"
+            type="number"
+          />
+        </label>
+      ) : null}
+      {canSeeBudget ? (
+        <label className={OPS_LABEL_CLASS}>
           Planned budget ZMW
           <input
             className={OPS_INPUT_CLASS}
@@ -330,6 +343,7 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
   const canSeeBudget = canViewSiteBudget(auth.profile.role);
   const canSeeActualBudget = canViewSiteActualBudget(auth.profile.role);
   const notice = siteNotice(params);
+  const totalContractValue = sites.reduce((sum, site) => sum + (site.contract_value ?? 0), 0);
   const totalBudget = sites.reduce((sum, site) => sum + (site.budget_zmw ?? 0), 0);
   const totalActualBudget = sites.reduce((sum, site) => sum + (site.actual_budget_zmw ?? 0), 0);
   const avgCompletion =
@@ -370,6 +384,16 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                 {avgCompletion}%
               </p>
             </div>
+            {canSeeBudget ? (
+              <div className="rounded-md border border-primary-dark/10 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+                  Contract value
+                </p>
+                <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+                  {formatZmw(totalContractValue)}
+                </p>
+              </div>
+            ) : null}
             {canSeeBudget ? (
               <div className="rounded-md border border-primary-dark/10 px-4 py-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
@@ -488,6 +512,11 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                       : "Coordinates not set"}
                   </OpsMobileRecordRow>
                   {canSeeBudget ? (
+                    <OpsMobileRecordRow label="Contract value">
+                      {formatZmw(site.contract_value ?? 0)}
+                    </OpsMobileRecordRow>
+                  ) : null}
+                  {canSeeBudget ? (
                     <OpsMobileRecordRow label="Planned budget">
                       {formatZmw(site.budget_zmw ?? 0)}
                     </OpsMobileRecordRow>
@@ -541,6 +570,11 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                     </th>
                     {canSeeBudget ? (
                       <th className="px-5 py-3" scope="col">
+                        Contract value
+                      </th>
+                    ) : null}
+                    {canSeeBudget ? (
+                      <th className="px-5 py-3" scope="col">
                         Planned budget
                       </th>
                     ) : null}
@@ -587,6 +621,11 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                       <td className="px-5 py-4 text-primary-dark/70">
                         {site.supervisor_name || "Supervisor not assigned"}
                       </td>
+                      {canSeeBudget ? (
+                        <td className="px-5 py-4 font-semibold text-primary-dark">
+                          {formatZmw(site.contract_value ?? 0)}
+                        </td>
+                      ) : null}
                       {canSeeBudget ? (
                         <td className="px-5 py-4 font-semibold text-primary-dark">
                           {formatZmw(site.budget_zmw ?? 0)}
