@@ -4,6 +4,10 @@ import { Bell, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getOpsSupabaseBrowserClient } from "@/lib/ops/supabase-browser";
+import {
+  playOpsNotificationChime,
+  primeOpsNotificationSound,
+} from "@/lib/ops/notification-sound";
 
 type Toast = {
   key: number;
@@ -43,6 +47,7 @@ export function OpsNotificationToaster({ userId }: { userId: string }) {
     if (!supabase) return;
 
     const timersAtMount = timers.current;
+    const cleanupSound = primeOpsNotificationSound();
     const channel = supabase
       .channel(`ops-notification-toaster:${userId}`)
       .on(
@@ -72,6 +77,7 @@ export function OpsNotificationToaster({ userId }: { userId: string }) {
           };
 
           setToasts((prev) => [toast, ...prev].slice(0, MAX_TOASTS));
+          playOpsNotificationChime();
           const timer = setTimeout(() => {
             setToasts((prev) => prev.filter((item) => item.key !== key));
             timersAtMount.delete(key);
@@ -82,6 +88,7 @@ export function OpsNotificationToaster({ userId }: { userId: string }) {
       .subscribe();
 
     return () => {
+      cleanupSound();
       timersAtMount.forEach((timer) => clearTimeout(timer));
       timersAtMount.clear();
       supabase.removeChannel(channel).catch(() => null);

@@ -823,32 +823,52 @@ export async function attachMaterialRequestPricingAction(formData: FormData) {
   }
 
   // Apply updates serially (small N — at most a few line items per request).
-  // The trigger keeps actual_total = actual_unit_cost * quantity automatically.
+  // Attaching the supplier price REPLACES the engineer estimate on that line, so
+  // the request total, the line "Estimate" column, the finance cost approval, and
+  // any downstream PO all reflect the real price rather than the original guess.
+  // (estimated_total is a generated column — quantity * estimated_unit_cost — so
+  // it follows estimated_unit_cost; the trigger keeps actual_total in step too.)
   for (const update of updates) {
     const { error: updErr } = await supabase
       .from("material_request_items")
-      .update({ actual_unit_cost: update.actual_unit_cost })
+      .update({
+        actual_unit_cost: update.actual_unit_cost,
+        estimated_unit_cost: update.actual_unit_cost,
+      })
       .eq("id", update.item_id);
     if (updErr) {
       materialRequestError(updErr.message);
     }
   }
 
-  // Re-read line totals to compute the priced total for the notification body.
+  // Re-read line totals. `pricedTotal` (actual) drives the finance notification;
+  // `estimatedTotal` is the new header total — summing every line's estimate so
+  // a partial price save still keeps un-priced lines on their original estimate.
   const { data: pricedRows } = await supabase
     .from("material_request_items")
-    .select("actual_total")
+    .select("estimated_total, actual_total")
     .eq("request_id", request.id);
-  const pricedTotal = ((pricedRows ?? []) as Array<{ actual_total: number | string }>).reduce(
-    (sum, row) => sum + normalizeMoney(row.actual_total),
+  const lineTotals = (pricedRows ?? []) as Array<{
+    estimated_total: number | string;
+    actual_total: number | string;
+  }>;
+  const pricedTotal = lineTotals.reduce((sum, row) => sum + normalizeMoney(row.actual_total), 0);
+  const estimatedTotal = lineTotals.reduce(
+    (sum, row) => sum + normalizeMoney(row.estimated_total),
     0,
   );
 
-  // Move the request to `priced` so Finance can approve the cost.
+  // Move the request to `priced` so Finance can approve the cost, and refresh the
+  // header estimate so every view of this request shows the attached prices.
   const nowIso = new Date().toISOString();
   const { error: stateError } = await supabase
     .from("material_requests")
-    .update({ status: "priced", priced_at: nowIso, priced_by: profile.id })
+    .update({
+      status: "priced",
+      priced_at: nowIso,
+      priced_by: profile.id,
+      estimated_total: estimatedTotal,
+    })
     .eq("id", request.id);
   if (stateError) {
     materialRequestError(stateError.message);
