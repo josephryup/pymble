@@ -7,6 +7,9 @@ import {
   ExternalLink,
   FilePlus2,
   Search,
+  ShieldPlus,
+  BadgeDollarSign,
+  ClipboardCheck,
 } from "lucide-react";
 import { OpsCommandPalette } from "@/components/ops/OpsCommandPalette";
 import { Badge } from "@/components/ui/badge";
@@ -21,12 +24,13 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { OpsReadyModule } from "@/lib/ops/types";
+import type { OpsReadyModule, OpsUserRole } from "@/lib/ops/types";
 
 type OpsTopUtilityBarProps = {
   currentTitle: string;
   modules: OpsReadyModule[];
   unreadNotifications?: number;
+  profileRole?: OpsUserRole;
 };
 
 const SEARCHABLE_WORKSPACE_PATHS = [
@@ -70,9 +74,24 @@ export function OpsTopUtilityBar({
   currentTitle,
   modules,
   unreadNotifications = 0,
+  profileRole,
 }: OpsTopUtilityBarProps) {
   const pathname = usePathname();
   const canSearchCurrentPage = supportsSearch(pathname);
+
+  const roleActions: Record<string, { href: string; label: string; icon: any }> = {
+    hse: { href: "/ops/hse", label: "Log incident", icon: ShieldPlus },
+    commercial: { href: "/ops/invoices?create=invoice#invoice-create-panel", label: "Create invoice", icon: FilePlus2 },
+    finance: { href: "/ops/payment-requests", label: "Payment queue", icon: BadgeDollarSign },
+    executive: { href: "/ops/approvals", label: "Approvals", icon: ClipboardCheck },
+  };
+
+  const action = (profileRole && roleActions[profileRole]) || {
+    href: "/ops/material-requests",
+    label: "New request",
+    icon: FilePlus2,
+  };
+  const ActionIcon = action.icon;
 
   return (
     <header className="hidden border-b border-border bg-background/95 px-5 py-3 backdrop-blur lg:block">
@@ -123,10 +142,10 @@ export function OpsTopUtilityBar({
 
           <Link
             className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-10")}
-            href="/ops/material-requests"
+            href={action.href}
           >
-            <FilePlus2 className="size-4" aria-hidden="true" />
-            New request
+            <ActionIcon className="size-4" aria-hidden="true" />
+            {action.label}
           </Link>
 
           <Link

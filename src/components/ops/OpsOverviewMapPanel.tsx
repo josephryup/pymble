@@ -30,7 +30,7 @@ const OpsSiteMap = dynamic<OpsSiteMapProps>(
         className="flex min-h-96 flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground"
         role="status"
       >
-        <span className="flex size-16 items-center justify-center rounded-lg border border-primary-dark/10">
+        <span className="flex size-16 items-center justify-center rounded-lg border border-border">
           <OpsBrandMark decorative className="h-12 w-12" sizes="48px" />
         </span>
         <span>Loading Pymble site map...</span>

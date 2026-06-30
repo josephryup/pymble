@@ -22,8 +22,8 @@ export function OpsLocalRolePreviewPanel({
       aria-labelledby={compact ? "ops-preview-banner-title" : "ops-preview-login-title"}
       className={
         compact
-          ? "rounded-xl border-amber-200 bg-amber-50 p-3 text-primary-dark"
-          : "mt-5 rounded-xl border-amber-200 bg-amber-50 p-4 text-primary-dark"
+          ? "rounded-xl border-amber-200 bg-amber-50 p-3 text-foreground"
+          : "mt-5 rounded-xl border-amber-200 bg-amber-50 p-4 text-foreground"
       }
     >
       <div className={compact ? "grid gap-3 xl:grid-cols-[1fr_auto]" : "grid gap-3"}>
@@ -34,7 +34,7 @@ export function OpsLocalRolePreviewPanel({
           >
             Local role preview
           </p>
-          <p className="mt-1 text-sm leading-6 text-primary-dark/70">
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
             {activeRole
               ? `Viewing the workspace as ${formatOpsRole(activeRole)}. Preview mode is read-only.`
               : "Use a temporary local-only role view without creating Supabase accounts."}
@@ -44,10 +44,10 @@ export function OpsLocalRolePreviewPanel({
         <div className={compact ? "flex flex-wrap items-end gap-2" : "grid gap-2"}>
           <form action="/api/ops/dev-preview" className="flex flex-wrap items-end gap-2" method="post">
             <input name="action" type="hidden" value="start" />
-            <Label className="grid min-w-[13rem] flex-1 gap-1 text-xs font-bold text-primary-dark/70">
+            <Label className="grid min-w-[13rem] flex-1 gap-1 text-xs font-bold text-muted-foreground">
               <span>Preview role</span>
               <select
-                className={`${OPS_INPUT_CLASS} min-h-10 bg-white text-sm`}
+                className={`${OPS_INPUT_CLASS} min-h-10 bg-background text-sm`}
                 defaultValue={activeRole ?? "developer"}
                 name="role"
               >

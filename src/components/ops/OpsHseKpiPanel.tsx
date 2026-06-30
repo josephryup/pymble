@@ -1,22 +1,23 @@
 import { AlertOctagon, Award, GraduationCap, HardHat, ShieldCheck } from "lucide-react";
 import type { OpsHseComplianceSummary, OpsLtifrSummary } from "@/lib/ops/hse-kpis";
+import { OPS_EYEBROW_CLASS } from "@/lib/ops/ui";
 
 function pctClass(value: number | null, goodThreshold: number, warnThreshold: number) {
-  if (value === null) return "text-primary-dark/45";
+  if (value === null) return "text-muted-foreground";
   if (value >= goodThreshold) return "text-emerald-700";
   if (value >= warnThreshold) return "text-amber-700";
   return "text-red-700";
 }
 
 function rateClass(value: number | null, lowGood: number, highWarn: number) {
-  if (value === null) return "text-primary-dark/45";
+  if (value === null) return "text-muted-foreground";
   if (value <= lowGood) return "text-emerald-700";
   if (value <= highWarn) return "text-amber-700";
   return "text-red-700";
 }
 
 function scoreClass(value: number | null) {
-  if (value === null) return "text-primary-dark/45";
+  if (value === null) return "text-muted-foreground";
   if (value >= 80) return "text-emerald-700";
   if (value >= 60) return "text-amber-700";
   return "text-red-700";
@@ -30,16 +31,16 @@ export function OpsHseKpiPanel({
   ltifr: OpsLtifrSummary;
 }) {
   return (
-    <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+    <section className="rounded-lg border border-border border-l-4 border-l-emerald-500 bg-card p-5">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+          <p className={OPS_EYEBROW_CLASS}>
             HSE KPIs
           </p>
-          <h2 className="mt-1 font-heading text-xl font-bold text-primary-dark">
+          <h2 className="mt-1 font-heading text-xl font-bold text-foreground">
             Safety performance — last {ltifr.windowDays} days
           </h2>
-          <p className="mt-1 text-sm text-primary-dark/60">
+          <p className="mt-1 text-sm text-muted-foreground">
             Lost-time injury rate, Personal Protective Equipment compliance, audit/inspection scores, and training currency.
           </p>
         </div>
@@ -49,47 +50,47 @@ export function OpsHseKpiPanel({
       </header>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <article className="rounded-md border border-primary-dark/10 p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <article className="rounded-md border border-border p-4">
+          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
             LTIFR
             <AlertOctagon className="size-3.5 text-red-600" aria-hidden="true" />
           </p>
           <p className={`mt-1 font-heading text-2xl font-bold ${rateClass(ltifr.ltifr, 5, 15)}`}>
             {ltifr.ltifr !== null ? ltifr.ltifr.toLocaleString("en-ZM") : "—"}
           </p>
-          <p className="mt-1 text-xs text-primary-dark/60">
+          <p className="mt-1 text-xs text-muted-foreground">
             {ltifr.lostTimeIncidents} LTI · {ltifr.hoursWorked.toLocaleString("en-ZM")} hrs worked
           </p>
         </article>
 
-        <article className="rounded-md border border-primary-dark/10 p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <article className="rounded-md border border-border p-4">
+          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
             TRIFR (all recordable)
             <AlertOctagon className="size-3.5 text-amber-600" aria-hidden="true" />
           </p>
           <p className={`mt-1 font-heading text-2xl font-bold ${rateClass(ltifr.trifr, 10, 30)}`}>
             {ltifr.trifr !== null ? ltifr.trifr.toLocaleString("en-ZM") : "—"}
           </p>
-          <p className="mt-1 text-xs text-primary-dark/60">
+          <p className="mt-1 text-xs text-muted-foreground">
             {ltifr.totalRecordable} recordable · {ltifr.totalNearMisses} near-misses
           </p>
         </article>
 
-        <article className="rounded-md border border-primary-dark/10 p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <article className="rounded-md border border-border p-4">
+          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Personal Protective Equipment compliance
             <HardHat className="size-3.5 text-primary-blue" aria-hidden="true" />
           </p>
           <p className={`mt-1 font-heading text-2xl font-bold ${pctClass(compliance.ppeCompliancePct, 90, 70)}`}>
             {compliance.ppeCompliancePct !== null ? `${compliance.ppeCompliancePct}%` : "—"}
           </p>
-          <p className="mt-1 text-xs text-primary-dark/60">
+          <p className="mt-1 text-xs text-muted-foreground">
             {compliance.ppeIssued} of {compliance.activeEmployees} active employees with PPE issued
           </p>
         </article>
 
-        <article className="rounded-md border border-primary-dark/10 p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <article className="rounded-md border border-border p-4">
+          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Inspection avg score
             <ShieldCheck className="size-3.5 text-primary-blue" aria-hidden="true" />
           </p>
@@ -98,27 +99,27 @@ export function OpsHseKpiPanel({
               ? `${compliance.inspectionsAvgScore}/100`
               : "—"}
           </p>
-          <p className="mt-1 text-xs text-primary-dark/60">
+          <p className="mt-1 text-xs text-muted-foreground">
             From {compliance.inspectionsCount} completed inspection
             {compliance.inspectionsCount === 1 ? "" : "s"}
           </p>
         </article>
 
-        <article className="rounded-md border border-primary-dark/10 p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <article className="rounded-md border border-border p-4">
+          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Audit avg score
             <Award className="size-3.5 text-primary-blue" aria-hidden="true" />
           </p>
           <p className={`mt-1 font-heading text-2xl font-bold ${scoreClass(compliance.auditsAvgScore)}`}>
             {compliance.auditsAvgScore !== null ? `${compliance.auditsAvgScore}/100` : "—"}
           </p>
-          <p className="mt-1 text-xs text-primary-dark/60">
+          <p className="mt-1 text-xs text-muted-foreground">
             From {compliance.auditsCount} completed audit{compliance.auditsCount === 1 ? "" : "s"}
           </p>
         </article>
 
-        <article className="rounded-md border border-primary-dark/10 p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <article className="rounded-md border border-border p-4">
+          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Training currency
             <GraduationCap className="size-3.5 text-primary-blue" aria-hidden="true" />
           </p>
@@ -127,7 +128,7 @@ export function OpsHseKpiPanel({
               ? `${compliance.trainingCompliancePct}%`
               : "—"}
           </p>
-          <p className="mt-1 text-xs text-primary-dark/60">
+          <p className="mt-1 text-xs text-muted-foreground">
             {compliance.trainingCompletedCount} of {compliance.trainingTotalCount} records in date
           </p>
         </article>

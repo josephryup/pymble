@@ -95,8 +95,8 @@ export function OpsNotificationToaster({ userId }: { userId: string }) {
       {toasts.map((toast) => (
         <div
           key={toast.key}
-          className={`overflow-hidden rounded-xl border bg-white shadow-2xl ${
-            toast.isAction ? "border-primary-blue/30 border-l-4 border-l-primary-blue" : "border-primary-dark/10"
+          className={`overflow-hidden rounded-xl border bg-card shadow-2xl ${
+            toast.isAction ? "border-primary/30 border-l-4 border-l-primary" : "border-border"
           }`}
         >
           <div className="flex items-start gap-3 p-3">
@@ -111,11 +111,11 @@ export function OpsNotificationToaster({ userId }: { userId: string }) {
               }}
               className="min-w-0 flex-1 text-left"
             >
-              <span className="block truncate text-sm font-bold text-primary-dark">
+              <span className="block truncate text-sm font-bold text-foreground">
                 {toast.title}
               </span>
               {toast.body ? (
-                <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-primary-dark/60">
+                <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-muted-foreground">
                   {toast.body}
                 </span>
               ) : null}
@@ -124,7 +124,7 @@ export function OpsNotificationToaster({ userId }: { userId: string }) {
               type="button"
               onClick={() => dismiss(toast.key)}
               aria-label="Dismiss notification"
-              className="rounded-md p-1 text-primary-dark/40 transition hover:bg-primary-dark/5 hover:text-primary-dark"
+              className="rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
             >
               <X className="size-4" aria-hidden="true" />
             </button>

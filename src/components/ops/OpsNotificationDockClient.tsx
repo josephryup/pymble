@@ -92,7 +92,7 @@ export function OpsNotificationDockClient({
           )}
           <button
             type="submit"
-            className={`flex w-full gap-3 px-4 py-3 text-left transition hover:bg-primary-blue/[0.04] focus-visible:bg-primary-blue/[0.06] focus-visible:outline-none ${
+            className={`flex w-full gap-3 px-4 py-3 text-left transition hover:bg-primary/[0.04] focus-visible:bg-primary/[0.06] focus-visible:outline-none ${
               isUnread ? "bg-sky-50/50" : ""
             }`}
           >
@@ -105,17 +105,17 @@ export function OpsNotificationDockClient({
             <span className="min-w-0 flex-1">
               <span
                 className={`block truncate text-sm ${
-                  isUnread ? "font-bold text-primary-dark" : "font-semibold text-primary-dark/80"
+                  isUnread ? "font-bold text-foreground" : "font-semibold text-foreground/80"
                 }`}
               >
                 {notification.title}
               </span>
               {notification.body ? (
-                <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-primary-dark/60">
+                <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-muted-foreground">
                   {notification.body}
                 </span>
               ) : null}
-              <span className="mt-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-primary-dark/40">
+              <span className="mt-1 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
                 {notification.moduleKey.replace(/_/g, " ")} · {relativeTime(notification.createdAt)}
               </span>
             </span>
@@ -131,11 +131,11 @@ export function OpsNotificationDockClient({
       className="fixed bottom-5 right-5 z-[60] flex flex-col items-end gap-3 print:hidden"
     >
       {open ? (
-        <div className="flex w-[22rem] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-primary-dark/10 bg-white shadow-2xl">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 bg-primary-dark/[0.02] px-4 py-3">
+        <div className="flex w-[22rem] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+          <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3">
             <div className="flex items-center gap-2">
               <Bell className="size-4 text-primary-blue" aria-hidden="true" />
-              <span className="font-heading text-sm font-bold text-primary-dark">
+              <span className="font-heading text-sm font-bold text-foreground">
                 Notifications
               </span>
               {unreadCount > 0 ? (
@@ -148,7 +148,7 @@ export function OpsNotificationDockClient({
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close notifications"
-              className="rounded-md p-1 text-primary-dark/50 transition hover:bg-primary-dark/5 hover:text-primary-dark"
+              className="rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -158,8 +158,8 @@ export function OpsNotificationDockClient({
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
                 <CheckCircle2 className="size-8 text-emerald-600" aria-hidden="true" />
-                <p className="text-sm font-semibold text-primary-dark">You&apos;re all caught up</p>
-                <p className="text-xs text-primary-dark/55">
+                <p className="text-sm font-semibold text-foreground">You&apos;re all caught up</p>
+                <p className="text-xs text-muted-foreground">
                   New workflow alerts will appear here.
                 </p>
               </div>
@@ -170,7 +170,7 @@ export function OpsNotificationDockClient({
                     <p className="bg-primary-blue/[0.05] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-primary-blue">
                       Action needed
                     </p>
-                    <ul className="divide-y divide-primary-dark/[0.07]">
+                    <ul className="divide-y divide-border">
                       {actionNeeded.map(renderItem)}
                     </ul>
                   </>
@@ -178,11 +178,11 @@ export function OpsNotificationDockClient({
                 {informational.length > 0 ? (
                   <>
                     {actionNeeded.length > 0 ? (
-                      <p className="bg-primary-dark/[0.02] px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <p className="bg-muted/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                         Recent
                       </p>
                     ) : null}
-                    <ul className="divide-y divide-primary-dark/[0.07]">
+                    <ul className="divide-y divide-border">
                       {informational.map(renderItem)}
                     </ul>
                   </>
@@ -191,7 +191,7 @@ export function OpsNotificationDockClient({
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-2 border-t border-primary-dark/10 px-3 py-2">
+          <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
             {unreadCount > 0 ? (
               <form action={markAllOpsNotificationsReadAction}>
                 <input type="hidden" name="return_to" value={returnTo} />
@@ -209,7 +209,7 @@ export function OpsNotificationDockClient({
             <Link
               href="/ops/notifications"
               onClick={() => setOpen(false)}
-              className="rounded-md px-2 py-1.5 text-xs font-bold text-primary-dark/70 transition hover:bg-primary-dark/5 hover:text-primary-dark"
+              className="rounded-md px-2 py-1.5 text-xs font-bold text-muted-foreground transition hover:bg-muted hover:text-foreground"
             >
               Open inbox →
             </Link>
@@ -222,7 +222,7 @@ export function OpsNotificationDockClient({
         onClick={() => setOpen((value) => !value)}
         aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
         aria-expanded={open}
-        className="relative inline-flex size-14 items-center justify-center rounded-full bg-primary-blue text-white shadow-lg shadow-primary-blue/30 transition hover:bg-primary-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue"
+        className="relative inline-flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/30 transition hover:bg-primary/88 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <Bell className="size-6" aria-hidden="true" />
         {unreadCount > 0 ? (

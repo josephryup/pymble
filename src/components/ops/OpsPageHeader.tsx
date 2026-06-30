@@ -37,23 +37,23 @@ type OpsPageHeaderProps = {
  */
 export function OpsPageHeader({ eyebrow, title, description, actions }: OpsPageHeaderProps) {
   return (
-    <header className="flex flex-col gap-3 border-b border-primary-dark/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
+    <header className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0">
         {eyebrow ? <p className={OPS_EYEBROW_CLASS}>{eyebrow}</p> : null}
         <div className="mt-1 flex items-center gap-2">
-          <h1 className="font-heading text-2xl font-bold text-primary-dark md:text-3xl">{title}</h1>
+          <h1 className="font-heading text-2xl font-bold text-foreground md:text-3xl">{title}</h1>
           {description ? (
             <span
-              aria-label={description}
               className="group relative inline-flex"
               tabIndex={0}
             >
               <Info
-                aria-hidden="true"
-                className="size-4 text-primary-dark/40 transition hover:text-primary-blue"
+                aria-describedby="header-tooltip-desc"
+                className="size-4 text-muted-foreground transition hover:text-primary"
               />
               <span
-                className="invisible absolute left-1/2 top-full z-10 mt-2 w-72 -translate-x-1/2 rounded-md border border-primary-dark/10 bg-white px-3 py-2 text-xs leading-5 text-primary-dark/80 opacity-0 shadow-md shadow-primary-dark/10 transition group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100"
+                id="header-tooltip-desc"
+                className="invisible absolute left-1/2 top-full z-10 mt-2 w-72 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-xs leading-5 text-foreground opacity-0 shadow-md shadow-foreground/10 transition group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100"
                 role="tooltip"
               >
                 {description}

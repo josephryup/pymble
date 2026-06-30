@@ -108,16 +108,16 @@ export function OpsRecordActivityPanel({
 
   return (
     <details
-      className="group border-t border-primary-dark/8 bg-white px-5 py-4"
+      className="group border-t border-border bg-card px-5 py-4"
       onToggle={(event) => {
         if (event.currentTarget.open) {
           void loadActivity();
         }
       }}
     >
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-foreground transition hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
-          <span className="inline-flex size-9 items-center justify-center rounded-md bg-primary-blue/10 text-primary-blue ring-1 ring-primary-blue/10">
+          <span className="inline-flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-primary/10">
             <Paperclip className="size-4" aria-hidden="true" />
           </span>
           Attachments and comments
@@ -127,24 +127,23 @@ export function OpsRecordActivityPanel({
             {totalItems ?? "Open"}
           </Badge>
           <ChevronDown
-            className="size-4 shrink-0 text-primary-dark/42 transition group-open:rotate-180"
+            className="size-4 shrink-0 text-muted-foreground/60 transition group-open:rotate-180"
             aria-hidden="true"
           />
         </span>
       </summary>
-
       <div className="mt-4 grid gap-5 lg:grid-cols-2">
         <section className="min-w-0">
           <div className="flex items-center gap-2">
-            <Paperclip className="size-4 text-primary-blue" aria-hidden="true" />
-            <h3 className="font-heading text-base font-semibold text-primary-dark">
+            <Paperclip className="size-4 text-primary" aria-hidden="true" />
+            <h3 className="font-heading text-base font-semibold text-foreground">
               Linked documents
             </h3>
           </div>
 
           {isLoading ? (
-            <div className="mt-3 flex min-h-24 items-center gap-2 rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
-              <Loader2 className="size-4 animate-spin text-primary-blue" aria-hidden="true" />
+            <div className="mt-3 flex min-h-24 items-center gap-2 rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
               <div className="grid flex-1 gap-2">
                 <span>Loading activity</span>
                 <Skeleton className="h-3 w-full max-w-xs" />
@@ -159,7 +158,7 @@ export function OpsRecordActivityPanel({
           ) : null}
 
           {activity && activity.documents.length > 0 ? (
-            <ul className="mt-3 divide-y divide-primary-dark/10 border-y border-primary-dark/10">
+            <ul className="mt-3 divide-y divide-border border-y border-border">
               {activity.documents.map((document) => {
                 const version = currentVersion(document);
 
@@ -167,12 +166,12 @@ export function OpsRecordActivityPanel({
                   <li className="py-3" key={document.link_id}>
                     <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                       <div className="min-w-0">
-                        <p className="truncate font-bold text-primary-dark">{document.title}</p>
-                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        <p className="truncate font-bold text-foreground">{document.title}</p>
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           {document.category} / v{document.current_version_number}
                         </p>
                         {version ? (
-                          <p className="mt-1 truncate text-xs text-primary-dark/55">
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
                             {version.file_name} / {formatBytes(version.file_size_bytes)}
                           </p>
                         ) : null}
@@ -194,7 +193,7 @@ export function OpsRecordActivityPanel({
           ) : null}
 
           {activity && activity.documents.length === 0 ? (
-            <p className="mt-3 rounded-md border border-dashed border-primary-dark/15 bg-primary-dark/[0.02] px-3 py-3 text-sm text-primary-dark/60">
+            <p className="mt-3 rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
               No attachments linked to this {OPS_RECORD_ACTIVITY_SOURCE_LABELS[sourceTable]} yet.
             </p>
           ) : null}
@@ -218,14 +217,14 @@ export function OpsRecordActivityPanel({
                 </Label>
                 <Label className={`${OPS_LABEL_CLASS} grid gap-1.5`}>
                   <span>File</span>
-                  <span className="mt-1 block rounded-lg border border-dashed border-primary-dark/20 bg-primary-dark/[0.02] p-4 text-center transition hover:border-primary-blue hover:bg-primary-blue/[0.03]">
-                    <span className="mx-auto flex size-10 items-center justify-center rounded-md bg-white text-primary-blue shadow-sm ring-1 ring-primary-dark/8">
+                  <span className="mt-1 block rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center transition hover:border-primary hover:bg-primary/[0.03]">
+                    <span className="mx-auto flex size-10 items-center justify-center rounded-md bg-card text-primary shadow-sm ring-1 ring-border">
                       <Upload className="size-5" aria-hidden="true" />
                     </span>
-                    <span className="mt-2 block text-sm font-semibold text-primary-dark">
+                    <span className="mt-2 block text-sm font-semibold text-foreground">
                       Click to upload
                     </span>
-                    <span className="mt-1 block text-xs font-medium text-primary-dark/45">
+                    <span className="mt-1 block text-xs font-medium text-muted-foreground">
                       PDF, Office, CSV, text, or image evidence
                     </span>
                     <Input
@@ -251,30 +250,30 @@ export function OpsRecordActivityPanel({
 
         <section className="min-w-0">
           <div className="flex items-center gap-2">
-            <MessageSquare className="size-4 text-primary-blue" aria-hidden="true" />
-            <h3 className="font-heading text-base font-semibold text-primary-dark">
+            <MessageSquare className="size-4 text-primary" aria-hidden="true" />
+            <h3 className="font-heading text-base font-semibold text-foreground">
               Internal comments
             </h3>
           </div>
 
           {activity && activity.comments.length > 0 ? (
-            <ol className="mt-3 divide-y divide-primary-dark/10 border-y border-primary-dark/10">
+            <ol className="mt-3 divide-y divide-border border-y border-border">
               {activity.comments.map((comment) => (
                 <li className="py-3" key={comment.id}>
                   <div className="flex flex-col gap-1 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between">
-                    <p className="font-bold text-primary-dark">
+                    <p className="font-bold text-foreground">
                       {formatOpsUserName(comment.author?.full_name, comment.author_id)}
                     </p>
-                    <time className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <time className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       {formatDateTime(comment.created_at)}
                     </time>
                   </div>
                   {comment.author ? (
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       {formatOpsRole(comment.author.role)}
                     </p>
                   ) : null}
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-primary-dark/70">
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground/80">
                     {comment.body}
                   </p>
                 </li>
@@ -283,7 +282,7 @@ export function OpsRecordActivityPanel({
           ) : null}
 
           {activity && activity.comments.length === 0 ? (
-            <p className="mt-3 rounded-md border border-dashed border-primary-dark/15 bg-primary-dark/[0.02] px-3 py-3 text-sm text-primary-dark/60">
+            <p className="mt-3 rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
               No internal comments yet.
             </p>
           ) : null}

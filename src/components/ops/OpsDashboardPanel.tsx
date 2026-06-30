@@ -44,7 +44,7 @@ export function OpsDashboardPanel({
   );
 
   return (
-    <Card className={cn("py-0 shadow-sm shadow-primary-dark/[0.03]", className)}>
+    <Card className={cn("py-0 shadow-sm shadow-foreground/[0.03]", className)}>
       <CardHeader className="flex flex-col gap-3 p-5 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
         <div className="min-w-0">
           {href ? (

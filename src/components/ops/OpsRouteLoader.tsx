@@ -17,7 +17,7 @@ export function OpsRouteLoader({
     return (
       <div
         aria-live="polite"
-        className="ops-ui min-h-[50vh] bg-[#f6f7fb] p-4 text-primary-dark md:p-6"
+        className="ops-ui min-h-[50vh] bg-muted p-4 text-foreground md:p-6"
         role="status"
       >
         <span className="sr-only">{label}</span>
@@ -26,7 +26,7 @@ export function OpsRouteLoader({
             <CardContent className="p-5 md:p-7">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex min-w-0 gap-4">
-                <span className="flex size-12 shrink-0 items-center justify-center rounded-md border border-primary-dark/10 bg-white">
+                <span className="flex size-12 shrink-0 items-center justify-center rounded-md border border-border bg-card">
                   <OpsBrandMark decorative className="h-9 w-9" sizes="36px" />
                 </span>
                 <div className="min-w-0 flex-1 space-y-3">
@@ -61,19 +61,19 @@ export function OpsRouteLoader({
   return (
     <div
       aria-live="polite"
-      className="ops-ui flex min-h-screen items-center justify-center bg-[#f6f7fb] p-6 text-primary-dark"
+      className="ops-ui flex min-h-screen items-center justify-center bg-muted p-6 text-foreground"
       role="status"
     >
-      <Card className="w-full max-w-xs py-0 text-center shadow-sm shadow-primary-dark/5">
+      <Card className="w-full max-w-xs py-0 text-center shadow-sm shadow-foreground/5">
         <CardContent className="flex flex-col items-center gap-4 px-8 py-7">
-        <span className="flex size-20 items-center justify-center rounded-lg border border-primary-dark/10 bg-white">
+        <span className="flex size-20 items-center justify-center rounded-lg border border-border bg-card">
           <OpsBrandMark decorative className="h-16 w-16" sizes="64px" />
         </span>
         <span className="block">
           <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             Pymble Operations
           </span>
-          <span className="mt-2 block text-sm font-semibold leading-6 text-primary-dark/65">
+          <span className="mt-2 block text-sm font-semibold leading-6 text-muted-foreground">
             {label}
           </span>
         </span>

@@ -43,12 +43,12 @@ export function OpsEmptyState({
   return (
     <div className="grid min-h-56 place-items-center px-6 py-12 text-center">
       <div className="max-w-md space-y-4">
-        <div className="mx-auto grid size-12 place-items-center rounded-full bg-primary-blue/10 text-primary-blue">
+        <div className="mx-auto grid size-12 place-items-center rounded-full bg-primary/10 text-primary">
           <Icon className="size-6" aria-hidden="true" />
         </div>
         <div>
-          <h3 className="font-heading text-xl font-bold text-primary-dark">{title}</h3>
-          <p className="mt-2 text-sm leading-6 text-primary-dark/65">{description}</p>
+          <h3 className="font-heading text-xl font-bold text-foreground">{title}</h3>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
         {actions.length > 0 ? (
           <div className="flex flex-wrap justify-center gap-2">
@@ -68,7 +68,7 @@ export function OpsEmptyState({
           </div>
         ) : null}
         {tip ? (
-          <p className="text-xs text-primary-dark/45">{tip}</p>
+          <p className="text-xs text-muted-foreground">{tip}</p>
         ) : null}
       </div>
     </div>

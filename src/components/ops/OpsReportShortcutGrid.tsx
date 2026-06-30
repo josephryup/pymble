@@ -24,7 +24,7 @@ export function OpsReportShortcutGrid({ groups }: OpsReportShortcutGridProps) {
       {groups.map((group) => (
         <Card
           aria-label={group.title}
-          className="py-0 shadow-sm shadow-primary-dark/[0.03]"
+          className="py-0 shadow-sm shadow-foreground/[0.03]"
           key={group.title}
         >
           <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border p-4">
@@ -41,7 +41,7 @@ export function OpsReportShortcutGrid({ groups }: OpsReportShortcutGridProps) {
           <CardContent className="grid gap-2 p-4">
             {group.items.map((item) => (
               <Link
-                className={`group flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground/70 shadow-sm shadow-primary-dark/[0.02] transition hover:-translate-y-0.5 hover:border-primary/50 hover:text-primary hover:shadow-md ${OPS_FOCUS_CLASS}`}
+                className={`group flex min-h-12 items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground/70 shadow-sm shadow-foreground/[0.02] transition hover:-translate-y-0.5 hover:border-primary/50 hover:text-primary hover:shadow-md ${OPS_FOCUS_CLASS}`}
                 href={item.href}
                 key={item.href}
               >

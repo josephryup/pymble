@@ -8,8 +8,8 @@ import type { OpsImportTemplateKind } from "@/lib/ops/import-templates";
 export function OpsImportTemplateLinks({ kind }: { kind: OpsImportTemplateKind }) {
   const base = `/api/ops/import-templates/${kind}`;
   return (
-    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-primary-dark/55">
-      <span className="font-semibold text-primary-dark/65">Need a template?</span>
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <span className="font-semibold text-foreground/65">Need a template?</span>
       <a
         className="inline-flex items-center gap-1 font-semibold text-primary-blue hover:underline"
         href={`${base}?format=csv`}

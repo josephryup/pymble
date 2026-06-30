@@ -118,7 +118,7 @@ function Navigation({
 
         return (
           <div
-            className="overflow-hidden rounded-lg border border-border bg-card/80 shadow-sm shadow-primary-dark/5"
+            className="overflow-hidden rounded-lg border border-border bg-card/80 shadow-sm shadow-foreground/5"
             key={group.id}
           >
             <button
@@ -183,7 +183,7 @@ function ProfilePanel({
   unreadNotifications?: number;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3 shadow-sm shadow-primary-dark/5">
+    <div className="rounded-lg border border-border bg-card p-3 shadow-sm shadow-foreground/5">
       <Link
         className={`flex items-center gap-3 rounded-md p-1 transition hover:bg-muted ${OPS_FOCUS_CLASS}`}
         href="/ops/profile"
@@ -250,13 +250,13 @@ function OpsLogoLink({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <Link
       aria-label={`${OPS_BRAND.companyName} operations overview`}
-      className={`flex w-full items-center justify-start gap-3 rounded-lg border border-border bg-card px-3 py-3 shadow-sm shadow-primary-dark/5 transition hover:border-primary/30 ${OPS_FOCUS_CLASS}`}
+      className={`flex w-full items-center justify-start gap-3 rounded-lg border border-border bg-card px-3 py-3 shadow-sm shadow-foreground/5 transition hover:border-primary/30 ${OPS_FOCUS_CLASS}`}
       href="/ops"
       onClick={onNavigate}
     >
       <OpsBrandMark priority className="h-12 w-12 rounded-md" sizes="48px" />
       <span className="min-w-0">
-        <span className="block truncate text-sm font-black text-primary-dark">
+        <span className="block truncate text-sm font-black text-foreground">
           Pymble Ops
         </span>
         <span className="block truncate text-[11px] font-semibold text-muted-foreground">
@@ -391,10 +391,10 @@ export function OpsShell({
               sizes="40px"
             />
             <span className="min-w-0">
-              <span className="block truncate text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+              <span className="block truncate text-xs font-bold uppercase tracking-[0.12em] text-primary">
                 Pymble
               </span>
-              <span className="block truncate text-sm font-bold text-primary-dark">
+              <span className="block truncate text-sm font-bold text-foreground">
                 {currentTitle}
               </span>
             </span>
@@ -487,9 +487,10 @@ export function OpsShell({
           <OpsTopUtilityBar
             currentTitle={currentTitle}
             modules={routeModules}
+            profileRole={profileRole}
             unreadNotifications={unreadNotifications}
           />
-          <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 lg:p-5">
+          <div className="mx-auto grid w-full max-w-[1400px] gap-4 p-4 lg:p-5">
             {isLocalRolePreview ? (
               <OpsLocalRolePreviewPanel activeRole={profileRole} compact />
             ) : null}

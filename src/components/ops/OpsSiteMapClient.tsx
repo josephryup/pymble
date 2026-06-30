@@ -148,7 +148,7 @@ export function OpsSiteMapClient({
 
   if (!sitesWithCoordinates.length && !headquartersHasCoordinates) {
     return (
-      <div className="flex min-h-96 items-center justify-center rounded-md border border-dashed border-primary-dark/15 bg-primary-dark/[0.03] p-8 text-center text-sm leading-6 text-primary-dark/60">
+      <div className="flex min-h-96 items-center justify-center rounded-md border border-dashed border-border bg-muted/30 p-8 text-center text-sm leading-6 text-muted-foreground">
         Add headquarters or site coordinates to activate the Pymble map.
       </div>
     );
@@ -157,7 +157,7 @@ export function OpsSiteMapClient({
   return (
     <div
       aria-label="Pymble site and attendance map"
-      className="relative overflow-hidden rounded-lg border border-primary-dark/10"
+      className="relative overflow-hidden rounded-lg border border-border"
       role="region"
     >
       <p className="sr-only">
@@ -173,7 +173,7 @@ export function OpsSiteMapClient({
             headquarters.longitude ??
             DEFAULT_ZAMBIA_MAP_CENTER.longitude,
         ]}
-        className="h-64 w-full bg-primary-dark/5 md:h-80 lg:h-[26rem]"
+        className="h-64 w-full bg-muted md:h-80 lg:h-[26rem]"
         scrollWheelZoom={false}
         zoom={7}
       >
@@ -195,14 +195,14 @@ export function OpsSiteMapClient({
               <span className="text-xs font-bold tracking-tight">HQ</span>
             </Tooltip>
             <Popup>
-              <div className="space-y-1 p-1 text-sm text-primary-dark">
-                <p className="font-bold leading-tight text-primary-dark">{headquarters.name}</p>
-                <p className="text-xs text-primary-dark/55">
+              <div className="space-y-1 p-1 text-sm text-foreground">
+                <p className="font-bold leading-tight text-foreground">{headquarters.name}</p>
+                <p className="text-xs text-muted-foreground">
                   {[headquarters.addressLine, headquarters.city, headquarters.country]
                     .filter(Boolean)
                     .join(", ")}
                 </p>
-                <p className="mt-1 text-xs font-semibold text-primary-blue">
+                <p className="mt-1 text-xs font-semibold text-primary">
                   Pymble headquarters
                 </p>
               </div>
@@ -236,10 +236,10 @@ export function OpsSiteMapClient({
                 </Tooltip>
               ) : null}
               <Popup>
-                <div className="space-y-1 p-1 text-sm text-primary-dark">
-                  <p className="font-bold leading-tight text-primary-dark">{site.name}</p>
-                  <p className="text-xs text-primary-dark/55">{site.location}</p>
-                  <p className="mt-1 text-xs font-semibold text-primary-blue">
+                <div className="space-y-1 p-1 text-sm text-foreground">
+                  <p className="font-bold leading-tight text-foreground">{site.name}</p>
+                  <p className="text-xs text-muted-foreground">{site.location}</p>
+                  <p className="mt-1 text-xs font-semibold text-primary">
                     {crewCount} crew - {approvedCount} approved today
                   </p>
                 </div>
@@ -261,11 +261,11 @@ export function OpsSiteMapClient({
             radius={6}
           >
             <Popup>
-              <div className="space-y-1 p-1 text-sm text-primary-dark">
-                <p className="font-bold text-primary-dark">
+              <div className="space-y-1 p-1 text-sm text-foreground">
+                <p className="font-bold text-foreground">
                   {record.gps_label || "Clock point"}
                 </p>
-                <p className="text-xs text-primary-dark/55">
+                <p className="text-xs text-muted-foreground">
                   GPS: {record.gps_latitude?.toFixed(4)},{" "}
                   {record.gps_longitude?.toFixed(4)}
                 </p>
@@ -282,14 +282,14 @@ export function OpsSiteMapClient({
         ))}
       </MapContainer>
 
-      <div className="pointer-events-none absolute left-3 top-3 z-[1000] hidden max-w-xs rounded-md border border-primary-dark/10 bg-white/95 px-3.5 py-2.5 shadow-sm md:block">
-        <p className="text-[11px] font-bold text-primary-dark">Pymble site map</p>
-        <p className="mt-0.5 text-[11px] leading-relaxed text-primary-dark/55">
+      <div className="pointer-events-none absolute left-3 top-3 z-[1000] hidden max-w-xs rounded-md border border-border bg-card/95 px-3.5 py-2.5 shadow-sm md:block">
+        <p className="text-[11px] font-bold text-foreground">Pymble site map</p>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
           Tap a site pin to review crew, approvals, and site details. HQ marks the Pymble office.
         </p>
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 right-3 z-[1000] hidden rounded-md border border-primary-dark/10 bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-primary-dark/60 shadow-sm md:block">
+      <div className="pointer-events-none absolute bottom-3 right-3 z-[1000] hidden rounded-md border border-border bg-card/95 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground shadow-sm md:block">
         {sitesMissingCoordinates > 0
           ? `${sitesMissingCoordinates} sites missing GPS`
           : `All sites geolocated - ${activeDate}`}

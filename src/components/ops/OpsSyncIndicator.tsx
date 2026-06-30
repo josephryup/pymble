@@ -83,14 +83,14 @@ export function OpsSyncIndicator() {
   }
 
   return (
-    <div className="rounded-md border border-primary-dark/10 bg-card px-3 py-2 text-xs shadow-sm shadow-primary-dark/[0.03]">
+    <div className="rounded-md border border-border bg-card px-3 py-2 text-xs shadow-sm shadow-foreground/[0.03]">
       {!online ? (
         <p className="flex items-center gap-2 font-semibold text-amber-700">
           <CloudOff aria-hidden className="h-3.5 w-3.5" />
           Working offline — items will sync when you reconnect
         </p>
       ) : pending > 0 ? (
-        <p className="flex items-center gap-2 font-semibold text-primary-blue">
+        <p className="flex items-center gap-2 font-semibold text-primary">
           <RefreshCw aria-hidden className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
           Syncing {pending} item{pending === 1 ? "" : "s"}…
         </p>

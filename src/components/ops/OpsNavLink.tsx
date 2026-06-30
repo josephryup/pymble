@@ -27,7 +27,7 @@ export function OpsNavLink({
       aria-current={isActive ? "page" : undefined}
       className={`flex min-h-10 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold transition ${OPS_FOCUS_CLASS} ${
         isActive
-          ? "bg-primary/10 text-primary shadow-sm shadow-primary-dark/5"
+          ? "bg-primary/10 text-primary shadow-sm shadow-foreground/5"
           : "text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
       href={href}

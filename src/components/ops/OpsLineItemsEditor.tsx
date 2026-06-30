@@ -57,16 +57,16 @@ export function OpsLineItemsEditor({
         const defaults = index === 0 ? firstItemDefaults : undefined;
         return (
         <div
-          className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3"
+          className="rounded-md border border-border bg-muted/50 p-3"
           key={key}
         >
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               Item {index + 1}
             </p>
             <button
               aria-label={`Remove item ${index + 1}`}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary-dark/55 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
               disabled={rows.length === 1}
               onClick={() => removeRow(key)}
               type="button"

@@ -101,10 +101,10 @@ export function OpsInstallPrompt() {
           <Smartphone className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-heading text-base font-bold text-primary-dark">
+          <p className="font-heading text-base font-bold text-foreground">
             Install Pymble Operations on this device
           </p>
-          <p className="mt-1 text-sm leading-6 text-primary-dark/70">
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
             {showIos
               ? "Tap the Share button in Safari, then 'Add to Home Screen' to use Pymble Operations like an app — useful for site engineers and supervisors logging attendance and reports from the field."
               : "Add Pymble Operations to your home screen for one-tap access — useful for site engineers and supervisors logging attendance, daily reports, and photos from the field."}
@@ -121,7 +121,7 @@ export function OpsInstallPrompt() {
               </button>
             ) : null}
             <button
-              className="inline-flex items-center gap-1.5 rounded-md border border-primary-dark/15 px-3 py-1.5 text-sm font-semibold text-primary-dark/70 transition hover:bg-primary-dark/5"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground transition hover:bg-muted"
               onClick={dismiss}
               type="button"
             >

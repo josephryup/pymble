@@ -20,18 +20,18 @@ function dotClass(state: OpsChainStepState) {
     case "rejected":
       return "bg-red-500 text-white";
     default:
-      return "border border-primary-dark/20 bg-white text-primary-dark/30";
+      return "border border-border bg-card text-muted-foreground";
   }
 }
 
 function labelClass(state: OpsChainStepState) {
   if (state === "pending") {
-    return "text-primary-dark/45";
+    return "text-muted-foreground";
   }
   if (state === "rejected") {
     return "text-red-700";
   }
-  return "text-primary-dark";
+  return "text-foreground";
 }
 
 /**
@@ -46,8 +46,8 @@ export function OpsChainTracker({
   title?: string;
 }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border bg-muted/50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {title}
       </p>
       <ol className="mt-3 grid gap-3 sm:grid-flow-col sm:auto-cols-fr">
@@ -71,7 +71,7 @@ export function OpsChainTracker({
                   {step.label}
                 </span>
                 {step.caption ? (
-                  <span className="mt-0.5 block text-xs font-medium text-primary-dark/50">
+                  <span className="mt-0.5 block text-xs font-medium text-muted-foreground">
                     {step.caption}
                   </span>
                 ) : null}
