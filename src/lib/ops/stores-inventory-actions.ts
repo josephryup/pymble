@@ -507,11 +507,14 @@ async function syncPurchaseOrderReceiptStatus(purchaseOrder: PurchaseOrderForRec
 
   if (isClosed && purchaseOrder.material_request_id) {
     await (async () => {
+      // Stores receipt is the fallback close path (Option A). It closes a request
+      // whether or not the requester has confirmed delivery — including one that
+      // is resting in `delivered` after a partial confirmation.
       await supabase
         .from("material_requests")
-        .update({ status: "closed" })
+        .update({ status: "closed", closed_at: now })
         .eq("id", purchaseOrder.material_request_id)
-        .in("status", ["approved", "ordered"]);
+        .in("status", ["approved", "ordered", "delivered"]);
     })().catch(() => null);
   }
 }

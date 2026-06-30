@@ -62,6 +62,7 @@ export type OpsMaterialRequestStatus =
   | "rejected"
   | "cancelled"
   | "ordered"
+  | "delivered"
   | "closed";
 export type OpsNotificationStatus = "unread" | "read" | "archived";
 export type OpsEmailDeliveryStatus = "sent" | "failed" | "skipped";

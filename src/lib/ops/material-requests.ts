@@ -53,6 +53,9 @@ export type OpsMaterialRequestSummary = {
   approved_at: string | null;
   closed_at: string | null;
   created_at: string;
+  delivered_at: string | null;
+  delivered_by: string | null;
+  delivery_notes: string;
   description: string;
   estimated_total: number;
   id: string;
@@ -72,6 +75,9 @@ export type OpsMaterialRequestSummary = {
   status: OpsMaterialRequestStatus;
   submitted_at: string | null;
   title: string;
+  // Internal procurement transport/sourcing cost. Kept separate from goods
+  // totals and excluded from both PDFs (see migration part 2).
+  transport_cost: number;
   updated_at: string;
 };
 
@@ -122,6 +128,7 @@ export function buildMaterialRequestChainSteps(
     | "ordered_at"
     | "closed_at"
     | "priced_at"
+    | "delivered_at"
   >,
 ): OpsChainStepDescriptor[] {
   const s = request.status;
@@ -146,6 +153,7 @@ export function buildMaterialRequestChainSteps(
     "priced",
     "approved",
     "ordered",
+    "delivered",
     "closed",
   ].includes(s);
   const operationsApprovedDone = [
@@ -153,11 +161,13 @@ export function buildMaterialRequestChainSteps(
     "priced",
     "approved",
     "ordered",
+    "delivered",
     "closed",
   ].includes(s);
-  const pricedDone = ["priced", "approved", "ordered", "closed"].includes(s);
-  const financeApprovedDone = ["approved", "ordered", "closed"].includes(s);
-  const orderedDone = ["ordered", "closed"].includes(s);
+  const pricedDone = ["priced", "approved", "ordered", "delivered", "closed"].includes(s);
+  const financeApprovedDone = ["approved", "ordered", "delivered", "closed"].includes(s);
+  const orderedDone = ["ordered", "delivered", "closed"].includes(s);
+  const deliveredDone = ["delivered", "closed"].includes(s);
   const rejected = s === "rejected";
 
   return [
@@ -227,6 +237,15 @@ export function buildMaterialRequestChainSteps(
       href: orderedDone || s === "approved" ? "/ops/rfq-po" : null,
     },
     {
+      key: "delivered",
+      label: "Delivered to site",
+      state: deliveredDone ? "done" : s === "ordered" ? "current" : "pending",
+      caption:
+        chainDate(request.delivered_at) ??
+        (s === "ordered" ? "Awaiting requester confirmation" : null),
+      href: null,
+    },
+    {
       key: "closed",
       label: "Closed",
       state: s === "closed" ? "done" : "pending",
@@ -238,8 +257,15 @@ export function buildMaterialRequestChainSteps(
 
 type RawMaterialRequest = Omit<
   OpsMaterialRequestSummary,
-  "actual_total" | "approval_status" | "estimated_total" | "items" | "requester" | "site"
+  | "actual_total"
+  | "approval_status"
+  | "estimated_total"
+  | "items"
+  | "requester"
+  | "site"
+  | "transport_cost"
 > & {
+  transport_cost: number | string;
   requester: OpsMaterialRequestUserSummary | OpsMaterialRequestUserSummary[] | null;
   site: OpsMaterialRequestSiteSummary | OpsMaterialRequestSiteSummary[] | null;
 };
@@ -405,6 +431,10 @@ async function fetchOpsMaterialRequestItems(
         "closed_at",
         "priced_at",
         "priced_by",
+        "delivered_at",
+        "delivered_by",
+        "delivery_notes",
+        "transport_cost",
         "created_at",
         "updated_at",
         "requester:users!material_requests_requested_by_fkey(id, full_name, role)",
@@ -466,6 +496,7 @@ async function fetchOpsMaterialRequestItems(
         items,
         requester: normalizeRelation(request.requester),
         site: normalizeRelation(request.site),
+        transport_cost: normalizeMoney(request.transport_cost),
       } satisfies OpsMaterialRequestSummary;
     }),
   };
@@ -516,6 +547,10 @@ export async function fetchOpsMaterialRequestById(
         "closed_at",
         "priced_at",
         "priced_by",
+        "delivered_at",
+        "delivered_by",
+        "delivery_notes",
+        "transport_cost",
         "created_at",
         "updated_at",
         "requester:users!material_requests_requested_by_fkey(id, full_name, role)",
@@ -553,5 +588,6 @@ export async function fetchOpsMaterialRequestById(
     items,
     requester: normalizeRelation(request.requester),
     site: normalizeRelation(request.site),
+    transport_cost: normalizeMoney(request.transport_cost),
   } satisfies OpsMaterialRequestSummary;
 }

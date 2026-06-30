@@ -135,8 +135,35 @@ export function canAttachMaterialRequestPricing(role: OpsUserRole) {
   return MATERIAL_REQUEST_PRICING_ROLES.includes(role);
 }
 
+/**
+ * Who may record the procurement department's internal transport/sourcing cost.
+ * Same gate as pricing — it is a procurement-owned figure.
+ */
+export function canSetMaterialRequestTransportCost(role: OpsUserRole) {
+  return MATERIAL_REQUEST_PRICING_ROLES.includes(role);
+}
+
 export function canApproveMaterialRequestCost(role: OpsUserRole) {
   return MATERIAL_REQUEST_FINANCE_APPROVAL_ROLES.includes(role);
+}
+
+/**
+ * Who may confirm that ordered materials were delivered (Option A — the site
+ * requester is the primary confirmer, with operations/procurement managers as a
+ * backstop). Only meaningful once the request has been ordered.
+ */
+export function canConfirmMaterialRequestDelivery(
+  actorId: string,
+  actorRole: OpsUserRole,
+  request: OpsMaterialRequestMutationTarget,
+) {
+  if (request.status !== "ordered") {
+    return false;
+  }
+  if (request.requested_by === actorId && canCreateOpsMaterialRequest(actorRole)) {
+    return true;
+  }
+  return canManageOpsMaterialRequest(actorRole);
 }
 
 const MATERIAL_REQUEST_ARCHIVE_ROLES: OpsUserRole[] = [
@@ -154,11 +181,12 @@ export function canCancelOpsMaterialRequest(
   actorRole: OpsUserRole,
   request: OpsMaterialRequestMutationTarget,
 ) {
-  // Already closed / cancelled / ordered → no cancellation possible.
+  // Already closed / cancelled / ordered / delivered → no cancellation possible.
   if (
     request.status === "closed" ||
     request.status === "cancelled" ||
-    request.status === "ordered"
+    request.status === "ordered" ||
+    request.status === "delivered"
   ) {
     return false;
   }

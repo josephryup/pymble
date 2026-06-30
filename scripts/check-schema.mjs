@@ -60,6 +60,11 @@ const REQUIRED_COLUMNS = [
   ["material_requests", "cancelled_by"],
   ["material_requests", "priced_at"],
   ["material_requests", "priced_by"],
+  // Procurement transport cost + requester delivery confirmation (Option A)
+  ["material_requests", "transport_cost"],
+  ["material_requests", "delivered_at"],
+  ["material_requests", "delivered_by"],
+  ["material_requests", "delivery_notes"],
   ["invoices", "archived_at"],
   ["invoices", "archived_by"],
   ["invoices", "cancelled_at"],

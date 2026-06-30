@@ -1,15 +1,18 @@
 import {
   AlertTriangle,
+  Banknote,
   CheckCircle2,
   ClipboardList,
   Clock,
   FileCheck2,
   FilePlus2,
+  PackageCheck,
   PackagePlus,
   Pencil,
   Plus,
   Send,
   Trash2,
+  Truck,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -31,10 +34,12 @@ import {
   archiveMaterialRequestAction,
   attachMaterialRequestPricingAction,
   cancelMaterialRequestAction,
+  confirmMaterialRequestDeliveryAction,
   createMaterialRequestAction,
   decideMaterialRequestCostAction,
   deleteMaterialRequestItemAction,
   importMaterialRequestItemsAction,
+  setMaterialRequestTransportCostAction,
   submitMaterialRequestForApprovalAction,
   updateMaterialRequestHeaderAction,
   updateMaterialRequestItemAction,
@@ -44,9 +49,11 @@ import {
   canArchiveOpsMaterialRequest,
   canAttachMaterialRequestPricing,
   canCancelOpsMaterialRequest,
+  canConfirmMaterialRequestDelivery,
   canCreateOpsMaterialRequest,
   canEditOpsMaterialRequest,
   canManageOpsMaterialRequest,
+  canSetMaterialRequestTransportCost,
   canSubmitOpsMaterialRequest,
 } from "@/lib/ops/material-request-permissions";
 import {
@@ -98,6 +105,7 @@ const MATERIAL_REQUEST_STATUS_OPTIONS: Array<{
   { label: "Approved", value: "approved" },
   { label: "Rejected", value: "rejected" },
   { label: "Ordered", value: "ordered" },
+  { label: "Delivered", value: "delivered" },
   { label: "Closed", value: "closed" },
 ];
 
@@ -176,6 +184,15 @@ function materialRequestNotice(params: OpsSearchParams) {
   if (u === "cost_rejected") {
     return { tone: "success" as const, message: "Cost rejected. Procurement has been asked to re-price." };
   }
+  if (u === "transport_cost") {
+    return { tone: "success" as const, message: "Transport cost recorded." };
+  }
+  if (u === "delivered") {
+    return { tone: "success" as const, message: "Delivery confirmed. Awaiting full receipt to close." };
+  }
+  if (u === "delivered_closed") {
+    return { tone: "success" as const, message: "Delivery confirmed in full. Request closed." };
+  }
   if (u === "cancelled") {
     return { tone: "success" as const, message: "Material request cancelled." };
   }
@@ -191,7 +208,7 @@ function formatLabel(value: string) {
 }
 
 function statusClass(status: OpsMaterialRequestStatus) {
-  if (status === "approved" || status === "closed") {
+  if (status === "approved" || status === "closed" || status === "delivered") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
@@ -601,6 +618,12 @@ function FinanceCostDecisionForm({ request }: { request: OpsMaterialRequestSumma
           <strong>ZMW {formatZmw(request.actual_total)}</strong>. Approve to release for
           ordering, or reject with a reason so Procurement can renegotiate.
         </p>
+        {request.transport_cost > 0 ? (
+          <p className="text-xs leading-5 text-primary-dark/55">
+            Procurement transport (internal): ZMW {formatZmw(request.transport_cost)} — tracked
+            separately, not included in the goods cost above.
+          </p>
+        ) : null}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <form action={decideMaterialRequestCostAction}>
@@ -642,6 +665,131 @@ function FinanceCostDecisionForm({ request }: { request: OpsMaterialRequestSumma
   );
 }
 
+function TransportCostForm({ request }: { request: OpsMaterialRequestSummary }) {
+  return (
+    <form
+      action={setMaterialRequestTransportCostAction}
+      className="rounded-md border border-primary-dark/15 bg-primary-dark/[0.02] p-4"
+    >
+      <input name="request_id" type="hidden" value={request.id} />
+      <div className="mb-3 flex items-start gap-2">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary-dark/10 text-primary-dark">
+          <Truck className="size-4" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/55">
+            Procurement transport cost (internal)
+          </p>
+          <p className="text-sm leading-6 text-primary-dark/65">
+            Procurement&rsquo;s own cost of moving around to source and collect these materials.
+            Recorded for internal tracking only — it is not part of the goods price and never
+            appears on the Material Request or Purchase Order PDF.
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-xs font-bold text-primary-dark/60">
+          Transport cost (ZMW)
+          <input
+            className={`${OPS_INPUT_CLASS} mt-1 w-40 text-right`}
+            defaultValue={request.transport_cost || ""}
+            min="0"
+            name="transport_cost"
+            step="0.01"
+            type="number"
+          />
+        </label>
+        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+          <Banknote className="size-4" aria-hidden="true" />
+          Save transport cost
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ConfirmDeliveryForm({ request }: { request: OpsMaterialRequestSummary }) {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Lusaka",
+  }).format(new Date());
+
+  return (
+    <form
+      action={confirmMaterialRequestDeliveryAction}
+      className="rounded-md border border-emerald-300/50 bg-emerald-50/40 p-4"
+    >
+      <input name="request_id" type="hidden" value={request.id} />
+      <div className="mb-3 flex items-start gap-2">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-700">
+          <PackageCheck className="size-4" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-700">
+            Confirm delivery
+          </p>
+          <p className="text-sm leading-6 text-primary-dark/70">
+            This order has been placed. Confirm when the materials arrived on site. Tick
+            &ldquo;received in full&rdquo; to close the request; leave it unticked for a partial or
+            with-issues delivery (it stays open until fully received).
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className={OPS_LABEL_CLASS}>
+          Delivery date
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={today}
+            max={today}
+            name="delivered_on"
+            type="date"
+          />
+        </label>
+        <label className="flex items-center gap-2 self-end pb-2 text-sm font-semibold text-primary-dark">
+          <input
+            className="size-4 rounded border-primary-dark/30 text-emerald-600 focus:ring-emerald-500"
+            defaultChecked
+            name="received_in_full"
+            type="checkbox"
+          />
+          Received in full (close request)
+        </label>
+        <label className={`${OPS_LABEL_CLASS} sm:col-span-2`}>
+          Notes (optional)
+          <input
+            className={OPS_INPUT_CLASS}
+            name="notes"
+            placeholder="e.g. 2 bags short, supplier to redeliver; or signed for by site storeman."
+          />
+        </label>
+      </div>
+      <div className="mt-3">
+        <OpsConfirmSubmitButton
+          className={OPS_PRIMARY_BUTTON_CLASS}
+          confirmText="Confirm delivery"
+        >
+          <Truck className="size-4" aria-hidden="true" />
+          Confirm delivery
+        </OpsConfirmSubmitButton>
+      </div>
+    </form>
+  );
+}
+
+function DeliveredInfo({ request }: { request: OpsMaterialRequestSummary }) {
+  return (
+    <div className="rounded-md border border-emerald-200 bg-emerald-50/50 px-4 py-3">
+      <p className="inline-flex items-center gap-2 text-sm font-bold text-emerald-800">
+        <PackageCheck className="size-4" aria-hidden="true" />
+        Delivery confirmed{request.delivered_at ? ` · ${formatDateTime(request.delivered_at)}` : ""}
+      </p>
+      {request.delivery_notes ? (
+        <p className="mt-1 text-sm leading-6 text-emerald-900/70">{request.delivery_notes}</p>
+      ) : null}
+    </div>
+  );
+}
+
 export default async function OpsMaterialRequestsPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
     searchParams ?? Promise.resolve({} as OpsSearchParams),
@@ -679,7 +827,10 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
   ).length;
   const approvedCount = requests.filter((request) => request.status === "approved").length;
   const procurementCount = requests.filter(
-    (request) => request.status === "ordered" || request.status === "closed",
+    (request) =>
+      request.status === "ordered" ||
+      request.status === "delivered" ||
+      request.status === "closed",
   ).length;
   const urgentCount = requests.filter((request) => request.priority === "urgent").length;
   const lineItemCount = requests.reduce((sum, request) => sum + request.items.length, 0);
@@ -986,6 +1137,23 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                 request.status === "priced" &&
                 canApproveMaterialRequestCost(auth.profile.role);
 
+              const showTransportForm =
+                canSetMaterialRequestTransportCost(auth.profile.role) &&
+                (request.status === "pricing_pending" ||
+                  request.status === "priced" ||
+                  request.status === "approved" ||
+                  request.status === "ordered");
+
+              const showDeliveryForm = canConfirmMaterialRequestDelivery(
+                auth.profile.id,
+                auth.profile.role,
+                request,
+              );
+
+              const showDeliveredInfo =
+                (request.status === "delivered" || request.status === "closed") &&
+                Boolean(request.delivered_at);
+
               const canCancel = canCancelOpsMaterialRequest(
                 auth.profile.id,
                 auth.profile.role,
@@ -1129,9 +1297,12 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       </div>
                     ) : null}
                     {showPricingForm ? <ProcurementPricingForm request={request} /> : null}
+                    {showTransportForm ? <TransportCostForm request={request} /> : null}
                     {showFinanceDecisionForm ? (
                       <FinanceCostDecisionForm request={request} />
                     ) : null}
+                    {showDeliveryForm ? <ConfirmDeliveryForm request={request} /> : null}
+                    {showDeliveredInfo ? <DeliveredInfo request={request} /> : null}
                   </div>
 
                   {canEdit ? (

@@ -11,9 +11,11 @@ import {
   canArchiveOpsMaterialRequest,
   canAttachMaterialRequestPricing,
   canCancelOpsMaterialRequest,
+  canConfirmMaterialRequestDelivery,
   canCreateOpsMaterialRequest,
   canDeleteOpsMaterialRequest,
   canEditOpsMaterialRequest,
+  canSetMaterialRequestTransportCost,
   canSubmitOpsMaterialRequest,
   materialRequestApprovalRecipientRoles,
   materialRequestApprovalSteps,
@@ -1066,6 +1068,207 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
   revalidatePath("/ops");
   redirect(
     `${MATERIAL_REQUEST_ROUTE}?updated=${decisionIsApprove ? "cost_approved" : "cost_rejected"}#mr-${request.id}`,
+  );
+}
+
+// =============================================================================
+// Transport cost: Procurement records its OWN internal cost of moving around to
+// source / collect the materials. It is kept separate from goods totals and is
+// never printed on either PDF (see migration part 2).
+// =============================================================================
+
+const transportSchema = requestIdSchema.extend({
+  transport_cost: z.coerce
+    .number()
+    .min(0, "Transport cost cannot be negative.")
+    .max(1_000_000_000, "Transport cost looks unrealistic."),
+});
+
+export async function setMaterialRequestTransportCostAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canSetMaterialRequestTransportCost(profile.role)) {
+    materialRequestError("Only Procurement and leadership can record transport cost.");
+  }
+
+  const parsed = transportSchema.safeParse({
+    request_id: field(formData, "request_id"),
+    transport_cost: field(formData, "transport_cost") || "0",
+  });
+  if (!parsed.success) {
+    materialRequestError(parsed.error.issues[0]?.message ?? "Check the transport cost.");
+  }
+
+  const request = await fetchMaterialRequestForMutation(parsed.data.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+
+  // Procurement sources materials from pricing through to delivery, so transport
+  // can be recorded any time the request is in that window.
+  const transportEditable: OpsMaterialRequestStatus[] = [
+    "pricing_pending",
+    "priced",
+    "approved",
+    "ordered",
+  ];
+  if (!transportEditable.includes(request.status)) {
+    materialRequestError(
+      "Transport cost can only be recorded while the request is with Procurement (priced through ordered).",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("material_requests")
+    .update({ transport_cost: parsed.data.transport_cost })
+    .eq("id", request.id);
+  if (error) {
+    materialRequestError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "material_request.transport_cost_set",
+    actorUserId: profile.id,
+    entityId: request.id,
+    entityType: "material_request",
+    metadata: {
+      request_number: request.request_number,
+      transport_cost_zmw: parsed.data.transport_cost,
+    },
+    moduleKey: "material_requests",
+    sourceId: request.id,
+    sourceTable: "material_requests",
+    summary: `Recorded transport cost on ${request.request_number}: ZMW ${parsed.data.transport_cost.toLocaleString("en-ZM")}`,
+  }).catch(() => null);
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=transport_cost#mr-${request.id}`);
+}
+
+// =============================================================================
+// Delivery confirmation (Option A): the site requester confirms ordered
+// materials arrived and picks the delivery date. "Received in full" closes the
+// request outright; a partial / with-issues delivery rests in `delivered` until
+// the Goods Received Note flow (or a follow-up) closes it.
+// =============================================================================
+
+const deliverySchema = requestIdSchema.extend({
+  delivered_on: z.string().trim().default(""),
+  received_in_full: z.boolean().default(false),
+  notes: z.string().trim().max(800).default(""),
+});
+
+export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = deliverySchema.safeParse({
+    request_id: field(formData, "request_id"),
+    delivered_on: field(formData, "delivered_on"),
+    received_in_full: field(formData, "received_in_full") === "on",
+    notes: field(formData, "notes"),
+  });
+  if (!parsed.success) {
+    materialRequestError(parsed.error.issues[0]?.message ?? "Check the delivery details.");
+  }
+
+  const request = await fetchMaterialRequestForMutation(parsed.data.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+
+  if (!canConfirmMaterialRequestDelivery(profile.id, profile.role, request)) {
+    materialRequestError(
+      "Only the requester (or an operations manager) can confirm delivery, and only once the request has been ordered.",
+    );
+  }
+
+  // normalizeDateInput validates the YYYY-MM-DD shape (and redirects on a bad
+  // one). Store at local noon so the displayed date can't slip a day on TZ math.
+  const deliveredAt = parsed.data.delivered_on
+    ? `${normalizeDateInput(parsed.data.delivered_on)}T12:00:00+02:00`
+    : new Date().toISOString();
+  const nowIso = new Date().toISOString();
+  const receivedInFull = parsed.data.received_in_full;
+
+  const update: {
+    status: OpsMaterialRequestStatus;
+    delivered_at: string;
+    delivered_by: string;
+    delivery_notes: string;
+    closed_at?: string;
+  } = {
+    status: receivedInFull ? "closed" : "delivered",
+    delivered_at: deliveredAt,
+    delivered_by: profile.id,
+    delivery_notes: parsed.data.notes,
+  };
+  if (receivedInFull) {
+    update.closed_at = nowIso;
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: updated, error } = await supabase
+    .from("material_requests")
+    .update(update)
+    .eq("id", request.id)
+    .eq("status", "ordered")
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (error || !updated) {
+    materialRequestError(
+      error?.message ??
+        "This request is no longer awaiting delivery confirmation. Refresh and try again.",
+    );
+  }
+
+  await recordOpsAuditEvent({
+    action: receivedInFull
+      ? "material_request.delivered_closed"
+      : "material_request.delivered",
+    actorUserId: profile.id,
+    entityId: request.id,
+    entityType: "material_request",
+    metadata: {
+      request_number: request.request_number,
+      delivered_at: deliveredAt,
+      received_in_full: receivedInFull,
+      notes: parsed.data.notes,
+    },
+    moduleKey: "material_requests",
+    sourceId: request.id,
+    sourceTable: "material_requests",
+    summary: receivedInFull
+      ? `${profile.full_name} confirmed ${request.request_number} delivered in full and closed it`
+      : `${profile.full_name} confirmed delivery on ${request.request_number}`,
+  }).catch(() => null);
+
+  // Let Procurement and Finance know the order landed.
+  const recipients = await fanoutToOpsRoles(
+    ["procurement_manager", "procurement", "finance_manager", "accountant"],
+    { excludeUserIds: [profile.id] },
+  );
+  await Promise.all(
+    recipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
+        body: receivedInFull
+          ? `${profile.full_name} confirmed ${request.request_number} was delivered in full.`
+          : `${profile.full_name} confirmed a (partial) delivery on ${request.request_number}.`,
+        idempotencyKey: `material-request-delivered:${request.id}:${recipient.id}`,
+        moduleKey: "material_requests",
+        recipientId: recipient.id,
+        sourceId: request.id,
+        sourceTable: "material_requests",
+        title: `Delivered: ${request.request_number}`,
+      }).catch(() => null),
+    ),
+  );
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  revalidatePath("/ops/notifications");
+  redirect(
+    `${MATERIAL_REQUEST_ROUTE}?updated=${receivedInFull ? "delivered_closed" : "delivered"}#mr-${request.id}`,
   );
 }
 

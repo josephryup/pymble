@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 import {
   canApproveMaterialRequestCost,
   canAttachMaterialRequestPricing,
+  canConfirmMaterialRequestDelivery,
   canCreateOpsMaterialRequest,
   canEditOpsMaterialRequest,
+  canSetMaterialRequestTransportCost,
   canSubmitOpsMaterialRequest,
   materialRequestApprovalRecipientRoles,
   materialRequestApprovalSteps,
@@ -130,6 +132,64 @@ describe("material request pricing flow gates", () => {
       canEditOpsMaterialRequest("engineer-id", "engineer", {
         requested_by: "engineer-id",
         status: "approved",
+      }),
+      false,
+    );
+  });
+});
+
+describe("material request transport cost gate", () => {
+  it("lets procurement and leadership record transport cost, but not site or finance roles", () => {
+    assert.equal(canSetMaterialRequestTransportCost("procurement_manager"), true);
+    assert.equal(canSetMaterialRequestTransportCost("procurement"), true);
+    assert.equal(canSetMaterialRequestTransportCost("procurement_assistant"), true);
+    assert.equal(canSetMaterialRequestTransportCost("developer"), true);
+    // It is a procurement-owned figure — engineers and finance don't set it.
+    assert.equal(canSetMaterialRequestTransportCost("engineer"), false);
+    assert.equal(canSetMaterialRequestTransportCost("finance_manager"), false);
+  });
+});
+
+describe("material request delivery confirmation gate", () => {
+  it("lets the requester confirm delivery only once ordered", () => {
+    assert.equal(
+      canConfirmMaterialRequestDelivery("requester-1", "engineer", {
+        requested_by: "requester-1",
+        status: "ordered",
+      }),
+      true,
+    );
+    // Not before it has been ordered.
+    assert.equal(
+      canConfirmMaterialRequestDelivery("requester-1", "engineer", {
+        requested_by: "requester-1",
+        status: "approved",
+      }),
+      false,
+    );
+    // Already delivered/closed → nothing further to confirm.
+    assert.equal(
+      canConfirmMaterialRequestDelivery("requester-1", "engineer", {
+        requested_by: "requester-1",
+        status: "delivered",
+      }),
+      false,
+    );
+  });
+
+  it("lets operations managers confirm as a backstop, but blocks unrelated site staff", () => {
+    assert.equal(
+      canConfirmMaterialRequestDelivery("ops-1", "operations_manager", {
+        requested_by: "requester-1",
+        status: "ordered",
+      }),
+      true,
+    );
+    // A different engineer who didn't raise it and isn't a manager cannot confirm.
+    assert.equal(
+      canConfirmMaterialRequestDelivery("engineer-2", "engineer", {
+        requested_by: "requester-1",
+        status: "ordered",
       }),
       false,
     );
