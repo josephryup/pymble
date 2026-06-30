@@ -70,10 +70,12 @@ type DashboardActionItem = {
 };
 
 type DashboardKpi = {
+  cta?: string;
+  hint?: string;
   href: string;
   icon: LucideIcon;
   label: string;
-  tone?: "default" | "good" | "warn";
+  tone?: "default" | "good" | "warn" | "critical";
   trend?: string;
   value: string;
 };
@@ -452,8 +454,11 @@ function kpisForGroup(
   hseSafetyRollup: OpsHseExecutiveSafetyRollup | null,
 ): DashboardKpi[] {
   if (group === "executive") {
+    const paymentsOverdue = metrics.finance.overduePaymentAmount > 0;
     return [
       {
+        cta: "View sites",
+        hint: `${formatCount(overview.attendancePings.length)} attendance ping${overview.attendancePings.length === 1 ? "" : "s"} today`,
         href: "/ops/sites",
         icon: Building2,
         label: "Active sites",
@@ -462,26 +467,40 @@ function kpisForGroup(
         value: formatCount(overview.sites.length),
       },
       {
+        cta: "Open queue",
+        hint: paymentsOverdue ? `${formatZmw(metrics.finance.overduePaymentAmount)} overdue` : "Within SLA",
         href: "/ops/payment-requests",
         icon: BadgeDollarSign,
         label: "Payment queue",
-        tone: metrics.finance.paymentRequestsPending > 0 ? "warn" : "good",
+        tone: paymentsOverdue ? "critical" : metrics.finance.paymentRequestsPending > 0 ? "warn" : "good",
         trend: metrics.finance.paymentRequestsPending > 0 ? "Needs review" : "Clear",
         value: formatCount(metrics.finance.paymentRequestsPending),
       },
       {
+        cta: "Review",
+        hint:
+          metrics.escalations.total > 0
+            ? `${formatCount(metrics.escalations.total)} SLA escalation${metrics.escalations.total === 1 ? "" : "s"}`
+            : "No escalations",
         href: "/ops/approvals",
         icon: ClipboardCheck,
         label: "Open approvals",
-        tone: overview.openApprovals > 0 ? "warn" : "good",
+        tone: metrics.escalations.total > 0 ? "critical" : overview.openApprovals > 0 ? "warn" : "good",
         trend: overview.openApprovals > 0 ? "Today" : "Clear",
         value: formatCount(overview.openApprovals),
       },
       {
+        cta: "Open HSE",
+        hint: `${formatCount(metrics.hse.openIncidents)} open incident${metrics.hse.openIncidents === 1 ? "" : "s"}`,
         href: "/ops/hse",
         icon: ShieldCheck,
         label: "Health, Safety and Environment pressure",
-        tone: hseSafetyRollup?.pressureLevel === "urgent" ? "warn" : "default",
+        tone:
+          hseSafetyRollup?.pressureLevel === "urgent"
+            ? "critical"
+            : hseSafetyRollup?.pressureLevel === "watch"
+              ? "warn"
+              : "default",
         trend: hseSafetyRollup?.pressureLevel ?? "Live",
         value: hseSafetyRollup ? `${hseSafetyRollup.pressureScore}/100` : formatCount(metrics.hse.openIncidents),
       },
@@ -489,8 +508,11 @@ function kpisForGroup(
   }
 
   if (group === "delivery" || group === "engineering") {
+    const staleMaterials = metrics.escalations.staleMaterialRequests > 0;
     return [
       {
+        cta: "View sites",
+        hint: `${formatCount(overview.attendancePings.length)} ping${overview.attendancePings.length === 1 ? "" : "s"} today`,
         href: "/ops/sites",
         icon: Building2,
         label: "Active sites",
@@ -498,6 +520,8 @@ function kpisForGroup(
         value: formatCount(overview.sites.length),
       },
       {
+        cta: "Open attendance",
+        hint: `Across ${formatCount(overview.sites.length)} active site${overview.sites.length === 1 ? "" : "s"}`,
         href: "/ops/attendance",
         icon: ClipboardCheck,
         label: "Today attendance",
@@ -506,13 +530,19 @@ function kpisForGroup(
         value: formatCount(overview.attendancePings.length),
       },
       {
+        cta: "Open requests",
+        hint: staleMaterials
+          ? `${formatCount(metrics.escalations.staleMaterialRequests)} escalated`
+          : "On track",
         href: "/ops/material-requests",
         icon: PackageSearch,
         label: "Material requests",
-        tone: metrics.procurement.openMaterialRequests > 0 ? "warn" : "good",
+        tone: staleMaterials ? "critical" : metrics.procurement.openMaterialRequests > 0 ? "warn" : "good",
         value: formatCount(metrics.procurement.openMaterialRequests),
       },
       {
+        cta: "Log report",
+        hint: "Due daily per site",
         href: "/ops/daily-site-reports",
         icon: FileText,
         label: "Site reports",
@@ -523,15 +553,23 @@ function kpisForGroup(
   }
 
   if (group === "procurement") {
+    const staleMaterials = metrics.escalations.staleMaterialRequests > 0;
+    const hasExceptions = metrics.procurement.deliveryExceptions > 0;
     return [
       {
+        cta: "Open queue",
+        hint: staleMaterials
+          ? `${formatCount(metrics.escalations.staleMaterialRequests)} past follow-up`
+          : "Awaiting sourcing",
         href: "/ops/material-requests",
         icon: PackageSearch,
         label: "Demand queue",
-        tone: metrics.procurement.openMaterialRequests > 0 ? "warn" : "good",
+        tone: staleMaterials ? "critical" : metrics.procurement.openMaterialRequests > 0 ? "warn" : "good",
         value: formatCount(metrics.procurement.openMaterialRequests),
       },
       {
+        cta: "Open RFQs",
+        hint: "In sourcing",
         href: "/ops/rfq-po",
         icon: ShoppingCart,
         label: "Active RFQs",
@@ -539,6 +577,8 @@ function kpisForGroup(
         value: formatCount(metrics.procurement.activeRfqs),
       },
       {
+        cta: "Track POs",
+        hint: "Not fully received",
         href: "/ops/rfq-po",
         icon: Truck,
         label: "POs awaiting delivery",
@@ -546,10 +586,12 @@ function kpisForGroup(
         value: formatCount(metrics.procurement.posAwaitingDelivery),
       },
       {
+        cta: "Resolve",
+        hint: hasExceptions ? "Need supplier action" : "All clear",
         href: "/ops/delivery-exceptions",
         icon: ShieldPlus,
         label: "Delivery exceptions",
-        tone: metrics.procurement.deliveryExceptions > 0 ? "warn" : "good",
+        tone: hasExceptions ? "critical" : "good",
         value: formatCount(metrics.procurement.deliveryExceptions),
       },
     ];
@@ -558,6 +600,8 @@ function kpisForGroup(
   if (group === "commercial") {
     return [
       {
+        cta: "Open BOQ",
+        hint: overview.latestBoq ? `${formatZmw(overview.latestBoq.actual_total)} actual` : "Create to anchor reporting",
         href: "/ops/boq",
         icon: ReceiptText,
         label: "Latest BOQ",
@@ -565,6 +609,8 @@ function kpisForGroup(
         value: overview.latestBoq ? formatZmw(overview.latestBoq.budgeted_total) : "No BOQ",
       },
       {
+        cta: "Open IPCs",
+        hint: "Awaiting certification",
         href: "/ops/commercial",
         icon: BarChart3,
         label: "Active IPCs",
@@ -572,6 +618,8 @@ function kpisForGroup(
         value: formatCount(metrics.commercial.activeIpcs),
       },
       {
+        cta: "Review",
+        hint: metrics.commercial.activeVariations > 0 ? "Need pricing or sign-off" : "None open",
         href: "/ops/commercial",
         icon: FileText,
         label: "Variations",
@@ -579,6 +627,8 @@ function kpisForGroup(
         value: formatCount(metrics.commercial.activeVariations),
       },
       {
+        cta: "Open invoices",
+        hint: metrics.commercial.unpaidInvoiceAmount > 0 ? "Not yet paid" : "All settled",
         href: "/ops/invoices",
         icon: BadgeDollarSign,
         label: "Unpaid invoices",
@@ -589,8 +639,11 @@ function kpisForGroup(
   }
 
   if (group === "finance") {
+    const paymentsOverdue = metrics.finance.overduePaymentAmount > 0;
     return [
       {
+        cta: "Open queue",
+        hint: metrics.finance.approvedPaymentAmount > 0 ? `${formatZmw(metrics.finance.approvedPaymentAmount)} approved` : "Awaiting review",
         href: "/ops/payment-requests",
         icon: BadgeDollarSign,
         label: "Payment queue",
@@ -598,13 +651,17 @@ function kpisForGroup(
         value: formatCount(metrics.finance.paymentRequestsPending),
       },
       {
+        cta: "Action now",
+        hint: paymentsOverdue ? "Past due date" : "Nothing overdue",
         href: "/ops/payment-requests",
         icon: CalendarDays,
         label: "Overdue payments",
-        tone: metrics.finance.overduePaymentAmount > 0 ? "warn" : "good",
+        tone: paymentsOverdue ? "critical" : "good",
         value: formatZmw(metrics.finance.overduePaymentAmount),
       },
       {
+        cta: "View",
+        hint: "Cleared this month",
         href: "/ops/invoices",
         icon: ReceiptText,
         label: "Paid this month",
@@ -612,6 +669,8 @@ function kpisForGroup(
         value: formatZmw(metrics.finance.paidInvoicesThisMonth),
       },
       {
+        cta: "Review",
+        hint: overview.draftPayroll ? overview.draftPayroll.period_label : "Nothing pending",
         href: "/ops/payroll",
         icon: Users,
         label: "Payroll draft",
@@ -622,8 +681,11 @@ function kpisForGroup(
   }
 
   if (group === "hse") {
+    const overdueActions = metrics.hse.overdueCorrectiveActions > 0;
     return [
       {
+        cta: "Open HSE",
+        hint: metrics.hse.openIncidents > 0 ? "Need investigation" : "None open",
         href: "/ops/hse",
         icon: ShieldPlus,
         label: "Open incidents",
@@ -631,6 +693,8 @@ function kpisForGroup(
         value: formatCount(metrics.hse.openIncidents),
       },
       {
+        cta: "Open HSE",
+        hint: "In progress",
         href: "/ops/hse",
         icon: ClipboardCheck,
         label: "Corrective actions",
@@ -638,13 +702,17 @@ function kpisForGroup(
         value: formatCount(metrics.hse.openCorrectiveActions),
       },
       {
+        cta: "Action now",
+        hint: overdueActions ? "Past due date" : "None overdue",
         href: "/ops/hse",
         icon: CalendarDays,
         label: "Overdue actions",
-        tone: metrics.hse.overdueCorrectiveActions > 0 ? "warn" : "good",
+        tone: overdueActions ? "critical" : "good",
         value: formatCount(metrics.hse.overdueCorrectiveActions),
       },
       {
+        cta: "Open compliance",
+        hint: "Within 30 days",
         href: "/ops/hse-compliance",
         icon: ShieldCheck,
         label: "Training due soon",
@@ -656,6 +724,8 @@ function kpisForGroup(
 
   return [
     {
+      cta: "View",
+      hint: `${formatCount(metrics.people.onLeaveToday)} on leave today`,
       href: "/ops/employees",
       icon: BriefcaseBusiness,
       label: "Active employees",
@@ -663,6 +733,8 @@ function kpisForGroup(
       value: formatCount(metrics.people.activeEmployees),
     },
     {
+      cta: "Review",
+      hint: metrics.people.pendingLeaveRequests > 0 ? "Need HR review" : "None pending",
       href: "/ops/employees",
       icon: CalendarDays,
       label: "Pending leave",
@@ -670,6 +742,8 @@ function kpisForGroup(
       value: formatCount(metrics.people.pendingLeaveRequests),
     },
     {
+      cta: "Open",
+      hint: "Open onboarding tasks",
       href: "/ops/employees",
       icon: ClipboardCheck,
       label: "Onboarding items",
@@ -677,6 +751,8 @@ function kpisForGroup(
       value: formatCount(metrics.people.onboardingOpenItems),
     },
     {
+      cta: "Review",
+      hint: metrics.people.expiringDocuments > 0 ? "Within 30 days" : "All current",
       href: "/ops/employees",
       icon: FileText,
       label: "Documents expiring",
@@ -1186,8 +1262,11 @@ function ActionQueue({ actions }: { actions: DashboardActionItem[] }) {
     return urgency[a.tone] - urgency[b.tone];
   });
 
+  const hasLiveItems = sortedActions.some((item) => item.tone !== "good");
+
   return (
     <OpsDashboardPanel
+      accent={hasLiveItems}
       description="Role-aware workflow prompts, escalations, and operational blockers."
       eyebrow="Action queue"
       title="Needs attention"
@@ -1235,7 +1314,7 @@ function PipelinePanel({
       title={title}
     >
       <div className="grid gap-3 min-[620px]:grid-cols-2">
-        {steps.map((step, index) => {
+        {steps.map((step) => {
           const tone = workflowToneClass(step.tone);
           const Icon = tone.icon;
 
@@ -1653,19 +1732,6 @@ function PrimaryPanel({
   return <CommercialSnapshot metrics={metrics} overview={overview} />;
 }
 
-function getSparklineFor(label: string, currentValue: number): number[] {
-  const seed = label.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const data: number[] = [];
-  const val = currentValue === 0 ? 1 : currentValue;
-
-  for (let i = 0; i < 7; i++) {
-    const variation = Math.sin(seed + i) * (val * 0.12);
-    data.push(Math.max(0, Math.round(val - (6 - i) * (val * 0.04) + variation)));
-  }
-  data[6] = currentValue;
-  return data;
-}
-
 export function OpsRoleOverviewDashboard({
   hseSafetyRollup,
   metrics,
@@ -1728,22 +1794,19 @@ export function OpsRoleOverviewDashboard({
       </Card>
 
       <div className="grid gap-4 min-[720px]:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((item) => {
-          const cleanVal = parseFloat(item.value.replace(/[^0-9.]/g, "")) || 0;
-          const sparkline = getSparklineFor(item.label, cleanVal);
-          return (
-            <OpsKpiCard
-              href={item.href}
-              icon={item.icon}
-              key={`${item.href}-${item.label}`}
-              label={item.label}
-              tone={item.tone}
-              trend={item.trend}
-              value={item.value}
-              sparklineData={sparkline}
-            />
-          );
-        })}
+        {kpis.map((item) => (
+          <OpsKpiCard
+            cta={item.cta}
+            hint={item.hint}
+            href={item.href}
+            icon={item.icon}
+            key={`${item.href}-${item.label}`}
+            label={item.label}
+            tone={item.tone}
+            trend={item.trend}
+            value={item.value}
+          />
+        ))}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">

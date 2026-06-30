@@ -150,3 +150,22 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   "/ops/department-reports/d/hse": ShieldAlert,
   "/ops/department-reports/d/hr": Users,
 };
+
+/**
+ * One icon per nav group, keyed by `OpsModuleGroup.id`. Used by the collapsed
+ * sidebar icon rail (OpsShell) so each group reads as a single glyph with a
+ * hover flyout of its modules. Group ids are stable (see OPS_MODULE_GROUPS).
+ */
+export const OPS_GROUP_ICONS: Record<string, LucideIcon> = {
+  operations: Briefcase,
+  engineering: Hammer,
+  procurement: ShoppingBag,
+  fleet: Bus,
+  commercial: LineChart,
+  finance: Banknote,
+  hr: Users,
+  hse: ShieldCheck,
+  records: FolderOpen,
+  it: MonitorCog,
+  executive: BarChart3,
+};

@@ -29,6 +29,28 @@ export const OPS_DANGER_BUTTON_CLASS =
 export const OPS_TABLE_SCROLL_CLASS =
   `overflow-x-auto ${OPS_FOCUS_CLASS}`;
 
+/**
+ * Shared data-table styling. Standardises the ~17 hand-rolled ops tables onto
+ * semantic tokens (was a mix of `text-primary-dark/52`, `divide-primary-dark/10`),
+ * with a sticky header, consistent column padding, hover rows, and right-aligned
+ * numeric columns. Pair the table with <OpsTableShell> for the scroll container.
+ */
+export const OPS_TABLE_CLASS = "w-full border-collapse text-left text-sm";
+
+export const OPS_THEAD_CLASS =
+  "sticky top-0 z-10 bg-muted/70 text-left text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground backdrop-blur";
+
+export const OPS_TH_CLASS = "whitespace-nowrap px-3 py-2.5 font-semibold";
+
+export const OPS_TH_NUM_CLASS = `${OPS_TH_CLASS} text-right`;
+
+export const OPS_TR_CLASS =
+  "border-b border-border transition-colors last:border-0 hover:bg-muted/40";
+
+export const OPS_TD_CLASS = "px-3 py-2.5 align-middle";
+
+export const OPS_TD_NUM_CLASS = "px-3 py-2.5 align-middle text-right tabular-nums";
+
 export function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }

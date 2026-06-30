@@ -9,16 +9,20 @@ import {
   KeyRound,
   LogOut,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   UserCircle,
   X,
 } from "lucide-react";
-import { OPS_NAV_ICONS } from "@/lib/ops/nav-icons";
+import { OPS_GROUP_ICONS, OPS_NAV_ICONS } from "@/lib/ops/nav-icons";
 import { OpsNavLink } from "@/components/ops/OpsNavLink";
 import { OpsBrandMark } from "@/components/ops/OpsBrandMark";
 import { OpsLocalRolePreviewGuard } from "@/components/ops/OpsLocalRolePreviewGuard";
 import { OpsLocalRolePreviewPanel } from "@/components/ops/OpsLocalRolePreviewPanel";
 import { OpsInstallPrompt } from "@/components/ops/OpsInstallPrompt";
 import { OpsTopUtilityBar } from "@/components/ops/OpsTopUtilityBar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPS_BRAND, OPS_MODULE_GROUPS } from "@/lib/ops/constants";
 import { visibleOpsModules, visibleOpsRouteModules } from "@/lib/ops/permissions";
 import { formatOpsProfileName, formatOpsRole } from "@/lib/ops/roles";
@@ -169,19 +173,182 @@ function Navigation({
   );
 }
 
+function railItemClass(active: boolean) {
+  return `relative flex size-11 items-center justify-center rounded-lg transition ${OPS_FOCUS_CLASS} ${
+    active
+      ? "bg-primary/10 text-primary ring-1 ring-primary/15"
+      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+  }`;
+}
+
+/**
+ * Collapsed (icon-rail) variant of the desktop navigation. Each module group
+ * becomes a single glyph; hovering or focusing it opens a portalled flyout
+ * (escapes the rail's `overflow-y-auto` clip) listing that group's modules.
+ * The overview entry stays a direct link with a tooltip label.
+ */
+function NavRail({
+  modules,
+  unreadInbox,
+  unreadNotifications,
+}: {
+  modules: OpsReadyModule[];
+  unreadInbox?: number;
+  unreadNotifications?: number;
+}) {
+  const pathname = usePathname();
+  const overviewModule = modules.find((module) => module.href === "/ops");
+  const groupedModules = modules.filter((module) => module.href !== "/ops");
+  const OverviewIcon = overviewModule ? NAV_ICON_BY_HREF[overviewModule.href] : undefined;
+
+  return (
+    <div className="grid justify-items-center gap-1.5">
+      {overviewModule ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Link
+                aria-current={pathname === "/ops" ? "page" : undefined}
+                aria-label={overviewModule.title}
+                className={railItemClass(pathname === "/ops")}
+                href={overviewModule.href}
+              />
+            }
+          >
+            {OverviewIcon ? <OverviewIcon className="size-5" aria-hidden="true" /> : null}
+          </TooltipTrigger>
+          <TooltipContent side="right">{overviewModule.title}</TooltipContent>
+        </Tooltip>
+      ) : null}
+      {OPS_MODULE_GROUPS.map((group) => {
+        const groupModules = groupedModules.filter((module) => module.group === group.id);
+
+        if (groupModules.length === 0) {
+          return null;
+        }
+
+        const Icon = OPS_GROUP_ICONS[group.id];
+        const isActive = groupModules.some((module) => pathname.startsWith(module.href));
+        const groupUnread = groupModules.reduce(
+          (sum, module) => sum + (badgeFor(module.href, unreadNotifications, unreadInbox) ?? 0),
+          0,
+        );
+
+        return (
+          <Popover key={group.id}>
+            <PopoverTrigger
+              aria-label={group.title}
+              className={railItemClass(isActive)}
+              delay={80}
+              openOnHover
+            >
+              {Icon ? <Icon className="size-5" aria-hidden="true" /> : null}
+              {groupUnread > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary ring-2 ring-background"
+                />
+              ) : null}
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-64 gap-1.5" side="right" sideOffset={12}>
+              <p className="px-1 pb-1 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                {group.title}
+              </p>
+              <div className="grid gap-1">
+                {groupModules.map((item) => (
+                  <OpsNavLink
+                    badge={badgeFor(item.href, unreadNotifications, unreadInbox)}
+                    href={item.href}
+                    icon={NAV_ICON_BY_HREF[item.href]}
+                    key={item.href}
+                    title={item.title}
+                  />
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProfilePanel({
+  collapsed = false,
   displayName,
   onNavigate,
   profileEmail,
   profileRole,
   unreadNotifications,
 }: {
+  collapsed?: boolean;
   displayName: string;
   onNavigate?: () => void;
   profileEmail?: string | null;
   profileRole?: OpsUserRole;
   unreadNotifications?: number;
 }) {
+  if (collapsed) {
+    return (
+      <div className="grid justify-items-center gap-1.5">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Link
+                aria-label={`Profile: ${displayName}`}
+                className={railItemClass(false)}
+                href="/ops/profile"
+              />
+            }
+          >
+            <span className="flex size-8 items-center justify-center rounded-md bg-primary text-xs font-black text-primary-foreground">
+              {initials(displayName)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {displayName} · {formatOpsRole(profileRole)}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Link
+                aria-label={`Notifications, ${unreadNotifications ?? 0} unread`}
+                className={railItemClass(false)}
+                href="/ops/notifications"
+              />
+            }
+          >
+            <Bell className="size-4" aria-hidden="true" />
+            {(unreadNotifications ?? 0) > 0 ? (
+              <span
+                aria-hidden="true"
+                className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary ring-2 ring-background"
+              />
+            ) : null}
+          </TooltipTrigger>
+          <TooltipContent side="right">Notifications</TooltipContent>
+        </Tooltip>
+        <form action="/api/ops/auth/logout" method="post">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  aria-label="Sign out"
+                  className={`${railItemClass(false)} hover:text-destructive`}
+                  type="submit"
+                />
+              }
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent side="right">Sign out</TooltipContent>
+          </Tooltip>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-border bg-card p-3 shadow-sm shadow-foreground/5">
       <Link
@@ -246,7 +413,33 @@ function ProfilePanel({
   );
 }
 
-function OpsLogoLink({ onNavigate }: { onNavigate?: () => void }) {
+function OpsLogoLink({
+  collapsed = false,
+  onNavigate,
+}: {
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Link
+              aria-label={`${OPS_BRAND.companyName} operations overview`}
+              className={`flex size-11 items-center justify-center rounded-lg border border-border bg-card shadow-sm shadow-foreground/5 transition hover:border-primary/30 ${OPS_FOCUS_CLASS}`}
+              href="/ops"
+              onClick={onNavigate}
+            />
+          }
+        >
+          <OpsBrandMark priority className="h-7 w-7 rounded" sizes="28px" />
+        </TooltipTrigger>
+        <TooltipContent side="right">Pymble Ops · Overview</TooltipContent>
+      </Tooltip>
+    );
+  }
+
   return (
     <Link
       aria-label={`${OPS_BRAND.companyName} operations overview`}
@@ -269,6 +462,7 @@ function OpsLogoLink({ onNavigate }: { onNavigate?: () => void }) {
 
 export function OpsShell({
   children,
+  defaultNavCollapsed = false,
   isLocalRolePreview = false,
   profileEmail,
   profileName,
@@ -277,6 +471,7 @@ export function OpsShell({
   unreadNotifications,
 }: {
   children: React.ReactNode;
+  defaultNavCollapsed?: boolean;
   isLocalRolePreview?: boolean;
   profileEmail?: string | null;
   profileName?: string;
@@ -286,6 +481,16 @@ export function OpsShell({
 }) {
   const pathname = usePathname();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isNavCollapsed, setIsNavCollapsed] = useState(defaultNavCollapsed);
+
+  const toggleNavCollapsed = () => {
+    setIsNavCollapsed((current) => {
+      const next = !current;
+      // Persist across reloads so the layout can SSR the right width (no flash).
+      document.cookie = `ops-nav-collapsed=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+      return next;
+    });
+  };
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileNavRef = useRef<HTMLElement>(null);
   const modules = useMemo(
@@ -463,25 +668,76 @@ export function OpsShell({
         </aside>
       ) : null}
 
-      <div className="min-h-screen lg:pl-[280px]">
-        <aside className="hidden border-r border-border bg-background text-foreground lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:h-screen lg:w-[280px]">
-          <div className="grid h-full w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-4 p-4">
-            <OpsLogoLink />
-            <nav aria-label="Operations workspace" className="min-h-0 overflow-y-auto pr-1">
-              <Navigation
-                modules={modules}
-                unreadInbox={unreadInbox}
+      <div
+        className={`min-h-screen transition-[padding] duration-200 ${
+          isNavCollapsed ? "lg:pl-[76px]" : "lg:pl-[280px]"
+        }`}
+      >
+        <TooltipProvider delay={150}>
+          <aside
+            className={`hidden border-r border-border bg-background text-foreground transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:h-screen ${
+              isNavCollapsed ? "lg:w-[76px]" : "lg:w-[280px]"
+            }`}
+          >
+            <div
+              className={`grid h-full w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-4 ${
+                isNavCollapsed ? "p-2.5" : "p-4"
+              }`}
+            >
+              {isNavCollapsed ? (
+                <div className="grid justify-items-center gap-2">
+                  <OpsLogoLink collapsed />
+                  <button
+                    aria-expanded={false}
+                    aria-label="Expand navigation"
+                    className={`inline-flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:border-primary/30 hover:text-primary ${OPS_FOCUS_CLASS}`}
+                    onClick={toggleNavCollapsed}
+                    type="button"
+                  >
+                    <PanelLeftOpen className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <OpsLogoLink />
+                  </div>
+                  <button
+                    aria-expanded
+                    aria-label="Collapse navigation"
+                    className={`inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:border-primary/30 hover:text-primary ${OPS_FOCUS_CLASS}`}
+                    onClick={toggleNavCollapsed}
+                    type="button"
+                  >
+                    <PanelLeftClose className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+              <nav aria-label="Operations workspace" className="min-h-0 overflow-y-auto pr-1">
+                {isNavCollapsed ? (
+                  <NavRail
+                    modules={modules}
+                    unreadInbox={unreadInbox}
+                    unreadNotifications={unreadNotifications}
+                  />
+                ) : (
+                  <Navigation
+                    modules={modules}
+                    unreadInbox={unreadInbox}
+                    unreadNotifications={unreadNotifications}
+                  />
+                )}
+              </nav>
+              <ProfilePanel
+                collapsed={isNavCollapsed}
+                displayName={displayName}
+                profileEmail={profileEmail}
+                profileRole={profileRole}
                 unreadNotifications={unreadNotifications}
               />
-            </nav>
-            <ProfilePanel
-              displayName={displayName}
-              profileEmail={profileEmail}
-              profileRole={profileRole}
-              unreadNotifications={unreadNotifications}
-            />
-          </div>
-        </aside>
+            </div>
+          </aside>
+        </TooltipProvider>
 
         <main className="min-w-0" id="ops-main-content" tabIndex={-1}>
           <OpsTopUtilityBar
@@ -490,7 +746,7 @@ export function OpsShell({
             profileRole={profileRole}
             unreadNotifications={unreadNotifications}
           />
-          <div className="mx-auto grid w-full max-w-[1400px] gap-4 p-4 lg:p-5">
+          <div className="mx-auto grid w-full max-w-[1760px] gap-4 p-4 lg:px-6 lg:py-5 xl:px-8">
             {isLocalRolePreview ? (
               <OpsLocalRolePreviewPanel activeRole={profileRole} compact />
             ) : null}

@@ -75,8 +75,16 @@ import {
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
+  OPS_TABLE_CLASS,
+  OPS_TD_CLASS,
+  OPS_TD_NUM_CLASS,
+  OPS_TH_CLASS,
+  OPS_TH_NUM_CLASS,
+  OPS_THEAD_CLASS,
+  OPS_TR_CLASS,
   type OpsSearchParams,
 } from "@/lib/ops/ui";
+import { OpsTableShell } from "@/components/ops/OpsTableShell";
 import type { OpsPaymentRequestStatus, OpsPaymentRequestType } from "@/lib/ops/types";
 
 type PageProps = {
@@ -885,45 +893,47 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                   ) : null}
 
                   {paymentRequest.items.length > 0 ? (
-                    <div className="mt-4 overflow-x-auto rounded-md border border-primary-dark/10">
-                      <table className="min-w-[680px] w-full text-left text-sm">
+                    <OpsTableShell className="mt-4">
+                      <table className={`${OPS_TABLE_CLASS} min-w-[680px]`}>
                         <caption className="sr-only">
                           Payment request line items with budget links, quantity, unit cost, and total.
                         </caption>
-                        <thead className="bg-primary-dark/[0.03] text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+                        <thead className={OPS_THEAD_CLASS}>
                           <tr>
-                            <th className="px-3 py-3" scope="col">Line</th>
-                            <th className="px-3 py-3" scope="col">Description</th>
-                            <th className="px-3 py-3" scope="col">Budget line</th>
-                            <th className="px-3 py-3" scope="col">Qty</th>
-                            <th className="px-3 py-3" scope="col">Unit cost</th>
-                            <th className="px-3 py-3" scope="col">Total</th>
+                            <th className={OPS_TH_CLASS} scope="col">Line</th>
+                            <th className={OPS_TH_CLASS} scope="col">Description</th>
+                            <th className={OPS_TH_CLASS} scope="col">Budget line</th>
+                            <th className={OPS_TH_NUM_CLASS} scope="col">Qty</th>
+                            <th className={OPS_TH_NUM_CLASS} scope="col">Unit cost</th>
+                            <th className={OPS_TH_NUM_CLASS} scope="col">Total</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-primary-dark/10">
+                        <tbody>
                           {paymentRequest.items.map((item) => (
-                            <tr key={item.id}>
-                              <td className="px-3 py-3 font-bold text-primary-dark">
+                            <tr className={OPS_TR_CLASS} key={item.id}>
+                              <td className={`${OPS_TD_CLASS} font-bold text-foreground`}>
                                 {item.line_number}
                               </td>
-                              <td className="px-3 py-3 text-primary-dark/70">
+                              <td className={`${OPS_TD_CLASS} text-muted-foreground`}>
                                 {item.description}
                               </td>
-                              <td className="px-3 py-3 text-primary-dark/65">
+                              <td className={`${OPS_TD_CLASS} text-muted-foreground`}>
                                 {item.budget_line?.cost_code || "Not linked"}
                               </td>
-                              <td className="px-3 py-3 text-primary-dark/65">{item.quantity}</td>
-                              <td className="px-3 py-3 text-primary-dark/65">
+                              <td className={`${OPS_TD_NUM_CLASS} text-muted-foreground`}>
+                                {item.quantity}
+                              </td>
+                              <td className={`${OPS_TD_NUM_CLASS} text-muted-foreground`}>
                                 {formatMoney(item.unit_cost, paymentRequest.currency_code)}
                               </td>
-                              <td className="px-3 py-3 font-semibold text-primary-dark">
+                              <td className={`${OPS_TD_NUM_CLASS} font-semibold text-foreground`}>
                                 {formatMoney(item.line_total, paymentRequest.currency_code)}
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </OpsTableShell>
                   ) : null}
 
                   {canPay ? (

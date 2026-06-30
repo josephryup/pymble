@@ -63,14 +63,14 @@ export function OpsChartPanel({ data, description, title }: OpsChartPanelProps) 
                   <div key={item.label} className="space-y-1.5">
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-semibold text-foreground">{item.label}</span>
-                      <span className="font-bold text-foreground">
+                      <span className="font-bold tabular-nums text-foreground">
                         {formatValue(item.value)}{" "}
-                        <span className="text-xs font-normal text-muted-foreground">
+                        <span className="text-xs font-normal tabular-nums text-muted-foreground">
                           ({share}%)
                         </span>
                       </span>
                     </div>
-                    <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="h-3 w-full overflow-hidden rounded-full bg-muted ring-1 ring-inset ring-border/60">
                       <div
                         className={cn("h-full rounded-full transition-all duration-500", barColor)}
                         style={{ width: `${Math.max(1, share)}%` }}

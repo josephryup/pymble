@@ -10,6 +10,7 @@ import {
   ShieldPlus,
   BadgeDollarSign,
   ClipboardCheck,
+  type LucideIcon,
 } from "lucide-react";
 import { OpsCommandPalette } from "@/components/ops/OpsCommandPalette";
 import { Badge } from "@/components/ui/badge";
@@ -79,7 +80,7 @@ export function OpsTopUtilityBar({
   const pathname = usePathname();
   const canSearchCurrentPage = supportsSearch(pathname);
 
-  const roleActions: Record<string, { href: string; label: string; icon: any }> = {
+  const roleActions: Record<string, { href: string; label: string; icon: LucideIcon }> = {
     hse: { href: "/ops/hse", label: "Log incident", icon: ShieldPlus },
     commercial: { href: "/ops/invoices?create=invoice#invoice-create-panel", label: "Create invoice", icon: FilePlus2 },
     finance: { href: "/ops/payment-requests", label: "Payment queue", icon: BadgeDollarSign },

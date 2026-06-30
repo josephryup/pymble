@@ -41,7 +41,7 @@ export function OpsPageHeader({ eyebrow, title, description, actions }: OpsPageH
       <div className="min-w-0">
         {eyebrow ? <p className={OPS_EYEBROW_CLASS}>{eyebrow}</p> : null}
         <div className="mt-1 flex items-center gap-2">
-          <h1 className="font-heading text-2xl font-bold text-foreground md:text-3xl">{title}</h1>
+          <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground md:text-3xl">{title}</h1>
           {description ? (
             <span
               className="group relative inline-flex"

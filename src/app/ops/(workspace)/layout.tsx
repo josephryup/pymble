@@ -4,6 +4,7 @@ import { OpsNotificationDock } from "@/components/ops/OpsNotificationDock";
 import { OpsNotificationToaster } from "@/components/ops/OpsNotificationToaster";
 import { OpsServiceWorker } from "@/components/ops/OpsServiceWorker";
 import { OpsSessionTimeout } from "@/components/ops/OpsSessionTimeout";
+import { cookies } from "next/headers";
 import { OpsShell } from "@/components/ops/OpsShell";
 import { OpsSyncIndicator } from "@/components/ops/OpsSyncIndicator";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -17,6 +18,8 @@ export default async function OpsWorkspaceLayout({
 }>) {
   const auth = await requireOpsUser();
   const { profile } = auth;
+  const cookieStore = await cookies();
+  const defaultNavCollapsed = cookieStore.get("ops-nav-collapsed")?.value === "1";
   const [unreadNotifications, unreadInbox] = auth.isLocalRolePreview
     ? [0, 0]
     : await Promise.all([
@@ -26,6 +29,7 @@ export default async function OpsWorkspaceLayout({
 
   return (
     <OpsShell
+      defaultNavCollapsed={defaultNavCollapsed}
       isLocalRolePreview={auth.isLocalRolePreview}
       profileEmail={profile.email}
       profileName={profile.full_name}

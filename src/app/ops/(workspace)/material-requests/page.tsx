@@ -71,8 +71,16 @@ import {
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
+  OPS_TABLE_CLASS,
+  OPS_TD_CLASS,
+  OPS_TD_NUM_CLASS,
+  OPS_TH_CLASS,
+  OPS_TH_NUM_CLASS,
+  OPS_THEAD_CLASS,
+  OPS_TR_CLASS,
   type OpsSearchParams,
 } from "@/lib/ops/ui";
+import { OpsTableShell } from "@/components/ops/OpsTableShell";
 import type { OpsMaterialRequestStatus, OpsPriority } from "@/lib/ops/types";
 
 type PageProps = {
@@ -302,56 +310,56 @@ function MaterialRequestItems({
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border border-primary-dark/10">
-      <table className="min-w-full divide-y divide-primary-dark/10 text-sm">
+    <OpsTableShell>
+      <table className={OPS_TABLE_CLASS}>
         <caption className="sr-only">
           Line items for {request.request_number}
         </caption>
-        <thead className="bg-primary-dark/[0.03] text-left text-xs uppercase tracking-[0.12em] text-primary-dark/52">
+        <thead className={OPS_THEAD_CLASS}>
           <tr>
-            <th className="px-3 py-3" scope="col">Item</th>
-            <th className="px-3 py-3" scope="col">Quantity</th>
-            <th className="px-3 py-3" scope="col">Estimate</th>
-            {canEdit ? <th className="px-3 py-3" scope="col">Actions</th> : null}
+            <th className={OPS_TH_CLASS} scope="col">Item</th>
+            <th className={OPS_TH_CLASS} scope="col">Quantity</th>
+            <th className={OPS_TH_NUM_CLASS} scope="col">Estimate</th>
+            {canEdit ? <th className={OPS_TH_CLASS} scope="col">Actions</th> : null}
           </tr>
         </thead>
-        <tbody className="divide-y divide-primary-dark/10">
+        <tbody>
           {request.items.map((item) => (
-            <tr key={item.id}>
-              <td className="px-3 py-3 align-top">
-                <p className="font-bold text-primary-dark">{item.item_name}</p>
+            <tr className={OPS_TR_CLASS} key={item.id}>
+              <td className={`${OPS_TD_CLASS} align-top`}>
+                <p className="font-bold text-foreground">{item.item_name}</p>
                 {item.specification ? (
-                  <p className="mt-1 max-w-lg text-xs leading-5 text-primary-dark/55">
+                  <p className="mt-1 max-w-lg text-xs leading-5 text-muted-foreground">
                     {item.specification}
                   </p>
                 ) : null}
                 {item.notes ? (
-                  <p className="mt-1 max-w-lg text-xs leading-5 text-primary-dark/45">
+                  <p className="mt-1 max-w-lg text-xs leading-5 text-muted-foreground/80">
                     {item.notes}
                   </p>
                 ) : null}
                 {item.supplier_name ? (
-                  <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-primary-blue/20 bg-primary-blue/5 px-2 py-0.5 text-[11px] font-semibold text-primary-blue">
+                  <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-semibold text-primary">
                     Supplier: {item.supplier_name}
                     {!item.supplier_id ? (
-                      <span className="text-[10px] font-normal text-primary-blue/60">
+                      <span className="text-[10px] font-normal text-primary/60">
                         (not in master list)
                       </span>
                     ) : null}
                   </p>
                 ) : null}
               </td>
-              <td className="px-3 py-3 align-top font-semibold text-primary-dark/70">
+              <td className={`${OPS_TD_CLASS} align-top font-semibold text-muted-foreground`}>
                 {item.quantity.toLocaleString("en-ZM")} {item.unit}
               </td>
-              <td className="px-3 py-3 align-top">
-                <p className="font-bold text-primary-dark">{formatZmw(item.estimated_total)}</p>
-                <p className="mt-1 text-xs text-primary-dark/45">
+              <td className={`${OPS_TD_NUM_CLASS} align-top`}>
+                <p className="font-bold text-foreground">{formatZmw(item.estimated_total)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
                   {formatZmw(item.estimated_unit_cost)} per {item.unit}
                 </p>
               </td>
               {canEdit ? (
-                <td className="px-3 py-3 align-top">
+                <td className={`${OPS_TD_CLASS} align-top`}>
                   <div className="flex flex-wrap gap-2">
                     <details className="inline-block">
                       <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-primary-dark/70 hover:text-primary-dark [&::-webkit-details-marker]:hidden">
@@ -417,7 +425,7 @@ function MaterialRequestItems({
           ))}
         </tbody>
       </table>
-    </div>
+    </OpsTableShell>
   );
 }
 
