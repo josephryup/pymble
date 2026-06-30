@@ -841,34 +841,25 @@ export async function attachMaterialRequestPricingAction(formData: FormData) {
     }
   }
 
-  // Re-read line totals. `pricedTotal` (actual) drives the finance notification;
-  // `estimatedTotal` is the new header total — summing every line's estimate so
-  // a partial price save still keeps un-priced lines on their original estimate.
+  // Re-read actual line totals to compute the priced total for the finance
+  // notification. The request's estimate/actual totals are DERIVED from the line
+  // items at read time (material_requests has no stored total column), so
+  // overwriting the line estimates above is enough — there is no header total to
+  // write, and the displayed request estimate updates on the next read.
   const { data: pricedRows } = await supabase
     .from("material_request_items")
-    .select("estimated_total, actual_total")
+    .select("actual_total")
     .eq("request_id", request.id);
-  const lineTotals = (pricedRows ?? []) as Array<{
-    estimated_total: number | string;
-    actual_total: number | string;
-  }>;
-  const pricedTotal = lineTotals.reduce((sum, row) => sum + normalizeMoney(row.actual_total), 0);
-  const estimatedTotal = lineTotals.reduce(
-    (sum, row) => sum + normalizeMoney(row.estimated_total),
+  const pricedTotal = ((pricedRows ?? []) as Array<{ actual_total: number | string }>).reduce(
+    (sum, row) => sum + normalizeMoney(row.actual_total),
     0,
   );
 
-  // Move the request to `priced` so Finance can approve the cost, and refresh the
-  // header estimate so every view of this request shows the attached prices.
+  // Move the request to `priced` so Finance can approve the cost.
   const nowIso = new Date().toISOString();
   const { error: stateError } = await supabase
     .from("material_requests")
-    .update({
-      status: "priced",
-      priced_at: nowIso,
-      priced_by: profile.id,
-      estimated_total: estimatedTotal,
-    })
+    .update({ status: "priced", priced_at: nowIso, priced_by: profile.id })
     .eq("id", request.id);
   if (stateError) {
     materialRequestError(stateError.message);
