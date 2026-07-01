@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
+import { postPayrollRunJournalSafe } from "@/lib/ops/gl-posting";
 import { canManageOps } from "@/lib/ops/permissions";
 import { computePayslip } from "@/lib/ops/statutory/calculator";
 
@@ -442,6 +443,8 @@ export async function completePayrollRunAction(formData: FormData) {
   if (updateError) {
     payrollError(updateError.message);
   }
+
+  await postPayrollRunJournalSafe(run.id, profile.id);
 
   await supabase.from("audit_events").insert({
     actor_user_id: profile.id,

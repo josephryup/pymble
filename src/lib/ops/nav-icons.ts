@@ -28,6 +28,7 @@ import {
   KeyRound,
   KeySquare,
   Laptop,
+  Landmark,
   LayoutDashboard,
   LayoutGrid,
   LibraryBig,
@@ -41,6 +42,7 @@ import {
   PackageSearch,
   ReceiptText,
   Ruler,
+  Scale,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -94,11 +96,19 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   // Commercial
   "/ops/boq": BarChart3,
   "/ops/invoices": ReceiptText,
+  "/ops/customers": Users,
   "/ops/commercial": ChartNoAxesCombined,
 
   // Finance
+  "/ops/finance": LayoutDashboard,
   "/ops/project-budgets": Wallet,
   "/ops/payment-requests": Banknote,
+  "/ops/finance/accounts": BookOpen,
+  "/ops/finance/trial-balance": ChartNoAxesCombined,
+  "/ops/finance/journal": ScrollText,
+  "/ops/finance/profit-and-loss": LineChart,
+  "/ops/finance/balance-sheet": Scale,
+  "/ops/finance/cash-flow-statement": Landmark,
 
   // Human Resources
   "/ops/employees": BriefcaseBusiness,

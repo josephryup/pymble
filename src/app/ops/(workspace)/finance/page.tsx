@@ -1,0 +1,331 @@
+import {
+  AlertTriangle,
+  Banknote,
+  BookOpen,
+  CheckCircle2,
+  ClipboardList,
+  Layers,
+  Receipt,
+  ScrollText,
+  Target,
+  TrendingDown,
+  Wallet,
+} from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import {
+  OpsAgeingPanel,
+  OpsCashflowChartPanel,
+  OpsCommercialKpiPanel,
+} from "@/components/ops/OpsFinanceKpiPanels";
+import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { OpsProjectPnlPanel } from "@/components/ops/OpsProjectPnlPanel";
+import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { OpsTableShell } from "@/components/ops/OpsTableShell";
+import { requireOpsUser } from "@/lib/ops/auth";
+import { canViewOpsChartOfAccounts } from "@/lib/ops/chart-of-accounts-permissions";
+import {
+  fetchOpsBudgetVarianceDashboard,
+  fetchOpsFinanceCashflowDashboard,
+  fetchOpsPaymentRequestStats,
+  fetchOpsProjectBudgetStats,
+} from "@/lib/ops/finance";
+import {
+  fetchOpsCashflowChart,
+  fetchOpsCommercialKpis,
+  fetchOpsReceivablesAgeing,
+  fetchOpsSupplierAgeing,
+} from "@/lib/ops/finance-kpis";
+import { canAccessOpsHref } from "@/lib/ops/permissions";
+import { fetchOpsProjectPnl } from "@/lib/ops/project-pnl";
+import {
+  formatZmw,
+  OPS_SECONDARY_BUTTON_CLASS,
+  OPS_TABLE_CLASS,
+  OPS_TD_CLASS,
+  OPS_TD_NUM_CLASS,
+  OPS_TH_CLASS,
+  OPS_TH_NUM_CLASS,
+  OPS_THEAD_CLASS,
+  OPS_TR_CLASS,
+} from "@/lib/ops/ui";
+
+export const dynamic = "force-dynamic";
+
+export default async function OpsFinanceOverviewPage() {
+  const { profile } = await requireOpsUser();
+
+  if (!canAccessOpsHref(profile.role, "/ops/finance")) {
+    notFound();
+  }
+
+  const [
+    cashflow,
+    paymentStats,
+    budgetStats,
+    variance,
+    cashflowChart,
+    supplierAgeing,
+    receivablesAgeing,
+    pnl,
+    commercialKpis,
+  ] = await Promise.all([
+    fetchOpsFinanceCashflowDashboard(),
+    fetchOpsPaymentRequestStats(),
+    fetchOpsProjectBudgetStats(),
+    fetchOpsBudgetVarianceDashboard(),
+    fetchOpsCashflowChart(),
+    fetchOpsSupplierAgeing(),
+    fetchOpsReceivablesAgeing(),
+    fetchOpsProjectPnl(),
+    fetchOpsCommercialKpis(),
+  ]);
+
+  const showAccountsLink = canViewOpsChartOfAccounts(profile.role);
+
+  return (
+    <div className="w-full max-w-none space-y-6">
+      <OpsRealtimeRefresh
+        tables={["payment_requests", "invoices", "project_budgets", "project_cost_entries"]}
+      />
+      <OpsPageHeader
+        eyebrow="Finance and Accounts"
+        title="Finance overview"
+        description="Cashflow, receivables, payables, budget variance, and project margin in one cockpit. Statutory statements unlock when the general ledger goes live."
+        actions={
+          <>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/project-budgets">
+              <Target className="size-4" aria-hidden="true" />
+              Budgets
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/payment-requests">
+              <Banknote className="size-4" aria-hidden="true" />
+              Payments
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/invoices">
+              <Receipt className="size-4" aria-hidden="true" />
+              Invoices
+            </Link>
+            {showAccountsLink ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/finance/accounts">
+                <BookOpen className="size-4" aria-hidden="true" />
+                Chart of Accounts
+              </Link>
+            ) : null}
+          </>
+        }
+      />
+
+      {/* Cash & liability signal */}
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <OpsKpiCard
+          href="/ops/payment-requests"
+          icon={Wallet}
+          label="Net 30-day cash signal"
+          tone={cashflow.netNext30 >= 0 ? "good" : "critical"}
+          trend={cashflow.netNext30 >= 0 ? "Inflow positive" : "Shortfall risk"}
+          trendDirection={cashflow.netNext30 >= 0 ? "up" : "down"}
+          value={formatZmw(cashflow.netNext30)}
+        />
+        <OpsKpiCard
+          href="/ops/invoices"
+          icon={Receipt}
+          label="Open receivables"
+          hint={`${formatZmw(cashflow.sentReceivables)} sent`}
+          value={formatZmw(cashflow.openReceivables)}
+        />
+        <OpsKpiCard
+          href="/ops/payment-requests?status=submitted#payment-request-register"
+          icon={Banknote}
+          label="Unpaid payables"
+          tone={paymentStats.unpaidAmount > 0 ? "warn" : "default"}
+          trend="Submitted plus approved"
+          value={formatZmw(paymentStats.unpaidAmount)}
+        />
+        <OpsKpiCard
+          href="/ops/payment-requests"
+          icon={AlertTriangle}
+          label="Overdue payables"
+          tone={cashflow.overduePayables > 0 ? "critical" : "good"}
+          trend={cashflow.overduePayables > 0 ? "Past due date" : "None overdue"}
+          value={formatZmw(cashflow.overduePayables)}
+        />
+      </section>
+
+      {/* Budget posture */}
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <OpsKpiCard
+          href="/ops/project-budgets"
+          icon={Layers}
+          label="Total budgeted"
+          hint={`${budgetStats.activeBudgets} active budgets`}
+          value={formatZmw(budgetStats.totalBudgetedAmount)}
+        />
+        <OpsKpiCard
+          href="/ops/project-budgets"
+          icon={ClipboardList}
+          label="Committed cost"
+          value={formatZmw(budgetStats.committedAmount)}
+        />
+        <OpsKpiCard
+          href="/ops/project-budgets"
+          icon={CheckCircle2}
+          label="Posted cost"
+          value={formatZmw(budgetStats.postedAmount)}
+        />
+        <OpsKpiCard
+          href="/ops/project-budgets"
+          icon={TrendingDown}
+          label="Over budget"
+          tone={variance.overBudgetAmount > 0 ? "critical" : "good"}
+          trend={variance.overBudgetAmount > 0 ? "Exposure exceeds budget" : "Within budget"}
+          value={formatZmw(variance.overBudgetAmount)}
+        />
+      </section>
+
+      <OpsCashflowChartPanel data={cashflowChart} />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <OpsAgeingPanel
+          description="Outstanding supplier payment requests by days since submission."
+          emptyMessage="No outstanding payment requests."
+          eyebrow="Supplier ageing"
+          summary={supplierAgeing}
+          title="Payables ageing 0/30/60/90"
+        />
+        <OpsAgeingPanel
+          description="Outstanding sent client invoices by days since issue."
+          emptyMessage="No outstanding receivables."
+          eyebrow="Receivables ageing"
+          summary={receivablesAgeing}
+          title="Receivables ageing 0/30/60/90"
+        />
+      </div>
+
+      <OpsCommercialKpiPanel kpis={commercialKpis} />
+
+      <OpsProjectPnlPanel pnl={pnl} />
+
+      <OpsDashboardPanel
+        eyebrow="Budget variance"
+        title="Project budget exposure"
+        description="Active and locked budgets ranked by over-budget amount, then variance."
+        actions={
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/project-budgets">
+            <Target className="size-4" aria-hidden="true" />
+            Open budgets
+          </Link>
+        }
+      >
+        {variance.rows.length > 0 ? (
+          <OpsTableShell>
+            <table className={`${OPS_TABLE_CLASS} min-w-[720px]`}>
+              <caption className="sr-only">
+                Project budget variance by budget — budgeted, exposure, remaining, and over-budget amounts.
+              </caption>
+              <thead className={OPS_THEAD_CLASS}>
+                <tr>
+                  <th className={OPS_TH_CLASS} scope="col">Budget</th>
+                  <th className={OPS_TH_NUM_CLASS} scope="col">Budgeted</th>
+                  <th className={OPS_TH_NUM_CLASS} scope="col">Exposure</th>
+                  <th className={OPS_TH_NUM_CLASS} scope="col">Remaining</th>
+                  <th className={OPS_TH_NUM_CLASS} scope="col">Over budget</th>
+                  <th className={OPS_TH_NUM_CLASS} scope="col">Used</th>
+                </tr>
+              </thead>
+              <tbody>
+                {variance.rows.map((row) => (
+                  <tr className={OPS_TR_CLASS} key={row.id}>
+                    <td className={OPS_TD_CLASS}>
+                      <p className="font-bold text-foreground">{row.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {row.budget_number}
+                        {row.site ? ` · ${row.site.code}` : ""}
+                      </p>
+                    </td>
+                    <td className={`${OPS_TD_NUM_CLASS} text-muted-foreground`}>
+                      {formatZmw(row.total_budgeted_amount)}
+                    </td>
+                    <td className={`${OPS_TD_NUM_CLASS} font-semibold text-foreground`}>
+                      {formatZmw(row.exposure_amount)}
+                    </td>
+                    <td
+                      className={`${OPS_TD_NUM_CLASS} font-semibold ${
+                        row.remaining_amount < 0 ? "text-red-700" : "text-emerald-700"
+                      }`}
+                    >
+                      {formatZmw(row.remaining_amount)}
+                    </td>
+                    <td
+                      className={`${OPS_TD_NUM_CLASS} font-bold ${
+                        row.over_budget_amount > 0 ? "text-red-700" : "text-muted-foreground"
+                      }`}
+                    >
+                      {formatZmw(row.over_budget_amount)}
+                    </td>
+                    <td className={`${OPS_TD_NUM_CLASS} text-muted-foreground`}>
+                      {Math.round(row.variance_percent)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </OpsTableShell>
+        ) : (
+          <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            No active or locked budgets with cost exposure yet.
+          </p>
+        )}
+      </OpsDashboardPanel>
+
+      <OpsDashboardPanel
+        eyebrow="General Ledger"
+        title="Ledger and statements"
+        description="The double-entry ledger is live — journals post automatically when invoices are sent and paid, bills are approved and paid, and payroll is disbursed. Statements are since-inception until period close lands in a later phase."
+        actions={
+          showAccountsLink ? (
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/finance/accounts">
+              <ScrollText className="size-4" aria-hidden="true" />
+              Chart of Accounts
+            </Link>
+          ) : undefined
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {[
+            { label: "Trial Balance", href: "/ops/finance/trial-balance" },
+            { label: "Journal", href: "/ops/finance/journal" },
+            { label: "Profit & Loss", href: "/ops/finance/profit-and-loss" },
+            { label: "Balance Sheet", href: "/ops/finance/balance-sheet" },
+            { label: "Cash Flow Statement", href: "/ops/finance/cash-flow-statement" },
+          ].map((statement) =>
+            statement.href ? (
+              <Link
+                className="rounded-md border border-border bg-card px-3 py-4 text-center transition hover:border-primary/50 hover:bg-muted"
+                href={statement.href}
+                key={statement.label}
+              >
+                <p className="text-sm font-bold text-foreground">{statement.label}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-emerald-700">
+                  Live
+                </p>
+              </Link>
+            ) : (
+              <div
+                className="rounded-md border border-dashed border-border px-3 py-4 text-center"
+                key={statement.label}
+              >
+                <p className="text-sm font-bold text-foreground">{statement.label}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  Pending
+                </p>
+              </div>
+            ),
+          )}
+        </div>
+      </OpsDashboardPanel>
+    </div>
+  );
+}

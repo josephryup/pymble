@@ -23,6 +23,7 @@ import {
   canReviewOpsPaymentRequest,
   canSubmitOpsPaymentRequest,
 } from "@/lib/ops/finance-permissions";
+import { postPaymentRequestJournalSafe, reverseOpsJournalSafe } from "@/lib/ops/gl-posting";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsPaymentRequestStatus,
@@ -948,6 +949,19 @@ export async function approvePaymentRequestAction(formData: FormData) {
     }).catch(() => null),
   );
 
+  await postPaymentRequestJournalSafe(
+    {
+      id: paymentRequest.id,
+      request_number: paymentRequest.request_number,
+      title: paymentRequest.title,
+      site_id: paymentRequest.site_id,
+      payment_type: paymentRequest.payment_type,
+      requested_amount: paymentRequest.requested_amount,
+    },
+    "accrued",
+    profile.id,
+  );
+
   await recordOpsAuditEvent({
     action: "payment_request.approved",
     actorUserId: profile.id,
@@ -1064,6 +1078,20 @@ export async function markPaymentRequestPaidAction(formData: FormData) {
     paymentRequest,
     status: "posted",
   });
+
+  await postPaymentRequestJournalSafe(
+    {
+      id: paymentRequest.id,
+      request_number: paymentRequest.request_number,
+      title: paymentRequest.title,
+      site_id: paymentRequest.site_id,
+      payment_type: paymentRequest.payment_type,
+      requested_amount: paymentRequest.requested_amount,
+      payment_reference: parsed.data.payment_reference,
+    },
+    "paid",
+    profile.id,
+  );
 
   await recordOpsAuditEvent({
     action: "payment_request.paid",

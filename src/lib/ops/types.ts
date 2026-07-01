@@ -68,6 +68,7 @@ export type OpsNotificationStatus = "unread" | "read" | "archived";
 export type OpsEmailDeliveryStatus = "sent" | "failed" | "skipped";
 export type OpsSupplierStatus = "active" | "on_hold" | "archived";
 export type OpsSupplierKind = "vendor" | "subcontractor" | "both";
+export type OpsCustomerStatus = "active" | "archived";
 export type OpsSupplierPerformanceEventType =
   | "delivery"
   | "quality"

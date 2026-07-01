@@ -15,6 +15,7 @@ import {
   canVoidInvoice,
   type OpsInvoiceMutationTarget,
 } from "@/lib/ops/invoice-permissions";
+import { postInvoiceJournalSafe, reverseOpsJournalSafe } from "@/lib/ops/gl-posting";
 import type { OrganizationProfile } from "@/lib/ops/organization";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -26,6 +27,11 @@ const createInvoiceSchema = z.object({
     .transform((value) => (value.length > 0 ? value : null))
     .pipe(z.string().uuid().nullable()),
   client_name: z.string().trim().min(2, "Client name is required.").max(160),
+  customer_id: z
+    .string()
+    .trim()
+    .transform((value) => (value.length > 0 ? value : null))
+    .pipe(z.string().uuid().nullable()),
   invoice_number: z.string().trim().max(80).optional(),
   issued_at: dateSchema,
   site_id: z.string().uuid("Select a Pymble site."),
@@ -86,6 +92,7 @@ export async function createInvoiceAction(formData: FormData) {
   const parsed = createInvoiceSchema.safeParse({
     boq_id: field(formData, "boq_id"),
     client_name: field(formData, "client_name"),
+    customer_id: field(formData, "customer_id"),
     invoice_number: field(formData, "invoice_number"),
     issued_at: field(formData, "issued_at"),
     site_id: field(formData, "site_id"),
@@ -121,6 +128,7 @@ export async function createInvoiceAction(formData: FormData) {
       boq_id: parsed.data.boq_id,
       client_name: parsed.data.client_name,
       created_by: profile.id,
+      customer_id: parsed.data.customer_id,
       invoice_number: invoiceNumber,
       issued_at: parsed.data.issued_at,
       site_id: parsed.data.site_id,
@@ -200,6 +208,10 @@ async function updateInvoiceStatus(id: string, status: "paid" | "sent", userId: 
     entity_type: "invoice",
     entity_id: data.id,
   });
+
+  // Post the matching GL journal (revenue recognition on send, cash receipt on
+  // paid). Best-effort + idempotent — never blocks the status change.
+  await postInvoiceJournalSafe(data.id, status === "sent" ? "issued" : "paid", userId);
 }
 
 export async function sendInvoiceAction(formData: FormData) {
@@ -369,6 +381,10 @@ export async function voidInvoiceAction(formData: FormData) {
     source_id: parsed.data.id,
     metadata: { reason: parsed.data.reason, invoice_number: invoice.invoice_number },
   });
+
+  // A sent invoice already posted a revenue/AR accrual — unwind it. A no-op if
+  // the invoice was still draft (nothing was ever posted) or already reversed.
+  await reverseOpsJournalSafe("invoices", parsed.data.id, "invoice_issued", profile.id);
 
   revalidatePath("/ops/invoices");
   redirect("/ops/invoices?updated=voided");

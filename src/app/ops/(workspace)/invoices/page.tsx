@@ -7,6 +7,7 @@ import {
   Plus,
   ReceiptText,
   Send,
+  Users,
   Wallet,
 } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -41,6 +42,7 @@ import {
 } from "@/lib/ops/invoices";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsBoqOptions } from "@/lib/ops/boq";
+import { fetchActiveCustomerOptions } from "@/lib/ops/customers";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
@@ -173,16 +175,18 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 10 });
   const status = invoiceStatusFromParam(firstParam(params.status));
-  const [invoicePage, siteOptions, boqOptions, invoiceStatusCounts] = await Promise.all([
-    fetchPaginatedOpsInvoices({
-      listState,
-      query: listState.query,
-      status: status || undefined,
-    }),
-    fetchActiveSiteOptions(),
-    fetchOpsBoqOptions(),
-    fetchOpsInvoiceStatusCounts(),
-  ]);
+  const [invoicePage, siteOptions, boqOptions, invoiceStatusCounts, customerOptions] =
+    await Promise.all([
+      fetchPaginatedOpsInvoices({
+        listState,
+        query: listState.query,
+        status: status || undefined,
+      }),
+      fetchActiveSiteOptions(),
+      fetchOpsBoqOptions(),
+      fetchOpsInvoiceStatusCounts(),
+      fetchActiveCustomerOptions(),
+    ]);
   const invoices = invoicePage.items;
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const canCreate = canCreateInvoice(auth.profile.role);
@@ -225,6 +229,10 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
             <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/boq">
               <FileText className="size-4" aria-hidden="true" />
               Bill of Quantities
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/customers">
+              <Users className="size-4" aria-hidden="true" />
+              Customers
             </Link>
             {canManage ? (
               <a className={OPS_PRIMARY_BUTTON_CLASS} href={createInvoiceHref}>
@@ -383,6 +391,17 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
               <label className={OPS_LABEL_CLASS}>
                 Invoice no.
                 <input className={OPS_INPUT_CLASS} name="invoice_number" />
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                Customer (optional)
+                <select className={OPS_INPUT_CLASS} defaultValue="" name="customer_id">
+                  <option value="">No customer link</option>
+                  {customerOptions.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.customer_code} - {customer.label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Client
