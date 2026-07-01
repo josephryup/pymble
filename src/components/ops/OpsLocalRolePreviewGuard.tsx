@@ -37,8 +37,13 @@ export function OpsLocalRolePreviewGuard() {
 
   return blockedAt ? (
     <div
-      className="fixed bottom-4 left-4 right-4 z-[70] rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 shadow-lg md:left-auto md:w-[28rem]"
+      className="fixed z-[70] rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 shadow-lg md:left-auto md:w-[28rem]"
       role="status"
+      style={{
+        bottom: "max(1rem, env(safe-area-inset-bottom))",
+        left: "max(1rem, env(safe-area-inset-left))",
+        right: "max(1rem, env(safe-area-inset-right))",
+      }}
     >
       Local role preview is read-only. Stop preview or sign in with a real account to make changes.
     </div>

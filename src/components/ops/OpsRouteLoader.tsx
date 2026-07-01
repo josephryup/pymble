@@ -61,7 +61,7 @@ export function OpsRouteLoader({
   return (
     <div
       aria-live="polite"
-      className="ops-ui flex min-h-screen items-center justify-center bg-muted p-6 text-foreground"
+      className="ops-ui flex min-h-dvh items-center justify-center bg-muted p-6 text-foreground"
       role="status"
     >
       <Card className="w-full max-w-xs py-0 text-center shadow-sm shadow-foreground/5">

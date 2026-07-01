@@ -128,7 +128,11 @@ export function OpsNotificationDockClient({
   return (
     <div
       ref={containerRef}
-      className="fixed bottom-5 right-5 z-[60] flex flex-col items-end gap-3 print:hidden"
+      className="fixed z-[60] flex flex-col items-end gap-3 print:hidden"
+      style={{
+        bottom: "max(1.25rem, env(safe-area-inset-bottom))",
+        right: "max(1.25rem, env(safe-area-inset-right))",
+      }}
     >
       {open ? (
         <div className="flex w-[22rem] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">

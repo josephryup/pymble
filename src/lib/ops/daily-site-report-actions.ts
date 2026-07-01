@@ -6,13 +6,13 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { createDailySiteReportCore } from "@/lib/ops/daily-site-report-core";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import {
   canArchiveOpsDailySiteReport,
   canCancelOpsDailySiteReport,
   canCloseOpsDailySiteReport,
-  canCreateOpsDailySiteReport,
   canDeleteOpsDailySiteReport,
   canEditOpsDailySiteReport,
   canReviewOpsDailySiteReport,
@@ -20,24 +20,6 @@ import {
 } from "@/lib/ops/daily-site-report-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsDailySiteReportStatus } from "@/lib/ops/types";
-
-const createReportSchema = z.object({
-  commercial_notes: z.string().trim().max(1200).default(""),
-  delay_notes: z.string().trim().max(1200).default(""),
-  equipment_count: z.coerce.number().int().min(0).default(0),
-  equipment_notes: z.string().trim().max(1200).default(""),
-  hse_notes: z.string().trim().max(1200).default(""),
-  incident_count: z.coerce.number().int().min(0).default(0),
-  labour_count: z.coerce.number().int().min(0).default(0),
-  labour_notes: z.string().trim().max(1200).default(""),
-  material_deliveries_count: z.coerce.number().int().min(0).default(0),
-  material_notes: z.string().trim().max(1200).default(""),
-  overall_progress_percent: z.coerce.number().min(0).max(100).default(0),
-  progress_summary: z.string().trim().min(2, "Progress summary is required.").max(1600),
-  report_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter a valid report date."),
-  site_id: z.string().uuid("Select a Pymble site."),
-  weather: z.string().trim().max(160).default(""),
-});
 
 const entrySchema = z.object({
   entry_type: z.enum(["progress", "labour", "equipment", "material", "delay", "hse", "commercial"]),
@@ -90,74 +72,11 @@ async function fetchReportForPermission(reportId: string) {
 
 export async function createDailySiteReportAction(formData: FormData) {
   const { profile } = await requireOpsUser();
+  const result = await createDailySiteReportCore(formData, profile);
 
-  if (!canCreateOpsDailySiteReport(profile.role)) {
-    reportError("Your role cannot create daily site reports.");
+  if (!result.ok) {
+    reportError(result.message);
   }
-
-  const parsed = createReportSchema.safeParse({
-    commercial_notes: field(formData, "commercial_notes"),
-    delay_notes: field(formData, "delay_notes"),
-    equipment_count: field(formData, "equipment_count") || "0",
-    equipment_notes: field(formData, "equipment_notes"),
-    hse_notes: field(formData, "hse_notes"),
-    incident_count: field(formData, "incident_count") || "0",
-    labour_count: field(formData, "labour_count") || "0",
-    labour_notes: field(formData, "labour_notes"),
-    material_deliveries_count: field(formData, "material_deliveries_count") || "0",
-    material_notes: field(formData, "material_notes"),
-    overall_progress_percent: field(formData, "overall_progress_percent") || "0",
-    progress_summary: field(formData, "progress_summary"),
-    report_date: field(formData, "report_date"),
-    site_id: field(formData, "site_id"),
-    weather: field(formData, "weather"),
-  });
-
-  if (!parsed.success) {
-    reportError(parsed.error.issues[0]?.message ?? "Check the daily report details.");
-  }
-
-  // Sprint 10 offline support: if the page submitted a client_id (UUID
-  // generated when the user filled the form offline), upsert on it so a
-  // replayed FormData doesn't insert twice.
-  const clientId = (field(formData, "client_id") || "").trim() || null;
-  const supabase = getOpsSupabaseServiceClient();
-  const { data, error } = clientId
-    ? await supabase
-        .from("daily_site_reports")
-        .upsert(
-          { ...parsed.data, client_id: clientId, prepared_by: profile.id },
-          { onConflict: "client_id", ignoreDuplicates: false },
-        )
-        .select("id, report_number")
-        .single<{ id: string; report_number: string }>()
-    : await supabase
-        .from("daily_site_reports")
-        .insert({
-          ...parsed.data,
-          prepared_by: profile.id,
-        })
-        .select("id, report_number")
-        .single<{ id: string; report_number: string }>();
-
-  if (error || !data) {
-    reportError(error?.message ?? "The daily site report could not be created.");
-  }
-
-  await recordOpsAuditEvent({
-    action: "daily_site_report.created",
-    actorUserId: profile.id,
-    entityId: data.id,
-    entityType: "daily_site_report",
-    metadata: {
-      report_date: parsed.data.report_date,
-      site_id: parsed.data.site_id,
-    },
-    moduleKey: "daily_site_reports",
-    sourceId: data.id,
-    sourceTable: "daily_site_reports",
-    summary: `Created daily site report ${data.report_number}`,
-  }).catch(() => null);
 
   revalidatePath("/ops/daily-site-reports");
   redirect("/ops/daily-site-reports?created=report");

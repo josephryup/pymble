@@ -98,7 +98,13 @@ export function OpsNotificationToaster({ userId }: { userId: string }) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed right-5 top-5 z-[70] flex w-[20rem] max-w-[calc(100vw-2.5rem)] flex-col gap-2 print:hidden">
+    <div
+      className="fixed z-[70] flex w-[20rem] max-w-[calc(100vw-2.5rem)] flex-col gap-2 print:hidden"
+      style={{
+        top: "max(1.25rem, env(safe-area-inset-top))",
+        right: "max(1.25rem, env(safe-area-inset-right))",
+      }}
+    >
       {toasts.map((toast) => (
         <div
           key={toast.key}

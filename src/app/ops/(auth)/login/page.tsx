@@ -25,8 +25,8 @@ export default async function OpsLoginPage({ searchParams }: PageProps) {
     : null;
 
   return (
-    <main className="ops-ui min-h-screen bg-[#f6f7fb] px-5 py-10 text-primary-dark">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md items-center">
+    <main className="ops-ui min-h-dvh bg-[#f6f7fb] px-5 py-10 text-primary-dark">
+      <div className="mx-auto flex min-h-[calc(100dvh-5rem)] max-w-md items-center">
         <section
           aria-labelledby="ops-login-title"
           className="w-full rounded-lg border border-primary-dark/10 bg-white p-6 shadow-sm"

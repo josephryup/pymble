@@ -3,7 +3,7 @@ import { OPS_PRIMARY_BUTTON_CLASS } from "@/lib/ops/ui";
 
 export default function OpsNotFound() {
   return (
-    <main className="ops-ui flex min-h-screen items-center justify-center bg-[#f6f7fb] px-5 text-primary-dark">
+    <main className="ops-ui flex min-h-dvh items-center justify-center bg-[#f6f7fb] px-5 text-primary-dark">
       <section
         aria-labelledby="ops-not-found-title"
         className="w-full max-w-md rounded-lg border border-primary-dark/10 bg-white p-6 shadow-sm"

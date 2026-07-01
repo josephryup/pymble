@@ -14,6 +14,12 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#2235DD",
+  // Lets the installed PWA render edge-to-edge and exposes real
+  // env(safe-area-inset-*) values (notch, Dynamic Island, home-indicator,
+  // Android gesture bar) instead of always reporting 0 — every fixed/sticky
+  // element in the ops shell pads against these so nothing renders under or
+  // gets crowded by device chrome once installed.
+  viewportFit: "cover",
 };
 
 export default function OpsLayout({

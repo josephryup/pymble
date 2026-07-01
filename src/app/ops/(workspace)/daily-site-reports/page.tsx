@@ -15,9 +15,11 @@ import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsOfflineForm } from "@/components/ops/OpsOfflineForm";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import {
   addDailySiteReportEntryAction,
   closeDailySiteReportAction,
@@ -485,9 +487,12 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
               </div>
             </div>
           ) : (
-            <form
+            <OpsOfflineForm
               action={createDailySiteReportAction}
               className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              kind="daily_site_report.create"
+              replayEndpoint="/api/ops/offline/daily-site-reports"
+              summary="Daily site report"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
@@ -577,12 +582,15 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
                 <textarea className={OPS_INPUT_CLASS} name="commercial_notes" rows={2} />
               </label>
               <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
-                <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
+                <OpsSubmitButton
+                  className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`}
+                  pendingLabel="Creating..."
+                >
                   <Plus className="size-4" aria-hidden="true" />
                   Create report
-                </button>
+                </OpsSubmitButton>
               </div>
-            </form>
+            </OpsOfflineForm>
           )}
         </details>
       ) : null}

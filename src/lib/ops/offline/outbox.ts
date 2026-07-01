@@ -52,6 +52,45 @@ export type OpsOutboxIntent = {
   status: OpsOutboxIntentStatus;
 };
 
+/**
+ * IndexedDB stores values via the structured clone algorithm, which does NOT
+ * support `FormData` (it throws `DataCloneError`) — only its underlying
+ * primitives, `File`/`Blob`, arrays, and plain objects. So a `FormData`
+ * payload is serialised to a plain entries array before `db.put` and
+ * reconstructed on read; this is transparent to callers, who can still pass
+ * a `FormData` straight through.
+ */
+type OpsOutboxSerializedFormData = {
+  __opsFormData: true;
+  entries: Array<[string, string | File]>;
+};
+
+function isSerializedFormData(value: unknown): value is OpsOutboxSerializedFormData {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { __opsFormData?: unknown }).__opsFormData === true
+  );
+}
+
+function serializeOutboxPayload(payload: unknown): unknown {
+  if (payload instanceof FormData) {
+    return { __opsFormData: true, entries: Array.from(payload.entries()) } satisfies OpsOutboxSerializedFormData;
+  }
+  return payload;
+}
+
+function deserializeOutboxPayload(payload: unknown): unknown {
+  if (isSerializedFormData(payload)) {
+    const formData = new FormData();
+    for (const [key, value] of payload.entries) {
+      formData.append(key, value);
+    }
+    return formData;
+  }
+  return payload;
+}
+
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
 function getDb() {
@@ -98,7 +137,7 @@ export async function enqueueOutboxIntent(
     attempts: intent.attempts ?? 0,
     status: intent.status ?? "pending",
   };
-  await db.put(STORE_NAME, full);
+  await db.put(STORE_NAME, { ...full, payload: serializeOutboxPayload(full.payload) });
   notifyOutboxChanged();
   return full;
 }
@@ -166,15 +205,16 @@ export async function replayOutboxIntent(intent: OpsOutboxIntent): Promise<boole
     attempts: intent.attempts + 1,
   });
 
+  const payload = deserializeOutboxPayload(intent.payload);
   let body: BodyInit | undefined;
   const headers: Record<string, string> = {};
-  if (intent.payload instanceof FormData) {
-    body = intent.payload;
-  } else if (intent.payload && typeof intent.payload === "object") {
-    body = JSON.stringify(intent.payload);
+  if (payload instanceof FormData) {
+    body = payload;
+  } else if (payload && typeof payload === "object") {
+    body = JSON.stringify(payload);
     headers["Content-Type"] = "application/json";
   } else {
-    body = String(intent.payload ?? "");
+    body = String(payload ?? "");
   }
 
   try {

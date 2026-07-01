@@ -17,6 +17,8 @@ import {
   OpsMobileRecordList,
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
+import { OpsOfflineForm } from "@/components/ops/OpsOfflineForm";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approveAttendanceAction,
@@ -403,9 +405,12 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
               Add at least one site and one worker before recording attendance.
             </div>
           ) : (
-            <form
+            <OpsOfflineForm
               action={createAttendanceAction}
               className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              kind="attendance.create"
+              replayEndpoint="/api/ops/offline/attendance"
+              summary="Attendance record"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Worker
@@ -493,15 +498,12 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                 <input className={OPS_INPUT_CLASS} inputMode="decimal" name="gps_longitude" />
               </label>
               <div className="flex items-end min-[520px]:col-span-2 lg:col-span-1">
-                <button
-                  className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
-                  type="submit"
-                >
+                <OpsSubmitButton className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} pendingLabel="Adding...">
                   <Plus className="size-4" aria-hidden="true" />
                   Add record
-                </button>
+                </OpsSubmitButton>
               </div>
-            </form>
+            </OpsOfflineForm>
           )}
         </section>
       ) : (

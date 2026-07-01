@@ -574,16 +574,27 @@ export function OpsShell({
   };
 
   return (
-    <div className="ops-ui min-h-screen bg-background text-foreground">
+    <div className="ops-ui min-h-dvh bg-background text-foreground">
       {isLocalRolePreview ? <OpsLocalRolePreviewGuard /> : null}
       <a
-        className={`sr-only fixed left-4 top-4 z-[1000] rounded-md bg-card px-4 py-3 text-sm font-bold text-foreground shadow-lg focus:not-sr-only ${OPS_FOCUS_CLASS}`}
+        className={`sr-only fixed z-[1000] rounded-md bg-card px-4 py-3 text-sm font-bold text-foreground shadow-lg focus:not-sr-only ${OPS_FOCUS_CLASS}`}
+        style={{
+          top: "max(1rem, env(safe-area-inset-top))",
+          left: "max(1rem, env(safe-area-inset-left))",
+        }}
         href="#ops-main-content"
       >
         Skip to content
       </a>
 
-      <header className="sticky top-0 z-40 border-b border-border bg-background px-4 py-3 lg:hidden">
+      <header
+        className="sticky top-0 z-40 border-b border-border bg-background pb-3 lg:hidden"
+        style={{
+          paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+          paddingLeft: "max(1rem, env(safe-area-inset-left))",
+          paddingRight: "max(1rem, env(safe-area-inset-right))",
+        }}
+      >
         <div className="flex items-center justify-between gap-3">
           <Link
             aria-label={`${OPS_BRAND.companyName} operations overview`}
@@ -638,7 +649,14 @@ export function OpsShell({
           ref={mobileNavRef}
           role="dialog"
         >
-          <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_auto] gap-4 p-4">
+          <div
+            className="grid h-full grid-rows-[auto_minmax(0,1fr)_auto] gap-4 pr-4"
+            style={{
+              paddingTop: "max(1rem, env(safe-area-inset-top))",
+              paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+              paddingLeft: "max(1rem, env(safe-area-inset-left))",
+            }}
+          >
             <div className="flex items-center gap-3">
               <OpsLogoLink onNavigate={closeMobileNav} />
               <button
@@ -670,13 +688,13 @@ export function OpsShell({
       ) : null}
 
       <div
-        className={`min-h-screen transition-[padding] duration-200 ${
+        className={`min-h-dvh transition-[padding] duration-200 ${
           isNavCollapsed ? "lg:pl-[76px]" : "lg:pl-[280px]"
         }`}
       >
         <TooltipProvider delay={150}>
           <aside
-            className={`hidden border-r border-border bg-background text-foreground transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:h-screen ${
+            className={`hidden border-r border-border bg-background text-foreground transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:h-dvh ${
               isNavCollapsed ? "lg:w-[76px]" : "lg:w-[280px]"
             }`}
           >
@@ -684,6 +702,11 @@ export function OpsShell({
               className={`grid h-full w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-4 ${
                 isNavCollapsed ? "p-2.5" : "p-4"
               }`}
+              style={{
+                paddingLeft: isNavCollapsed
+                  ? "max(0.625rem, env(safe-area-inset-left))"
+                  : "max(1rem, env(safe-area-inset-left))",
+              }}
             >
               {isNavCollapsed ? (
                 <div className="grid justify-items-center gap-2">

@@ -14,6 +14,13 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
+// Bump this string whenever src/app/ops/offline/page.tsx's content changes so
+// Serwist knows to re-fetch and re-precache it. Next doesn't include plain
+// app-router pages in its build manifest (only JS/CSS/static assets), so this
+// one page is added by hand as the offline navigation fallback.
+const OPS_OFFLINE_FALLBACK_REVISION = "1";
+const OPS_OFFLINE_FALLBACK_URL = "/ops/offline";
+
 /**
  * Pymble Operations service worker.
  *
@@ -23,16 +30,29 @@ declare const self: ServiceWorkerGlobalScope;
  * Strategy:
  *  - Precache the Next.js build manifest (shell + static assets)
  *  - Use Serwist's defaults for typical asset traffic
+ *  - Fall back to /ops/offline (precached by hand, see above) when a
+ *    navigation fails offline, instead of the browser's raw error page
  *  - The IndexedDB outbox (src/lib/ops/offline/outbox.ts) handles outbound
  *    writes; this worker does NOT intercept POSTs — replay is owned by the
  *    page so we keep failed attempts visible to the user.
  */
 const serwist = new Serwist({
-  precacheEntries: self.__SW_MANIFEST,
+  precacheEntries: [
+    ...(self.__SW_MANIFEST ?? []),
+    { url: OPS_OFFLINE_FALLBACK_URL, revision: OPS_OFFLINE_FALLBACK_REVISION },
+  ],
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: defaultCache,
+  fallbacks: {
+    entries: [
+      {
+        url: OPS_OFFLINE_FALLBACK_URL,
+        matcher: ({ request }) => request.destination === "document",
+      },
+    ],
+  },
 });
 
 serwist.addEventListeners();

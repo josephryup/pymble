@@ -1,6 +1,8 @@
 import { Camera, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsOfflineForm } from "@/components/ops/OpsOfflineForm";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { deleteSitePhotoAction, uploadSitePhotoAction } from "@/lib/ops/photo-actions";
 import { fetchOpsSitePhotos, type OpsSitePhoto } from "@/lib/ops/photos";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -140,9 +142,12 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
               Add at least one site before uploading photos.
             </div>
           ) : (
-            <form
+            <OpsOfflineForm
               action={uploadSitePhotoAction}
               className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              kind="site_photo.upload"
+              replayEndpoint="/api/ops/offline/photos"
+              summary="Site photo"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
@@ -180,15 +185,15 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
                 />
               </label>
               <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
-                <button
+                <OpsSubmitButton
                   className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`}
-                  type="submit"
+                  pendingLabel="Uploading..."
                 >
                   <Camera className="size-4" aria-hidden="true" />
                   Upload photo
-                </button>
+                </OpsSubmitButton>
               </div>
-            </form>
+            </OpsOfflineForm>
           )}
         </section>
       ) : null}
