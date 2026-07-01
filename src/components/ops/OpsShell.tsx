@@ -20,6 +20,7 @@ import { OpsBrandMark } from "@/components/ops/OpsBrandMark";
 import { OpsLocalRolePreviewGuard } from "@/components/ops/OpsLocalRolePreviewGuard";
 import { OpsLocalRolePreviewPanel } from "@/components/ops/OpsLocalRolePreviewPanel";
 import { OpsInstallPrompt } from "@/components/ops/OpsInstallPrompt";
+import { OpsPushNotificationPrompt } from "@/components/ops/OpsPushNotificationPrompt";
 import { OpsTopUtilityBar } from "@/components/ops/OpsTopUtilityBar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -751,6 +752,7 @@ export function OpsShell({
               <OpsLocalRolePreviewPanel activeRole={profileRole} compact />
             ) : null}
             <OpsInstallPrompt />
+            {isLocalRolePreview ? null : <OpsPushNotificationPrompt />}
             {children}
           </div>
         </main>

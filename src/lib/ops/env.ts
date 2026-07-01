@@ -77,6 +77,21 @@ export const OPS_ENV_REQUIREMENTS: EnvRequirement[] = [
     description: "Reply-to mailbox for Pymble operational email alerts.",
   },
   {
+    key: "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+    scope: "public",
+    description: "Public VAPID key the browser uses to create a push subscription.",
+  },
+  {
+    key: "VAPID_PRIVATE_KEY",
+    scope: "server",
+    description: "Server-only VAPID private key used to sign outgoing Web Push messages.",
+  },
+  {
+    key: "VAPID_SUBJECT",
+    scope: "server",
+    description: "Contact URI (mailto: or https:) sent to push services alongside VAPID auth.",
+  },
+  {
     key: "NEXT_PUBLIC_SENTRY_DSN",
     scope: "public",
     description: "Public Sentry browser DSN for production error monitoring.",
@@ -125,6 +140,10 @@ export function getOpsEnvironmentStatus() {
       hasEnvValue("R2_SECRET_ACCESS_KEY") &&
       hasEnvValue("R2_BUCKET_NAME"),
     isCronConfigured: hasEnvValue("CRON_SECRET"),
+    isPushConfigured:
+      hasEnvValue("NEXT_PUBLIC_VAPID_PUBLIC_KEY") &&
+      hasEnvValue("VAPID_PRIVATE_KEY") &&
+      hasEnvValue("VAPID_SUBJECT"),
     isEmailConfigured:
       hasEnvValue("RESEND_API_KEY") &&
       (hasEnvValue("OPS_EMAIL_FROM") || hasEnvValue("RESEND_FROM_EMAIL")),

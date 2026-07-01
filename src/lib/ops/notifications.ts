@@ -1,5 +1,6 @@
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canViewSensitiveOpsFoundation } from "@/lib/ops/permissions";
+import { sendOpsPushToUser } from "@/lib/ops/push-sender";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsNotificationStatus } from "@/lib/ops/types";
 
@@ -206,4 +207,13 @@ export async function queueOpsNotification(input: QueueOpsNotificationInput) {
   if (error) {
     throw error;
   }
+
+  // Best-effort OS-level push so this notification also reaches devices where
+  // the ops PWA is installed but closed/backgrounded. Never throws — a push
+  // failure must not roll back or fail the notification write above.
+  await sendOpsPushToUser(input.recipientId, {
+    actionHref: input.actionHref,
+    body: input.body ?? "",
+    title: input.title,
+  });
 }
