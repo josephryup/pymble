@@ -7,12 +7,18 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import {
   canArchiveBoq,
+  canAttachBoqPricing,
   canCreateBoq,
   canDeleteBoq,
   canEditBoq,
+  canIssueBoq,
+  canSubmitBoqForPricing,
   type OpsBoqMutationTarget,
 } from "@/lib/ops/boq-permissions";
+import { syncProjectBudgetFromBoq } from "@/lib/ops/boq-budget-sync";
 import { readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
+import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
+import { queueOpsNotification } from "@/lib/ops/notifications";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -30,17 +36,61 @@ const createBoqSchema = z.object({
   site_id: z.string().uuid("Select a Pymble site."),
   title: z.string().trim().min(2, "BOQ title is required.").max(160),
   version: z.coerce.number().int().positive().default(1),
-  status: z.enum(["draft", "issued"]),
 });
+
+const optionalCategory = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .default("general")
+  .transform((value) => {
+    const slug = value.replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
+    if (!slug) {
+      return "general";
+    }
+    // The DB constraint requires the first character to be a letter.
+    return /^[a-z]/.test(slug) ? slug : `c_${slug}`;
+  });
+
+const optionalDateInput = z
+  .string()
+  .trim()
+  .default("")
+  .transform((value) => (value.length > 0 ? value : null))
+  .refine((value) => value === null || /^\d{4}-\d{2}-\d{2}$/.test(value), {
+    message: "Use a valid date.",
+  });
+
+const optionalProjectTaskId = z
+  .string()
+  .trim()
+  .default("")
+  .transform((value) => (value.length > 0 ? value : null))
+  .refine((value) => value === null || UUID_PATTERN.test(value), {
+    message: "Select a valid project task.",
+  });
+
+const optionalLeadTimeDays = z
+  .string()
+  .trim()
+  .default("")
+  .transform((value) => (value.length > 0 ? Number(value) : null))
+  .refine((value) => value === null || (Number.isFinite(value) && value >= 0), {
+    message: "Lead time must be zero or more days.",
+  });
 
 const createLineItemSchema = z.object({
   boq_id: z.string().uuid("Select a BOQ document."),
   description: z.string().trim().min(2, "Line item description is required.").max(220),
   unit: z.string().trim().min(1, "Unit is required.").max(40),
   quantity: z.coerce.number().min(0, "Quantity cannot be negative."),
-  unit_rate: z.coerce.number().min(0, "Unit rate cannot be negative."),
+  unit_rate: z.coerce.number().min(0, "Unit rate cannot be negative.").default(0),
   actual_quantity: z.coerce.number().min(0, "Actual quantity cannot be negative.").default(0),
   supplier_id: optionalSupplierId,
+  category: optionalCategory,
+  needed_by: optionalDateInput,
+  project_task_id: optionalProjectTaskId,
+  lead_time_days_override: optionalLeadTimeDays,
 });
 
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
@@ -161,7 +211,6 @@ export async function createBoqDocumentAction(formData: FormData) {
 
   const parsed = createBoqSchema.safeParse({
     site_id: field(formData, "site_id"),
-    status: field(formData, "status") || "draft",
     title: field(formData, "title"),
     version: field(formData, "version") || "1",
   });
@@ -175,6 +224,7 @@ export async function createBoqDocumentAction(formData: FormData) {
     .from("boq_documents")
     .insert({
       ...parsed.data,
+      status: "draft",
       created_by: profile.id,
     })
     .select("id")
@@ -212,7 +262,11 @@ export async function createBoqLineItemAction(formData: FormData) {
     quantity: field(formData, "quantity"),
     supplier_id: field(formData, "supplier_id"),
     unit: field(formData, "unit"),
-    unit_rate: field(formData, "unit_rate"),
+    unit_rate: field(formData, "unit_rate") || "0",
+    category: field(formData, "category"),
+    needed_by: field(formData, "needed_by"),
+    project_task_id: field(formData, "project_task_id"),
+    lead_time_days_override: field(formData, "lead_time_days_override"),
   });
 
   if (!parsed.success) {
@@ -272,7 +326,6 @@ const lineItemIdSchema = z.object({
 const updateBoqSchema = boqIdSchema.extend({
   title: z.string().trim().min(2, "Title is required.").max(160),
   version: z.coerce.number().int().positive().default(1),
-  status: z.enum(["draft", "issued"]),
 });
 
 const updateLineItemSchema = lineItemIdSchema.extend({
@@ -286,15 +339,24 @@ const updateLineItemSchema = lineItemIdSchema.extend({
     .trim()
     .default("")
     .transform((value) => (value.length > 0 ? value : null)),
+  category: optionalCategory,
+  needed_by: optionalDateInput,
+  project_task_id: optionalProjectTaskId,
+  lead_time_days_override: optionalLeadTimeDays,
 });
 
-type BoqDocumentForMutation = OpsBoqMutationTarget & { id: string; site_id: string };
+type BoqDocumentForMutation = OpsBoqMutationTarget & {
+  id: string;
+  site_id: string;
+  title: string;
+  created_by: string | null;
+};
 
 async function fetchBoqMutationTarget(boqId: string): Promise<BoqDocumentForMutation | null> {
   const supabase = await createOpsServerSessionClient();
   const { data, error } = await supabase
     .from("boq_documents")
-    .select("id, site_id, status, deleted_at, archived_at")
+    .select("id, site_id, title, created_by, status, deleted_at, archived_at")
     .eq("id", boqId)
     .maybeSingle<BoqDocumentForMutation>();
   if (error) {
@@ -323,7 +385,6 @@ export async function updateBoqDocumentAction(formData: FormData) {
     boq_id: field(formData, "boq_id"),
     title: field(formData, "title"),
     version: field(formData, "version") || "1",
-    status: field(formData, "status") || "draft",
   });
   if (!parsed.success) {
     boqError(parsed.error.issues[0]?.message ?? "Check the BOQ details.");
@@ -339,13 +400,15 @@ export async function updateBoqDocumentAction(formData: FormData) {
     );
   }
 
+  // Status is no longer editable from here — it only moves forward through
+  // submitBoqForPricingAction / attachBoqPricingAction / issueBoqAction, so a
+  // schedule can never skip Procurement's mandatory pricing step.
   const supabase = await createOpsServerSessionClient();
   const { error } = await supabase
     .from("boq_documents")
     .update({
       title: parsed.data.title,
       version: parsed.data.version,
-      status: parsed.data.status,
     })
     .eq("id", parsed.data.boq_id);
   if (error) {
@@ -360,7 +423,7 @@ export async function updateBoqDocumentAction(formData: FormData) {
     module_key: "boq",
     source_table: "boq_documents",
     source_id: parsed.data.boq_id,
-    metadata: { title: parsed.data.title, status: parsed.data.status, version: parsed.data.version },
+    metadata: { title: parsed.data.title, version: parsed.data.version },
   });
 
   revalidatePath("/ops/boq");
@@ -378,6 +441,10 @@ export async function updateBoqLineItemAction(formData: FormData) {
     unit_rate: field(formData, "unit_rate"),
     actual_quantity: field(formData, "actual_quantity") || "0",
     supplier_id: field(formData, "supplier_id"),
+    category: field(formData, "category"),
+    needed_by: field(formData, "needed_by"),
+    project_task_id: field(formData, "project_task_id"),
+    lead_time_days_override: field(formData, "lead_time_days_override"),
   });
   if (!parsed.success) {
     boqError(parsed.error.issues[0]?.message ?? "Check the line item details.");
@@ -405,6 +472,10 @@ export async function updateBoqLineItemAction(formData: FormData) {
       unit_rate: parsed.data.unit_rate,
       actual_quantity: parsed.data.actual_quantity,
       supplier_id: parsed.data.supplier_id,
+      category: parsed.data.category,
+      needed_by: parsed.data.needed_by,
+      project_task_id: parsed.data.project_task_id,
+      lead_time_days_override: parsed.data.lead_time_days_override,
     })
     .eq("id", parsed.data.line_item_id);
   if (error) {
@@ -586,6 +657,308 @@ export async function deleteBoqAction(formData: FormData) {
 
   revalidatePath("/ops/boq");
   redirect("/ops/boq?updated=deleted");
+}
+
+// ---------------------------------------------------------------------------
+// BOQ pricing-split workflow: draft (QS) → pricing_pending → priced
+// (Procurement) → issued (QS/Projects Manager/leadership sign-off, which also
+// generates/syncs the project budget). Mirrors the Material Request
+// pricing_pending/priced pattern in material-request-actions.ts.
+// ---------------------------------------------------------------------------
+
+export async function submitBoqForPricingAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
+  if (!parsed.success) {
+    boqError(parsed.error.issues[0]?.message ?? "Select a BOQ.");
+  }
+
+  const target = await fetchBoqMutationTarget(parsed.data.boq_id);
+  if (!target) {
+    boqError("Bill of Quantities was not found.");
+  }
+  if (!canSubmitBoqForPricing(profile.role, target)) {
+    boqError(
+      "Only the Quantity Surveyor, Projects Manager, and leadership can submit a schedule for pricing while it is in draft.",
+    );
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { count } = await supabase
+    .from("boq_line_items")
+    .select("id", { count: "exact", head: true })
+    .eq("boq_id", target.id);
+  if (!count) {
+    boqError("Add at least one line item before submitting the schedule for pricing.");
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("boq_documents")
+    .update({ status: "pricing_pending", submitted_at: nowIso })
+    .eq("id", target.id)
+    .eq("status", "draft");
+  if (error) {
+    boqError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "boq.submitted_for_pricing",
+    entity_type: "boq_document",
+    entity_id: target.id,
+    module_key: "boq",
+    source_table: "boq_documents",
+    source_id: target.id,
+    metadata: { title: target.title },
+  });
+
+  const recipients = await fanoutToOpsRoles(
+    ["procurement_manager", "procurement", "procurement_assistant"],
+    { excludeUserIds: [profile.id] },
+  );
+  await Promise.all(
+    recipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: `/ops/boq?boq=${target.id}`,
+        body: `${profile.full_name} submitted "${target.title}" for pricing. Add unit rates and transport estimates.`,
+        idempotencyKey: `boq-submitted-pricing:${target.id}:${recipient.id}`,
+        moduleKey: "boq",
+        recipientId: recipient.id,
+        sourceId: target.id,
+        sourceTable: "boq_documents",
+        title: `Price schedule: ${target.title}`,
+      }).catch(() => null),
+    ),
+  );
+
+  revalidatePath("/ops/boq");
+  redirect(`/ops/boq?updated=submitted_for_pricing#boq-${target.id}`);
+}
+
+const pricingLineItemSchema = z.object({
+  item_id: z.string().uuid("Select a line item."),
+  unit_rate: z.coerce.number().min(0, "Unit rate cannot be negative.").max(1_000_000_000),
+  estimated_transport_cost: z.coerce
+    .number()
+    .min(0, "Transport cost cannot be negative.")
+    .max(1_000_000_000)
+    .optional(),
+});
+
+export async function attachBoqPricingAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const idParsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
+  if (!idParsed.success) {
+    boqError(idParsed.error.issues[0]?.message ?? "Select a BOQ.");
+  }
+
+  const target = await fetchBoqMutationTarget(idParsed.data.boq_id);
+  if (!target) {
+    boqError("Bill of Quantities was not found.");
+  }
+  if (!canAttachBoqPricing(profile.role, target)) {
+    boqError(
+      "Only Procurement and leadership can price a schedule, and only once it has been submitted by the Quantity Surveyor.",
+    );
+  }
+
+  // Collect every `unit_rate::<itemId>` / `estimated_transport_cost::<itemId>`
+  // pair from the form — a partial save is allowed, mirroring
+  // attachMaterialRequestPricingAction.
+  const updates = new Map<string, { unit_rate?: number; estimated_transport_cost?: number }>();
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith("unit_rate::")) {
+      const itemId = key.slice("unit_rate::".length);
+      const parsed = pricingLineItemSchema.pick({ item_id: true, unit_rate: true }).safeParse({
+        item_id: itemId,
+        unit_rate: value,
+      });
+      if (!parsed.success) {
+        boqError(parsed.error.issues[0]?.message ?? "Check the line item prices.");
+      }
+      updates.set(itemId, { ...updates.get(itemId), unit_rate: parsed.data.unit_rate });
+    } else if (key.startsWith("estimated_transport_cost::")) {
+      const itemId = key.slice("estimated_transport_cost::".length);
+      const parsed = pricingLineItemSchema
+        .pick({ item_id: true, estimated_transport_cost: true })
+        .safeParse({ item_id: itemId, estimated_transport_cost: value });
+      if (!parsed.success) {
+        boqError(parsed.error.issues[0]?.message ?? "Check the transport estimates.");
+      }
+      updates.set(itemId, {
+        ...updates.get(itemId),
+        estimated_transport_cost: parsed.data.estimated_transport_cost,
+      });
+    }
+  }
+
+  if (updates.size === 0) {
+    boqError("Enter at least one unit rate before saving.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  const itemIds = Array.from(updates.keys());
+  const { data: lineRows, error: lineFetchError } = await supabase
+    .from("boq_line_items")
+    .select("id, boq_id")
+    .in("id", itemIds);
+  if (lineFetchError) {
+    boqError(lineFetchError.message);
+  }
+  const valid = (lineRows ?? []) as Array<{ id: string; boq_id: string }>;
+  if (valid.length !== itemIds.length || valid.some((row) => row.boq_id !== target.id)) {
+    boqError("One or more line items don't belong to this schedule.");
+  }
+
+  for (const [itemId, update] of updates) {
+    const payload: Record<string, number> = {};
+    if (update.unit_rate !== undefined) {
+      payload.unit_rate = update.unit_rate;
+    }
+    if (update.estimated_transport_cost !== undefined) {
+      payload.estimated_transport_cost = update.estimated_transport_cost;
+    }
+    const { error: updErr } = await supabase
+      .from("boq_line_items")
+      .update(payload)
+      .eq("id", itemId);
+    if (updErr) {
+      boqError(updErr.message);
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: stateError } = await supabase
+    .from("boq_documents")
+    .update({ status: "priced", priced_at: nowIso, priced_by: profile.id })
+    .eq("id", target.id)
+    .in("status", ["pricing_pending", "priced"]);
+  if (stateError) {
+    boqError(stateError.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "boq.priced",
+    entity_type: "boq_document",
+    entity_id: target.id,
+    module_key: "boq",
+    source_table: "boq_documents",
+    source_id: target.id,
+    metadata: { title: target.title, lines_updated: updates.size },
+  });
+
+  const recipients = await fanoutToOpsRoles(["quantity_surveyor", "projects_manager"], {
+    excludeUserIds: [profile.id],
+  });
+  const notifyIds = new Set(recipients.map((recipient) => recipient.id));
+  if (target.created_by) {
+    notifyIds.add(target.created_by);
+  }
+  await Promise.all(
+    Array.from(notifyIds).map((recipientId) =>
+      queueOpsNotification({
+        actionHref: `/ops/boq?boq=${target.id}`,
+        body: `${profile.full_name} priced "${target.title}". It's ready to issue.`,
+        idempotencyKey: `boq-priced:${target.id}:${recipientId}`,
+        moduleKey: "boq",
+        recipientId,
+        sourceId: target.id,
+        sourceTable: "boq_documents",
+        title: `Ready to issue: ${target.title}`,
+      }).catch(() => null),
+    ),
+  );
+
+  revalidatePath("/ops/boq");
+  redirect(`/ops/boq?updated=priced#boq-${target.id}`);
+}
+
+export async function issueBoqAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
+  if (!parsed.success) {
+    boqError(parsed.error.issues[0]?.message ?? "Select a BOQ.");
+  }
+
+  const target = await fetchBoqMutationTarget(parsed.data.boq_id);
+  if (!target) {
+    boqError("Bill of Quantities was not found.");
+  }
+  if (!canIssueBoq(profile.role, target)) {
+    boqError(
+      "A schedule can only be issued once Procurement has priced every line. Only the Quantity Surveyor, Projects Manager, and leadership can issue it.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const nowIso = new Date().toISOString();
+  const { error } = await supabase
+    .from("boq_documents")
+    .update({ status: "issued", issued_at: nowIso, issued_by: profile.id })
+    .eq("id", target.id)
+    .eq("status", "priced");
+  if (error) {
+    boqError(error.message);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "boq.issued",
+    entity_type: "boq_document",
+    entity_id: target.id,
+    module_key: "boq",
+    source_table: "boq_documents",
+    source_id: target.id,
+    metadata: { title: target.title },
+  });
+
+  // Generate/sync the project budget from the priced schedule. Best-effort:
+  // a sync failure shouldn't block the issue itself, but is recorded so it
+  // can be retried/investigated (same non-fatal pattern used for
+  // material-request cost entries).
+  await syncProjectBudgetFromBoq(target.id, profile.id).catch((syncError: unknown) =>
+    supabase.from("audit_events").insert({
+      actor_user_id: profile.id,
+      action: "boq.issued_budget_sync_failed",
+      entity_type: "boq_document",
+      entity_id: target.id,
+      module_key: "boq",
+      source_table: "boq_documents",
+      source_id: target.id,
+      metadata: {
+        error: syncError instanceof Error ? syncError.message : String(syncError),
+      },
+    }),
+  );
+
+  const recipients = await fanoutToOpsRoles(
+    ["procurement_manager", "procurement", "finance_manager", "projects_manager"],
+    { excludeUserIds: [profile.id] },
+  );
+  await Promise.all(
+    recipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: `/ops/boq?boq=${target.id}`,
+        body: `${profile.full_name} issued "${target.title}". The project budget has been generated from it.`,
+        idempotencyKey: `boq-issued:${target.id}:${recipient.id}`,
+        moduleKey: "boq",
+        recipientId: recipient.id,
+        sourceId: target.id,
+        sourceTable: "boq_documents",
+        title: `Issued: ${target.title}`,
+      }).catch(() => null),
+    ),
+  );
+
+  revalidatePath("/ops/boq");
+  revalidatePath("/ops/project-budgets");
+  redirect(`/ops/boq?updated=issued#boq-${target.id}`);
 }
 
 export async function importBoqLineItemsCsvAction(formData: FormData) {

@@ -8,6 +8,7 @@ import {
   Landmark,
   Lock,
   Plus,
+  Truck,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -614,6 +615,12 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                         >
                           {formatLabel(budget.status)}
                         </span>
+                        {budget.title.startsWith("Budget generated from ") ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-primary-blue/25 bg-primary-blue/10 px-2.5 py-1 text-[11px] font-bold text-primary-blue">
+                            <ClipboardList className="size-3" aria-hidden="true" />
+                            From material schedule
+                          </span>
+                        ) : null}
                       </div>
                       <p className="mt-2 font-bold text-primary-dark">{budget.title}</p>
                       <p className="mt-1 text-sm leading-6 text-primary-dark/62">
@@ -705,6 +712,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                             <tr>
                               <th className="px-3 py-3" scope="col">Line</th>
                               <th className="px-3 py-3" scope="col">Cost code</th>
+                              <th className="px-3 py-3" scope="col">Classification</th>
                               <th className="px-3 py-3" scope="col">Description</th>
                               <th className="px-3 py-3" scope="col">Budgeted</th>
                               <th className="px-3 py-3" scope="col">Committed</th>
@@ -719,6 +727,22 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                                 </td>
                                 <td className="px-3 py-3 text-primary-dark/65">
                                   {line.cost_code || "No code"}
+                                </td>
+                                <td className="px-3 py-3">
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.06em] ${
+                                      line.category === "transport"
+                                        ? "border-primary-blue/25 bg-primary-blue/10 text-primary-blue"
+                                        : line.category === "unplanned"
+                                          ? "border-orange-200 bg-orange-50 text-orange-700"
+                                          : "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/60"
+                                    }`}
+                                  >
+                                    {line.category === "transport" ? (
+                                      <Truck className="size-3" aria-hidden="true" />
+                                    ) : null}
+                                    {line.category}
+                                  </span>
                                 </td>
                                 <td className="px-3 py-3 text-primary-dark/70">
                                   {line.description}

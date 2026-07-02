@@ -24,6 +24,7 @@ import {
   canSubmitOpsPaymentRequest,
 } from "@/lib/ops/finance-permissions";
 import { postPaymentRequestJournalSafe, reverseOpsJournalSafe } from "@/lib/ops/gl-posting";
+import { upsertProjectCostEntry } from "@/lib/ops/project-cost-entries";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsPaymentRequestStatus,
@@ -346,63 +347,27 @@ async function upsertPaymentCostEntry(input: {
   paymentRequest: PaymentRequestForMutation;
   status: "committed" | "posted" | "cancelled";
 }) {
-  const supabase = getOpsSupabaseServiceClient();
-  const { data: existing, error: existingError } = await supabase
-    .from("project_cost_entries")
-    .select("id")
-    .eq("payment_request_id", input.paymentRequest.id)
-    .maybeSingle<{ id: string }>();
-
-  if (existingError) {
-    throw existingError;
-  }
-
-  const payload = {
-    amount: normalizeNumber(input.paymentRequest.requested_amount),
-    budget_id: input.paymentRequest.budget_id,
-    budget_line_id: input.paymentRequest.budget_line_id,
-    cost_date: new Date().toISOString().slice(0, 10),
-    cost_type: input.paymentRequest.payment_type,
-    currency_code: input.paymentRequest.currency_code,
-    description: input.paymentReference
-      ? `${input.paymentRequest.title} / ${input.paymentReference}`
-      : input.paymentRequest.title,
-    payment_request_id: input.paymentRequest.id,
-    purchase_order_id: input.paymentRequest.purchase_order_id,
-    site_id: input.paymentRequest.site_id,
-    source_id: input.paymentRequest.id,
-    source_table: "payment_requests",
+  return upsertProjectCostEntry({
+    actorUserId: input.actorUserId,
+    match: { payment_request_id: input.paymentRequest.id },
+    payload: {
+      amount: normalizeNumber(input.paymentRequest.requested_amount),
+      budget_id: input.paymentRequest.budget_id,
+      budget_line_id: input.paymentRequest.budget_line_id,
+      cost_type: input.paymentRequest.payment_type,
+      currency_code: input.paymentRequest.currency_code,
+      description: input.paymentReference
+        ? `${input.paymentRequest.title} / ${input.paymentReference}`
+        : input.paymentRequest.title,
+      payment_request_id: input.paymentRequest.id,
+      purchase_order_id: input.paymentRequest.purchase_order_id,
+      site_id: input.paymentRequest.site_id,
+      source_id: input.paymentRequest.id,
+      source_table: "payment_requests",
+      supplier_id: input.paymentRequest.supplier_id,
+    },
     status: input.status,
-    supplier_id: input.paymentRequest.supplier_id,
-  };
-
-  if (existing) {
-    const { error } = await supabase
-      .from("project_cost_entries")
-      .update(payload)
-      .eq("id", existing.id);
-
-    if (error) {
-      throw error;
-    }
-
-    return existing.id;
-  }
-
-  const { data, error } = await supabase
-    .from("project_cost_entries")
-    .insert({
-      ...payload,
-      created_by: input.actorUserId,
-    })
-    .select("id")
-    .single<{ id: string }>();
-
-  if (error || !data) {
-    throw error ?? new Error("Could not create project cost entry.");
-  }
-
-  return data.id;
+  });
 }
 
 export async function createProjectBudgetAction(formData: FormData) {

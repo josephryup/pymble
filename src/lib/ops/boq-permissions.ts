@@ -37,8 +37,21 @@ const BOQ_ARCHIVE_ROLES: OpsUserRole[] = [
   "projects_manager",
 ];
 
+// Procurement prices the schedule (unit_rate + transport estimate per line)
+// once QS has submitted it. Same role set as material request pricing
+// (MATERIAL_REQUEST_PRICING_ROLES in material-request-permissions.ts) — one
+// department, one gate.
+const BOQ_PRICING_ROLES: OpsUserRole[] = [
+  "developer",
+  "managing_director",
+  "owner",
+  "procurement_manager",
+  "procurement",
+  "procurement_assistant",
+];
+
 export type OpsBoqMutationTarget = {
-  status: "draft" | "issued";
+  status: "draft" | "pricing_pending" | "priced" | "issued";
   deleted_at?: string | null;
   archived_at?: string | null;
 };
@@ -48,8 +61,10 @@ export function canCreateBoq(role: OpsUserRole) {
 }
 
 export function canEditBoq(role: OpsUserRole, document: OpsBoqMutationTarget) {
-  // Lines can only be edited while draft. Issued documents must be replaced by
-  // a new version (handled separately via a future supersede action).
+  // Lines (quantities, spec, classification, dates) can only be edited by QS
+  // while draft. Issued documents must be replaced by a new version (handled
+  // separately via a future supersede action). Once submitted for pricing,
+  // only Procurement can touch the document (see canAttachBoqPricing).
   if (document.status !== "draft") {
     return false;
   }
@@ -61,8 +76,38 @@ export function canEditBoq(role: OpsUserRole, document: OpsBoqMutationTarget) {
   return BOQ_EDIT_ROLES.includes(role);
 }
 
-export function canIssueBoq(role: OpsUserRole, document: OpsBoqMutationTarget) {
+export function canSubmitBoqForPricing(role: OpsUserRole, document: OpsBoqMutationTarget) {
+  // Same owners as edit, one step later: draft → pricing_pending.
   return canEditBoq(role, document);
+}
+
+export function canAttachBoqPricing(role: OpsUserRole, document: OpsBoqMutationTarget) {
+  if (document.archived_at || document.deleted_at) {
+    return false;
+  }
+
+  // Procurement can keep adjusting prices while priced (before issue) in case
+  // a supplier quote changes, same latitude Material Request pricing gets.
+  if (document.status !== "pricing_pending" && document.status !== "priced") {
+    return false;
+  }
+
+  return BOQ_PRICING_ROLES.includes(role);
+}
+
+export function canIssueBoq(role: OpsUserRole, document: OpsBoqMutationTarget) {
+  // Mandatory-procurement gate: a schedule cannot be issued until Procurement
+  // has priced every line. QS / Projects Manager / leadership still perform
+  // the final sign-off.
+  if (document.status !== "priced") {
+    return false;
+  }
+
+  if (document.archived_at || document.deleted_at) {
+    return false;
+  }
+
+  return BOQ_EDIT_ROLES.includes(role);
 }
 
 export function canArchiveBoq(role: OpsUserRole) {

@@ -23,8 +23,10 @@ import {
 import { trackOpsEvent } from "@/lib/ops/analytics";
 import { parseCsvRows, readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
 import { collectOpsLineItems } from "@/lib/ops/line-items";
+import { resolveMaterialRequestBudgetLine } from "@/lib/ops/material-requests";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
+import { upsertMaterialRequestCostEntries } from "@/lib/ops/project-cost-entries";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsMaterialRequestStatus, OpsPriority } from "@/lib/ops/types";
 
@@ -68,6 +70,16 @@ const itemSchema = z.object({
     .default("")
     .transform((value) => (value.length > 0 ? value : null)),
   supplier_name_freeform: z.string().trim().max(160).default(""),
+  // Optional link back to the planned material schedule (BOQ) line this item
+  // fulfils. Drives budget-line resolution at submit time.
+  boq_line_item_id: z
+    .string()
+    .trim()
+    .default("")
+    .transform((value) => (value.length > 0 ? value : null))
+    .refine((value) => value === null || MR_UUID_PATTERN.test(value), {
+      message: "Select a valid schedule line.",
+    }),
 });
 
 
@@ -77,6 +89,7 @@ const requestIdSchema = z.object({
 
 type MaterialRequestForMutation = {
   approval_request_id: string | null;
+  budget_line_id: string | null;
   description: string;
   id: string;
   needed_by: string | null;
@@ -86,9 +99,12 @@ type MaterialRequestForMutation = {
   site_id: string;
   status: OpsMaterialRequestStatus;
   title: string;
+  transport_budget_line_id: string | null;
+  transport_cost: number | string;
 };
 
 type MaterialRequestItemForApproval = {
+  boq_line_item_id: string | null;
   estimated_total: number | string;
   id: string;
   item_name: string;
@@ -126,7 +142,7 @@ async function fetchMaterialRequestForMutation(requestId: string) {
   const { data, error } = await supabase
     .from("material_requests")
     .select(
-      "id, request_number, site_id, requested_by, title, description, priority, status, needed_by, approval_request_id",
+      "id, request_number, site_id, requested_by, title, description, priority, status, needed_by, approval_request_id, budget_line_id, transport_budget_line_id, transport_cost",
     )
     .eq("id", requestId)
     .maybeSingle<MaterialRequestForMutation>();
@@ -142,7 +158,7 @@ async function fetchMaterialRequestItemsForApproval(requestId: string) {
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("material_request_items")
-    .select("id, item_name, quantity, unit, estimated_total")
+    .select("id, item_name, quantity, unit, estimated_total, boq_line_item_id")
     .eq("request_id", requestId)
     .order("line_number", { ascending: true });
 
@@ -292,6 +308,7 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     supplier_id: field(formData, "supplier_id"),
     supplier_name_freeform: field(formData, "supplier_name_freeform"),
     unit: field(formData, "unit") || "each",
+    boq_line_item_id: field(formData, "boq_line_item_id"),
   });
 
   if (!parsed.success) {
@@ -321,6 +338,7 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     supplier_id: parsed.data.supplier_id,
     supplier_name_freeform: parsed.data.supplier_name_freeform || null,
     unit: parsed.data.unit,
+    boq_line_item_id: parsed.data.boq_line_item_id,
   });
 
   if (error) {
@@ -668,12 +686,40 @@ export async function submitMaterialRequestForApprovalAction(formData: FormData)
     materialRequestError(stepError.message);
   }
 
+  // Resolve which budget line(s) this request draws against (goods + the
+  // site's dedicated transport line), so the linkage is visible before
+  // Finance ever sees the request. Best-effort: a resolution hiccup shouldn't
+  // block submission — it can be re-resolved later when pricing/cost is
+  // approved.
+  const budgetLines = await resolveMaterialRequestBudgetLine({
+    actorUserId: profile.id,
+    boqLineItemIds: items.map((item) => item.boq_line_item_id).filter((id): id is string => Boolean(id)),
+    siteId: request.site_id,
+  }).catch((budgetLineError: unknown) => {
+    void recordOpsAuditEvent({
+      action: "material_request.budget_line_resolution_failed",
+      actorUserId: profile.id,
+      entityId: request.id,
+      entityType: "material_request",
+      metadata: {
+        error: budgetLineError instanceof Error ? budgetLineError.message : String(budgetLineError),
+      },
+      moduleKey: "material_requests",
+      sourceId: request.id,
+      sourceTable: "material_requests",
+      summary: `Could not resolve a budget line for ${request.request_number}`,
+    }).catch(() => null);
+    return { budgetLineId: null, transportBudgetLineId: null };
+  });
+
   const { data: updatedRequest, error: requestUpdateError } = await supabase
     .from("material_requests")
     .update({
       approval_request_id: approval.id,
       status: "submitted",
       submitted_at: now,
+      budget_line_id: budgetLines.budgetLineId,
+      transport_budget_line_id: budgetLines.transportBudgetLineId,
     })
     .eq("id", request.id)
     .in("status", ["draft", "rejected"])
@@ -998,6 +1044,61 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
     materialRequestError(stateError.message);
   }
 
+  // Finance approval is the moment the spend counts against the project
+  // budget (committed), mirroring Payment Requests' approve → committed
+  // transition. Best-effort: a ledger hiccup never blocks the approval.
+  let overBudget = false;
+  if (decisionIsApprove) {
+    const { data: itemRows } = await supabase
+      .from("material_request_items")
+      .select("actual_total")
+      .eq("request_id", request.id);
+    const goodsAmount = ((itemRows ?? []) as Array<{ actual_total: number | string }>).reduce(
+      (sum, row) => sum + normalizeMoney(row.actual_total),
+      0,
+    );
+
+    await upsertMaterialRequestCostEntries({
+      actorUserId: profile.id,
+      goodsAmount,
+      request,
+      status: "committed",
+    }).catch((costEntryError: unknown) =>
+      recordOpsAuditEvent({
+        action: "material_request.cost_entry_sync_failed",
+        actorUserId: profile.id,
+        entityId: request.id,
+        entityType: "material_request",
+        metadata: {
+          error:
+            costEntryError instanceof Error ? costEntryError.message : String(costEntryError),
+        },
+        moduleKey: "material_requests",
+        sourceId: request.id,
+        sourceTable: "material_requests",
+        summary: `Could not record the budget ledger entry for ${request.request_number}`,
+      }).catch(() => null),
+    );
+
+    if (request.budget_line_id) {
+      const { data: budgetLine } = await supabase
+        .from("project_budget_lines")
+        .select("budgeted_amount")
+        .eq("id", request.budget_line_id)
+        .maybeSingle<{ budgeted_amount: number | string }>();
+      const { data: committedRows } = await supabase
+        .from("project_cost_entries")
+        .select("amount")
+        .eq("budget_line_id", request.budget_line_id)
+        .in("status", ["committed", "posted"]);
+      const committedTotal = ((committedRows ?? []) as Array<{ amount: number | string }>).reduce(
+        (sum, row) => sum + normalizeMoney(row.amount),
+        0,
+      );
+      overBudget = committedTotal > normalizeMoney(budgetLine?.budgeted_amount);
+    }
+  }
+
   await recordOpsAuditEvent({
     action: decisionIsApprove
       ? "material_request.cost_approved"
@@ -1009,12 +1110,13 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
       request_number: request.request_number,
       decision: decisionParsed.data.decision,
       comment: decisionParsed.data.comment,
+      over_budget: overBudget,
     },
     moduleKey: "material_requests",
     sourceId: request.id,
     sourceTable: "material_requests",
     summary: decisionIsApprove
-      ? `Finance approved cost for ${request.request_number}`
+      ? `Finance approved cost for ${request.request_number}${overBudget ? " (over budget)" : ""}`
       : `Finance rejected cost for ${request.request_number}: ${decisionParsed.data.comment}`,
   }).catch(() => null);
 
@@ -1066,9 +1168,13 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   revalidatePath("/ops/notifications");
   revalidatePath("/ops");
-  redirect(
-    `${MATERIAL_REQUEST_ROUTE}?updated=${decisionIsApprove ? "cost_approved" : "cost_rejected"}#mr-${request.id}`,
-  );
+  revalidatePath("/ops/project-budgets");
+  const updatedFlag = decisionIsApprove
+    ? overBudget
+      ? "cost_approved_over_budget"
+      : "cost_approved"
+    : "cost_rejected";
+  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=${updatedFlag}#mr-${request.id}`);
 }
 
 // =============================================================================
@@ -1222,6 +1328,42 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
     );
   }
 
+  // Closing is the request's true completion milestone — the committed
+  // budget-ledger entries recorded at Finance approval become posted here,
+  // mirroring Payment Requests' paid → posted transition. Best-effort.
+  if (receivedInFull) {
+    const { data: itemRows } = await supabase
+      .from("material_request_items")
+      .select("actual_total")
+      .eq("request_id", request.id);
+    const goodsAmount = ((itemRows ?? []) as Array<{ actual_total: number | string }>).reduce(
+      (sum, row) => sum + normalizeMoney(row.actual_total),
+      0,
+    );
+
+    await upsertMaterialRequestCostEntries({
+      actorUserId: profile.id,
+      goodsAmount,
+      request,
+      status: "posted",
+    }).catch((costEntryError: unknown) =>
+      recordOpsAuditEvent({
+        action: "material_request.cost_entry_sync_failed",
+        actorUserId: profile.id,
+        entityId: request.id,
+        entityType: "material_request",
+        metadata: {
+          error:
+            costEntryError instanceof Error ? costEntryError.message : String(costEntryError),
+        },
+        moduleKey: "material_requests",
+        sourceId: request.id,
+        sourceTable: "material_requests",
+        summary: `Could not post the budget ledger entry for ${request.request_number}`,
+      }).catch(() => null),
+    );
+  }
+
   await recordOpsAuditEvent({
     action: receivedInFull
       ? "material_request.delivered_closed"
@@ -1267,6 +1409,7 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   revalidatePath("/ops/notifications");
+  revalidatePath("/ops/project-budgets");
   redirect(
     `${MATERIAL_REQUEST_ROUTE}?updated=${receivedInFull ? "delivered_closed" : "delivered"}#mr-${request.id}`,
   );
@@ -1507,6 +1650,29 @@ export async function cancelMaterialRequestAction(formData: FormData) {
     .eq("id", parsed.data.request_id);
   if (error) {
     materialRequestError(error.message);
+  }
+
+  // If Finance had already committed a budget-ledger entry (request was
+  // "approved" before being cancelled), release it — best-effort, only
+  // meaningful when a prior entry exists (upsert is a no-op cost-wise
+  // otherwise since goodsAmount would just write a cancelled zero-ish row,
+  // which is harmless but we only bother when there's something to release).
+  if (request.budget_line_id) {
+    const { data: itemRows } = await supabase
+      .from("material_request_items")
+      .select("actual_total")
+      .eq("request_id", request.id);
+    const goodsAmount = ((itemRows ?? []) as Array<{ actual_total: number | string }>).reduce(
+      (sum, row) => sum + normalizeMoney(row.actual_total),
+      0,
+    );
+
+    await upsertMaterialRequestCostEntries({
+      actorUserId: profile.id,
+      goodsAmount,
+      request,
+      status: "cancelled",
+    }).catch(() => null);
   }
 
   await recordOpsAuditEvent({

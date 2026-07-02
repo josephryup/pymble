@@ -1,4 +1,5 @@
 import { requireOpsUser } from "@/lib/ops/auth";
+import { ensureTransportBudgetLine, ensureUnplannedBudgetLine } from "@/lib/ops/boq-budget-sync";
 import {
   opsIlikeOrFilter,
   toOpsPaginatedResult,
@@ -31,6 +32,7 @@ export type OpsMaterialRequestUserSummary = {
 export type OpsMaterialRequestItem = {
   actual_total: number;
   actual_unit_cost: number;
+  boq_line_item_id: string | null;
   created_at: string;
   estimated_total: number;
   estimated_unit_cost: number;
@@ -51,6 +53,8 @@ export type OpsMaterialRequestSummary = {
   approval_request_id: string | null;
   approval_status: OpsApprovalStatus | null;
   approved_at: string | null;
+  budget_line_id: string | null;
+  transport_budget_line_id: string | null;
   closed_at: string | null;
   created_at: string;
   delivered_at: string | null;
@@ -364,7 +368,7 @@ async function fetchMaterialRequestItems(requestIds: string[]) {
   const { data, error } = await supabase
     .from("material_request_items")
     .select(
-      "id, request_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, actual_unit_cost, actual_total, notes, created_at, supplier_id, supplier_name_freeform, supplier:suppliers!material_request_items_supplier_id_fkey(legal_name)",
+      "id, request_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, actual_unit_cost, actual_total, notes, created_at, supplier_id, supplier_name_freeform, boq_line_item_id, supplier:suppliers!material_request_items_supplier_id_fkey(legal_name)",
     )
     .in("request_id", requestIds)
     .order("line_number", { ascending: true });
@@ -435,6 +439,8 @@ async function fetchOpsMaterialRequestItems(
         "delivered_by",
         "delivery_notes",
         "transport_cost",
+        "budget_line_id",
+        "transport_budget_line_id",
         "created_at",
         "updated_at",
         "requester:users!material_requests_requested_by_fkey(id, full_name, role)",
@@ -551,6 +557,8 @@ export async function fetchOpsMaterialRequestById(
         "delivered_by",
         "delivery_notes",
         "transport_cost",
+        "budget_line_id",
+        "transport_budget_line_id",
         "created_at",
         "updated_at",
         "requester:users!material_requests_requested_by_fkey(id, full_name, role)",
@@ -590,4 +598,94 @@ export async function fetchOpsMaterialRequestById(
     site: normalizeRelation(request.site),
     transport_cost: normalizeMoney(request.transport_cost),
   } satisfies OpsMaterialRequestSummary;
+}
+
+/**
+ * Resolves which project_budget_lines this request should draw against, at
+ * submit time. The goods line comes from the linked BOQ line's category (the
+ * majority category across the request's items, if it spans more than one);
+ * with no BOQ link at all, it falls back to the site's lazily-created
+ * "unplanned" line. The transport line is always the site's dedicated
+ * transport line, resolved independently of the goods category.
+ */
+export async function resolveMaterialRequestBudgetLine(input: {
+  siteId: string;
+  boqLineItemIds: string[];
+  actorUserId: string;
+}): Promise<{ budgetLineId: string | null; transportBudgetLineId: string | null }> {
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: budget, error: budgetError } = await supabase
+    .from("project_budgets")
+    .select("id")
+    .eq("site_id", input.siteId)
+    .in("status", ["draft", "active"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
+  if (budgetError) {
+    throw budgetError;
+  }
+
+  let goodsBudgetLineId: string | null = null;
+  let transportBudgetLineId: string | null = null;
+
+  const boqLineIds = input.boqLineItemIds.filter(Boolean);
+
+  if (budget) {
+    if (boqLineIds.length > 0) {
+      const { data: boqLines, error: boqLineError } = await supabase
+        .from("boq_line_items")
+        .select("id, category")
+        .in("id", boqLineIds);
+      if (boqLineError) {
+        throw boqLineError;
+      }
+
+      const categoryCounts = new Map<string, number>();
+      for (const line of (boqLines ?? []) as Array<{ id: string; category: string }>) {
+        categoryCounts.set(line.category, (categoryCounts.get(line.category) ?? 0) + 1);
+      }
+      const majorityCategory = Array.from(categoryCounts.entries()).sort(
+        (a, b) => b[1] - a[1],
+      )[0]?.[0];
+
+      if (majorityCategory) {
+        const { data: matchedLine, error: matchedLineError } = await supabase
+          .from("project_budget_lines")
+          .select("id")
+          .eq("budget_id", budget.id)
+          .eq("category", majorityCategory)
+          .maybeSingle<{ id: string }>();
+        if (matchedLineError) {
+          throw matchedLineError;
+        }
+        goodsBudgetLineId = matchedLine?.id ?? null;
+      }
+    }
+
+    const { data: transportLine, error: transportLineError } = await supabase
+      .from("project_budget_lines")
+      .select("id")
+      .eq("budget_id", budget.id)
+      .eq("category", "transport")
+      .maybeSingle<{ id: string }>();
+    if (transportLineError) {
+      throw transportLineError;
+    }
+    transportBudgetLineId = transportLine?.id ?? null;
+  }
+
+  if (!goodsBudgetLineId) {
+    const fallback = await ensureUnplannedBudgetLine(input.siteId, input.actorUserId);
+    goodsBudgetLineId = fallback.budgetLineId;
+  }
+
+  if (!transportBudgetLineId) {
+    const transportFallback = await ensureTransportBudgetLine(input.siteId, input.actorUserId);
+    transportBudgetLineId = transportFallback.budgetLineId;
+  }
+
+  return { budgetLineId: goodsBudgetLineId, transportBudgetLineId };
 }

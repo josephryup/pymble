@@ -61,6 +61,8 @@ import {
   fetchPaginatedOpsMaterialRequests,
   type OpsMaterialRequestSummary,
 } from "@/lib/ops/material-requests";
+import { fetchOpsBoqDocuments } from "@/lib/ops/boq";
+import { fetchProjectBudgetLineLabels } from "@/lib/ops/finance";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { formatOpsUserName } from "@/lib/ops/roles";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
@@ -180,6 +182,13 @@ function materialRequestNotice(params: OpsSearchParams) {
   }
   if (u === "cost_approved") {
     return { tone: "success" as const, message: "Cost approved. Procurement can raise the Request for Quotation or Purchase Order." };
+  }
+  if (u === "cost_approved_over_budget") {
+    return {
+      tone: "error" as const,
+      message:
+        "Cost approved, but this pushes its budget line over the budgeted amount. Review the project budget.",
+    };
   }
   if (u === "cost_rejected") {
     return { tone: "success" as const, message: "Cost rejected. Procurement has been asked to re-price." };
@@ -310,10 +319,12 @@ function MaterialRequestFlowStep({
 }
 
 function MaterialRequestItems({
+  boqLineLabelById,
   canEdit,
   request,
   supplierOptions,
 }: {
+  boqLineLabelById: Map<string, string>;
   canEdit: boolean;
   request: OpsMaterialRequestSummary;
   supplierOptions: Array<{ id: string; label: string }>;
@@ -363,6 +374,11 @@ function MaterialRequestItems({
                         (not in master list)
                       </span>
                     ) : null}
+                  </p>
+                ) : null}
+                {item.boq_line_item_id ? (
+                  <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-primary-blue/20 bg-primary-blue/5 px-2 py-0.5 text-[11px] font-semibold text-primary-blue">
+                    Schedule: {boqLineLabelById.get(item.boq_line_item_id) ?? "Linked line"}
                   </p>
                 ) : null}
               </td>
@@ -447,9 +463,11 @@ function MaterialRequestItems({
 }
 
 function AddItemForm({
+  boqLineOptions,
   requestId,
   supplierOptions,
 }: {
+  boqLineOptions: Array<{ id: string; label: string }>;
   requestId: string;
   supplierOptions: Array<{ id: string; label: string }>;
 }) {
@@ -464,6 +482,19 @@ function AddItemForm({
         className="grid gap-3 border-t border-primary-dark/10 p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
       >
         <input name="request_id" type="hidden" value={requestId} />
+        {boqLineOptions.length > 0 ? (
+          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+            Link to material schedule line (optional)
+            <select className={OPS_INPUT_CLASS} defaultValue="" name="boq_line_item_id">
+              <option value="">Not tied to a planned schedule line</option>
+              {boqLineOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
           Item
           <input className={OPS_INPUT_CLASS} name="item_name" required />
@@ -804,7 +835,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
   const status = materialRequestStatusFromParam(firstParam(params.status));
   const scopeParam = firstParam(params.scope);
   const scope = scopeParam === "site" || scopeParam === "general" ? scopeParam : undefined;
-  const [requestPage, siteOptions, supplierOptions] = await Promise.all([
+  const [requestPage, siteOptions, supplierOptions, issuedBoqDocuments] = await Promise.all([
     fetchPaginatedOpsMaterialRequests({
       listState,
       query: listState.query,
@@ -813,8 +844,26 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
     }),
     fetchActiveSiteOptions(),
     fetchActiveSupplierOptions(),
+    fetchOpsBoqDocuments({ status: "issued" }),
   ]);
   const requests = requestPage.items;
+  // The planned material schedule (BOQ), scoped per site, so a requester can
+  // optionally raise a request "against" a specific planned line — this is
+  // what resolves the request's budget line at submit time.
+  const boqLinesBySiteId = new Map<string, Array<{ id: string; label: string }>>();
+  const boqLineLabelById = new Map<string, string>();
+  for (const document of issuedBoqDocuments) {
+    for (const item of document.items) {
+      const label = `${document.title} — ${item.description}`;
+      boqLineLabelById.set(item.id, label);
+      const existing = boqLinesBySiteId.get(document.site_id) ?? [];
+      existing.push({ id: item.id, label });
+      boqLinesBySiteId.set(document.site_id, existing);
+    }
+  }
+  const budgetLineLabelById = await fetchProjectBudgetLineLabels(
+    requests.flatMap((request) => [request.budget_line_id, request.transport_budget_line_id]),
+  );
   const canCreate = canCreateOpsMaterialRequest(auth.profile.role);
   const canManageActivity = canCreate || canManageOpsMaterialRequest(auth.profile.role);
   const notice = materialRequestNotice(params);
@@ -1277,12 +1326,31 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                     </div>
                   </dl>
 
+                  {request.budget_line_id || request.transport_budget_line_id ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {request.budget_line_id ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-blue/20 bg-primary-blue/5 px-3 py-1 text-xs font-semibold text-primary-blue">
+                          Budget line:{" "}
+                          {budgetLineLabelById.get(request.budget_line_id)?.description ??
+                            "Resolved"}
+                        </span>
+                      ) : null}
+                      {request.transport_budget_line_id && request.transport_cost > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-dark/15 bg-primary-dark/[0.04] px-3 py-1 text-xs font-semibold text-primary-dark/60">
+                          <Truck className="size-3" aria-hidden="true" />
+                          Transport budget: {formatZmw(request.transport_cost)}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="mt-4">
                     <OpsChainTracker steps={buildMaterialRequestChainSteps(request)} />
                   </div>
 
                   <div className="mt-4 grid gap-4">
                     <MaterialRequestItems
+                      boqLineLabelById={boqLineLabelById}
                       canEdit={canEdit}
                       request={request}
                       supplierOptions={supplierOptions}
@@ -1290,6 +1358,9 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                     {canEdit ? (
                       <div className="grid gap-3 md:grid-cols-2">
                         <AddItemForm
+                          boqLineOptions={
+                            request.site_id ? (boqLinesBySiteId.get(request.site_id) ?? []) : []
+                          }
                           requestId={request.id}
                           supplierOptions={supplierOptions}
                         />

@@ -1298,3 +1298,52 @@ export async function fetchFinancePurchaseOrderOptions(limit = 200) {
     total_amount: normalizeNumber(purchaseOrder.total_amount),
   }));
 }
+
+export type OpsBudgetLineLabel = {
+  id: string;
+  category: string;
+  description: string;
+  budgeted_amount: number;
+};
+
+/**
+ * Minimal lookup by id, regardless of the parent budget's status (draft
+ * included) — unlike fetchFinanceBudgetLineOptions, which only surfaces
+ * active/locked budgets for the "pick a line" form. Used to label a budget
+ * line a record already links to (e.g. a material request's budget_line_id)
+ * even before Finance activates the budget.
+ */
+export async function fetchProjectBudgetLineLabels(
+  ids: Array<string | null | undefined>,
+): Promise<Map<string, OpsBudgetLineLabel>> {
+  const uniqueIds = Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
+  if (uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("project_budget_lines")
+    .select("id, category, description, budgeted_amount")
+    .in("id", uniqueIds);
+
+  if (error) {
+    throw error;
+  }
+
+  const map = new Map<string, OpsBudgetLineLabel>();
+  for (const row of (data ?? []) as Array<{
+    id: string;
+    category: string;
+    description: string;
+    budgeted_amount: number | string;
+  }>) {
+    map.set(row.id, {
+      id: row.id,
+      category: row.category,
+      description: row.description,
+      budgeted_amount: normalizeNumber(row.budgeted_amount),
+    });
+  }
+  return map;
+}

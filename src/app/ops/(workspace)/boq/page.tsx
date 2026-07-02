@@ -1,5 +1,6 @@
 import {
   Archive,
+  AlertTriangle,
   Calculator,
   CheckCircle2,
   Clock3,
@@ -10,6 +11,7 @@ import {
   ReceiptText,
   Send,
   Trash2,
+  Truck,
   Upload,
   type LucideIcon,
 } from "lucide-react";
@@ -29,24 +31,38 @@ import {
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import {
   archiveBoqAction,
+  attachBoqPricingAction,
   createBoqDocumentAction,
   createBoqLineItemAction,
   deleteBoqLineItemAction,
+  issueBoqAction,
+  submitBoqForPricingAction,
   updateBoqDocumentAction,
   updateBoqLineItemAction,
   importBoqLineItemsCsvAction,
 } from "@/lib/ops/boq-actions";
-import { fetchPaginatedOpsBoqDocuments, type OpsBoqDocument } from "@/lib/ops/boq";
+import {
+  deriveOpsBoqLineDates,
+  fetchOpsMaterialTriggerAlerts,
+  fetchPaginatedOpsBoqDocuments,
+  type OpsBoqDocument,
+  type OpsMaterialTriggerAlert,
+} from "@/lib/ops/boq";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import {
   canArchiveBoq,
+  canAttachBoqPricing,
   canCreateBoq,
   canEditBoq,
+  canIssueBoq,
+  canSubmitBoqForPricing,
 } from "@/lib/ops/boq-permissions";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
+import { fetchOpsProjectTasksForSite, type OpsProjectTask } from "@/lib/ops/project-tasks";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import { fetchActiveSupplierOptions } from "@/lib/ops/suppliers";
+import type { OpsUserRole } from "@/lib/ops/types";
 import {
   firstParam,
   formatZmw,
@@ -67,7 +83,20 @@ type PageProps = {
 const BOQ_STATUS_OPTIONS: Array<{ label: string; value: OpsBoqDocument["status"] | "" }> = [
   { label: "All statuses", value: "" },
   { label: "Draft", value: "draft" },
+  { label: "Pricing pending", value: "pricing_pending" },
+  { label: "Priced", value: "priced" },
   { label: "Issued", value: "issued" },
+];
+
+const BOQ_CATEGORY_SUGGESTIONS = [
+  "foundation",
+  "excavation",
+  "structure",
+  "roofing",
+  "finishes",
+  "mep",
+  "external_works",
+  "general",
 ];
 
 function boqStatusFromParam(value: string | undefined) {
@@ -133,6 +162,21 @@ function boqNotice(params: OpsSearchParams) {
   if (updatedKey === "deleted") {
     return { tone: "success" as const, message: "Bill of Quantities permanently deleted." };
   }
+  if (updatedKey === "submitted_for_pricing") {
+    return {
+      tone: "success" as const,
+      message: "Schedule submitted to Procurement for pricing.",
+    };
+  }
+  if (updatedKey === "priced") {
+    return { tone: "success" as const, message: "Schedule priced. Ready to issue." };
+  }
+  if (updatedKey === "issued") {
+    return {
+      tone: "success" as const,
+      message: "Schedule issued. The project budget has been generated from it.",
+    };
+  }
 
   return null;
 }
@@ -165,9 +209,23 @@ function buildBoqLineRfqHref(
 }
 
 function boqStatusClass(status: OpsBoqDocument["status"]) {
-  return status === "issued"
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : "border-orange-200 bg-orange-50 text-orange-700";
+  if (status === "issued") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (status === "priced") {
+    return "border-primary-blue/30 bg-primary-blue/10 text-primary-blue";
+  }
+  if (status === "pricing_pending") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+  return "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/60";
+}
+
+function boqStatusLabel(status: OpsBoqDocument["status"]) {
+  if (status === "pricing_pending") {
+    return "pricing pending";
+  }
+  return status;
 }
 
 function BoqValueMetric({ label, value }: { label: string; value: string }) {
@@ -210,6 +268,126 @@ function BoqFlowStep({
   );
 }
 
+/**
+ * Mandatory-procurement pricing gate: draft (QS) → pricing_pending →
+ * priced (Procurement) → issued. Renders the action relevant to the
+ * document's current status and the viewer's role; renders nothing once
+ * issued (there's nothing left to do here).
+ */
+function BoqPricingWorkflowPanel({
+  document,
+  role,
+}: {
+  document: OpsBoqDocument;
+  role: OpsUserRole;
+}) {
+  if (document.status === "draft") {
+    if (!canSubmitBoqForPricing(role, document)) {
+      return null;
+    }
+    return (
+      <form
+        action={submitBoqForPricingAction}
+        className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary-blue/25 bg-primary-blue/5 p-4"
+      >
+        <input name="boq_id" type="hidden" value={document.id} />
+        <p className="text-sm leading-6 text-primary-dark/70">
+          Once quantities, classification, and dates are set, submit this schedule to Procurement
+          for pricing. Procurement must price every line — including transport — before it can be
+          issued.
+        </p>
+        <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+          <Send className="size-4" aria-hidden="true" />
+          Submit for pricing
+        </button>
+      </form>
+    );
+  }
+
+  if (document.status === "pricing_pending" || document.status === "priced") {
+    const canPrice = canAttachBoqPricing(role, document);
+    const canIssue = canIssueBoq(role, document);
+    return (
+      <div className="mt-5 rounded-md border border-orange-200 bg-orange-50/50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm leading-6 text-primary-dark/70">
+            {document.status === "pricing_pending"
+              ? "Awaiting Procurement pricing (unit rate + transport estimate per line)."
+              : "Priced by Procurement. Ready to issue — issuing generates the project budget."}
+          </p>
+          {canIssue ? (
+            <form action={issueBoqAction}>
+              <input name="boq_id" type="hidden" value={document.id} />
+              <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                <CheckCircle2 className="size-4" aria-hidden="true" />
+                Issue &amp; generate budget
+              </button>
+            </form>
+          ) : null}
+        </div>
+
+        {canPrice ? (
+          <form
+            action={attachBoqPricingAction}
+            className="mt-4 grid gap-3 border-t border-orange-200 pt-4"
+          >
+            <input name="boq_id" type="hidden" value={document.id} />
+            {document.items.length === 0 ? (
+              <p className="text-sm text-primary-dark/60">No line items to price yet.</p>
+            ) : (
+              document.items.map((item) => (
+                <div
+                  className="grid gap-2 rounded-md border border-primary-dark/10 bg-white p-3 min-[560px]:grid-cols-[minmax(0,1fr)_9rem_9rem]"
+                  key={item.id}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-primary-dark">
+                      {item.description}
+                    </p>
+                    <p className="text-xs text-primary-dark/50">
+                      {formatNumber(item.quantity)} {item.unit} · {item.category}
+                    </p>
+                  </div>
+                  <label className="text-xs font-bold text-primary-dark/60">
+                    Unit rate
+                    <input
+                      className={`${OPS_INPUT_CLASS} mt-1`}
+                      defaultValue={item.unit_rate || ""}
+                      min="0"
+                      name={`unit_rate::${item.id}`}
+                      step="0.01"
+                      type="number"
+                    />
+                  </label>
+                  <label className="text-xs font-bold text-primary-dark/60">
+                    Transport
+                    <input
+                      className={`${OPS_INPUT_CLASS} mt-1`}
+                      defaultValue={item.estimated_transport_cost || ""}
+                      min="0"
+                      name={`estimated_transport_cost::${item.id}`}
+                      step="0.01"
+                      type="number"
+                    />
+                  </label>
+                </div>
+              ))
+            )}
+            <div className="flex items-end">
+              <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
+                <ReceiptText className="size-4" aria-hidden="true" />
+                Save prices
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default async function OpsBoqPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
     searchParams ?? Promise.resolve({} as OpsSearchParams),
@@ -245,11 +423,27 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
   const notice = boqNotice(params);
   const totalBudgeted = boqDocuments.reduce((sum, document) => sum + document.budgeted_total, 0);
   const totalActual = boqDocuments.reduce((sum, document) => sum + document.actual_total, 0);
+  const totalTransport = boqDocuments.reduce((sum, document) => sum + document.transport_total, 0);
   const draftCount = boqDocuments.filter((document) => document.status === "draft").length;
+  const pricingCount = boqDocuments.filter(
+    (document) => document.status === "pricing_pending" || document.status === "priced",
+  ).length;
   const issuedCount = boqDocuments.filter((document) => document.status === "issued").length;
   const visibleLineItems = boqDocuments.reduce((sum, document) => sum + document.items.length, 0);
   const visibleSiteCount = new Set(boqDocuments.map((document) => document.site_id)).size;
   const visibleVariance = totalBudgeted - totalActual;
+
+  const uniqueSiteIds = Array.from(new Set(boqDocuments.map((document) => document.site_id)));
+  const [tasksPerSite, triggerAlertsPerSite] = await Promise.all([
+    Promise.all(uniqueSiteIds.map((siteId) => fetchOpsProjectTasksForSite(siteId))),
+    Promise.all(uniqueSiteIds.map((siteId) => fetchOpsMaterialTriggerAlerts(siteId))),
+  ]);
+  const tasksBySiteId = new Map<string, OpsProjectTask[]>(
+    uniqueSiteIds.map((siteId, index) => [siteId, tasksPerSite[index]]),
+  );
+  const triggerAlertsBySiteId = new Map<string, OpsMaterialTriggerAlert[]>(
+    uniqueSiteIds.map((siteId, index) => [siteId, triggerAlertsPerSite[index]]),
+  );
   const createPanelParams = new URLSearchParams();
 
   if (listState.query) {
@@ -267,6 +461,11 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
   return (
     <div className="w-full max-w-none space-y-6">
       <OpsRealtimeRefresh tables={["boq_documents", "boq_line_items"]} />
+      <datalist id="boq-category-suggestions">
+        {BOQ_CATEGORY_SUGGESTIONS.map((category) => (
+          <option key={category} value={category} />
+        ))}
+      </datalist>
       <OpsPageHeader
         eyebrow="Commercial control"
         title="Bill of Quantities"
@@ -321,19 +520,37 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           value={draftCount.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
+          href="/ops/boq?status=pricing_pending#boq-register"
+          icon={Send}
+          label="With procurement"
+          tone={pricingCount > 0 ? "warn" : "default"}
+          trend={pricingCount > 0 ? "Pricing" : "Clear"}
+          value={pricingCount.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
           href="/ops/boq?status=issued#boq-register"
           icon={CheckCircle2}
           label="Issued shown"
           tone="good"
-          trend="Invoice ready"
+          trend="Budget generated"
           value={issuedCount.toLocaleString("en-ZM")}
         />
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <OpsKpiCard
           href="/ops/boq#boq-register"
           icon={Calculator}
           label="Line items shown"
           trend="Measured"
           value={visibleLineItems.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
+          href="/ops/project-budgets"
+          icon={Truck}
+          label="Transport estimate shown"
+          trend="Planning"
+          value={formatZmw(totalTransport)}
         />
       </section>
 
@@ -361,15 +578,21 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
         >
           <div className="grid gap-3">
             <BoqFlowStep
-              description="Draft BOQs stay editable while QS/commercial teams build measured scope."
+              description="QS builds quantities, classification, and dates. Draft stays editable."
               icon={Clock3}
-              label="Draft control"
+              label="Draft (QS plans)"
               value={`${draftCount} shown`}
             />
             <BoqFlowStep
-              description="Issued BOQs become the stable source record for invoice links and future IPCs."
+              description="Procurement prices every line and the transport estimate before it can be issued."
+              icon={Send}
+              label="With procurement"
+              value={`${pricingCount} shown`}
+            />
+            <BoqFlowStep
+              description="Issuing generates the project budget: one line per classification, plus a dedicated transport line."
               icon={CheckCircle2}
-              label="Issued source"
+              label="Issued — budget generated"
               value={`${issuedCount} shown`}
             />
             <BoqFlowStep
@@ -438,13 +661,12 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                 Version
                 <input className={OPS_INPUT_CLASS} defaultValue="1" min="1" name="version" type="number" />
               </label>
-              <label className={OPS_LABEL_CLASS}>
-                Status
-                <select className={OPS_INPUT_CLASS} defaultValue="draft" name="status">
-                  <option value="draft">Draft</option>
-                  <option value="issued">Issued</option>
-                </select>
-              </label>
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-2">
+                <p className="text-xs leading-5 text-primary-dark/50">
+                  Always starts as <span className="font-semibold">draft</span>. Add line items,
+                  then submit to Procurement for pricing.
+                </p>
+              </div>
               <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
                 <button
                   className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`}
@@ -503,14 +725,14 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           document.status,
                         )}`}
                       >
-                        {document.status}
+                        {boqStatusLabel(document.status)}
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-primary-dark/60">
                       {document.site?.name ?? "Site record unavailable"}
                     </p>
                   </div>
-                  <div className="grid gap-3 min-[520px]:grid-cols-3 lg:min-w-[24rem]">
+                  <div className="grid gap-3 min-[520px]:grid-cols-4 lg:min-w-[28rem]">
                     <div className="rounded-md border border-primary-dark/10 px-3 py-2">
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
                         Budgeted
@@ -529,6 +751,14 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     </div>
                     <div className="rounded-md border border-primary-dark/10 px-3 py-2">
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        Transport
+                      </p>
+                      <p className="mt-1 font-bold text-primary-dark">
+                        {formatZmw(document.transport_total)}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
                         Lines
                       </p>
                       <p className="mt-1 font-bold text-primary-dark">
@@ -537,6 +767,45 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     </div>
                   </div>
                 </div>
+
+                <BoqPricingWorkflowPanel role={auth.profile.role} document={document} />
+
+                {(() => {
+                  const dueAlerts = (triggerAlertsBySiteId.get(document.site_id) ?? []).filter(
+                    (alert) => alert.boqId === document.id,
+                  );
+                  if (dueAlerts.length === 0) {
+                    return null;
+                  }
+                  return (
+                    <div className="mt-3 rounded-md border border-orange-200 bg-orange-50/60 p-4">
+                      <p className="flex items-center gap-2 text-sm font-bold text-orange-800">
+                        <AlertTriangle className="size-4" aria-hidden="true" />
+                        Materials due — {dueAlerts.length} line{dueAlerts.length === 1 ? "" : "s"} past their
+                        trigger date with no material request raised
+                      </p>
+                      <ul className="mt-2 grid gap-1.5 text-sm text-orange-800/90">
+                        {dueAlerts.slice(0, 6).map((alert) => (
+                          <li key={alert.lineItemId}>
+                            <span className="font-semibold">{alert.description}</span> — needed by{" "}
+                            {alert.effectiveNeededBy}
+                            {alert.projectTaskTitle ? ` (task: ${alert.projectTaskTitle})` : ""}
+                            , trigger by {alert.triggerBy}
+                          </li>
+                        ))}
+                      </ul>
+                      {canManage ? (
+                        <Link
+                          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-blue hover:underline"
+                          href="/ops/material-requests?create=material_request"
+                        >
+                          <Send className="size-3.5" aria-hidden="true" />
+                          Raise material request(s)
+                        </Link>
+                      ) : null}
+                    </div>
+                  );
+                })()}
 
                 {canEditDoc ? (
                   <>
@@ -608,6 +877,30 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           {supplierOptions.map((supplier) => (
                             <option key={supplier.id} value={supplier.id}>
                               {supplier.supplier_code} - {supplier.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Classification
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue="general"
+                          list="boq-category-suggestions"
+                          name="category"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        Needed by
+                        <input className={OPS_INPUT_CLASS} name="needed_by" type="date" />
+                      </label>
+                      <label className={`${OPS_LABEL_CLASS} md:col-span-2 lg:col-span-2`}>
+                        Linked schedule task (optional)
+                        <select className={OPS_INPUT_CLASS} defaultValue="" name="project_task_id">
+                          <option value="">No linked task</option>
+                          {(tasksBySiteId.get(document.site_id) ?? []).map((task) => (
+                            <option key={task.id} value={task.id}>
+                              {task.title} ({task.planned_start_date})
                             </option>
                           ))}
                         </select>
@@ -708,17 +1001,6 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           type="number"
                         />
                       </label>
-                      <label className={OPS_LABEL_CLASS}>
-                        Status
-                        <select
-                          className={OPS_INPUT_CLASS}
-                          defaultValue={document.status}
-                          name="status"
-                        >
-                          <option value="draft">Draft</option>
-                          <option value="issued">Issued</option>
-                        </select>
-                      </label>
                       <div className="flex items-end md:col-span-4">
                         <button className={`${OPS_PRIMARY_BUTTON_CLASS}`} type="submit">
                           <Pencil className="size-4" aria-hidden="true" />
@@ -777,6 +1059,13 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           <OpsMobileRecordRow label="Total">
                             {formatZmw(item.budgeted_total)}
                           </OpsMobileRecordRow>
+                          <OpsMobileRecordRow label="Classification">{item.category}</OpsMobileRecordRow>
+                          <OpsMobileRecordRow label="Needed by">
+                            {deriveOpsBoqLineDates(item).effectiveNeededBy ?? "—"}
+                          </OpsMobileRecordRow>
+                          <OpsMobileRecordRow label="Transport">
+                            {formatZmw(item.estimated_transport_cost)}
+                          </OpsMobileRecordRow>
                           <OpsMobileRecordRow label="Supplier">
                             {item.supplier
                               ? `${item.supplier.supplier_code} — ${item.supplier.legal_name}`
@@ -827,6 +1116,15 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           Total
                         </th>
                         <th className="px-5 py-3" scope="col">
+                          Classification
+                        </th>
+                        <th className="px-5 py-3" scope="col">
+                          Needed by
+                        </th>
+                        <th className="px-5 py-3" scope="col">
+                          Transport
+                        </th>
+                        <th className="px-5 py-3" scope="col">
                           Supplier
                         </th>
                         {canManage ? (
@@ -854,6 +1152,24 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           </td>
                           <td className="px-5 py-4 font-semibold text-primary-dark">
                             {formatZmw(item.budgeted_total)}
+                          </td>
+                          <td className="px-5 py-4 text-primary-dark/70">
+                            <span className="inline-flex rounded-full border border-primary-dark/15 bg-primary-dark/[0.04] px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-primary-dark/60">
+                              {item.category}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-primary-dark/70">
+                            {deriveOpsBoqLineDates(item).effectiveNeededBy ?? (
+                              <span className="text-primary-dark/40">—</span>
+                            )}
+                            {item.task ? (
+                              <span className="ml-1 text-xs text-primary-dark/45">
+                                (from {item.task.title})
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-5 py-4 text-primary-dark/70">
+                            {formatZmw(item.estimated_transport_cost)}
                           </td>
                           <td className="px-5 py-4 text-primary-dark/70">
                             {item.supplier ? (
@@ -929,6 +1245,27 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                                             </select>
                                           </label>
                                         </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <label className="text-xs font-bold text-primary-dark/60">
+                                            Classification
+                                            <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.category} list="boq-category-suggestions" name="category" />
+                                          </label>
+                                          <label className="text-xs font-bold text-primary-dark/60">
+                                            Needed by
+                                            <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.needed_by ?? ""} name="needed_by" type="date" />
+                                          </label>
+                                        </div>
+                                        <label className="text-xs font-bold text-primary-dark/60">
+                                          Linked schedule task
+                                          <select className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.project_task_id ?? ""} name="project_task_id">
+                                            <option value="">No linked task</option>
+                                            {(tasksBySiteId.get(document.site_id) ?? []).map((task) => (
+                                              <option key={task.id} value={task.id}>
+                                                {task.title} ({task.planned_start_date})
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </label>
                                         <button className={`${OPS_PRIMARY_BUTTON_CLASS} mt-1 w-full`} type="submit">
                                           Save line
                                         </button>

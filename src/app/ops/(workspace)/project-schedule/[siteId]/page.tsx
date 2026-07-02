@@ -3,6 +3,7 @@ import {
   CalendarRange,
   CheckCircle2,
   ClipboardList,
+  Package,
   Pencil,
   Plus,
   Trash2,
@@ -14,6 +15,12 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { requireOpsUser } from "@/lib/ops/auth";
+import {
+  deriveOpsBoqLineDates,
+  fetchOpsBoqDocuments,
+  fetchOpsMaterialTriggerAlerts,
+  type OpsBoqLineItem,
+} from "@/lib/ops/boq";
 import {
   archiveProjectTaskAction,
   createProjectTaskAction,
@@ -80,10 +87,12 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
   }
 
   const supabase = getOpsSupabaseServiceClient();
-  const [siteRes, tasks, staff] = await Promise.all([
+  const [siteRes, tasks, staff, boqDocuments, materialTriggerAlerts] = await Promise.all([
     supabase.from("sites").select("id, code, name").eq("id", siteId).maybeSingle(),
     fetchOpsProjectTasksForSite(siteId),
     fetchOpsStaffMembers().catch(() => []),
+    fetchOpsBoqDocuments(),
+    fetchOpsMaterialTriggerAlerts(siteId),
   ]);
   if (siteRes.error || !siteRes.data) notFound();
   const site = siteRes.data as { id: string; code: string; name: string };
@@ -101,6 +110,23 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
         member.role,
       ),
   );
+
+  // Material schedule (BOQ) lines linked to this site's tasks — the
+  // schedule↔material-schedule link surfaced on the schedule itself.
+  const boqLinesByTaskId = new Map<string, OpsBoqLineItem[]>();
+  for (const document of boqDocuments) {
+    if (document.site_id !== site.id) {
+      continue;
+    }
+    for (const item of document.items) {
+      if (!item.project_task_id) {
+        continue;
+      }
+      const existing = boqLinesByTaskId.get(item.project_task_id) ?? [];
+      existing.push(item);
+      boqLinesByTaskId.set(item.project_task_id, existing);
+    }
+  }
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -131,7 +157,7 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
         </div>
       ) : null}
 
-      <section className="grid gap-3 md:grid-cols-4">
+      <section className="grid gap-3 md:grid-cols-5">
         <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
             Site progress
@@ -173,6 +199,18 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
             {rollup.blockedTasks}
           </p>
         </div>
+        <Link
+          className="block rounded-md border border-orange-200 bg-orange-50 px-4 py-3 shadow-sm transition hover:bg-orange-100"
+          href="/ops/boq"
+        >
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">
+            <Package className="size-3.5" aria-hidden="true" />
+            Materials due
+          </p>
+          <p className="mt-1 font-heading text-3xl font-bold text-orange-700">
+            {materialTriggerAlerts.length}
+          </p>
+        </Link>
       </section>
 
       {canCreate ? (
@@ -245,6 +283,7 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
               canEdit={canEdit}
               canArchive={canArchive}
               assignableStaff={assignableStaff}
+              linkedBoqLines={boqLinesByTaskId.get(task.id) ?? []}
             />
           ))}
         </ul>
@@ -260,6 +299,7 @@ function ProjectTaskCard({
   canEdit,
   canArchive,
   assignableStaff,
+  linkedBoqLines,
 }: {
   task: OpsProjectTask;
   actorId: string;
@@ -267,6 +307,7 @@ function ProjectTaskCard({
   canEdit: boolean;
   canArchive: boolean;
   assignableStaff: Array<{ id: string; full_name: string; role: string }>;
+  linkedBoqLines: OpsBoqLineItem[];
 }) {
   const canProgress = canUpdateProjectTaskProgress(role, actorId, task);
   return (
@@ -312,6 +353,32 @@ function ProjectTaskCard({
           </div>
         </div>
       </div>
+
+      {linkedBoqLines.length > 0 ? (
+        <details className="mt-3 rounded-md border border-primary-blue/20 bg-primary-blue/5">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-primary-blue">
+            <Package className="mr-1 inline size-3.5" aria-hidden="true" />
+            {linkedBoqLines.length} material schedule line{linkedBoqLines.length === 1 ? "" : "s"} linked to
+            this task
+          </summary>
+          <ul className="grid gap-1.5 border-t border-primary-blue/15 p-3 text-xs text-primary-dark/70">
+            {linkedBoqLines.map((line) => {
+              const { triggerBy } = deriveOpsBoqLineDates(line);
+              return (
+                <li key={line.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    <span className="font-semibold text-primary-dark">{line.description}</span>{" "}
+                    ({line.quantity} {line.unit}, {line.category})
+                  </span>
+                  {triggerBy ? (
+                    <span className="text-primary-dark/50">Trigger by {triggerBy}</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      ) : null}
 
       {canProgress ? (
         <details className="mt-3 rounded-md border border-primary-dark/10">
