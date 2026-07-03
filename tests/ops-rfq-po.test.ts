@@ -62,10 +62,10 @@ describe("RFQ and purchase order guards", () => {
       thresholdSteps.map((step) => step.approverRole),
       ["procurement_manager", "finance_manager", "managing_director"],
     );
+    // Only the first step's approver is summoned at submission — later steps
+    // are notified when the chain reaches them (decideOpsApprovalAction).
     assert.deepEqual(purchaseOrderApprovalRecipientRoles(thresholdSteps), [
       "procurement_manager",
-      "finance_manager",
-      "managing_director",
       "developer",
     ]);
   });

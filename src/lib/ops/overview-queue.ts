@@ -44,6 +44,52 @@ type QueueTask = {
  * Each query is a head count; only items with a count > 0 are returned so the
  * widget stays focused. Failures degrade to 0 rather than breaking the overview.
  */
+/**
+ * Counts approvals that are actionable by this viewer RIGHT NOW. Every step in
+ * a chain is inserted as `pending` at submission, so a plain pending-steps
+ * count would summon later-step approvers before the chain reaches them —
+ * they'd click through only to find "waiting for the assigned approver".
+ * Actionable = pending step assigned to me/my role AND the request is open
+ * AND the chain's current step is this step.
+ */
+async function countActionableApprovals(
+  supabase: ReturnType<typeof getOpsSupabaseServiceClient>,
+  role: OpsUserRole,
+  userId: string,
+) {
+  type Row = {
+    approval_request_id: string;
+    step_number: number;
+    approval_requests:
+      | { current_step_number: number }
+      | { current_step_number: number }[]
+      | null;
+  };
+
+  const { data, error } = await supabase
+    .from("approval_steps")
+    .select("approval_request_id, step_number, approval_requests!inner(current_step_number)")
+    .eq("status", "pending")
+    .or(`approver_user_id.eq.${userId},approver_role.eq.${role}`)
+    .in("approval_requests.status", ["submitted", "in_review"])
+    .limit(500);
+
+  if (error || !data) return 0;
+
+  const actionableRequestIds = new Set(
+    (data as Row[])
+      .filter((row) => {
+        const request = Array.isArray(row.approval_requests)
+          ? row.approval_requests[0]
+          : row.approval_requests;
+        return request && row.step_number === request.current_step_number;
+      })
+      .map((row) => row.approval_request_id),
+  );
+
+  return actionableRequestIds.size;
+}
+
 export async function fetchOpsMyQueue(role: OpsUserRole, userId: string): Promise<OpsQueueItem[]> {
   const supabase = getOpsSupabaseServiceClient();
   const count = (builder: PromiseLike<{ count: number | null }>) =>
@@ -59,16 +105,7 @@ export async function fetchOpsMyQueue(role: OpsUserRole, userId: string): Promis
       label: "Approvals awaiting your decision",
       href: "/ops/approvals",
       tone: "warn",
-      // Role-specific: count only pending approval steps assigned to this
-      // viewer's role (or directly to them), so each approver sees their own
-      // queue rather than a global pending total.
-      run: count(
-        supabase
-          .from("approval_steps")
-          .select("approval_request_id", { count: "exact", head: true })
-          .eq("status", "pending")
-          .or(`approver_user_id.eq.${userId},approver_role.eq.${role}`),
-      ),
+      run: countActionableApprovals(supabase, role, userId).catch(() => 0),
     });
   }
 

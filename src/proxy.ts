@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { buildOpsContentSecurityPolicy, generateOpsCspNonce } from "@/lib/ops/csp";
 import {
   canUseOpsLocalRolePreview,
   OPS_LOCAL_ROLE_PREVIEW_COOKIE,
@@ -9,37 +10,6 @@ import {
 const OPS_PATH_PREFIX = "/ops";
 const DEFAULT_OPS_HOST = "ops.pymbleconstruction.com";
 const OPS_SESSION_REFRESH_TIMEOUT_MS = 2500;
-
-function opsContentSecurityPolicy() {
-  // React in development uses eval() for hot reload + dev tooling. Production
-  // builds never call eval() so we keep production strict.
-  const isDev = process.env.NODE_ENV !== "production";
-  const scriptSrc = isDev
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-    : "script-src 'self' 'unsafe-inline'";
-  // Supabase Realtime opens a websocket (`wss://*.supabase.co/realtime/...`),
-  // so `wss:` to the Supabase origins must be allowed in production too,
-  // otherwise the OpsAutoRefresh + OpsRealtimeRefresh subscriptions silently
-  // fail and the workspace looks stale.
-  const connectSrc = isDev
-    ? "connect-src 'self' ws: wss: https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com"
-    : "connect-src 'self' wss://*.supabase.co wss://*.supabase.in https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com";
-
-  return [
-    "default-src 'self'",
-    "base-uri 'self'",
-    "object-src 'none'",
-    "frame-ancestors 'none'",
-    "form-action 'self'",
-    scriptSrc,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://*.r2.cloudflarestorage.com",
-    "font-src 'self' data:",
-    connectSrc,
-    "media-src 'self' data: blob:",
-    "worker-src 'self' blob:",
-  ].join("; ");
-}
 
 function isStaticAsset(pathname: string) {
   return /\.[a-z0-9]+$/i.test(pathname);
@@ -98,6 +68,7 @@ function applyOpsSecurityHeaders(
   response: NextResponse,
   host: string,
   pathname: string,
+  contentSecurityPolicy: string,
 ) {
   applyBaselineSecurityHeaders(response);
 
@@ -106,7 +77,7 @@ function applyOpsSecurityHeaders(
   }
 
   response.headers.set("Cache-Control", "no-store, max-age=0");
-  response.headers.set("Content-Security-Policy", opsContentSecurityPolicy());
+  response.headers.set("Content-Security-Policy", contentSecurityPolicy);
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
   response.headers.set("X-Robots-Tag", "noindex, nofollow");
 
@@ -221,6 +192,19 @@ async function refreshOpsSession(request: NextRequest) {
 export async function proxy(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
   const { pathname } = request.nextUrl;
+  const isDev = process.env.NODE_ENV !== "production";
+  const nonce = isDev ? undefined : generateOpsCspNonce();
+  const contentSecurityPolicy = buildOpsContentSecurityPolicy({ isDev, nonce });
+
+  if (nonce && shouldApplyOpsSecurityHeaders(host, pathname)) {
+    // Forward the policy on the request itself: Next.js reads the nonce out
+    // of the request's Content-Security-Policy header and stamps it onto
+    // every framework <script> tag it renders. x-nonce is for route handlers
+    // that build HTML by hand (see /ops/auth/callback). Both are overwritten
+    // here so a client can never smuggle its own values in.
+    request.headers.set("content-security-policy", contentSecurityPolicy);
+    request.headers.set("x-nonce", nonce);
+  }
 
   if (shouldBlockOpsLocalRolePreviewMutation(request, host)) {
     const response = pathname.startsWith("/api/ops")
@@ -232,11 +216,16 @@ export async function proxy(request: NextRequest) {
           status: 303,
         });
 
-    return applyOpsSecurityHeaders(response, host, pathname);
+    return applyOpsSecurityHeaders(response, host, pathname, contentSecurityPolicy);
   }
 
   if (isRetiredOpsPath(host, pathname)) {
-    return applyOpsSecurityHeaders(new NextResponse(null, { status: 404 }), host, pathname);
+    return applyOpsSecurityHeaders(
+      new NextResponse(null, { status: 404 }),
+      host,
+      pathname,
+      contentSecurityPolicy,
+    );
   }
 
   const authResponse = await refreshOpsSession(request);
@@ -248,7 +237,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/_next") ||
     isStaticAsset(pathname)
   ) {
-    return applyOpsSecurityHeaders(authResponse, host, pathname);
+    return applyOpsSecurityHeaders(authResponse, host, pathname, contentSecurityPolicy);
   }
 
   const nextUrl = request.nextUrl.clone();
@@ -258,7 +247,7 @@ export async function proxy(request: NextRequest) {
   const rewriteResponse = NextResponse.rewrite(nextUrl, { request });
   copyResponseCookies(authResponse, rewriteResponse);
 
-  return applyOpsSecurityHeaders(rewriteResponse, host, pathname);
+  return applyOpsSecurityHeaders(rewriteResponse, host, pathname, contentSecurityPolicy);
 }
 
 export const config = {

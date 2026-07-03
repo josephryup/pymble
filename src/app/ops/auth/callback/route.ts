@@ -16,9 +16,20 @@ function opsAuthErrorRedirect(requestUrl: URL, message: string) {
   );
 }
 
-function hashBridgePage(next: string) {
+// The proxy stamps x-nonce onto every ops request in production; only a
+// well-formed base64 nonce may be echoed into markup so a spoofed header can
+// never inject attributes.
+function safeCspNonce(request: NextRequest) {
+  const nonce = request.headers.get("x-nonce") ?? "";
+  return /^[A-Za-z0-9+/\-_]{16,64}={0,2}$/.test(nonce) ? nonce : null;
+}
+
+function hashBridgePage(next: string, nonce: string | null) {
   const nextJson = JSON.stringify(next);
   const errorMessage = JSON.stringify("The secure email link could not be verified.");
+  // Without the nonce the CSP blocks this inline script and email-link
+  // sign-in dies silently on the bridge page.
+  const scriptTag = nonce ? `<script nonce="${nonce}">` : "<script>";
 
   return new NextResponse(
     `<!doctype html>
@@ -36,7 +47,7 @@ function hashBridgePage(next: string) {
       <p style="margin:12px 0 0;color:#475467;font-size:14px;line-height:22px;">Please wait while we finish signing you in.</p>
     </section>
   </main>
-  <script>
+  ${scriptTag}
     (async function () {
       var fallbackError = ${errorMessage};
       var next = ${nextJson};
@@ -131,5 +142,5 @@ export async function GET(request: NextRequest) {
     return opsAuthErrorRedirect(requestUrl, "The secure email link could not be verified.");
   }
 
-  return hashBridgePage(next);
+  return hashBridgePage(next, safeCspNonce(request));
 }

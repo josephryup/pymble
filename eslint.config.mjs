@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Serwist writes the bundled service worker into public/ at build time
+    // (gitignored); linting the minified bundle fails the run.
+    "public/sw.js",
+    "public/sw.js.map",
   ]),
 ]);
 

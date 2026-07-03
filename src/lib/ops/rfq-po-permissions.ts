@@ -165,9 +165,20 @@ export function purchaseOrderApprovalSteps(
 export function purchaseOrderApprovalRecipientRoles(
   steps: OpsPurchaseOrderApprovalStepTemplate[],
 ) {
+  // Only the FIRST step's approver is summoned at submission. Later steps are
+  // notified by decideOpsApprovalAction the moment the chain actually reaches
+  // them — alerting the whole chain up front sends action-category alerts to
+  // people who cannot act yet and duplicates the advance notification later.
+  const firstStepNumber = steps.reduce(
+    (min, step) => Math.min(min, step.stepNumber),
+    Number.POSITIVE_INFINITY,
+  );
+
   return Array.from(
     new Set<OpsUserRole>([
-      ...steps.map((step) => step.approverRole),
+      ...steps
+        .filter((step) => step.stepNumber === firstStepNumber)
+        .map((step) => step.approverRole),
       "developer",
     ]),
   );
