@@ -63,36 +63,189 @@ export function departmentForRole(role: OpsUserRole): OpsDepartmentKey | null {
   return ROLE_DEPARTMENT_MAP[role] ?? null;
 }
 
+export type OpsDepartmentReportScope = "individual" | "compiled";
+
+export type OpsDepartmentReportingRoute = {
+  /** Roles that file tier-1 individual reports for this department. */
+  contributorRoles: OpsUserRole[];
+  /**
+   * Line managers who review the individual reports AND file the compiled
+   * department report upward.
+   */
+  compilerRoles: OpsUserRole[];
+  /** Leadership the compiled report routes to for final review. */
+  finalReviewerRoles: OpsUserRole[];
+};
+
 /**
- * Heads who can submit a department report on behalf of their department.
- * Reports leave the head's hands as 'submitted' and route up to MD + GM.
+ * The weekly reporting chain, per the PCL organogram:
+ * - Engineers and HSE report to the Projects Manager, who compiles for the MD.
+ * - Procurement officers report to the Procurement Manager, who compiles for
+ *   the GM and MD.
+ * - Operations Manager, Accountant/Finance, QS, HR, and IT file their
+ *   department report straight up (no tier-1 contributors).
  */
-const DEPARTMENT_HEAD_ROLES: OpsUserRole[] = [
-  "operations_manager",
-  "projects_manager",
-  "engineering_manager",
-  "procurement_manager",
-  "finance_manager",
-  "hse_officer",
-  "human_resource",
-  "hr",
-  "quantity_surveyor",
-  "it_manager",
-];
+export const OPS_DEPARTMENT_REPORTING_ROUTES: Record<
+  OpsDepartmentKey,
+  OpsDepartmentReportingRoute
+> = {
+  operations: {
+    contributorRoles: ["supervisor"],
+    compilerRoles: ["operations_manager"],
+    finalReviewerRoles: ["managing_director"],
+  },
+  engineering: {
+    contributorRoles: ["engineer"],
+    compilerRoles: ["projects_manager", "engineering_manager"],
+    finalReviewerRoles: ["managing_director"],
+  },
+  hse: {
+    contributorRoles: ["hse_officer", "hse_assistant_officer"],
+    compilerRoles: ["projects_manager"],
+    finalReviewerRoles: ["managing_director"],
+  },
+  procurement: {
+    contributorRoles: ["procurement", "procurement_assistant"],
+    compilerRoles: ["procurement_manager"],
+    finalReviewerRoles: ["general_manager", "managing_director"],
+  },
+  finance: {
+    contributorRoles: [],
+    compilerRoles: ["accountant", "finance_manager"],
+    finalReviewerRoles: ["managing_director", "general_manager"],
+  },
+  commercial: {
+    contributorRoles: [],
+    compilerRoles: ["quantity_surveyor"],
+    finalReviewerRoles: ["managing_director", "general_manager"],
+  },
+  hr: {
+    contributorRoles: [],
+    compilerRoles: ["human_resource", "hr"],
+    finalReviewerRoles: ["general_manager", "managing_director"],
+  },
+  it: {
+    contributorRoles: [],
+    compilerRoles: ["it_manager"],
+    finalReviewerRoles: ["managing_director"],
+  },
+  executive: {
+    contributorRoles: [],
+    compilerRoles: [],
+    finalReviewerRoles: [],
+  },
+};
+
+/** Departments whose compiled report this role files (PM covers eng + HSE). */
+export function departmentsCompiledBy(role: OpsUserRole): OpsDepartmentKey[] {
+  return (Object.keys(OPS_DEPARTMENT_REPORTING_ROUTES) as OpsDepartmentKey[]).filter(
+    (department) => OPS_DEPARTMENT_REPORTING_ROUTES[department].compilerRoles.includes(role),
+  );
+}
+
+/** Departments whose individual reports this role contributes to. */
+export function departmentsContributedBy(role: OpsUserRole): OpsDepartmentKey[] {
+  return (Object.keys(OPS_DEPARTMENT_REPORTING_ROUTES) as OpsDepartmentKey[]).filter(
+    (department) => OPS_DEPARTMENT_REPORTING_ROUTES[department].contributorRoles.includes(role),
+  );
+}
+
+/** What this role may file: [department, scope] pairs. Leadership files anything compiled. */
+export function reportFilingOptions(
+  role: OpsUserRole,
+): Array<{ department: OpsDepartmentKey; scope: OpsDepartmentReportScope }> {
+  if (isLeadershipRole(role)) {
+    return (Object.keys(OPS_DEPARTMENT_LABELS) as OpsDepartmentKey[]).map((department) => ({
+      department,
+      scope: "compiled" as const,
+    }));
+  }
+  return [
+    ...departmentsCompiledBy(role).map((department) => ({
+      department,
+      scope: "compiled" as const,
+    })),
+    ...departmentsContributedBy(role).map((department) => ({
+      department,
+      scope: "individual" as const,
+    })),
+  ];
+}
+
+export function canFileDepartmentReport(
+  role: OpsUserRole,
+  department: OpsDepartmentKey,
+  scope: OpsDepartmentReportScope,
+) {
+  return reportFilingOptions(role).some(
+    (option) => option.department === department && option.scope === scope,
+  );
+}
+
+/** Roles a submitted report routes to: line manager for tier 1, leadership for compiled. */
+export function reviewerRolesForReport(report: {
+  department: OpsDepartmentKey;
+  scope: OpsDepartmentReportScope;
+}): OpsUserRole[] {
+  const route = OPS_DEPARTMENT_REPORTING_ROUTES[report.department];
+  return report.scope === "individual" ? route.compilerRoles : route.finalReviewerRoles;
+}
 
 export function canSubmitDepartmentReport(role: OpsUserRole) {
   if (isLeadershipRole(role)) return true;
-  return DEPARTMENT_HEAD_ROLES.includes(role);
-}
-
-/** Head roles that own a given department's report (may be empty). */
-export function departmentHeadRolesFor(department: OpsDepartmentKey): OpsUserRole[] {
-  return DEPARTMENT_HEAD_ROLES.filter((role) => ROLE_DEPARTMENT_MAP[role] === department);
+  return reportFilingOptions(role).length > 0;
 }
 
 /**
- * Departments expected to file a monthly report. Executive is excluded —
- * leadership reviews reports, it does not report to itself.
+ * Record-level review gate. MD/GM/Developer can always review; a compiler
+ * (e.g. Projects Manager) can review the INDIVIDUAL reports routed to them,
+ * but their own compiled report still needs leadership.
+ */
+export function canReviewDepartmentReportRecord(
+  role: OpsUserRole,
+  report: { department: OpsDepartmentKey; scope: OpsDepartmentReportScope },
+) {
+  if (canReviewDepartmentReport(role)) return true;
+  return (
+    report.scope === "individual" &&
+    OPS_DEPARTMENT_REPORTING_ROUTES[report.department].compilerRoles.includes(role)
+  );
+}
+
+/**
+ * Record-level visibility — "isolated" per the reporting chain:
+ * - Leadership sees everything.
+ * - A compiler sees every report in the departments they compile (their own
+ *   department included).
+ * - A contributor sees their OWN individual reports plus their department's
+ *   compiled reports — not their colleagues' individual reports.
+ */
+export function canViewDepartmentReportRecord(
+  role: OpsUserRole,
+  userId: string,
+  report: {
+    created_by: string | null;
+    department: OpsDepartmentKey;
+    scope: OpsDepartmentReportScope;
+    submitted_by: string | null;
+  },
+) {
+  if (isLeadershipRole(role)) return true;
+  if (report.created_by === userId || report.submitted_by === userId) return true;
+
+  const own = departmentForRole(role);
+  const compiled = departmentsCompiledBy(role);
+  if (compiled.includes(report.department)) return true;
+  if (own === report.department) {
+    // Department mates see the compiled report, never each other's tier-1s.
+    return report.scope === "compiled";
+  }
+  return false;
+}
+
+/**
+ * Departments expected to file reports on the weekly cadence. Executive is
+ * excluded — leadership reviews reports, it does not report to itself.
  */
 export function departmentsExpectedToReport(): OpsDepartmentKey[] {
   return (Object.keys(OPS_DEPARTMENT_LABELS) as OpsDepartmentKey[]).filter(
@@ -112,30 +265,32 @@ export function canReviewDepartmentReport(role: OpsUserRole) {
 }
 
 /**
- * Visibility: a viewer can see a report when
- *   - they are leadership (everything routes up to leadership), OR
- *   - the report belongs to their own department.
- *
- * Engineers see Engineering reports. HR sees HR reports. Finance sees
- * Finance reports. Cross-department leakage is blocked here.
+ * Department-level visibility: leadership sees all; everyone else sees their
+ * own department plus any department whose reports route THROUGH them (the
+ * Projects Manager compiles Engineering and HSE, so they see both).
+ * Cross-department leakage is blocked here; record-level isolation between
+ * colleagues is enforced by canViewDepartmentReportRecord.
  */
 export function canViewDepartmentReport(
   role: OpsUserRole,
   reportDepartment: OpsDepartmentKey,
 ) {
   if (isLeadershipRole(role)) return true;
+  if (departmentsCompiledBy(role).includes(reportDepartment)) return true;
   const own = departmentForRole(role);
   return own !== null && own === reportDepartment;
 }
 
 /**
- * List of departments a viewer can list/select for new reports. Heads
- * see only their own; leadership see all.
+ * List of departments a viewer can browse. Leadership sees all; managers see
+ * their own plus the departments they compile; contributors see their own.
  */
 export function listAccessibleDepartments(role: OpsUserRole): OpsDepartmentKey[] {
   if (isLeadershipRole(role)) {
     return Object.keys(OPS_DEPARTMENT_LABELS) as OpsDepartmentKey[];
   }
+  const departments = new Set<OpsDepartmentKey>(departmentsCompiledBy(role));
   const own = departmentForRole(role);
-  return own ? [own] : [];
+  if (own) departments.add(own);
+  return Array.from(departments);
 }

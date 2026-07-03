@@ -1,4 +1,7 @@
-﻿import type { OpsDepartmentKey } from "@/lib/ops/department-report-permissions";
+﻿import type {
+  OpsDepartmentKey,
+  OpsDepartmentReportScope,
+} from "@/lib/ops/department-report-permissions";
 import type { OpsDepartmentReportPeriod } from "@/lib/ops/department-reports";
 
 /**
@@ -124,6 +127,231 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
     ],
   },
 };
+
+// ---------------------------------------------------------------------------
+// Report sections — the structured body of a report, replacing the single
+// narrative blob. Compiled (department-level) reports follow the standard
+// PCL report skeleton: Executive Summary → dashboards → status sections →
+// risks → decisions needed → action plan. Individual (tier-1) reports use a
+// short contributor skeleton.
+// ---------------------------------------------------------------------------
+
+export type OpsDeptReportSection = {
+  key: string;
+  label: string;
+  placeholder?: string;
+};
+
+const SECTION_POOL = {
+  executive_summary: {
+    key: "executive_summary",
+    label: "Executive Summary",
+    placeholder: "Three to five sentences a director can read in one minute.",
+  },
+  project_dashboard: {
+    key: "project_dashboard",
+    label: "Project Dashboard (traffic-light status)",
+    placeholder: "One line per project: Project — Green / Amber / Red — reason.",
+  },
+  overall_progress: {
+    key: "overall_progress",
+    label: "Overall Progress (% complete)",
+    placeholder: "Progress per project against the programme.",
+  },
+  programme_status: {
+    key: "programme_status",
+    label: "Programme Status (planned vs actual)",
+    placeholder: "Milestones planned vs achieved; slippage and recovery plan.",
+  },
+  financial_status: {
+    key: "financial_status",
+    label: "Financial Status",
+    placeholder: "Spend vs budget, cash position, commitments, receivables.",
+  },
+  procurement_status: {
+    key: "procurement_status",
+    label: "Procurement Status",
+    placeholder: "Orders placed, lead-time risks, deliveries expected.",
+  },
+  labour_equipment: {
+    key: "labour_equipment",
+    label: "Labour & Equipment Status",
+    placeholder: "Workforce numbers, plant/equipment availability and downtime.",
+  },
+  staffing: {
+    key: "staffing",
+    label: "Staffing & People Update",
+    placeholder: "Hires, exits, leave coverage, disciplinary or welfare matters.",
+  },
+  systems_status: {
+    key: "systems_status",
+    label: "Systems & Infrastructure Status",
+    placeholder: "Uptime, incidents, security posture, licences and renewals.",
+  },
+  quality: {
+    key: "quality",
+    label: "Quality Report",
+    placeholder: "Inspections, non-conformances, rework and closures.",
+  },
+  hse: {
+    key: "hse",
+    label: "Health, Safety & Environment",
+    placeholder: "Incidents, near-misses, inspections, toolbox talks, actions.",
+  },
+  risks_mitigation: {
+    key: "risks_mitigation",
+    label: "Risks and Mitigation",
+    placeholder: "Top risks this period and what is being done about each.",
+  },
+  decisions_needed: {
+    key: "decisions_needed",
+    label: "Issues Requiring Management Decision",
+    placeholder: "Decisions you need from leadership, with options and a recommendation.",
+  },
+  action_plan: {
+    key: "action_plan",
+    label: "Action Plan for the Next Reporting Period",
+    placeholder: "Committed actions, owners and dates for next period.",
+  },
+  photos: {
+    key: "photos",
+    label: "Photographic Progress",
+    placeholder: "Reference the before/after photos uploaded to Site Photos for this period.",
+  },
+  appendix: {
+    key: "appendix",
+    label: "Appendix",
+    placeholder: "Updated programme, procurement schedule, cash-flow summary references.",
+  },
+} as const satisfies Record<string, OpsDeptReportSection>;
+
+/** Short skeleton every tier-1 contributor fills for their line manager. */
+const INDIVIDUAL_SECTIONS: OpsDeptReportSection[] = [
+  { key: "work_completed", label: "Work Completed This Period", placeholder: "What you delivered, per site/task." },
+  { key: "progress_status", label: "Progress Against Plan", placeholder: "On track / behind, and why." },
+  { key: "problems_risks", label: "Problems & Risks", placeholder: "Blockers, risks, anything unusual." },
+  { key: "support_needed", label: "Support Needed / Decisions Required", placeholder: "What you need from your manager." },
+  { key: "plan_next_period", label: "Plan for Next Period", placeholder: "Your priorities for the coming week." },
+];
+
+const COMPILED_SECTIONS: Record<OpsDepartmentKey, OpsDeptReportSection[]> = {
+  operations: [
+    SECTION_POOL.executive_summary,
+    SECTION_POOL.project_dashboard,
+    SECTION_POOL.overall_progress,
+    SECTION_POOL.programme_status,
+    SECTION_POOL.financial_status,
+    SECTION_POOL.procurement_status,
+    SECTION_POOL.labour_equipment,
+    SECTION_POOL.quality,
+    SECTION_POOL.hse,
+    SECTION_POOL.risks_mitigation,
+    SECTION_POOL.decisions_needed,
+    SECTION_POOL.action_plan,
+    SECTION_POOL.photos,
+    SECTION_POOL.appendix,
+  ],
+  engineering: [
+    SECTION_POOL.executive_summary,
+    SECTION_POOL.project_dashboard,
+    SECTION_POOL.overall_progress,
+    SECTION_POOL.programme_status,
+    SECTION_POOL.labour_equipment,
+    SECTION_POOL.quality,
+    SECTION_POOL.hse,
+    SECTION_POOL.risks_mitigation,
+    SECTION_POOL.decisions_needed,
+    SECTION_POOL.action_plan,
+    SECTION_POOL.photos,
+  ],
+  hse: [
+    SECTION_POOL.executive_summary,
+    SECTION_POOL.hse,
+    SECTION_POOL.quality,
+    SECTION_POOL.risks_mitigation,
+    SECTION_POOL.decisions_needed,
+    SECTION_POOL.action_plan,
+  ],
+  procurement: [
+    SECTION_POOL.executive_summary,
+    SECTION_POOL.procurement_status,
+    SECTION_POOL.financial_status,
+    SECTION_POOL.risks_mitigation,
+    SECTION_POOL.decisions_needed,
+    SECTION_POOL.action_plan,
+    SECTION_POOL.appendix,
+  ],
+  finance: [
+    SECTION_POOL.executive_summary,
+    SECTION_POOL.financial_status,
+    SECTION_POOL.risks_mitigation,
+    SECTION_POOL.decisions_needed,
+    SECTION_POOL.action_plan,
+    SECTION_POOL.appendix,
+  ],
+  commercial: [
+    SECTION_POOL.executive_summary,
+    SECTION_POOL.financial_status,
+    SECTION_POOL.programme_status,
+    SECTION_POOL.risks_mitigation,
+    SECTION_POOL.decisions_needed,
+    SECTION_POOL.action_plan,
+  ],
+  hr: [
+    SECTION_POOL.executive_summary,
+    SECTION_POOL.staffing,
+    SECTION_POOL.risks_mitigation,
+    SECTION_POOL.decisions_needed,
+    SECTION_POOL.action_plan,
+  ],
+  it: [
+    SECTION_POOL.executive_summary,
+    SECTION_POOL.systems_status,
+    SECTION_POOL.risks_mitigation,
+    SECTION_POOL.decisions_needed,
+    SECTION_POOL.action_plan,
+  ],
+  executive: [
+    SECTION_POOL.executive_summary,
+    SECTION_POOL.project_dashboard,
+    SECTION_POOL.financial_status,
+    SECTION_POOL.risks_mitigation,
+    SECTION_POOL.action_plan,
+  ],
+};
+
+export function reportSectionsFor(
+  department: OpsDepartmentKey,
+  scope: OpsDepartmentReportScope,
+): OpsDeptReportSection[] {
+  return scope === "individual" ? INDIVIDUAL_SECTIONS : COMPILED_SECTIONS[department];
+}
+
+const SECTION_MAX_LENGTH = 8000;
+
+/** Reads `section_<key>` form inputs; blank sections are simply omitted. */
+export function collectTemplateSections(
+  department: OpsDepartmentKey,
+  scope: OpsDepartmentReportScope,
+  readField: (name: string) => string,
+): Record<string, string> {
+  const sections: Record<string, string> = {};
+  for (const section of reportSectionsFor(department, scope)) {
+    const raw = readField(`section_${section.key}`).trim();
+    if (raw === "") continue;
+    sections[section.key] = raw.slice(0, SECTION_MAX_LENGTH);
+  }
+  return sections;
+}
+
+/** Label lookup across every known section, for rendering stored reports. */
+export function reportSectionLabel(key: string): string {
+  const pooled = (SECTION_POOL as Record<string, OpsDeptReportSection>)[key];
+  if (pooled) return pooled.label;
+  const individual = INDIVIDUAL_SECTIONS.find((section) => section.key === key);
+  if (individual) return individual.label;
+  return key.replace(/_/g, " ").replace(/^./, (first) => first.toUpperCase());
+}
 
 /**
  * Merges the template's `metric_<key>` form inputs over any advanced-JSON

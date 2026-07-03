@@ -1,8 +1,9 @@
 import {
-  departmentHeadRolesFor,
   departmentsExpectedToReport,
   OPS_DEPARTMENT_LABELS,
+  OPS_DEPARTMENT_REPORTING_ROUTES,
   type OpsDepartmentKey,
+  type OpsDepartmentReportScope,
 } from "@/lib/ops/department-report-permissions";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
@@ -29,9 +30,9 @@ export const OPS_ESCALATION_SLA_DAYS = {
   rfqs: 2,
 } as const;
 
-// Department heads are reminded during the first N days of a month if last
-// month's report has not been filed yet.
-export const OPS_REPORT_REMINDER_WINDOW_DAYS = 5;
+// Reporting cadence is weekly: reminders fire on Monday and Tuesday until
+// last week's compiled department report exists.
+export const OPS_REPORT_REMINDER_WEEKDAYS = [1, 2];
 
 // Budget variance: alert when actual+committed cost exceeds the active budget by
 // this fraction. 1.05 = 5% over budget triggers; tune via env if needed later.
@@ -174,6 +175,7 @@ type DepartmentReportEscalationRow = {
   id: string;
   period: string;
   period_end_date: string;
+  scope: OpsDepartmentReportScope;
   status: string;
   submitted_at: string | null;
   submitted_by: string | null;
@@ -469,7 +471,9 @@ async function fetchRfqEscalationRows(supabase: SupabaseServiceClient) {
 async function fetchDepartmentReportEscalationRows(supabase: SupabaseServiceClient) {
   const { data, error } = await supabase
     .from("department_reports")
-    .select("id, department, title, period, period_end_date, status, submitted_at, submitted_by")
+    .select(
+      "id, department, scope, title, period, period_end_date, status, submitted_at, submitted_by",
+    )
     .in("status", ["submitted", "under_review"])
     .is("archived_at", null)
     .order("submitted_at", { ascending: true })
@@ -498,20 +502,52 @@ export function previousMonthWindow(todayIsoDate: string) {
 }
 
 /**
- * Departments that have NOT filed a monthly report covering the given window.
- * A report counts when it is monthly, not archived (caller filters), and its
- * period_end_date falls inside the window — any status counts, since a draft
- * in progress still means the head has started.
+ * The last full Monday–Sunday week before a Lusaka business date, plus a
+ * stable key (the week's Monday) for reminder idempotency.
  */
-export function departmentsMissingMonthlyReport(
-  filed: Array<{ department: OpsDepartmentKey; period: string; period_end_date: string }>,
+export function previousWeekWindow(todayIsoDate: string) {
+  const today = new Date(`${todayIsoDate}T00:00:00Z`);
+  const dayOfWeek = today.getUTCDay() === 0 ? 7 : today.getUTCDay();
+  const thisMonday = new Date(today);
+  thisMonday.setUTCDate(today.getUTCDate() - (dayOfWeek - 1));
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setUTCDate(thisMonday.getUTCDate() - 7);
+  const lastSunday = new Date(thisMonday);
+  lastSunday.setUTCDate(thisMonday.getUTCDate() - 1);
+  return {
+    start: lastMonday.toISOString().slice(0, 10),
+    end: lastSunday.toISOString().slice(0, 10),
+    weekKey: lastMonday.toISOString().slice(0, 10),
+  };
+}
+
+/** Day of week (1 = Monday … 7 = Sunday) for a "YYYY-MM-DD" business date. */
+export function isoWeekday(todayIsoDate: string) {
+  const day = new Date(`${todayIsoDate}T00:00:00Z`).getUTCDay();
+  return day === 0 ? 7 : day;
+}
+
+/**
+ * Departments that have NOT filed a COMPILED report of the given cadence
+ * covering the window. Any status counts — a draft in progress still means
+ * the manager has started.
+ */
+export function departmentsMissingCadenceReport(
+  filed: Array<{
+    department: OpsDepartmentKey;
+    period: string;
+    period_end_date: string;
+    scope?: OpsDepartmentReportScope;
+  }>,
   window: { start: string; end: string },
+  period: "weekly" | "monthly",
 ): OpsDepartmentKey[] {
   const covered = new Set(
     filed
       .filter(
         (report) =>
-          report.period === "monthly" &&
+          report.period === period &&
+          (report.scope ?? "compiled") === "compiled" &&
           report.period_end_date >= window.start &&
           report.period_end_date <= window.end,
       )
@@ -1036,8 +1072,9 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     result.notificationsQueued += queued.queued;
   }
 
-  // Department reports awaiting leadership review past the SLA: nag the
-  // reviewers (MD/GM tier) so a head's submitted report never just sits.
+  // Department reports sitting unreviewed past the SLA: nag whoever the
+  // report routes to — the line manager for an individual report, the MD/GM
+  // tier for a compiled one — so a submitted report never just sits.
   for (const report of departmentReports) {
     const reason = classifyOpsEscalationAge({
       nowIso,
@@ -1050,9 +1087,14 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       continue;
     }
 
+    const route = OPS_DEPARTMENT_REPORTING_ROUTES[report.department];
+    const reviewerRoles =
+      report.scope === "individual" && route.compilerRoles.length > 0
+        ? route.compilerRoles
+        : LEADERSHIP_ESCALATION_ROLES;
     const queued = await queueEscalationNotifications({
       actionHref: `/ops/department-reports/${report.id}`,
-      body: `${report.title} (${OPS_DEPARTMENT_LABELS[report.department]}) was submitted and is still awaiting leadership review. Please acknowledge it or request revisions.`,
+      body: `${report.title} (${OPS_DEPARTMENT_LABELS[report.department]}) was submitted and is still awaiting review. Please acknowledge it or request revisions.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
         dateKey,
         reason,
@@ -1061,56 +1103,66 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
         sourceTable: "department_reports",
       }),
       moduleKey: "department_reports",
-      recipients: recipientsFor(users, LEADERSHIP_ESCALATION_ROLES),
+      recipients: recipientsFor(users, reviewerRoles),
       sourceId: report.id,
       sourceTable: "department_reports",
-      title: "Department report awaiting review",
+      title:
+        report.scope === "individual"
+          ? "Team report awaiting your review"
+          : "Department report awaiting review",
     });
     result.escalated.staleDepartmentReports += 1;
     result.notificationFailures += queued.failures;
     result.notificationsQueued += queued.queued;
   }
 
-  // Early-month reminders: each department head is asked for last month's
-  // report until one exists. Idempotency is keyed on the month, so a head
-  // gets at most one reminder per month regardless of how many sweeps run.
-  const dayOfMonth = Number(dateKey.slice(8, 10));
-  if (dayOfMonth >= 1 && dayOfMonth <= OPS_REPORT_REMINDER_WINDOW_DAYS) {
-    const window = previousMonthWindow(dateKey);
+  // Weekly cadence: every Monday and Tuesday, departments that have not filed
+  // last week's compiled report get reminded — the compiler is asked to
+  // compile, the contributors are asked to file their individual reports.
+  // Idempotency is keyed on the week, so each person hears about a given week
+  // at most once.
+  if (OPS_REPORT_REMINDER_WEEKDAYS.includes(isoWeekday(dateKey))) {
+    const window = previousWeekWindow(dateKey);
     const { data: filedRows, error: filedError } = await supabase
       .from("department_reports")
-      .select("department, period, period_end_date")
-      .eq("period", "monthly")
+      .select("department, scope, period, period_end_date")
+      .eq("period", "weekly")
+      .eq("scope", "compiled")
       .is("archived_at", null)
       .gte("period_end_date", window.start)
       .lte("period_end_date", window.end);
 
     if (!filedError) {
-      const missing = departmentsMissingMonthlyReport(
+      const missing = departmentsMissingCadenceReport(
         (filedRows ?? []) as Array<{
           department: OpsDepartmentKey;
           period: string;
           period_end_date: string;
+          scope: OpsDepartmentReportScope;
         }>,
         window,
+        "weekly",
       );
 
       for (const department of missing) {
-        const headRoles = departmentHeadRolesFor(department);
-        const recipients = recipientsFor(users, headRoles);
+        const route = OPS_DEPARTMENT_REPORTING_ROUTES[department];
+        const recipients = recipientsFor(users, [
+          ...route.compilerRoles,
+          ...route.contributorRoles,
+        ]);
         if (recipients.length === 0) {
           continue;
         }
 
         const queued = await queueEscalationNotifications({
-          actionHref: `/ops/department-reports/new?department=${department}&period=monthly`,
-          body: `The ${OPS_DEPARTMENT_LABELS[department]} monthly report for ${window.monthKey} has not been filed yet. Open the form to draft it — key figures are pre-filled from system records.`,
-          idempotencyBase: `ops-report-reminder:${department}:${window.monthKey}`,
+          actionHref: `/ops/department-reports/new?department=${department}&period=weekly`,
+          body: `The ${OPS_DEPARTMENT_LABELS[department]} weekly report for ${window.start} to ${window.end} has not been filed yet. Open the form to draft yours — the template and figures are ready.`,
+          idempotencyBase: `ops-report-reminder:${department}:${window.weekKey}`,
           moduleKey: "department_reports",
           recipients,
           sourceId: null,
           sourceTable: "department_reports",
-          title: `Monthly report due: ${OPS_DEPARTMENT_LABELS[department]}`,
+          title: `Weekly report due: ${OPS_DEPARTMENT_LABELS[department]}`,
         });
         result.departmentReportReminders += queued.queued;
         result.notificationFailures += queued.failures;

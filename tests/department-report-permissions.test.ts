@@ -1,110 +1,171 @@
 import test from "node:test";
 import { strict as assert } from "node:assert";
 import {
+  canFileDepartmentReport,
   canReviewDepartmentReport,
+  canReviewDepartmentReportRecord,
   canSubmitDepartmentReport,
   canViewDepartmentReport,
+  canViewDepartmentReportRecord,
   departmentForRole,
+  departmentsCompiledBy,
   listAccessibleDepartments,
   OPS_DEPARTMENT_LABELS,
+  reviewerRolesForReport,
   type OpsDepartmentKey,
 } from "@/lib/ops/department-report-permissions";
 import type { OpsUserRole } from "@/lib/ops/types";
 
 /**
- * Sprint 16: department report visibility must not leak across departments.
- * Reports flow:
- *   department head -> draft / submit
- *   leadership (MD + GM + Owner + Developer) -> review / acknowledge
- * No peer department, and no individual contributor, may read another
- * department's reports.
+ * Two-tier weekly reporting chain:
+ *   contributor (engineer / HSE officer / procurement officer)
+ *     -> individual report -> line manager reviews
+ *   line manager (PM / Procurement Manager / Ops Manager / ...)
+ *     -> compiled department report -> MD (+GM where routed)
+ * Reports are isolated: no peer department access, and contributors never
+ * see a colleague's individual report.
  */
 
 const ALL_DEPARTMENTS = Object.keys(OPS_DEPARTMENT_LABELS) as OpsDepartmentKey[];
 
 test("Engineering staff cannot see Finance department reports", () => {
   const role: OpsUserRole = "engineering_manager";
+  assert.ok(canViewDepartmentReport(role, "engineering"));
   for (const dept of ALL_DEPARTMENTS) {
-    if (dept === "engineering") {
-      assert.ok(canViewDepartmentReport(role, dept));
-    } else {
-      assert.equal(
-        canViewDepartmentReport(role, dept),
-        false,
-        `engineering_manager should not see ${dept} reports`,
-      );
-    }
-  }
-});
-
-test("Finance Manager cannot see HR department reports", () => {
-  const role: OpsUserRole = "finance_manager";
-  assert.equal(canViewDepartmentReport(role, "hr"), false);
-  assert.equal(canViewDepartmentReport(role, "operations"), false);
-  assert.ok(canViewDepartmentReport(role, "finance"));
-});
-
-test("HR Manager cannot see Procurement department reports", () => {
-  const role: OpsUserRole = "human_resource";
-  assert.equal(canViewDepartmentReport(role, "procurement"), false);
-  assert.equal(canViewDepartmentReport(role, "engineering"), false);
-  assert.ok(canViewDepartmentReport(role, "hr"));
-});
-
-test("Engineer cannot submit a department report", () => {
-  assert.equal(canSubmitDepartmentReport("engineer"), false);
-  assert.equal(canSubmitDepartmentReport("procurement_assistant"), false);
-  assert.equal(canSubmitDepartmentReport("accountant"), false);
-});
-
-test("Department heads can submit their own department's report", () => {
-  const heads: OpsUserRole[] = [
-    "operations_manager",
-    "projects_manager",
-    "engineering_manager",
-    "procurement_manager",
-    "finance_manager",
-    "hse_officer",
-    "human_resource",
-    "hr",
-    "quantity_surveyor",
-  ];
-  for (const role of heads) {
-    assert.ok(canSubmitDepartmentReport(role), `${role} should be able to submit`);
-  }
-});
-
-test("Managing Director and General Manager can review department reports", () => {
-  for (const role of ["managing_director", "general_manager", "owner", "developer"] as OpsUserRole[]) {
-    assert.ok(canReviewDepartmentReport(role), `${role} should be able to review`);
-  }
-});
-
-test("Department heads cannot review their own reports (no self-acknowledge)", () => {
-  for (const role of [
-    "operations_manager",
-    "projects_manager",
-    "engineering_manager",
-    "procurement_manager",
-    "finance_manager",
-    "human_resource",
-  ] as OpsUserRole[]) {
+    if (dept === "engineering") continue;
     assert.equal(
-      canReviewDepartmentReport(role),
+      canViewDepartmentReport(role, dept),
       false,
-      `${role} should not be able to acknowledge their own report`,
+      `engineering_manager should not see ${dept} reports`,
     );
   }
 });
 
-test("Leadership sees every department report", () => {
-  for (const role of ["managing_director", "general_manager", "owner", "developer"] as OpsUserRole[]) {
-    for (const dept of ALL_DEPARTMENTS) {
-      assert.ok(
-        canViewDepartmentReport(role, dept),
-        `${role} should see ${dept} reports`,
-      );
-    }
+test("Finance and HR stay isolated from other departments", () => {
+  assert.equal(canViewDepartmentReport("finance_manager", "hr"), false);
+  assert.equal(canViewDepartmentReport("finance_manager", "operations"), false);
+  assert.ok(canViewDepartmentReport("finance_manager", "finance"));
+  assert.equal(canViewDepartmentReport("human_resource", "procurement"), false);
+  assert.ok(canViewDepartmentReport("human_resource", "hr"));
+});
+
+test("Projects Manager sees Engineering AND HSE (both route through them)", () => {
+  assert.deepEqual(departmentsCompiledBy("projects_manager").sort(), ["engineering", "hse"]);
+  assert.ok(canViewDepartmentReport("projects_manager", "engineering"));
+  assert.ok(canViewDepartmentReport("projects_manager", "hse"));
+  assert.equal(canViewDepartmentReport("projects_manager", "finance"), false);
+  assert.deepEqual(listAccessibleDepartments("projects_manager").sort(), [
+    "engineering",
+    "hse",
+  ]);
+});
+
+test("Contributors file individual reports; managers file compiled ones", () => {
+  assert.ok(canFileDepartmentReport("engineer", "engineering", "individual"));
+  assert.equal(canFileDepartmentReport("engineer", "engineering", "compiled"), false);
+  assert.ok(canFileDepartmentReport("hse_officer", "hse", "individual"));
+  assert.ok(canFileDepartmentReport("procurement", "procurement", "individual"));
+  assert.equal(canFileDepartmentReport("procurement", "procurement", "compiled"), false);
+
+  assert.ok(canFileDepartmentReport("projects_manager", "engineering", "compiled"));
+  assert.ok(canFileDepartmentReport("projects_manager", "hse", "compiled"));
+  assert.ok(canFileDepartmentReport("procurement_manager", "procurement", "compiled"));
+  assert.ok(canFileDepartmentReport("operations_manager", "operations", "compiled"));
+  assert.ok(canFileDepartmentReport("accountant", "finance", "compiled"));
+  assert.ok(canFileDepartmentReport("it_manager", "it", "compiled"));
+
+  // Cross-department filing stays blocked.
+  assert.equal(canFileDepartmentReport("engineer", "finance", "individual"), false);
+  assert.equal(canFileDepartmentReport("it_manager", "finance", "compiled"), false);
+
+  for (const role of ["engineer", "hse_officer", "procurement", "accountant"] as OpsUserRole[]) {
+    assert.ok(canSubmitDepartmentReport(role), `${role} should be able to file reports`);
+  }
+});
+
+test("Reports route per the organogram", () => {
+  // Engineers & HSE -> Projects Manager.
+  assert.deepEqual(reviewerRolesForReport({ department: "engineering", scope: "individual" }), [
+    "projects_manager",
+    "engineering_manager",
+  ]);
+  assert.deepEqual(reviewerRolesForReport({ department: "hse", scope: "individual" }), [
+    "projects_manager",
+  ]);
+  // PM's compiled report -> MD.
+  assert.deepEqual(reviewerRolesForReport({ department: "engineering", scope: "compiled" }), [
+    "managing_director",
+  ]);
+  // Procurement Manager's compiled report -> GM + MD.
+  assert.deepEqual(reviewerRolesForReport({ department: "procurement", scope: "compiled" }), [
+    "general_manager",
+    "managing_director",
+  ]);
+  // Accountant -> MD + GM. IT Manager -> MD only.
+  assert.deepEqual(reviewerRolesForReport({ department: "finance", scope: "compiled" }), [
+    "managing_director",
+    "general_manager",
+  ]);
+  assert.deepEqual(reviewerRolesForReport({ department: "it", scope: "compiled" }), [
+    "managing_director",
+  ]);
+});
+
+test("Line managers review individual reports but not their own compiled tier", () => {
+  const individual = { department: "engineering", scope: "individual" } as const;
+  const compiled = { department: "engineering", scope: "compiled" } as const;
+
+  assert.ok(canReviewDepartmentReportRecord("projects_manager", individual));
+  assert.equal(canReviewDepartmentReportRecord("projects_manager", compiled), false);
+  assert.ok(canReviewDepartmentReportRecord("managing_director", compiled));
+  assert.ok(canReviewDepartmentReportRecord("developer", compiled));
+  // A peer contributor never reviews.
+  assert.equal(canReviewDepartmentReportRecord("engineer", individual), false);
+});
+
+test("Contributors never see a colleague's individual report", () => {
+  const mine = {
+    created_by: "user-a",
+    department: "engineering",
+    scope: "individual",
+    submitted_by: null,
+  } as const;
+  const colleagues = {
+    created_by: "user-b",
+    department: "engineering",
+    scope: "individual",
+    submitted_by: "user-b",
+  } as const;
+  const compiled = {
+    created_by: "user-pm",
+    department: "engineering",
+    scope: "compiled",
+    submitted_by: "user-pm",
+  } as const;
+
+  assert.ok(canViewDepartmentReportRecord("engineer", "user-a", mine));
+  assert.equal(canViewDepartmentReportRecord("engineer", "user-a", colleagues), false);
+  assert.ok(canViewDepartmentReportRecord("engineer", "user-a", compiled));
+  // The line manager sees the whole department, both tiers.
+  assert.ok(canViewDepartmentReportRecord("projects_manager", "user-pm", colleagues));
+  // Another department sees nothing.
+  assert.equal(canViewDepartmentReportRecord("finance_manager", "user-f", colleagues), false);
+  assert.equal(canViewDepartmentReportRecord("finance_manager", "user-f", compiled), false);
+  // Leadership sees everything.
+  assert.ok(canViewDepartmentReportRecord("managing_director", "user-md", colleagues));
+});
+
+test("Only MD/GM/Developer hold blanket review rights", () => {
+  for (const role of ["managing_director", "general_manager", "developer"] as OpsUserRole[]) {
+    assert.ok(canReviewDepartmentReport(role), `${role} should be able to review`);
+  }
+  for (const role of [
+    "operations_manager",
+    "projects_manager",
+    "procurement_manager",
+    "finance_manager",
+  ] as OpsUserRole[]) {
+    assert.equal(canReviewDepartmentReport(role), false);
   }
 });
 
@@ -129,22 +190,14 @@ test("Department mapping is single-valued and well-defined for heads", () => {
   }
 });
 
-test("Heads see only their own department in listAccessibleDepartments", () => {
-  const opsHead = listAccessibleDepartments("operations_manager");
-  assert.deepEqual(opsHead, ["operations"]);
-  const procHead = listAccessibleDepartments("procurement_manager");
-  assert.deepEqual(procHead, ["procurement"]);
-});
-
-test("Leadership sees every department in listAccessibleDepartments", () => {
-  const md = listAccessibleDepartments("managing_director");
-  assert.equal(md.length, ALL_DEPARTMENTS.length);
-});
-
-test("Engineer has no accessible departments to submit for", () => {
-  // engineer is mapped to engineering but is not a head — they cannot submit.
-  // listAccessibleDepartments is used to drive the submit form; an engineer
-  // sees their own department but submission is still blocked by
-  // canSubmitDepartmentReport.
-  assert.equal(canSubmitDepartmentReport("engineer"), false);
+test("Leadership sees every department", () => {
+  for (const role of ["managing_director", "general_manager", "owner", "developer"] as OpsUserRole[]) {
+    for (const dept of ALL_DEPARTMENTS) {
+      assert.ok(canViewDepartmentReport(role, dept), `${role} should see ${dept} reports`);
+    }
+  }
+  assert.equal(
+    listAccessibleDepartments("managing_director").length,
+    ALL_DEPARTMENTS.length,
+  );
 });

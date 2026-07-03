@@ -1,22 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  departmentHeadRolesFor,
   departmentsExpectedToReport,
   OPS_DEPARTMENT_LABELS,
   type OpsDepartmentKey,
 } from "../src/lib/ops/department-report-permissions";
 import {
   collectTemplateMetrics,
+  collectTemplateSections,
   compareReportMetrics,
   defaultReportPeriodRange,
   OPS_DEPARTMENT_REPORT_TEMPLATES,
+  reportSectionsFor,
   suggestedReportTitle,
   templateMetricKeys,
 } from "../src/lib/ops/department-report-templates";
 import {
-  departmentsMissingMonthlyReport,
+  departmentsMissingCadenceReport,
+  isoWeekday,
   previousMonthWindow,
+  previousWeekWindow,
 } from "../src/lib/ops/escalations";
 
 const DEPARTMENTS = Object.keys(OPS_DEPARTMENT_LABELS) as OpsDepartmentKey[];
@@ -67,6 +70,64 @@ describe("department report templates", () => {
   });
 });
 
+describe("report sections", () => {
+  it("gives every department a compiled skeleton led by an executive summary", () => {
+    for (const department of DEPARTMENTS) {
+      const sections = reportSectionsFor(department, "compiled");
+      assert.ok(sections.length >= 4, `${department} compiled template too thin`);
+      assert.equal(sections[0].key, "executive_summary");
+      const keys = sections.map((section) => section.key);
+      assert.equal(new Set(keys).size, keys.length, `${department} duplicate section keys`);
+    }
+  });
+
+  it("operations compiled template follows the standard PCL report skeleton", () => {
+    const keys = reportSectionsFor("operations", "compiled").map((section) => section.key);
+    for (const expected of [
+      "executive_summary",
+      "project_dashboard",
+      "overall_progress",
+      "programme_status",
+      "financial_status",
+      "procurement_status",
+      "labour_equipment",
+      "quality",
+      "hse",
+      "risks_mitigation",
+      "decisions_needed",
+      "action_plan",
+      "photos",
+      "appendix",
+    ]) {
+      assert.ok(keys.includes(expected), `operations template missing ${expected}`);
+    }
+  });
+
+  it("individual reports use the short contributor skeleton", () => {
+    const keys = reportSectionsFor("engineering", "individual").map((section) => section.key);
+    assert.deepEqual(keys, [
+      "work_completed",
+      "progress_status",
+      "problems_risks",
+      "support_needed",
+      "plan_next_period",
+    ]);
+  });
+
+  it("collects only filled sections from the form", () => {
+    const fields = new Map([
+      ["section_work_completed", "Poured slab at ZC-01."],
+      ["section_problems_risks", "  "],
+    ]);
+    const sections = collectTemplateSections(
+      "engineering",
+      "individual",
+      (name) => fields.get(name) ?? "",
+    );
+    assert.deepEqual(sections, { work_completed: "Poured slab at ZC-01." });
+  });
+});
+
 describe("compareReportMetrics", () => {
   it("computes deltas and percentages for numeric pairs only", () => {
     const deltas = compareReportMetrics(
@@ -111,7 +172,7 @@ describe("default reporting windows", () => {
   });
 });
 
-describe("monthly report reminders", () => {
+describe("report cadence reminders", () => {
   it("computes the previous month window from a Lusaka date key", () => {
     assert.deepEqual(previousMonthWindow("2026-07-03"), {
       start: "2026-06-01",
@@ -126,30 +187,43 @@ describe("monthly report reminders", () => {
     });
   });
 
-  it("flags departments without a monthly report in the window", () => {
-    const window = { start: "2026-06-01", end: "2026-06-30" };
-    const missing = departmentsMissingMonthlyReport(
+  it("computes the previous Monday-to-Sunday week and weekday numbers", () => {
+    // 2026-07-03 is a Friday.
+    assert.deepEqual(previousWeekWindow("2026-07-03"), {
+      start: "2026-06-22",
+      end: "2026-06-28",
+      weekKey: "2026-06-22",
+    });
+    // From a Monday, the previous full week ends yesterday.
+    assert.deepEqual(previousWeekWindow("2026-07-06"), {
+      start: "2026-06-29",
+      end: "2026-07-05",
+      weekKey: "2026-06-29",
+    });
+    assert.equal(isoWeekday("2026-07-06"), 1);
+    assert.equal(isoWeekday("2026-07-05"), 7);
+  });
+
+  it("flags departments without a compiled weekly report in the window", () => {
+    const window = { start: "2026-06-22", end: "2026-06-28" };
+    const missing = departmentsMissingCadenceReport(
       [
-        { department: "operations", period: "monthly", period_end_date: "2026-06-30" },
-        // Weekly report does not satisfy the monthly cadence.
-        { department: "finance", period: "weekly", period_end_date: "2026-06-28" },
-        // Prior-month report does not count for this window.
-        { department: "hse", period: "monthly", period_end_date: "2026-05-31" },
+        { department: "operations", period: "weekly", period_end_date: "2026-06-28", scope: "compiled" },
+        // An individual report does not satisfy the department cadence.
+        { department: "engineering", period: "weekly", period_end_date: "2026-06-28", scope: "individual" },
+        // Prior-week report does not count for this window.
+        { department: "hse", period: "weekly", period_end_date: "2026-06-21", scope: "compiled" },
       ],
       window,
+      "weekly",
     );
 
     assert.ok(!missing.includes("operations"));
-    assert.ok(missing.includes("finance"));
+    assert.ok(missing.includes("engineering"));
     assert.ok(missing.includes("hse"));
+    assert.ok(missing.includes("finance"));
     // Executive never reports to itself.
     assert.ok(!missing.includes("executive"));
-  });
-
-  it("maps departments to their head roles", () => {
-    assert.deepEqual(departmentHeadRolesFor("finance"), ["finance_manager"]);
-    assert.deepEqual(departmentHeadRolesFor("it"), ["it_manager"]);
-    assert.ok(departmentHeadRolesFor("executive").length === 0);
     assert.ok(!departmentsExpectedToReport().includes("executive"));
   });
 });

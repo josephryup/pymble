@@ -2,7 +2,9 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import {
   canViewDepartmentReport,
   departmentForRole,
+  departmentsCompiledBy,
   type OpsDepartmentKey,
+  type OpsDepartmentReportScope,
 } from "@/lib/ops/department-report-permissions";
 import { logOpsServerError } from "@/lib/ops/log";
 import { isLeadershipRole } from "@/lib/ops/roles";
@@ -27,11 +29,13 @@ type UserRef = { id: string; full_name: string; role: OpsUserRole } | null;
 export type OpsDepartmentReport = {
   id: string;
   department: OpsDepartmentKey;
+  scope: OpsDepartmentReportScope;
   period: OpsDepartmentReportPeriod;
   period_start_date: string;
   period_end_date: string;
   title: string;
   narrative: string;
+  sections: Record<string, string>;
   metrics: Record<string, unknown>;
   status: OpsDepartmentReportStatus;
   submitted_at: string | null;
@@ -73,11 +77,13 @@ function normalize(row: RawDepartmentReport): OpsDepartmentReport {
 const REPORT_SELECT = [
   "id",
   "department",
+  "scope",
   "period",
   "period_start_date",
   "period_end_date",
   "title",
   "narrative",
+  "sections",
   "metrics",
   "status",
   "submitted_at",
@@ -106,7 +112,7 @@ export async function fetchOpsDepartmentReports(
   role: OpsUserRole,
   deptOverride: OpsDepartmentKey | null = null,
 ) {
-  await requireOpsUser();
+  const { profile } = await requireOpsUser();
   const supabase = getOpsSupabaseServiceClient();
 
   let query = supabase
@@ -121,9 +127,23 @@ export async function fetchOpsDepartmentReports(
     if (deptOverride) query = query.eq("department", deptOverride);
   } else {
     const own = departmentForRole(role);
-    if (!own) return [];
-    // Always scope to own dept regardless of any override attempt.
-    query = query.eq("department", own);
+    const compiled = departmentsCompiledBy(role);
+    const visibleDepartments = Array.from(new Set([own, ...compiled].filter(Boolean))) as string[];
+    if (visibleDepartments.length === 0) return [];
+
+    const scoped =
+      deptOverride && visibleDepartments.includes(deptOverride)
+        ? [deptOverride]
+        : visibleDepartments;
+    query = query.in("department", scoped);
+
+    if (compiled.length === 0) {
+      // Contributors: their own reports plus the department's compiled
+      // reports — never a colleague's individual report (tier isolation).
+      query = query.or(
+        `scope.eq.compiled,created_by.eq.${profile.id},submitted_by.eq.${profile.id}`,
+      );
+    }
   }
 
   const { data, error } = await query;
@@ -165,25 +185,35 @@ export async function fetchOpsDepartmentReportById(
  * predecessor, so they return null.
  */
 export async function fetchPreviousOpsDepartmentReport(current: {
+  created_by: string | null;
   department: OpsDepartmentKey;
   id: string;
   period: OpsDepartmentReportPeriod;
   period_end_date: string;
+  scope: OpsDepartmentReportScope;
 }): Promise<OpsDepartmentReport | null> {
   if (current.period === "ad_hoc") return null;
 
   const supabase = getOpsSupabaseServiceClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("department_reports")
     .select(REPORT_SELECT)
     .eq("department", current.department)
+    .eq("scope", current.scope)
     .eq("period", current.period)
     .lt("period_end_date", current.period_end_date)
     .neq("id", current.id)
     .is("archived_at", null)
     .order("period_end_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+
+  // An individual's trend compares against THEIR previous report, not a
+  // colleague's.
+  if (current.scope === "individual" && current.created_by) {
+    query = query.eq("created_by", current.created_by);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     logOpsServerError(error, {
@@ -195,6 +225,40 @@ export async function fetchPreviousOpsDepartmentReport(current: {
   }
 
   return data ? normalize(data as unknown as RawDepartmentReport) : null;
+}
+
+/**
+ * Tier-1 reports feeding a compiled report: everything contributors have
+ * submitted for this department whose period ends inside the compiling
+ * window. Callers must already hold compile authority for the department
+ * (canFileDepartmentReport(role, department, "compiled")).
+ */
+export async function fetchSubmittedIndividualReports(
+  department: OpsDepartmentKey,
+  windowStart: string,
+  windowEnd: string,
+): Promise<OpsDepartmentReport[]> {
+  await requireOpsUser();
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("department_reports")
+    .select(REPORT_SELECT)
+    .eq("department", department)
+    .eq("scope", "individual")
+    .in("status", ["submitted", "under_review", "acknowledged"])
+    .gte("period_end_date", windowStart)
+    .lte("period_end_date", windowEnd)
+    .is("archived_at", null)
+    .order("submitted_at", { ascending: true });
+
+  if (error) {
+    logOpsServerError(error, {
+      module: "department_reports",
+      action: "fetchSubmittedIndividualReports",
+    });
+    return [];
+  }
+  return ((data ?? []) as unknown as RawDepartmentReport[]).map(normalize);
 }
 
 /**

@@ -7,14 +7,22 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
+  canFileDepartmentReport,
   canReviewDepartmentReport,
-  canSubmitDepartmentReport,
-  canViewDepartmentReport,
+  canReviewDepartmentReportRecord,
+  canViewDepartmentReportRecord,
+  OPS_DEPARTMENT_LABELS,
+  reviewerRolesForReport,
   type OpsDepartmentKey,
+  type OpsDepartmentReportScope,
 } from "@/lib/ops/department-report-permissions";
-import { collectTemplateMetrics } from "@/lib/ops/department-report-templates";
+import {
+  collectTemplateMetrics,
+  collectTemplateSections,
+} from "@/lib/ops/department-report-templates";
 import { fetchOpsDepartmentReportById } from "@/lib/ops/department-reports";
 import { logOpsServerError } from "@/lib/ops/log";
+import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsUserRole } from "@/lib/ops/types";
@@ -34,8 +42,11 @@ const departmentEnum = z.enum([
 ]);
 const periodEnum = z.enum(["weekly", "monthly", "quarterly", "ad_hoc"]);
 
+const scopeEnum = z.enum(["individual", "compiled"]);
+
 const createReportSchema = z.object({
   department: departmentEnum,
+  scope: scopeEnum.default("compiled"),
   period: periodEnum,
   period_start_date: z.string().regex(datePattern, "Pick a period start date."),
   period_end_date: z.string().regex(datePattern, "Pick a period end date."),
@@ -80,55 +91,64 @@ function parseMetrics(input: string): Record<string, unknown> {
   reportError("Metrics must be a JSON object.");
 }
 
-function assertCanWriteDepartment(role: OpsUserRole, department: OpsDepartmentKey) {
-  if (!canSubmitDepartmentReport(role)) {
-    reportError("Only department heads or leadership can submit reports.");
-  }
-  if (!canViewDepartmentReport(role, department)) {
-    reportError("You cannot submit a report for another department.");
+function assertCanWriteDepartment(
+  role: OpsUserRole,
+  department: OpsDepartmentKey,
+  scope: OpsDepartmentReportScope,
+) {
+  if (!canFileDepartmentReport(role, department, scope)) {
+    reportError(
+      scope === "individual"
+        ? "Your role does not file individual reports for this department."
+        : "Your role does not file this department's compiled report.",
+    );
   }
 }
 
-async function notifyLeadershipOnSubmit({
-  reportId,
-  department,
-  title,
+/**
+ * Routes the submission to whoever reviews this tier: line managers for an
+ * individual report (engineer → Projects Manager), leadership for a compiled
+ * one (Procurement Manager → GM + MD). Resolved through the workflow
+ * fallback chain so an unfilled seat never swallows the report.
+ */
+async function notifyReviewersOnSubmit({
+  report,
   actorId,
+  actorName,
 }: {
-  reportId: string;
-  department: OpsDepartmentKey;
-  title: string;
+  report: {
+    id: string;
+    department: OpsDepartmentKey;
+    scope: OpsDepartmentReportScope;
+    title: string;
+  };
   actorId: string;
+  actorName: string;
 }) {
-  const supabase = getOpsSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("users")
-    .select("id")
-    .in("role", ["managing_director", "general_manager", "owner", "manager"])
-    .eq("is_active", true);
-  if (error) {
-    logOpsServerError(error, {
-      module: "department_reports",
-      action: "notifyLeadershipOnSubmit",
-    });
-    return;
-  }
+  const reviewerRoles = reviewerRolesForReport(report);
+  if (reviewerRoles.length === 0) return;
+
+  const reviewers = await fanoutToOpsRoles(reviewerRoles, {
+    excludeUserIds: [actorId],
+  }).catch(() => []);
+
   const today = new Date().toISOString().slice(0, 10);
   await Promise.all(
-    (data ?? [])
-      .filter((row) => (row as { id: string }).id !== actorId)
-      .map((row) =>
-        queueOpsNotification({
-          actionHref: `${ROUTE}/${reportId}`,
-          body: `${title} (${department}) has been submitted for review.`,
-          idempotencyKey: `dept-report-submit:${today}:${reportId}:${(row as { id: string }).id}`,
-          moduleKey: "department_reports",
-          recipientId: (row as { id: string }).id,
-          sourceId: reportId,
-          sourceTable: "department_reports",
-          title: "Department report submitted",
-        }).catch(() => null),
-      ),
+    reviewers.map((reviewer) =>
+      queueOpsNotification({
+        actionHref: `${ROUTE}/${report.id}`,
+        body: `${actorName} submitted ${report.title} (${OPS_DEPARTMENT_LABELS[report.department]}) for your review.`,
+        idempotencyKey: `dept-report-submit:${today}:${report.id}:${reviewer.id}`,
+        moduleKey: "department_reports",
+        recipientId: reviewer.id,
+        sourceId: report.id,
+        sourceTable: "department_reports",
+        title:
+          report.scope === "individual"
+            ? "Team report awaiting your review"
+            : "Department report submitted",
+      }).catch(() => null),
+    ),
   );
 }
 
@@ -165,6 +185,7 @@ export async function createDepartmentReportAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   const parsed = createReportSchema.safeParse({
     department: field(formData, "department"),
+    scope: field(formData, "scope") || "compiled",
     period: field(formData, "period"),
     period_start_date: field(formData, "period_start_date"),
     period_end_date: field(formData, "period_end_date"),
@@ -178,12 +199,17 @@ export async function createDepartmentReportAction(formData: FormData) {
   if (parsed.data.period_end_date < parsed.data.period_start_date) {
     reportError("Period end date must be on or after the start date.");
   }
-  assertCanWriteDepartment(profile.role, parsed.data.department);
+  assertCanWriteDepartment(profile.role, parsed.data.department, parsed.data.scope);
   // Structured template inputs win over the advanced-JSON extras.
   const metrics = collectTemplateMetrics(
     parsed.data.department,
     (name) => field(formData, name),
     parseMetrics(parsed.data.metrics_json),
+  );
+  const sections = collectTemplateSections(
+    parsed.data.department,
+    parsed.data.scope,
+    (name) => field(formData, name),
   );
 
   const supabase = getOpsSupabaseServiceClient();
@@ -191,11 +217,13 @@ export async function createDepartmentReportAction(formData: FormData) {
     .from("department_reports")
     .insert({
       department: parsed.data.department,
+      scope: parsed.data.scope,
       period: parsed.data.period,
       period_start_date: parsed.data.period_start_date,
       period_end_date: parsed.data.period_end_date,
       title: parsed.data.title,
       narrative: parsed.data.narrative,
+      sections,
       metrics,
       created_by: profile.id,
     })
@@ -246,8 +274,17 @@ export async function updateDepartmentReportAction(formData: FormData) {
 
   const existing = await fetchOpsDepartmentReportById(parsed.data.id);
   if (!existing) reportError("The department report was not found.");
-  if (!canViewDepartmentReport(profile.role, existing.department)) {
-    reportError("You cannot edit a report from another department.");
+  if (!canViewDepartmentReportRecord(profile.role, profile.id, existing)) {
+    reportError("You cannot edit that report.");
+  }
+  // Tier isolation: an individual report is edited only by its author (or
+  // leadership); a colleague from the same department cannot touch it.
+  if (
+    existing.scope === "individual" &&
+    existing.created_by !== profile.id &&
+    !canReviewDepartmentReport(profile.role)
+  ) {
+    reportError("Only the report's author can edit it.");
   }
   if (
     existing.status === "acknowledged" &&
@@ -255,12 +292,17 @@ export async function updateDepartmentReportAction(formData: FormData) {
   ) {
     reportError("Acknowledged reports can no longer be edited.");
   }
-  assertCanWriteDepartment(profile.role, parsed.data.department);
+  assertCanWriteDepartment(profile.role, parsed.data.department, existing.scope);
   // Structured template inputs win over the advanced-JSON extras.
   const metrics = collectTemplateMetrics(
     parsed.data.department,
     (name) => field(formData, name),
     parseMetrics(parsed.data.metrics_json),
+  );
+  const sections = collectTemplateSections(
+    parsed.data.department,
+    existing.scope,
+    (name) => field(formData, name),
   );
 
   const supabase = getOpsSupabaseServiceClient();
@@ -273,6 +315,7 @@ export async function updateDepartmentReportAction(formData: FormData) {
       period_end_date: parsed.data.period_end_date,
       title: parsed.data.title,
       narrative: parsed.data.narrative,
+      sections,
       metrics,
       // Revision means it's back in the head's hands as a draft.
       status:
@@ -306,11 +349,16 @@ export async function submitDepartmentReportAction(formData: FormData) {
 
   const existing = await fetchOpsDepartmentReportById(parsed.data.id);
   if (!existing) reportError("The department report was not found.");
-  if (!canViewDepartmentReport(profile.role, existing.department)) {
-    reportError("You cannot submit another department's report.");
+  if (!canViewDepartmentReportRecord(profile.role, profile.id, existing)) {
+    reportError("You cannot submit that report.");
   }
-  if (!canSubmitDepartmentReport(profile.role)) {
-    reportError("Only department heads or leadership can submit reports.");
+  assertCanWriteDepartment(profile.role, existing.department, existing.scope);
+  if (
+    existing.scope === "individual" &&
+    existing.created_by !== profile.id &&
+    !canReviewDepartmentReport(profile.role)
+  ) {
+    reportError("Only the report's author can submit it.");
   }
   if (existing.status === "submitted" || existing.status === "under_review") {
     reportError("This report has already been submitted.");
@@ -339,11 +387,15 @@ export async function submitDepartmentReportAction(formData: FormData) {
     summary: `Submitted department report: ${existing.title}`,
   }).catch(() => null);
 
-  await notifyLeadershipOnSubmit({
-    reportId: parsed.data.id,
-    department: existing.department,
-    title: existing.title,
+  await notifyReviewersOnSubmit({
+    report: {
+      id: parsed.data.id,
+      department: existing.department,
+      scope: existing.scope,
+      title: existing.title,
+    },
     actorId: profile.id,
+    actorName: profile.full_name,
   });
 
   revalidatePath(ROUTE);
@@ -353,9 +405,6 @@ export async function submitDepartmentReportAction(formData: FormData) {
 
 export async function reviewDepartmentReportAction(formData: FormData) {
   const { profile } = await requireOpsUser();
-  if (!canReviewDepartmentReport(profile.role)) {
-    reportError("Only leadership can review department reports.");
-  }
   const parsed = reviewSchema.safeParse({
     id: field(formData, "id"),
     decision: field(formData, "decision"),
@@ -367,6 +416,17 @@ export async function reviewDepartmentReportAction(formData: FormData) {
 
   const existing = await fetchOpsDepartmentReportById(parsed.data.id);
   if (!existing) reportError("The department report was not found.");
+  // Individual reports are reviewed by the line manager they route to
+  // (e.g. Projects Manager); compiled reports need MD/GM/Developer.
+  if (!canReviewDepartmentReportRecord(profile.role, existing)) {
+    reportError("Your role cannot review this report.");
+  }
+  if (
+    (existing.submitted_by === profile.id || existing.created_by === profile.id) &&
+    profile.role !== "developer"
+  ) {
+    reportError("You cannot review your own report.");
+  }
   if (existing.status === "draft") {
     reportError("The report has not been submitted yet.");
   }
@@ -420,8 +480,9 @@ export async function archiveDepartmentReportAction(formData: FormData) {
   const existing = await fetchOpsDepartmentReportById(parsed.data.id);
   if (!existing) reportError("The department report was not found.");
   if (
-    !canReviewDepartmentReport(profile.role) &&
-    !canViewDepartmentReport(profile.role, existing.department)
+    !canReviewDepartmentReportRecord(profile.role, existing) &&
+    existing.created_by !== profile.id &&
+    existing.submitted_by !== profile.id
   ) {
     reportError("You cannot archive that report.");
   }

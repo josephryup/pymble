@@ -13,14 +13,17 @@ import {
   updateDepartmentReportAction,
 } from "@/lib/ops/department-report-actions";
 import {
+  canFileDepartmentReport,
   canReviewDepartmentReport,
-  canSubmitDepartmentReport,
-  canViewDepartmentReport,
+  canReviewDepartmentReportRecord,
+  canViewDepartmentReportRecord,
   OPS_DEPARTMENT_LABELS,
 } from "@/lib/ops/department-report-permissions";
 import {
   compareReportMetrics,
   OPS_DEPARTMENT_REPORT_TEMPLATES,
+  reportSectionLabel,
+  reportSectionsFor,
   templateMetricKeys,
 } from "@/lib/ops/department-report-templates";
 import {
@@ -73,15 +76,22 @@ export default async function OpsDepartmentReportDetailPage({
   const { profile } = await requireOpsUser();
   const report = await fetchOpsDepartmentReportById(reportId);
   if (!report) notFound();
-  // Cross-department leakage guard.
-  if (!canViewDepartmentReport(profile.role, report.department)) {
+  // Isolation guard: cross-department AND cross-tier (a contributor never
+  // sees a colleague's individual report).
+  if (!canViewDepartmentReportRecord(profile.role, profile.id, report)) {
     notFound();
   }
 
-  // Read receipt: the moment a reviewer opens a submitted report it becomes
-  // "under review", so the head can see leadership has actually picked it up.
+  const viewerIsAuthor =
+    report.created_by === profile.id || report.submitted_by === profile.id;
+  const viewerCanReviewRecord =
+    canReviewDepartmentReportRecord(profile.role, report) &&
+    (!viewerIsAuthor || profile.role === "developer");
+
+  // Read receipt: the moment its reviewer opens a submitted report it becomes
+  // "under review", so the author can see it has actually been picked up.
   // The status guard keeps the update idempotent across refreshes/races.
-  if (canReviewDepartmentReport(profile.role) && report.status === "submitted") {
+  if (viewerCanReviewRecord && report.status === "submitted") {
     const supabase = getOpsSupabaseServiceClient();
     const { error: reviewMarkError } = await supabase
       .from("department_reports")
@@ -111,26 +121,43 @@ export default async function OpsDepartmentReportDetailPage({
   const errorMessage = firstParam(search.error);
   const updated = firstParam(search.updated);
   const isAcknowledged = report.status === "acknowledged";
-  const canEdit =
-    canSubmitDepartmentReport(profile.role) &&
-    canViewDepartmentReport(profile.role, report.department) &&
-    !isAcknowledged;
+  // Individual reports belong to their author; compiled reports to whoever
+  // may file them for that department.
+  const canWrite =
+    canFileDepartmentReport(profile.role, report.department, report.scope) &&
+    (report.scope === "compiled" || viewerIsAuthor || canReviewDepartmentReport(profile.role));
+  const canEdit = canWrite && !isAcknowledged;
   const canSubmit =
-    canSubmitDepartmentReport(profile.role) &&
-    canViewDepartmentReport(profile.role, report.department) &&
-    (report.status === "draft" || report.status === "revision_requested");
+    canWrite && (report.status === "draft" || report.status === "revision_requested");
   const canReview =
-    canReviewDepartmentReport(profile.role) &&
+    viewerCanReviewRecord &&
     (report.status === "submitted" || report.status === "under_review");
-  const canArchive = canReviewDepartmentReport(profile.role);
+  const canArchive = canReviewDepartmentReportRecord(profile.role, report) || viewerIsAuthor;
+  const sectionEntries = reportSectionsFor(report.department, report.scope)
+    .map((section) => ({
+      key: section.key,
+      label: section.label,
+      value: report.sections[section.key] ?? "",
+    }))
+    .concat(
+      Object.entries(report.sections)
+        .filter(
+          ([key]) =>
+            !reportSectionsFor(report.department, report.scope).some(
+              (section) => section.key === key,
+            ),
+        )
+        .map(([key, value]) => ({ key, label: reportSectionLabel(key), value })),
+    );
+  const hasSections = sectionEntries.some((entry) => entry.value.trim() !== "");
 
   return (
     <div className="w-full max-w-4xl space-y-6">
       <OpsRealtimeRefresh tables={["department_reports"]} />
       <OpsPageHeader
-        eyebrow={`${OPS_DEPARTMENT_LABELS[report.department]} · ${report.period}`}
+        eyebrow={`${OPS_DEPARTMENT_LABELS[report.department]} · ${report.scope === "individual" ? "individual" : "department"} · ${report.period}`}
         title={report.title}
-        description={`Period ${report.period_start_date} → ${report.period_end_date}. Status: ${report.status.replace("_", " ")}.`}
+        description={`Period ${report.period_start_date} → ${report.period_end_date}. Status: ${report.status.replace("_", " ")}.${report.submitter ? ` Prepared by ${report.submitter.full_name}.` : ""}`}
         actions={
           <>
             <a
@@ -164,12 +191,29 @@ export default async function OpsDepartmentReportDetailPage({
         </div>
       ) : null}
 
-      <section className="rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
-        <h2 className="font-heading text-lg font-bold text-primary-dark">Narrative</h2>
-        <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-primary-dark/80">
-          {report.narrative || "(no narrative provided)"}
-        </pre>
-      </section>
+      {hasSections ? (
+        <section className="space-y-4 rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
+          {sectionEntries
+            .filter((entry) => entry.value.trim() !== "")
+            .map((entry) => (
+              <div key={entry.key}>
+                <h2 className="font-heading text-base font-bold text-primary-dark">
+                  {entry.label}
+                </h2>
+                <pre className="mt-1 whitespace-pre-wrap font-sans text-sm leading-6 text-primary-dark/80">
+                  {entry.value}
+                </pre>
+              </div>
+            ))}
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
+          <h2 className="font-heading text-lg font-bold text-primary-dark">Narrative</h2>
+          <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-primary-dark/80">
+            {report.narrative || "(no narrative provided)"}
+          </pre>
+        </section>
+      )}
 
       {Object.keys(report.metrics).length > 0 ? (
         <section className="rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
@@ -364,55 +408,77 @@ export default async function OpsDepartmentReportDetailPage({
                 required
               />
             </label>
-            <label className={OPS_LABEL_CLASS}>
-              Narrative
-              <textarea
-                className={`${OPS_INPUT_CLASS} min-h-40`}
-                defaultValue={report.narrative}
-                name="narrative"
-                rows={10}
-              />
-            </label>
-            <fieldset>
-              <legend className="text-sm font-bold text-primary-dark">Key figures</legend>
-              <div className="mt-3 grid gap-4 md:grid-cols-2">
-                {OPS_DEPARTMENT_REPORT_TEMPLATES[report.department].metrics.map((metric) => {
-                  const current = report.metrics[metric.key];
-                  return (
-                    <label className={OPS_LABEL_CLASS} key={metric.key}>
-                      {metric.label}
-                      <input
-                        className={OPS_INPUT_CLASS}
-                        defaultValue={
-                          typeof current === "number" || typeof current === "string"
-                            ? current
-                            : ""
-                        }
-                        inputMode="decimal"
-                        name={`metric_${metric.key}`}
-                        step="any"
-                        type="number"
-                      />
-                    </label>
-                  );
-                })}
-              </div>
+            {report.narrative && !hasSections ? (
+              <label className={OPS_LABEL_CLASS}>
+                Narrative (legacy)
+                <textarea
+                  className={`${OPS_INPUT_CLASS} min-h-40`}
+                  defaultValue={report.narrative}
+                  name="narrative"
+                  rows={10}
+                />
+              </label>
+            ) : null}
+            <fieldset className="space-y-4">
+              <legend className="text-sm font-bold text-primary-dark">Report sections</legend>
+              {reportSectionsFor(report.department, report.scope).map((section) => (
+                <label className={OPS_LABEL_CLASS} key={section.key}>
+                  {section.label}
+                  <textarea
+                    className={`${OPS_INPUT_CLASS} min-h-24`}
+                    defaultValue={report.sections[section.key] ?? ""}
+                    maxLength={8000}
+                    name={`section_${section.key}`}
+                    placeholder={section.placeholder}
+                    rows={4}
+                  />
+                </label>
+              ))}
             </fieldset>
-            <label className={OPS_LABEL_CLASS}>
-              Extra metrics (advanced, JSON)
-              <textarea
-                className={`${OPS_INPUT_CLASS} min-h-24 font-mono text-xs`}
-                defaultValue={metricsToText(
-                  Object.fromEntries(
-                    Object.entries(report.metrics).filter(
-                      ([key]) => !templateMetricKeys(report.department).has(key),
-                    ),
-                  ),
-                )}
-                name="metrics_json"
-                rows={4}
-              />
-            </label>
+            {report.scope === "compiled" ? (
+              <>
+                <fieldset>
+                  <legend className="text-sm font-bold text-primary-dark">Key figures</legend>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    {OPS_DEPARTMENT_REPORT_TEMPLATES[report.department].metrics.map((metric) => {
+                      const current = report.metrics[metric.key];
+                      return (
+                        <label className={OPS_LABEL_CLASS} key={metric.key}>
+                          {metric.label}
+                          <input
+                            className={OPS_INPUT_CLASS}
+                            defaultValue={
+                              typeof current === "number" || typeof current === "string"
+                                ? current
+                                : ""
+                            }
+                            inputMode="decimal"
+                            name={`metric_${metric.key}`}
+                            step="any"
+                            type="number"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+                <label className={OPS_LABEL_CLASS}>
+                  Extra metrics (advanced, JSON)
+                  <textarea
+                    className={`${OPS_INPUT_CLASS} min-h-24 font-mono text-xs`}
+                    defaultValue={metricsToText(
+                      Object.fromEntries(
+                        Object.entries(report.metrics).filter(
+                          ([key]) => !templateMetricKeys(report.department).has(key),
+                        ),
+                      ),
+                    )}
+                    name="metrics_json"
+                    rows={4}
+                  />
+                </label>
+              </>
+            ) : null}
             <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
               Save
             </button>

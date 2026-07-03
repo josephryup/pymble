@@ -8,6 +8,8 @@ import {
 import {
   compareReportMetrics,
   OPS_DEPARTMENT_REPORT_TEMPLATES,
+  reportSectionLabel,
+  reportSectionsFor,
   type OpsReportMetricDelta,
 } from "@/lib/ops/department-report-templates";
 import {
@@ -74,6 +76,19 @@ export async function GET(_request: Request, { params }: RouteContext) {
       change: formatChange(deltas[key]),
     }));
 
+    // Template order first, then any stored sections the template no longer
+    // defines; empty sections are dropped.
+    const templateSections = reportSectionsFor(report.department, report.scope);
+    const sectionRows = [
+      ...templateSections.map((section) => ({
+        label: section.label,
+        value: (report.sections[section.key] ?? "").trim(),
+      })),
+      ...Object.entries(report.sections)
+        .filter(([key]) => !templateSections.some((section) => section.key === key))
+        .map(([key, value]) => ({ label: reportSectionLabel(key), value: value.trim() })),
+    ].filter((section) => section.value !== "");
+
     const monthTag = new Date(`${report.period_end_date}T00:00:00Z`)
       .toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" })
       .toUpperCase();
@@ -94,6 +109,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
           review_notes: report.review_notes,
         },
         metrics: metricRows,
+        sections: sectionRows,
         narrative: report.narrative,
         comparedWith: previous?.title ?? null,
         org: org

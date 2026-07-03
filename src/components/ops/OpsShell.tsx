@@ -175,11 +175,10 @@ function Navigation({
 }
 
 function railItemClass(active: boolean) {
-  return `relative flex size-11 items-center justify-center rounded-lg transition ${OPS_FOCUS_CLASS} ${
-    active
+  return `relative flex size-11 items-center justify-center rounded-lg transition ${OPS_FOCUS_CLASS} ${active
       ? "bg-primary/10 text-primary ring-1 ring-primary/15"
       : "text-muted-foreground hover:bg-muted hover:text-foreground"
-  }`;
+    }`;
 }
 
 /**
@@ -688,20 +687,17 @@ export function OpsShell({
       ) : null}
 
       <div
-        className={`min-h-dvh transition-[padding] duration-200 ${
-          isNavCollapsed ? "lg:pl-[76px]" : "lg:pl-[280px]"
-        }`}
+        className={`min-h-dvh transition-[padding] duration-200 ${isNavCollapsed ? "lg:pl-[76px]" : "lg:pl-[280px]"
+          }`}
       >
         <TooltipProvider delay={150}>
           <aside
-            className={`hidden border-r border-border bg-background text-foreground transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:h-dvh ${
-              isNavCollapsed ? "lg:w-[76px]" : "lg:w-[280px]"
-            }`}
+            className={`hidden border-r border-border bg-background text-foreground transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:h-dvh ${isNavCollapsed ? "lg:w-[76px]" : "lg:w-[280px]"
+              }`}
           >
             <div
-              className={`grid h-full w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-4 ${
-                isNavCollapsed ? "p-2.5" : "p-4"
-              }`}
+              className={`grid h-full w-full grid-rows-[auto_minmax(0,1fr)_auto] gap-4 ${isNavCollapsed ? "p-2.5" : "p-4"
+                }`}
               style={{
                 paddingLeft: isNavCollapsed
                   ? "max(0.625rem, env(safe-area-inset-left))"

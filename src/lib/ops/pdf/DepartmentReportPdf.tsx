@@ -44,6 +44,11 @@ export type DepartmentReportPdfMetricRow = {
   change: string;
 };
 
+export type DepartmentReportPdfSection = {
+  label: string;
+  value: string;
+};
+
 export type DepartmentReportPdfProps = {
   report: {
     id: string;
@@ -60,6 +65,7 @@ export type DepartmentReportPdfProps = {
     review_notes: string;
   };
   metrics: DepartmentReportPdfMetricRow[];
+  sections: DepartmentReportPdfSection[];
   narrative: string;
   comparedWith: string | null;
   org: PymblePdfOrgSnapshot;
@@ -71,6 +77,7 @@ export type DepartmentReportPdfProps = {
 export function DepartmentReportPdf({
   report,
   metrics,
+  sections,
   narrative,
   comparedWith,
   org,
@@ -145,10 +152,23 @@ export function DepartmentReportPdf({
           </View>
         ) : null}
 
-        <SectionTitle>Narrative</SectionTitle>
-        <View style={styles.noteBlock}>
-          <Text>{narrative || "(no narrative provided)"}</Text>
-        </View>
+        {sections.length > 0 ? (
+          sections.map((section) => (
+            <View key={section.label} wrap={false}>
+              <SectionTitle>{section.label}</SectionTitle>
+              <View style={styles.noteBlock}>
+                <Text>{section.value}</Text>
+              </View>
+            </View>
+          ))
+        ) : (
+          <View>
+            <SectionTitle>Narrative</SectionTitle>
+            <View style={styles.noteBlock}>
+              <Text>{narrative || "(no narrative provided)"}</Text>
+            </View>
+          </View>
+        )}
 
         {report.review_notes ? (
           <View>
