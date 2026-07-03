@@ -12,6 +12,7 @@ import {
   canViewDepartmentReport,
   type OpsDepartmentKey,
 } from "@/lib/ops/department-report-permissions";
+import { collectTemplateMetrics } from "@/lib/ops/department-report-templates";
 import { fetchOpsDepartmentReportById } from "@/lib/ops/department-reports";
 import { logOpsServerError } from "@/lib/ops/log";
 import { queueOpsNotification } from "@/lib/ops/notifications";
@@ -178,7 +179,12 @@ export async function createDepartmentReportAction(formData: FormData) {
     reportError("Period end date must be on or after the start date.");
   }
   assertCanWriteDepartment(profile.role, parsed.data.department);
-  const metrics = parseMetrics(parsed.data.metrics_json);
+  // Structured template inputs win over the advanced-JSON extras.
+  const metrics = collectTemplateMetrics(
+    parsed.data.department,
+    (name) => field(formData, name),
+    parseMetrics(parsed.data.metrics_json),
+  );
 
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
@@ -250,7 +256,12 @@ export async function updateDepartmentReportAction(formData: FormData) {
     reportError("Acknowledged reports can no longer be edited.");
   }
   assertCanWriteDepartment(profile.role, parsed.data.department);
-  const metrics = parseMetrics(parsed.data.metrics_json);
+  // Structured template inputs win over the advanced-JSON extras.
+  const metrics = collectTemplateMetrics(
+    parsed.data.department,
+    (name) => field(formData, name),
+    parseMetrics(parsed.data.metrics_json),
+  );
 
   const supabase = getOpsSupabaseServiceClient();
   const { error } = await supabase

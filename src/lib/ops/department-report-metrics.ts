@@ -1,0 +1,408 @@
+import type { OpsDepartmentKey } from "@/lib/ops/department-report-permissions";
+import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
+
+/**
+ * Suggested metric values for a department report, computed from live system
+ * records for the chosen period. Best-effort by design: every query degrades
+ * to "no suggestion" rather than failing the page, and the head can overtype
+ * any figure — the system suggests, the human owns the report.
+ *
+ * Keys here MUST match `auto: true` fields in department-report-templates.ts.
+ */
+
+type ServiceClient = ReturnType<typeof getOpsSupabaseServiceClient>;
+
+function dayStart(date: string) {
+  return `${date}T00:00:00.000Z`;
+}
+
+function dayEnd(date: string) {
+  return `${date}T23:59:59.999Z`;
+}
+
+function headCount(builder: PromiseLike<{ count: number | null; error: unknown }>) {
+  return Promise.resolve(builder)
+    .then((result) => (result.error ? null : (result.count ?? 0)))
+    .catch(() => null);
+}
+
+async function sumColumn(
+  builder: PromiseLike<{ data: unknown; error: unknown }>,
+  column: string,
+) {
+  try {
+    const { data, error } = await builder;
+    if (error || !Array.isArray(data)) return null;
+    const total = data.reduce((sum: number, row) => {
+      const value = Number((row as Record<string, unknown>)[column] ?? 0);
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+    return Math.round(total * 100) / 100;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveEntries(
+  entries: Array<[string, Promise<number | null>]>,
+): Promise<Record<string, number>> {
+  const settled = await Promise.all(entries.map(async ([key, run]) => [key, await run] as const));
+  const metrics: Record<string, number> = {};
+  for (const [key, value] of settled) {
+    if (value !== null) metrics[key] = value;
+  }
+  return metrics;
+}
+
+function operationsMetrics(supabase: ServiceClient, start: string, end: string) {
+  return resolveEntries([
+    [
+      "sites_active",
+      headCount(
+        supabase.from("sites").select("id", { count: "exact", head: true }).eq("is_active", true),
+      ),
+    ],
+    [
+      "site_reports_filed",
+      headCount(
+        supabase
+          .from("daily_site_reports")
+          .select("id", { count: "exact", head: true })
+          .gte("report_date", start)
+          .lte("report_date", end),
+      ),
+    ],
+    [
+      "attendance_entries",
+      headCount(
+        supabase
+          .from("attendance_records")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "delivery_exceptions_reported",
+      headCount(
+        supabase
+          .from("delivery_exceptions")
+          .select("id", { count: "exact", head: true })
+          .gte("reported_at", start)
+          .lte("reported_at", end),
+      ),
+    ],
+  ]);
+}
+
+function engineeringMetrics(supabase: ServiceClient, start: string, end: string) {
+  return resolveEntries([
+    [
+      "sites_active",
+      headCount(
+        supabase.from("sites").select("id", { count: "exact", head: true }).eq("is_active", true),
+      ),
+    ],
+    [
+      "site_reports_filed",
+      headCount(
+        supabase
+          .from("daily_site_reports")
+          .select("id", { count: "exact", head: true })
+          .gte("report_date", start)
+          .lte("report_date", end),
+      ),
+    ],
+    [
+      "material_requests_raised",
+      headCount(
+        supabase
+          .from("material_requests")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+  ]);
+}
+
+function procurementMetrics(supabase: ServiceClient, start: string, end: string) {
+  return resolveEntries([
+    [
+      "material_requests_received",
+      headCount(
+        supabase
+          .from("material_requests")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "rfqs_created",
+      headCount(
+        supabase
+          .from("rfqs")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "purchase_orders_issued",
+      headCount(
+        supabase
+          .from("purchase_orders")
+          .select("id", { count: "exact", head: true })
+          .gte("issued_at", dayStart(start))
+          .lte("issued_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "purchase_order_value_zmw",
+      sumColumn(
+        supabase
+          .from("purchase_orders")
+          .select("total_amount")
+          .gte("issued_at", dayStart(start))
+          .lte("issued_at", dayEnd(end))
+          .limit(1000),
+        "total_amount",
+      ),
+    ],
+  ]);
+}
+
+function financeMetrics(supabase: ServiceClient, start: string, end: string) {
+  return resolveEntries([
+    [
+      "payment_requests_received",
+      headCount(
+        supabase
+          .from("payment_requests")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "payment_request_value_zmw",
+      sumColumn(
+        supabase
+          .from("payment_requests")
+          .select("requested_amount")
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end))
+          .limit(1000),
+        "requested_amount",
+      ),
+    ],
+    [
+      "invoices_issued",
+      headCount(
+        supabase
+          .from("invoices")
+          .select("id", { count: "exact", head: true })
+          .gte("issued_at", start)
+          .lte("issued_at", end),
+      ),
+    ],
+    [
+      "invoice_value_zmw",
+      sumColumn(
+        supabase
+          .from("invoices")
+          .select("total_amount")
+          .gte("issued_at", start)
+          .lte("issued_at", end)
+          .limit(1000),
+        "total_amount",
+      ),
+    ],
+  ]);
+}
+
+function commercialMetrics(supabase: ServiceClient, start: string, end: string) {
+  return resolveEntries([
+    [
+      "claims_submitted",
+      headCount(
+        supabase
+          .from("commercial_claims")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "claim_value_zmw",
+      sumColumn(
+        supabase
+          .from("commercial_claims")
+          .select("claimed_amount")
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end))
+          .limit(1000),
+        "claimed_amount",
+      ),
+    ],
+    [
+      "invoices_issued",
+      headCount(
+        supabase
+          .from("invoices")
+          .select("id", { count: "exact", head: true })
+          .gte("issued_at", start)
+          .lte("issued_at", end),
+      ),
+    ],
+  ]);
+}
+
+function hseMetrics(supabase: ServiceClient, start: string, end: string) {
+  return resolveEntries([
+    [
+      "incidents_reported",
+      headCount(
+        supabase
+          .from("hse_incidents")
+          .select("id", { count: "exact", head: true })
+          .gte("occurred_at", dayStart(start))
+          .lte("occurred_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "inspections_completed",
+      headCount(
+        supabase
+          .from("hse_inspections")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "risk_assessments_done",
+      headCount(
+        supabase
+          .from("hse_risk_assessments")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+  ]);
+}
+
+function hrMetrics(supabase: ServiceClient, start: string, end: string) {
+  return resolveEntries([
+    [
+      "employees_on_record",
+      headCount(supabase.from("employees").select("id", { count: "exact", head: true })),
+    ],
+    [
+      "workers_active",
+      headCount(
+        supabase.from("workers").select("id", { count: "exact", head: true }).eq("is_active", true),
+      ),
+    ],
+    [
+      "leave_requests_received",
+      headCount(
+        supabase
+          .from("leave_requests")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "applications_received",
+      headCount(
+        supabase
+          .from("job_applications")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+  ]);
+}
+
+function itMetrics(supabase: ServiceClient, start: string, end: string) {
+  return resolveEntries([
+    [
+      "tickets_raised",
+      headCount(
+        supabase
+          .from("it_tickets")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayStart(start))
+          .lte("created_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "tickets_resolved",
+      headCount(
+        supabase
+          .from("it_tickets")
+          .select("id", { count: "exact", head: true })
+          .gte("resolved_at", dayStart(start))
+          .lte("resolved_at", dayEnd(end)),
+      ),
+    ],
+    [
+      "tickets_open",
+      headCount(
+        supabase
+          .from("it_tickets")
+          .select("id", { count: "exact", head: true })
+          .in("status", ["open", "in_progress"]),
+      ),
+    ],
+    [
+      "assets_under_repair",
+      headCount(
+        supabase
+          .from("it_assets")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "repair"),
+      ),
+    ],
+  ]);
+}
+
+/**
+ * Suggested figures for the report form. Snapshot metrics (active sites, open
+ * tickets) reflect "now"; flow metrics (requests received, invoices issued)
+ * are filtered to the period. Returns {} for departments with no automatable
+ * metrics (executive) or when queries fail.
+ */
+export async function fetchOpsDepartmentMetricPrefill(
+  department: OpsDepartmentKey,
+  periodStart: string,
+  periodEnd: string,
+): Promise<Record<string, number>> {
+  const supabase = getOpsSupabaseServiceClient();
+
+  switch (department) {
+    case "operations":
+      return operationsMetrics(supabase, periodStart, periodEnd);
+    case "engineering":
+      return engineeringMetrics(supabase, periodStart, periodEnd);
+    case "procurement":
+      return procurementMetrics(supabase, periodStart, periodEnd);
+    case "finance":
+      return financeMetrics(supabase, periodStart, periodEnd);
+    case "commercial":
+      return commercialMetrics(supabase, periodStart, periodEnd);
+    case "hse":
+      return hseMetrics(supabase, periodStart, periodEnd);
+    case "hr":
+      return hrMetrics(supabase, periodStart, periodEnd);
+    case "it":
+      return itMetrics(supabase, periodStart, periodEnd);
+    default:
+      return {};
+  }
+}

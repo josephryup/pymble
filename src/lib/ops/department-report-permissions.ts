@@ -85,6 +85,21 @@ export function canSubmitDepartmentReport(role: OpsUserRole) {
   return DEPARTMENT_HEAD_ROLES.includes(role);
 }
 
+/** Head roles that own a given department's report (may be empty). */
+export function departmentHeadRolesFor(department: OpsDepartmentKey): OpsUserRole[] {
+  return DEPARTMENT_HEAD_ROLES.filter((role) => ROLE_DEPARTMENT_MAP[role] === department);
+}
+
+/**
+ * Departments expected to file a monthly report. Executive is excluded —
+ * leadership reviews reports, it does not report to itself.
+ */
+export function departmentsExpectedToReport(): OpsDepartmentKey[] {
+  return (Object.keys(OPS_DEPARTMENT_LABELS) as OpsDepartmentKey[]).filter(
+    (department) => department !== "executive",
+  );
+}
+
 /**
  * Reviewing = acknowledging or requesting revisions. MD + GM + Developer.
  */

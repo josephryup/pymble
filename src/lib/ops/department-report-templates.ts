@@ -1,0 +1,273 @@
+import type { OpsDepartmentKey } from "@/lib/ops/department-report-permissions";
+import type { OpsDepartmentReportPeriod } from "@/lib/ops/department-reports";
+
+/**
+ * Structured report templates per department.
+ *
+ * Each department reports against a defined set of metrics instead of a
+ * free-form JSON blob: the form renders one input per field, and fields
+ * marked `auto` are pre-filled from live system records for the chosen
+ * period (see department-report-metrics.ts). Values land in the same
+ * `metrics` JSONB column, so historic reports remain readable.
+ */
+
+export type OpsDeptMetricField = {
+  key: string;
+  label: string;
+  /** Shown under the input — what to count / where the number comes from. */
+  hint?: string;
+  /** True when the system can suggest this value from live records. */
+  auto?: boolean;
+};
+
+export type OpsDepartmentReportTemplate = {
+  /** Placeholder that guides the narrative into consistent sections. */
+  narrativePrompt: string;
+  metrics: OpsDeptMetricField[];
+};
+
+const NARRATIVE_SKELETON =
+  "Highlights:\n\nProgress against plan:\n\nProblems and risks:\n\nDecisions or support needed from leadership:";
+
+export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
+  OpsDepartmentKey,
+  OpsDepartmentReportTemplate
+> = {
+  operations: {
+    narrativePrompt: NARRATIVE_SKELETON,
+    metrics: [
+      { key: "sites_active", label: "Active sites", auto: true },
+      { key: "site_reports_filed", label: "Daily site reports filed", auto: true },
+      { key: "attendance_entries", label: "Attendance entries logged", auto: true },
+      { key: "delivery_exceptions_reported", label: "Delivery exceptions reported", auto: true },
+      { key: "average_workforce_on_site", label: "Average workforce on site", hint: "Rough daily average across sites." },
+    ],
+  },
+  engineering: {
+    narrativePrompt: NARRATIVE_SKELETON,
+    metrics: [
+      { key: "sites_active", label: "Active sites", auto: true },
+      { key: "site_reports_filed", label: "Daily site reports filed", auto: true },
+      { key: "material_requests_raised", label: "Material requests raised", auto: true },
+      { key: "inspections_carried_out", label: "Site inspections carried out" },
+      { key: "drawings_issued", label: "Drawings / designs issued" },
+    ],
+  },
+  procurement: {
+    narrativePrompt: NARRATIVE_SKELETON,
+    metrics: [
+      { key: "material_requests_received", label: "Material requests received", auto: true },
+      { key: "rfqs_created", label: "RFQs created", auto: true },
+      { key: "purchase_orders_issued", label: "Purchase orders issued", auto: true },
+      { key: "purchase_order_value_zmw", label: "Purchase order value (ZMW)", auto: true },
+      { key: "supplier_deliveries_late", label: "Late supplier deliveries" },
+    ],
+  },
+  finance: {
+    narrativePrompt: NARRATIVE_SKELETON,
+    metrics: [
+      { key: "payment_requests_received", label: "Payment requests received", auto: true },
+      { key: "payment_request_value_zmw", label: "Payment request value (ZMW)", auto: true },
+      { key: "invoices_issued", label: "Invoices issued", auto: true },
+      { key: "invoice_value_zmw", label: "Invoice value (ZMW)", auto: true },
+      { key: "cash_position_zmw", label: "Cash position (ZMW)", hint: "Bank balances at period end." },
+    ],
+  },
+  commercial: {
+    narrativePrompt: NARRATIVE_SKELETON,
+    metrics: [
+      { key: "claims_submitted", label: "Claims submitted", auto: true },
+      { key: "claim_value_zmw", label: "Claim value (ZMW)", auto: true },
+      { key: "invoices_issued", label: "Invoices issued", auto: true },
+      { key: "variations_priced", label: "Variations priced" },
+      { key: "boq_packages_completed", label: "BOQ packages completed" },
+    ],
+  },
+  hse: {
+    narrativePrompt: NARRATIVE_SKELETON,
+    metrics: [
+      { key: "incidents_reported", label: "Incidents reported", auto: true },
+      { key: "inspections_completed", label: "Inspections completed", auto: true },
+      { key: "risk_assessments_done", label: "Risk assessments done", auto: true },
+      { key: "toolbox_talks_held", label: "Toolbox talks held" },
+      { key: "lost_time_injuries", label: "Lost-time injuries" },
+    ],
+  },
+  hr: {
+    narrativePrompt: NARRATIVE_SKELETON,
+    metrics: [
+      { key: "employees_on_record", label: "Employees on record", auto: true },
+      { key: "workers_active", label: "Active site workers", auto: true },
+      { key: "leave_requests_received", label: "Leave requests received", auto: true },
+      { key: "applications_received", label: "Job applications received", auto: true },
+      { key: "disciplinary_cases", label: "Disciplinary cases" },
+    ],
+  },
+  it: {
+    narrativePrompt: NARRATIVE_SKELETON,
+    metrics: [
+      { key: "tickets_raised", label: "Help-desk tickets raised", auto: true },
+      { key: "tickets_resolved", label: "Tickets resolved", auto: true },
+      { key: "tickets_open", label: "Tickets still open", auto: true },
+      { key: "assets_under_repair", label: "Assets under repair", auto: true },
+      { key: "systems_downtime_hours", label: "Systems downtime (hours)" },
+    ],
+  },
+  executive: {
+    narrativePrompt: NARRATIVE_SKELETON,
+    metrics: [
+      { key: "revenue_zmw", label: "Revenue (ZMW)" },
+      { key: "headline_projects", label: "Headline projects in delivery" },
+      { key: "key_risks", label: "Key risks tracked" },
+    ],
+  },
+};
+
+/**
+ * Merges the template's `metric_<key>` form inputs over any advanced-JSON
+ * metrics. Blank inputs are skipped so untouched fields don't pollute the
+ * stored object; numeric strings are stored as numbers.
+ */
+export function collectTemplateMetrics(
+  department: OpsDepartmentKey,
+  readField: (name: string) => string,
+  baseMetrics: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const metrics: Record<string, unknown> = { ...baseMetrics };
+
+  for (const fieldDef of OPS_DEPARTMENT_REPORT_TEMPLATES[department].metrics) {
+    const raw = readField(`metric_${fieldDef.key}`).trim();
+    if (raw === "") continue;
+    const numeric = Number(raw);
+    metrics[fieldDef.key] = Number.isFinite(numeric) ? numeric : raw;
+  }
+
+  return metrics;
+}
+
+/** Template keys for a department — used to split "extra" metrics out. */
+export function templateMetricKeys(department: OpsDepartmentKey): Set<string> {
+  return new Set(
+    OPS_DEPARTMENT_REPORT_TEMPLATES[department].metrics.map((field) => field.key),
+  );
+}
+
+export type OpsReportMetricDelta = {
+  delta: number;
+  previous: number;
+  /** Null when the previous value is 0 — a percentage would be meaningless. */
+  percent: number | null;
+};
+
+/**
+ * Numeric metric deltas between this report and the previous one of the same
+ * cadence. Only keys that are numbers on BOTH sides compare; everything else
+ * (text values, newly added metrics) is skipped rather than guessed at.
+ */
+export function compareReportMetrics(
+  current: Record<string, unknown>,
+  previous: Record<string, unknown>,
+): Record<string, OpsReportMetricDelta> {
+  const deltas: Record<string, OpsReportMetricDelta> = {};
+
+  for (const [key, value] of Object.entries(current)) {
+    const previousValue = previous[key];
+    if (
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      typeof previousValue !== "number" ||
+      !Number.isFinite(previousValue)
+    ) {
+      continue;
+    }
+
+    const delta = Math.round((value - previousValue) * 100) / 100;
+    deltas[key] = {
+      delta,
+      previous: previousValue,
+      percent:
+        previousValue === 0 ? null : Math.round((delta / previousValue) * 1000) / 10,
+    };
+  }
+
+  return deltas;
+}
+
+function isoDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+/**
+ * Default reporting window for a period type: the most recent COMPLETED
+ * period, since you report on what has finished (weekly = last full
+ * Mon–Sun week, monthly = last full month, quarterly = last full quarter).
+ */
+export function defaultReportPeriodRange(
+  period: OpsDepartmentReportPeriod,
+  today = new Date(),
+): { start: string; end: string } {
+  const utcToday = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+  );
+
+  if (period === "weekly") {
+    // Monday of the current week, then step back one full week.
+    const dayOfWeek = utcToday.getUTCDay() === 0 ? 7 : utcToday.getUTCDay();
+    const thisMonday = new Date(utcToday);
+    thisMonday.setUTCDate(utcToday.getUTCDate() - (dayOfWeek - 1));
+    const lastMonday = new Date(thisMonday);
+    lastMonday.setUTCDate(thisMonday.getUTCDate() - 7);
+    const lastSunday = new Date(thisMonday);
+    lastSunday.setUTCDate(thisMonday.getUTCDate() - 1);
+    return { start: isoDate(lastMonday), end: isoDate(lastSunday) };
+  }
+
+  if (period === "quarterly") {
+    const quarter = Math.floor(utcToday.getUTCMonth() / 3);
+    const startOfThisQuarter = new Date(Date.UTC(utcToday.getUTCFullYear(), quarter * 3, 1));
+    const startOfLastQuarter = new Date(
+      Date.UTC(startOfThisQuarter.getUTCFullYear(), startOfThisQuarter.getUTCMonth() - 3, 1),
+    );
+    const endOfLastQuarter = new Date(startOfThisQuarter);
+    endOfLastQuarter.setUTCDate(0);
+    return { start: isoDate(startOfLastQuarter), end: isoDate(endOfLastQuarter) };
+  }
+
+  if (period === "ad_hoc") {
+    const weekAgo = new Date(utcToday);
+    weekAgo.setUTCDate(utcToday.getUTCDate() - 7);
+    return { start: isoDate(weekAgo), end: isoDate(utcToday) };
+  }
+
+  // monthly (default)
+  const startOfThisMonth = new Date(Date.UTC(utcToday.getUTCFullYear(), utcToday.getUTCMonth(), 1));
+  const startOfLastMonth = new Date(
+    Date.UTC(startOfThisMonth.getUTCFullYear(), startOfThisMonth.getUTCMonth() - 1, 1),
+  );
+  const endOfLastMonth = new Date(startOfThisMonth);
+  endOfLastMonth.setUTCDate(0);
+  return { start: isoDate(startOfLastMonth), end: isoDate(endOfLastMonth) };
+}
+
+/** "June 2026 Operations report" for monthly; falls back to the date range. */
+export function suggestedReportTitle(
+  departmentLabel: string,
+  period: OpsDepartmentReportPeriod,
+  range: { start: string; end: string },
+) {
+  if (period === "monthly") {
+    const monthName = new Date(`${range.start}T00:00:00Z`).toLocaleDateString("en-GB", {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+    return `${monthName} ${departmentLabel} report`;
+  }
+  if (period === "weekly") {
+    return `${departmentLabel} weekly report ${range.start} to ${range.end}`;
+  }
+  if (period === "quarterly") {
+    return `${departmentLabel} quarterly report ${range.start} to ${range.end}`;
+  }
+  return `${departmentLabel} report ${range.start} to ${range.end}`;
+}

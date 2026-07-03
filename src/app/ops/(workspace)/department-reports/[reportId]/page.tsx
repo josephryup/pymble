@@ -1,9 +1,10 @@
-import { CheckCircle2, RotateCcw, Send } from "lucide-react";
+import { CheckCircle2, FileDown, RotateCcw, Send } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   archiveDepartmentReportAction,
@@ -17,7 +18,16 @@ import {
   canViewDepartmentReport,
   OPS_DEPARTMENT_LABELS,
 } from "@/lib/ops/department-report-permissions";
-import { fetchOpsDepartmentReportById } from "@/lib/ops/department-reports";
+import {
+  compareReportMetrics,
+  OPS_DEPARTMENT_REPORT_TEMPLATES,
+  templateMetricKeys,
+} from "@/lib/ops/department-report-templates";
+import {
+  fetchOpsDepartmentReportById,
+  fetchPreviousOpsDepartmentReport,
+} from "@/lib/ops/department-reports";
+import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import {
   firstParam,
   OPS_DANGER_BUTTON_CLASS,
@@ -43,6 +53,17 @@ function metricsToText(metrics: Record<string, unknown>) {
   }
 }
 
+function prettifyMetricKey(key: string) {
+  return key.replace(/_/g, " ").replace(/^./, (first) => first.toUpperCase());
+}
+
+function formatMetricValue(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value.toLocaleString("en-ZM");
+  }
+  return String(value);
+}
+
 export default async function OpsDepartmentReportDetailPage({
   params,
   searchParams,
@@ -56,6 +77,36 @@ export default async function OpsDepartmentReportDetailPage({
   if (!canViewDepartmentReport(profile.role, report.department)) {
     notFound();
   }
+
+  // Read receipt: the moment a reviewer opens a submitted report it becomes
+  // "under review", so the head can see leadership has actually picked it up.
+  // The status guard keeps the update idempotent across refreshes/races.
+  if (canReviewDepartmentReport(profile.role) && report.status === "submitted") {
+    const supabase = getOpsSupabaseServiceClient();
+    const { error: reviewMarkError } = await supabase
+      .from("department_reports")
+      .update({ status: "under_review" })
+      .eq("id", report.id)
+      .eq("status", "submitted");
+    if (!reviewMarkError) {
+      report.status = "under_review";
+      await recordOpsAuditEvent({
+        action: "department_report.review_started",
+        actorUserId: profile.id,
+        entityId: report.id,
+        entityType: "department_report",
+        moduleKey: "department_reports",
+        sourceId: report.id,
+        sourceTable: "department_reports",
+        summary: `${profile.full_name} opened ${report.title} for review`,
+      }).catch(() => null);
+    }
+  }
+
+  const previousReport = await fetchPreviousOpsDepartmentReport(report);
+  const metricDeltas = previousReport
+    ? compareReportMetrics(report.metrics, previousReport.metrics)
+    : {};
 
   const errorMessage = firstParam(search.error);
   const updated = firstParam(search.updated);
@@ -113,10 +164,27 @@ export default async function OpsDepartmentReportDetailPage({
 
       {Object.keys(report.metrics).length > 0 ? (
         <section className="rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
-          <h2 className="font-heading text-lg font-bold text-primary-dark">Metrics</h2>
-          <pre className="mt-2 overflow-x-auto rounded-md bg-primary-dark/5 p-3 text-xs text-primary-dark/80">
-            {metricsToText(report.metrics)}
-          </pre>
+          <h2 className="font-heading text-lg font-bold text-primary-dark">Key figures</h2>
+          <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Object.entries(report.metrics).map(([key, value]) => {
+              const templateField = OPS_DEPARTMENT_REPORT_TEMPLATES[report.department].metrics.find(
+                (metric) => metric.key === key,
+              );
+              return (
+                <div
+                  className="rounded-xl border border-primary-dark/10 bg-primary-dark/[0.02] p-3"
+                  key={key}
+                >
+                  <dt className="text-xs font-semibold uppercase tracking-[0.1em] text-primary-dark/50">
+                    {templateField?.label ?? prettifyMetricKey(key)}
+                  </dt>
+                  <dd className="mt-1 font-heading text-xl font-bold text-primary-dark">
+                    {formatMetricValue(value)}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
         </section>
       ) : null}
 
@@ -260,33 +328,73 @@ export default async function OpsDepartmentReportDetailPage({
                 rows={10}
               />
             </label>
+            <fieldset>
+              <legend className="text-sm font-bold text-primary-dark">Key figures</legend>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                {OPS_DEPARTMENT_REPORT_TEMPLATES[report.department].metrics.map((metric) => {
+                  const current = report.metrics[metric.key];
+                  return (
+                    <label className={OPS_LABEL_CLASS} key={metric.key}>
+                      {metric.label}
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={
+                          typeof current === "number" || typeof current === "string"
+                            ? current
+                            : ""
+                        }
+                        inputMode="decimal"
+                        name={`metric_${metric.key}`}
+                        step="any"
+                        type="number"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
             <label className={OPS_LABEL_CLASS}>
-              Metrics JSON
+              Extra metrics (advanced, JSON)
               <textarea
                 className={`${OPS_INPUT_CLASS} min-h-24 font-mono text-xs`}
-                defaultValue={metricsToText(report.metrics)}
+                defaultValue={metricsToText(
+                  Object.fromEntries(
+                    Object.entries(report.metrics).filter(
+                      ([key]) => !templateMetricKeys(report.department).has(key),
+                    ),
+                  ),
+                )}
                 name="metrics_json"
                 rows={4}
               />
             </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
-                Save
-              </button>
-              {canArchive ? (
-                <form action={archiveDepartmentReportAction} className="inline-block">
-                  <input name="id" type="hidden" value={report.id} />
-                  <OpsConfirmSubmitButton
-                    className={OPS_DANGER_BUTTON_CLASS}
-                    confirmText="Confirm archive"
-                  >
-                    Archive
-                  </OpsConfirmSubmitButton>
-                </form>
-              ) : null}
-            </div>
+            <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+              Save
+            </button>
           </form>
         </details>
+      ) : null}
+
+      {/* Separate top-level form: nesting it inside the edit form is invalid
+          HTML — the browser drops the inner <form> and Archive would submit
+          the edit action instead. */}
+      {canEdit && canArchive ? (
+        <form
+          action={archiveDepartmentReportAction}
+          className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm"
+        >
+          <input name="id" type="hidden" value={report.id} />
+          <p className="text-sm text-primary-dark/70">
+            Archiving removes this report from the active list. It stays available to leadership
+            in the archive.
+          </p>
+          <OpsConfirmSubmitButton
+            className={`${OPS_DANGER_BUTTON_CLASS} mt-3`}
+            confirmText="Confirm archive"
+          >
+            Archive
+          </OpsConfirmSubmitButton>
+        </form>
       ) : null}
     </div>
   );

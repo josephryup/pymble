@@ -1,3 +1,9 @@
+import {
+  departmentHeadRolesFor,
+  departmentsExpectedToReport,
+  OPS_DEPARTMENT_LABELS,
+  type OpsDepartmentKey,
+} from "@/lib/ops/department-report-permissions";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
@@ -16,11 +22,16 @@ const MAX_ESCALATION_RECORDS_PER_TABLE = 100;
 export const OPS_ESCALATION_SLA_DAYS = {
   approvals: 2,
   deliveryExceptions: 2,
+  departmentReports: 2,
   materialRequests: 2,
   paymentRequests: 2,
   purchaseOrders: 1,
   rfqs: 2,
 } as const;
+
+// Department heads are reminded during the first N days of a month if last
+// month's report has not been filed yet.
+export const OPS_REPORT_REMINDER_WINDOW_DAYS = 5;
 
 // Budget variance: alert when actual+committed cost exceeds the active budget by
 // this fraction. 1.05 = 5% over budget triggers; tune via env if needed later.
@@ -158,13 +169,26 @@ type DeliveryExceptionEscalationRow = {
   title: string;
 };
 
+type DepartmentReportEscalationRow = {
+  department: OpsDepartmentKey;
+  id: string;
+  period: string;
+  period_end_date: string;
+  status: string;
+  submitted_at: string | null;
+  submitted_by: string | null;
+  title: string;
+};
+
 type QueueEscalationInput = {
   actionHref: string;
   body: string;
   idempotencyBase: string;
   moduleKey: string;
   recipients: OpsEscalationUser[];
-  sourceId: string;
+  // Null for reminders about records that don't exist yet (e.g. a missing
+  // monthly report).
+  sourceId: string | null;
   sourceTable: string;
   title: string;
 };
@@ -172,6 +196,7 @@ type QueueEscalationInput = {
 export type OpsEscalationSnapshot = {
   staleApprovals: number;
   staleDeliveryExceptions: number;
+  staleDepartmentReports: number;
   staleMaterialRequests: number;
   stalePaymentRequests: number;
   staleRfqs: number;
@@ -181,10 +206,12 @@ export type OpsEscalationSnapshot = {
 };
 
 export type OpsEscalationSweepResult = {
+  departmentReportReminders: number;
   escalated: OpsEscalationSnapshot;
   inspected: {
     approvals: number;
     deliveryExceptions: number;
+    departmentReports: number;
     materialRequests: number;
     paymentRequests: number;
     rfqs: number;
@@ -439,6 +466,61 @@ async function fetchRfqEscalationRows(supabase: SupabaseServiceClient) {
   return (data ?? []) as RfqEscalationRow[];
 }
 
+async function fetchDepartmentReportEscalationRows(supabase: SupabaseServiceClient) {
+  const { data, error } = await supabase
+    .from("department_reports")
+    .select("id, department, title, period, period_end_date, status, submitted_at, submitted_by")
+    .in("status", ["submitted", "under_review"])
+    .is("archived_at", null)
+    .order("submitted_at", { ascending: true })
+    .limit(MAX_ESCALATION_RECORDS_PER_TABLE);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as DepartmentReportEscalationRow[];
+}
+
+/**
+ * The previous calendar month for a Lusaka business date ("YYYY-MM-DD"),
+ * as inclusive ISO date bounds plus a stable month key for idempotency.
+ */
+export function previousMonthWindow(todayIsoDate: string) {
+  const [year, month] = todayIsoDate.split("-").map(Number);
+  const start = new Date(Date.UTC(year, month - 2, 1));
+  const end = new Date(Date.UTC(year, month - 1, 0));
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+    monthKey: start.toISOString().slice(0, 7),
+  };
+}
+
+/**
+ * Departments that have NOT filed a monthly report covering the given window.
+ * A report counts when it is monthly, not archived (caller filters), and its
+ * period_end_date falls inside the window — any status counts, since a draft
+ * in progress still means the head has started.
+ */
+export function departmentsMissingMonthlyReport(
+  filed: Array<{ department: OpsDepartmentKey; period: string; period_end_date: string }>,
+  window: { start: string; end: string },
+): OpsDepartmentKey[] {
+  const covered = new Set(
+    filed
+      .filter(
+        (report) =>
+          report.period === "monthly" &&
+          report.period_end_date >= window.start &&
+          report.period_end_date <= window.end,
+      )
+      .map((report) => report.department),
+  );
+
+  return departmentsExpectedToReport().filter((department) => !covered.has(department));
+}
+
 type BudgetVarianceRow = {
   site_id: string;
   site_code: string;
@@ -552,6 +634,7 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
     rfqs,
     purchaseOrders,
     budgetVariances,
+    departmentReports,
   ] = await Promise.all([
     fetchApprovalEscalationRows(supabase),
     fetchMaterialRequestEscalationRows(supabase),
@@ -560,6 +643,7 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
     fetchRfqEscalationRows(supabase),
     fetchPurchaseOrderEscalationRows(supabase),
     fetchBudgetVarianceCandidates(supabase),
+    fetchDepartmentReportEscalationRows(supabase),
   ]);
 
   const staleApprovals = approvals.filter((approval) =>
@@ -568,6 +652,15 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
       nowIso,
       staleAt: approval.submitted_at ?? approval.created_at,
       staleBeforeIso,
+      todayIsoDate,
+    }),
+  ).length;
+
+  const staleDepartmentReports = departmentReports.filter((report) =>
+    classifyOpsEscalationAge({
+      nowIso,
+      staleAt: report.submitted_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.departmentReports, now),
       todayIsoDate,
     }),
   ).length;
@@ -619,6 +712,7 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
   return {
     staleApprovals,
     staleDeliveryExceptions,
+    staleDepartmentReports,
     staleMaterialRequests,
     stalePaymentRequests,
     staleRfqs,
@@ -627,6 +721,7 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
     total:
       staleApprovals +
       staleDeliveryExceptions +
+      staleDepartmentReports +
       staleMaterialRequests +
       stalePaymentRequests +
       staleRfqs +
@@ -649,6 +744,7 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     rfqs,
     purchaseOrders,
     budgetVariances,
+    departmentReports,
   ] = await Promise.all([
     fetchApprovalEscalationRows(supabase),
     fetchMaterialRequestEscalationRows(supabase),
@@ -657,15 +753,18 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     fetchRfqEscalationRows(supabase),
     fetchPurchaseOrderEscalationRows(supabase),
     fetchBudgetVarianceCandidates(supabase),
+    fetchDepartmentReportEscalationRows(supabase),
   ]);
   const approvalSteps = await fetchPendingApprovalSteps(
     supabase,
     approvals.map((approval) => approval.id),
   );
   const result: OpsEscalationSweepResult = {
+    departmentReportReminders: 0,
     escalated: {
       staleApprovals: 0,
       staleDeliveryExceptions: 0,
+      staleDepartmentReports: 0,
       staleMaterialRequests: 0,
       stalePaymentRequests: 0,
       staleRfqs: 0,
@@ -676,6 +775,7 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     inspected: {
       approvals: approvals.length,
       deliveryExceptions: deliveryExceptions.length,
+      departmentReports: departmentReports.length,
       materialRequests: materialRequests.length,
       paymentRequests: paymentRequests.length,
       rfqs: rfqs.length,
@@ -936,6 +1036,89 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     result.notificationsQueued += queued.queued;
   }
 
+  // Department reports awaiting leadership review past the SLA: nag the
+  // reviewers (MD/GM tier) so a head's submitted report never just sits.
+  for (const report of departmentReports) {
+    const reason = classifyOpsEscalationAge({
+      nowIso,
+      staleAt: report.submitted_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.departmentReports, now),
+      todayIsoDate,
+    });
+
+    if (!reason) {
+      continue;
+    }
+
+    const queued = await queueEscalationNotifications({
+      actionHref: `/ops/department-reports/${report.id}`,
+      body: `${report.title} (${OPS_DEPARTMENT_LABELS[report.department]}) was submitted and is still awaiting leadership review. Please acknowledge it or request revisions.`,
+      idempotencyBase: buildOpsEscalationIdempotencyKey({
+        dateKey,
+        reason,
+        recipientId: "role",
+        sourceId: report.id,
+        sourceTable: "department_reports",
+      }),
+      moduleKey: "department_reports",
+      recipients: recipientsFor(users, LEADERSHIP_ESCALATION_ROLES),
+      sourceId: report.id,
+      sourceTable: "department_reports",
+      title: "Department report awaiting review",
+    });
+    result.escalated.staleDepartmentReports += 1;
+    result.notificationFailures += queued.failures;
+    result.notificationsQueued += queued.queued;
+  }
+
+  // Early-month reminders: each department head is asked for last month's
+  // report until one exists. Idempotency is keyed on the month, so a head
+  // gets at most one reminder per month regardless of how many sweeps run.
+  const dayOfMonth = Number(dateKey.slice(8, 10));
+  if (dayOfMonth >= 1 && dayOfMonth <= OPS_REPORT_REMINDER_WINDOW_DAYS) {
+    const window = previousMonthWindow(dateKey);
+    const { data: filedRows, error: filedError } = await supabase
+      .from("department_reports")
+      .select("department, period, period_end_date")
+      .eq("period", "monthly")
+      .is("archived_at", null)
+      .gte("period_end_date", window.start)
+      .lte("period_end_date", window.end);
+
+    if (!filedError) {
+      const missing = departmentsMissingMonthlyReport(
+        (filedRows ?? []) as Array<{
+          department: OpsDepartmentKey;
+          period: string;
+          period_end_date: string;
+        }>,
+        window,
+      );
+
+      for (const department of missing) {
+        const headRoles = departmentHeadRolesFor(department);
+        const recipients = recipientsFor(users, headRoles);
+        if (recipients.length === 0) {
+          continue;
+        }
+
+        const queued = await queueEscalationNotifications({
+          actionHref: `/ops/department-reports/new?department=${department}&period=monthly`,
+          body: `The ${OPS_DEPARTMENT_LABELS[department]} monthly report for ${window.monthKey} has not been filed yet. Open the form to draft it — key figures are pre-filled from system records.`,
+          idempotencyBase: `ops-report-reminder:${department}:${window.monthKey}`,
+          moduleKey: "department_reports",
+          recipients,
+          sourceId: null,
+          sourceTable: "department_reports",
+          title: `Monthly report due: ${OPS_DEPARTMENT_LABELS[department]}`,
+        });
+        result.departmentReportReminders += queued.queued;
+        result.notificationFailures += queued.failures;
+        result.notificationsQueued += queued.queued;
+      }
+    }
+  }
+
   result.escalated.total =
     result.escalated.staleApprovals +
     result.escalated.staleMaterialRequests +
@@ -943,6 +1126,7 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     result.escalated.staleDeliveryExceptions +
     result.escalated.staleRfqs +
     result.escalated.stalePurchaseOrders +
+    result.escalated.staleDepartmentReports +
     result.escalated.budgetVariance;
 
   return result;

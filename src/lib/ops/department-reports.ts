@@ -159,6 +159,45 @@ export async function fetchOpsDepartmentReportById(
 }
 
 /**
+ * The report this one naturally follows: same department, same cadence,
+ * closest earlier period end. Used for the month-over-month comparison on
+ * the detail page and in the PDF. Ad-hoc reports have no meaningful
+ * predecessor, so they return null.
+ */
+export async function fetchPreviousOpsDepartmentReport(current: {
+  department: OpsDepartmentKey;
+  id: string;
+  period: OpsDepartmentReportPeriod;
+  period_end_date: string;
+}): Promise<OpsDepartmentReport | null> {
+  if (current.period === "ad_hoc") return null;
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("department_reports")
+    .select(REPORT_SELECT)
+    .eq("department", current.department)
+    .eq("period", current.period)
+    .lt("period_end_date", current.period_end_date)
+    .neq("id", current.id)
+    .is("archived_at", null)
+    .order("period_end_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    logOpsServerError(error, {
+      module: "department_reports",
+      action: "fetchPreviousOpsDepartmentReport",
+      entityId: current.id,
+    });
+    return null;
+  }
+
+  return data ? normalize(data as unknown as RawDepartmentReport) : null;
+}
+
+/**
  * Server-side gate that decides whether the current viewer is allowed to
  * read a given report. Used in the detail page to 404 cross-department peeks.
  */

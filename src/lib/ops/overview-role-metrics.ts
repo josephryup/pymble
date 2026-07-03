@@ -260,6 +260,7 @@ export async function fetchOpsOverviewRoleMetrics(): Promise<OpsOverviewRoleMetr
     fetchOpsEscalationSnapshot().catch(() => ({
       staleApprovals: 0,
       staleDeliveryExceptions: 0,
+      staleDepartmentReports: 0,
       staleMaterialRequests: 0,
       stalePaymentRequests: 0,
       staleRfqs: 0,
