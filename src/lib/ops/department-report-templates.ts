@@ -1,4 +1,4 @@
-import type { OpsDepartmentKey } from "@/lib/ops/department-report-permissions";
+﻿import type { OpsDepartmentKey } from "@/lib/ops/department-report-permissions";
 import type { OpsDepartmentReportPeriod } from "@/lib/ops/department-reports";
 
 /**
@@ -18,6 +18,8 @@ export type OpsDeptMetricField = {
   hint?: string;
   /** True when the system can suggest this value from live records. */
   auto?: boolean;
+  /** True when a DROP in this figure is the good outcome (incidents, downtime). */
+  downIsGood?: boolean;
 };
 
 export type OpsDepartmentReportTemplate = {
@@ -39,7 +41,7 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
       { key: "sites_active", label: "Active sites", auto: true },
       { key: "site_reports_filed", label: "Daily site reports filed", auto: true },
       { key: "attendance_entries", label: "Attendance entries logged", auto: true },
-      { key: "delivery_exceptions_reported", label: "Delivery exceptions reported", auto: true },
+      { key: "delivery_exceptions_reported", label: "Delivery exceptions reported", auto: true, downIsGood: true },
       { key: "average_workforce_on_site", label: "Average workforce on site", hint: "Rough daily average across sites." },
     ],
   },
@@ -60,7 +62,7 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
       { key: "rfqs_created", label: "RFQs created", auto: true },
       { key: "purchase_orders_issued", label: "Purchase orders issued", auto: true },
       { key: "purchase_order_value_zmw", label: "Purchase order value (ZMW)", auto: true },
-      { key: "supplier_deliveries_late", label: "Late supplier deliveries" },
+      { key: "supplier_deliveries_late", label: "Late supplier deliveries", downIsGood: true },
     ],
   },
   finance: {
@@ -86,11 +88,11 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
   hse: {
     narrativePrompt: NARRATIVE_SKELETON,
     metrics: [
-      { key: "incidents_reported", label: "Incidents reported", auto: true },
+      { key: "incidents_reported", label: "Incidents reported", auto: true, downIsGood: true },
       { key: "inspections_completed", label: "Inspections completed", auto: true },
       { key: "risk_assessments_done", label: "Risk assessments done", auto: true },
       { key: "toolbox_talks_held", label: "Toolbox talks held" },
-      { key: "lost_time_injuries", label: "Lost-time injuries" },
+      { key: "lost_time_injuries", label: "Lost-time injuries", downIsGood: true },
     ],
   },
   hr: {
@@ -100,7 +102,7 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
       { key: "workers_active", label: "Active site workers", auto: true },
       { key: "leave_requests_received", label: "Leave requests received", auto: true },
       { key: "applications_received", label: "Job applications received", auto: true },
-      { key: "disciplinary_cases", label: "Disciplinary cases" },
+      { key: "disciplinary_cases", label: "Disciplinary cases", downIsGood: true },
     ],
   },
   it: {
@@ -108,9 +110,9 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
     metrics: [
       { key: "tickets_raised", label: "Help-desk tickets raised", auto: true },
       { key: "tickets_resolved", label: "Tickets resolved", auto: true },
-      { key: "tickets_open", label: "Tickets still open", auto: true },
-      { key: "assets_under_repair", label: "Assets under repair", auto: true },
-      { key: "systems_downtime_hours", label: "Systems downtime (hours)" },
+      { key: "tickets_open", label: "Tickets still open", auto: true, downIsGood: true },
+      { key: "assets_under_repair", label: "Assets under repair", auto: true, downIsGood: true },
+      { key: "systems_downtime_hours", label: "Systems downtime (hours)", downIsGood: true },
     ],
   },
   executive: {
@@ -118,7 +120,7 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
     metrics: [
       { key: "revenue_zmw", label: "Revenue (ZMW)" },
       { key: "headline_projects", label: "Headline projects in delivery" },
-      { key: "key_risks", label: "Key risks tracked" },
+      { key: "key_risks", label: "Key risks tracked", downIsGood: true },
     ],
   },
 };

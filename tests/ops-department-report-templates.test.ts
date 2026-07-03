@@ -8,6 +8,7 @@ import {
 } from "../src/lib/ops/department-report-permissions";
 import {
   collectTemplateMetrics,
+  compareReportMetrics,
   defaultReportPeriodRange,
   OPS_DEPARTMENT_REPORT_TEMPLATES,
   suggestedReportTitle,
@@ -63,6 +64,25 @@ describe("department report templates", () => {
     const keys = templateMetricKeys("it");
     assert.ok(keys.has("tickets_raised"));
     assert.ok(!keys.has("sites_active"));
+  });
+});
+
+describe("compareReportMetrics", () => {
+  it("computes deltas and percentages for numeric pairs only", () => {
+    const deltas = compareReportMetrics(
+      { tickets_raised: 8, tickets_open: 2, note: "text", brand_new: 5 },
+      { tickets_raised: 5, tickets_open: 2, note: "old text" },
+    );
+
+    assert.deepEqual(deltas.tickets_raised, { delta: 3, previous: 5, percent: 60 });
+    assert.deepEqual(deltas.tickets_open, { delta: 0, previous: 2, percent: 0 });
+    assert.equal(deltas.note, undefined);
+    assert.equal(deltas.brand_new, undefined);
+  });
+
+  it("returns a null percentage when the previous value was zero", () => {
+    const deltas = compareReportMetrics({ incidents: 2 }, { incidents: 0 });
+    assert.deepEqual(deltas.incidents, { delta: 2, previous: 0, percent: null });
   });
 });
 

@@ -132,12 +132,21 @@ export default async function OpsDepartmentReportDetailPage({
         title={report.title}
         description={`Period ${report.period_start_date} → ${report.period_end_date}. Status: ${report.status.replace("_", " ")}.`}
         actions={
-          <Link
-            className={OPS_SECONDARY_BUTTON_CLASS}
-            href="/ops/department-reports"
-          >
-            All reports
-          </Link>
+          <>
+            <a
+              className={OPS_SECONDARY_BUTTON_CLASS}
+              href={`/api/ops/pdf/department-report/${report.id}`}
+            >
+              <FileDown className="size-4" aria-hidden="true" />
+              Download PDF
+            </a>
+            <Link
+              className={OPS_SECONDARY_BUTTON_CLASS}
+              href="/ops/department-reports"
+            >
+              All reports
+            </Link>
+          </>
         }
       />
 
@@ -164,12 +173,32 @@ export default async function OpsDepartmentReportDetailPage({
 
       {Object.keys(report.metrics).length > 0 ? (
         <section className="rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
-          <h2 className="font-heading text-lg font-bold text-primary-dark">Key figures</h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-heading text-lg font-bold text-primary-dark">Key figures</h2>
+            {previousReport ? (
+              <p className="text-xs text-primary-dark/50">
+                Compared with{" "}
+                <Link
+                  className="font-semibold text-primary-blue hover:underline"
+                  href={`/ops/department-reports/${previousReport.id}`}
+                >
+                  {previousReport.title}
+                </Link>
+              </p>
+            ) : null}
+          </div>
           <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {Object.entries(report.metrics).map(([key, value]) => {
               const templateField = OPS_DEPARTMENT_REPORT_TEMPLATES[report.department].metrics.find(
                 (metric) => metric.key === key,
               );
+              const change = metricDeltas[key];
+              // "Up" is only good when the metric says so — more incidents
+              // rising green would send exactly the wrong message.
+              const improving =
+                change &&
+                change.delta !== 0 &&
+                (templateField?.downIsGood ? change.delta < 0 : change.delta > 0);
               return (
                 <div
                   className="rounded-xl border border-primary-dark/10 bg-primary-dark/[0.02] p-3"
@@ -181,6 +210,22 @@ export default async function OpsDepartmentReportDetailPage({
                   <dd className="mt-1 font-heading text-xl font-bold text-primary-dark">
                     {formatMetricValue(value)}
                   </dd>
+                  {change ? (
+                    <p
+                      className={`mt-1 text-xs font-semibold ${
+                        change.delta === 0
+                          ? "text-primary-dark/50"
+                          : improving
+                            ? "text-emerald-700"
+                            : "text-red-700"
+                      }`}
+                    >
+                      {change.delta > 0 ? "▲" : change.delta < 0 ? "▼" : "•"}{" "}
+                      {change.delta > 0 ? "+" : ""}
+                      {change.delta.toLocaleString("en-ZM")} vs previous
+                      {change.percent !== null ? ` (${change.percent > 0 ? "+" : ""}${change.percent}%)` : ""}
+                    </p>
+                  ) : null}
                 </div>
               );
             })}
