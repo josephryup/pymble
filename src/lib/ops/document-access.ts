@@ -1,4 +1,4 @@
-import { canViewSensitiveOpsFoundation } from "@/lib/ops/permissions";
+import { canViewOpsDocumentVisibility } from "@/lib/ops/document-permissions";
 import type { OpsDocumentStatus, OpsDocumentVisibility, OpsUserRole } from "@/lib/ops/types";
 
 export type OpsDocumentDownloadTarget = {
@@ -16,9 +16,9 @@ export function canDownloadOpsDocument(
     return false;
   }
 
-  return (
-    canViewSensitiveOpsFoundation(actorRole) ||
-    document.visibility === "company" ||
-    document.uploaded_by === actorId
+  return canViewOpsDocumentVisibility(
+    actorRole,
+    document.visibility,
+    document.uploaded_by === actorId,
   );
 }

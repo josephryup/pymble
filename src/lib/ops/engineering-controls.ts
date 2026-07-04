@@ -14,7 +14,7 @@ import {
   type OpsListState,
   type OpsPaginatedResult,
 } from "@/lib/ops/listing";
-import { canViewSensitiveOpsFoundation } from "@/lib/ops/permissions";
+import { canViewOpsDocumentVisibility } from "@/lib/ops/document-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsDocumentStatus,
@@ -507,12 +507,12 @@ export async function fetchDrawingDocumentVersionOptions(limit = 120): Promise<O
     throw documentError;
   }
 
-  const canViewAllDocuments = canViewSensitiveOpsFoundation(profile.role);
-  const visibleDocuments = ((documents ?? []) as unknown as RawDocumentOption[]).filter(
-    (document) =>
-      canViewAllDocuments ||
-      document.visibility === "company" ||
+  const visibleDocuments = ((documents ?? []) as unknown as RawDocumentOption[]).filter((document) =>
+    canViewOpsDocumentVisibility(
+      profile.role,
+      document.visibility,
       document.uploaded_by === profile.id,
+    ),
   );
   const visibleDocumentIds = visibleDocuments.map((document) => document.id);
 

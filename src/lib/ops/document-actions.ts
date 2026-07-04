@@ -7,13 +7,18 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
-import { canMutateOpsDocument } from "@/lib/ops/document-permissions";
+import {
+  assignableOpsDocumentVisibilities,
+  canMutateOpsDocument,
+} from "@/lib/ops/document-permissions";
 import { canManageOps } from "@/lib/ops/permissions";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { deleteOpsR2Object, putOpsR2Object } from "@/lib/ops/r2";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import { safeOpsFileName, validateOpsUploadFile } from "@/lib/ops/upload-validation";
 import type { OpsDocumentStatus, OpsDocumentVisibility, OpsUserRole } from "@/lib/ops/types";
+
+const MAX_ATTACHMENTS_PER_UPLOAD = 10;
 
 const uploadDocumentSchema = z.object({
   category: z
@@ -23,7 +28,7 @@ const uploadDocumentSchema = z.object({
     .max(60),
   description: z.string().trim().max(500).default(""),
   title: z.string().trim().min(2, "Document title is required.").max(160),
-  visibility: z.enum(["company", "restricted", "private"]),
+  visibility: z.enum(["public", "management", "finance", "md_restricted", "private"]),
 });
 
 const documentIdSchema = z.object({
@@ -87,6 +92,111 @@ async function hasOpenDocumentApproval(documentId: string) {
   return data;
 }
 
+type PreparedAttachment = {
+  bytes: Uint8Array;
+  checksum: string;
+  contentType: string;
+  fileName: string;
+  fileSize: number;
+  safeName: string;
+};
+
+/** Validates every file in a multi-file field and reads their bytes. */
+async function prepareAttachments(files: File[]): Promise<PreparedAttachment[]> {
+  const prepared: PreparedAttachment[] = [];
+  for (const candidate of files) {
+    const upload = validateOpsUploadFile(candidate, {
+      empty: "Select at least one file to upload.",
+      tooLarge: "Each file must be 25 MB or smaller.",
+      unsupportedType: "Upload PDF, Word, Excel, CSV, text, JPEG, PNG, or WebP files.",
+    });
+    if (!upload.ok) {
+      documentError(upload.message);
+    }
+    const file = upload.file;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    prepared.push({
+      bytes,
+      checksum: crypto.createHash("sha256").update(bytes).digest("hex"),
+      contentType: file.type,
+      fileName: file.name || safeOpsFileName("document"),
+      fileSize: file.size,
+      safeName: safeOpsFileName(file.name || "document"),
+    });
+  }
+  return prepared;
+}
+
+function collectUploadFiles(formData: FormData): File[] {
+  return [...formData.getAll("documents"), formData.get("document")]
+    .filter((value): value is File => value instanceof File && value.size > 0)
+    .slice(0, MAX_ATTACHMENTS_PER_UPLOAD);
+}
+
+/**
+ * Uploads prepared attachments to R2 and inserts a document_versions row per
+ * file (each row is one attachment in the group). Rolls back every R2 object
+ * and row on any failure. `startVersion` is the first version_number to use.
+ */
+async function persistAttachments(
+  documentId: string,
+  category: string,
+  startVersion: number,
+  attachments: PreparedAttachment[],
+  actorId: string,
+): Promise<{ ids: string[]; keys: string[] }> {
+  const supabase = getOpsSupabaseServiceClient();
+  const keys: string[] = [];
+  const ids: string[] = [];
+
+  for (let index = 0; index < attachments.length; index += 1) {
+    const attachment = attachments[index];
+    const versionNumber = startVersion + index;
+    const key = `documents/${category}/${crypto.randomUUID()}-v${versionNumber}-${attachment.safeName}`;
+
+    try {
+      await putOpsR2Object({ body: attachment.bytes, contentType: attachment.contentType, key });
+      keys.push(key);
+    } catch (uploadError) {
+      await rollbackAttachments(ids, keys);
+      documentError(uploadError instanceof Error ? uploadError.message : "Upload failed.");
+    }
+
+    const { data: version, error: versionError } = await supabase
+      .from("document_versions")
+      .insert({
+        checksum_sha256: attachment.checksum,
+        content_type: attachment.contentType,
+        document_id: documentId,
+        file_name: attachment.fileName,
+        file_size_bytes: attachment.fileSize,
+        r2_key: key,
+        uploaded_by: actorId,
+        version_number: versionNumber,
+      })
+      .select("id")
+      .single<{ id: string }>();
+
+    if (versionError || !version) {
+      await rollbackAttachments(ids, keys);
+      documentError(versionError?.message ?? "An attachment could not be logged.");
+    }
+    ids.push(version.id);
+  }
+
+  return { ids, keys };
+}
+
+async function rollbackAttachments(versionIds: string[], keys: string[]) {
+  const supabase = getOpsSupabaseServiceClient();
+  await Promise.all([
+    ...keys.map((key) => deleteOpsR2Object(key).catch(() => null)),
+    ...(versionIds.length > 0
+      ? [supabase.from("document_versions").delete().in("id", versionIds).then(() => null)]
+      : []),
+  ]);
+}
+
 export async function uploadOpsDocumentAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
@@ -98,41 +208,30 @@ export async function uploadOpsDocumentAction(formData: FormData) {
     category: field(formData, "category") || "general",
     description: field(formData, "description"),
     title: field(formData, "title"),
-    visibility: field(formData, "visibility") || "restricted",
+    visibility: field(formData, "visibility") || "private",
   });
 
   if (!parsed.success) {
     documentError(parsed.error.issues[0]?.message ?? "Check the document details.");
   }
 
-  const upload = validateOpsUploadFile(formData.get("document"), {
-    empty: "Select a document to upload.",
-    tooLarge: "Documents must be 25 MB or smaller.",
-    unsupportedType: "Upload a PDF, Word, Excel, CSV, text, JPEG, PNG, or WebP file.",
-  });
-
-  if (!upload.ok) {
-    documentError(upload.message);
+  if (!assignableOpsDocumentVisibilities(profile.role).includes(parsed.data.visibility)) {
+    documentError("You cannot file a document under that visibility level.");
   }
 
-  const file = upload.file;
+  const files = collectUploadFiles(formData);
+  if (files.length === 0) {
+    documentError("Select at least one file to upload.");
+  }
 
-  const fileBytes = new Uint8Array(await file.arrayBuffer());
-  const checksum = crypto.createHash("sha256").update(fileBytes).digest("hex");
-  const safeName = safeOpsFileName(file.name || "document");
-  const key = `documents/${parsed.data.category}/${crypto.randomUUID()}-${safeName}`;
-
-  await putOpsR2Object({
-    body: fileBytes,
-    contentType: file.type,
-    key,
-  });
+  const attachments = await prepareAttachments(files);
 
   const supabase = getOpsSupabaseServiceClient();
   const { data: document, error: documentErrorResult } = await supabase
     .from("documents")
     .insert({
       category: parsed.data.category,
+      current_version_number: attachments.length,
       description: parsed.data.description,
       status: "active",
       title: parsed.data.title,
@@ -143,40 +242,16 @@ export async function uploadOpsDocumentAction(formData: FormData) {
     .single<{ id: string }>();
 
   if (documentErrorResult || !document) {
-    await deleteOpsR2Object(key).catch(() => null);
-    documentError(documentErrorResult?.message ?? "The file was uploaded but could not be logged.");
+    documentError(documentErrorResult?.message ?? "The document group could not be created.");
   }
 
-  const { data: version, error: versionError } = await supabase
-    .from("document_versions")
-    .insert({
-      checksum_sha256: checksum,
-      content_type: file.type,
-      document_id: document.id,
-      file_name: file.name || safeName,
-      file_size_bytes: file.size,
-      r2_key: key,
-      uploaded_by: profile.id,
-      version_number: 1,
-    })
-    .select("id")
-    .single<{ id: string }>();
-
-  if (versionError || !version) {
-    await Promise.all([
-      deleteOpsR2Object(key).catch(() => null),
-      (async () => {
-        await supabase
-          .from("documents")
-          .update({
-            archived_at: new Date().toISOString(),
-            status: "archived",
-          })
-          .eq("id", document.id);
-      })().catch(() => null),
-    ]);
-    documentError(versionError?.message ?? "The document was created but the version was not logged.");
-  }
+  const { ids } = await persistAttachments(
+    document.id,
+    parsed.data.category,
+    1,
+    attachments,
+    profile.id,
+  );
 
   await recordOpsAuditEvent({
     action: "document.uploaded",
@@ -184,146 +259,159 @@ export async function uploadOpsDocumentAction(formData: FormData) {
     entityId: document.id,
     entityType: "document",
     metadata: {
+      attachment_count: attachments.length,
       category: parsed.data.category,
-      content_type: file.type,
-      file_name: file.name || safeName,
-      file_size_bytes: file.size,
-      version_id: version.id,
+      file_names: attachments.map((attachment) => attachment.fileName),
+      version_ids: ids,
       visibility: parsed.data.visibility,
     },
     moduleKey: "documents",
     sourceId: document.id,
     sourceTable: "documents",
-    summary: `Uploaded ${parsed.data.title}`,
+    summary: `Uploaded ${parsed.data.title} (${attachments.length} file${attachments.length === 1 ? "" : "s"})`,
   }).catch(() => null);
 
   revalidatePath("/ops/documents");
   redirect("/ops/documents?created=document");
 }
 
-export async function uploadOpsDocumentVersionAction(formData: FormData) {
+export async function addOpsDocumentAttachmentAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
-    documentError("Your role cannot upload document versions yet.");
-  }
-
-  const parsed = documentIdSchema.safeParse({
-    document_id: field(formData, "document_id"),
-  });
-
+  const parsed = documentIdSchema.safeParse({ document_id: field(formData, "document_id") });
   if (!parsed.success) {
     documentError(parsed.error.issues[0]?.message ?? "Select a document.");
   }
 
   const document = await fetchDocumentForMutation(parsed.data.document_id);
-
   if (!document) {
     documentError("Document was not found.");
   }
-
   if (document.status === "archived") {
-    documentError("Archived documents cannot receive new versions.");
+    documentError("Archived documents cannot receive new files.");
   }
-
   if (!canMutateDocument(profile.id, profile.role, document)) {
-    documentError("You can only replace documents you manage.");
+    documentError("You can only add files to documents you manage.");
   }
 
   const openApproval = await hasOpenDocumentApproval(document.id);
-
   if (openApproval) {
-    documentError("Resolve the open approval before uploading a new version.");
+    documentError("Resolve the open approval before adding files.");
   }
 
-  const upload = validateOpsUploadFile(formData.get("document"), {
-    empty: "Select a replacement document.",
-    tooLarge: "Documents must be 25 MB or smaller.",
-    unsupportedType: "Upload a PDF, Word, Excel, CSV, text, JPEG, PNG, or WebP file.",
-  });
-
-  if (!upload.ok) {
-    documentError(upload.message);
+  const files = collectUploadFiles(formData);
+  if (files.length === 0) {
+    documentError("Select at least one file to add.");
   }
+  const attachments = await prepareAttachments(files);
 
-  const file = upload.file;
-
-  const nextVersionNumber = document.current_version_number + 1;
-  const fileBytes = new Uint8Array(await file.arrayBuffer());
-  const checksum = crypto.createHash("sha256").update(fileBytes).digest("hex");
-  const safeName = safeOpsFileName(file.name || "document");
-  const key = `documents/${document.category}/${crypto.randomUUID()}-v${nextVersionNumber}-${safeName}`;
-
-  await putOpsR2Object({
-    body: fileBytes,
-    contentType: file.type,
-    key,
-  });
+  const { ids } = await persistAttachments(
+    document.id,
+    document.category,
+    document.current_version_number + 1,
+    attachments,
+    profile.id,
+  );
 
   const supabase = getOpsSupabaseServiceClient();
-  const { data: version, error: versionError } = await supabase
-    .from("document_versions")
-    .insert({
-      checksum_sha256: checksum,
-      content_type: file.type,
-      document_id: document.id,
-      file_name: file.name || safeName,
-      file_size_bytes: file.size,
-      r2_key: key,
-      uploaded_by: profile.id,
-      version_number: nextVersionNumber,
-    })
-    .select("id")
-    .single<{ id: string }>();
-
-  if (versionError || !version) {
-    await deleteOpsR2Object(key).catch(() => null);
-    documentError(versionError?.message ?? "The new version could not be logged.");
-  }
-
-  const { data: updatedDocument, error: documentUpdateError } = await supabase
+  await supabase
     .from("documents")
-    .update({
-      current_version_number: nextVersionNumber,
-      status: "active",
-    })
-    .eq("id", document.id)
-    .eq("current_version_number", document.current_version_number)
-    .select("id")
-    .maybeSingle<{ id: string }>();
-
-  if (documentUpdateError || !updatedDocument) {
-    await Promise.all([
-      deleteOpsR2Object(key).catch(() => null),
-      supabase.from("document_versions").delete().eq("id", version.id).then(() => null),
-    ]);
-    documentError(
-      documentUpdateError?.message ??
-        "Another version was uploaded first. Refresh the document library and try again.",
-    );
-  }
+    .update({ current_version_number: document.current_version_number + attachments.length })
+    .eq("id", document.id);
 
   await recordOpsAuditEvent({
-    action: "document.version_uploaded",
+    action: "document.attachment_added",
     actorUserId: profile.id,
     entityId: document.id,
     entityType: "document",
     metadata: {
-      content_type: file.type,
-      file_name: file.name || safeName,
-      file_size_bytes: file.size,
-      previous_version_number: document.current_version_number,
-      version_id: version.id,
-      version_number: nextVersionNumber,
+      attachment_count: attachments.length,
+      file_names: attachments.map((attachment) => attachment.fileName),
+      version_ids: ids,
     },
     moduleKey: "documents",
     sourceId: document.id,
     sourceTable: "documents",
-    summary: `Uploaded version ${nextVersionNumber} for ${document.title}`,
+    summary: `Added ${attachments.length} file${attachments.length === 1 ? "" : "s"} to ${document.title}`,
   }).catch(() => null);
 
   revalidatePath("/ops/documents");
-  redirect("/ops/documents?updated=version_uploaded");
+  redirect("/ops/documents?updated=attachment_added");
+}
+
+const attachmentIdSchema = z.object({
+  document_id: z.string().uuid("Select a document."),
+  version_id: z.string().uuid("Select a file."),
+});
+
+export async function removeOpsDocumentAttachmentAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = attachmentIdSchema.safeParse({
+    document_id: field(formData, "document_id"),
+    version_id: field(formData, "version_id"),
+  });
+  if (!parsed.success) {
+    documentError(parsed.error.issues[0]?.message ?? "Select a file to remove.");
+  }
+
+  const document = await fetchDocumentForMutation(parsed.data.document_id);
+  if (!document) {
+    documentError("Document was not found.");
+  }
+  if (!canMutateDocument(profile.id, profile.role, document)) {
+    documentError("You can only remove files from documents you manage.");
+  }
+
+  const openApproval = await hasOpenDocumentApproval(document.id);
+  if (openApproval) {
+    documentError("Resolve the open approval before removing files.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: attachments, error: countError } = await supabase
+    .from("document_versions")
+    .select("id, r2_key")
+    .eq("document_id", document.id);
+
+  if (countError) {
+    documentError(countError.message);
+  }
+
+  const rows = (attachments ?? []) as Array<{ id: string; r2_key: string }>;
+  const target = rows.find((row) => row.id === parsed.data.version_id);
+  if (!target) {
+    documentError("That file is not part of this document.");
+  }
+  if (rows.length <= 1) {
+    documentError("A document needs at least one file. Archive the document instead.");
+  }
+
+  const { error: deleteError } = await supabase
+    .from("document_versions")
+    .delete()
+    .eq("id", target.id);
+
+  if (deleteError) {
+    documentError(deleteError.message);
+  }
+
+  await deleteOpsR2Object(target.r2_key).catch(() => null);
+
+  await recordOpsAuditEvent({
+    action: "document.attachment_removed",
+    actorUserId: profile.id,
+    entityId: document.id,
+    entityType: "document",
+    metadata: { version_id: target.id },
+    moduleKey: "documents",
+    sourceId: document.id,
+    sourceTable: "documents",
+    summary: `Removed a file from ${document.title}`,
+  }).catch(() => null);
+
+  revalidatePath("/ops/documents");
+  redirect("/ops/documents?updated=attachment_removed");
 }
 
 export async function archiveOpsDocumentAction(formData: FormData) {

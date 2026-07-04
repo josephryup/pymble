@@ -51,7 +51,12 @@ export type OpsApprovalStatus =
   | "closed";
 export type OpsApprovalStepStatus = "pending" | "approved" | "rejected" | "skipped" | "cancelled";
 export type OpsDocumentStatus = "active" | "superseded" | "archived";
-export type OpsDocumentVisibility = "company" | "restricted" | "private";
+export type OpsDocumentVisibility =
+  | "public"
+  | "management"
+  | "finance"
+  | "md_restricted"
+  | "private";
 export type OpsMaterialRequestStatus =
   | "draft"
   | "submitted"

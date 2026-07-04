@@ -63,18 +63,24 @@ describe("approval decision guards", () => {
 });
 
 describe("document mutation guards", () => {
-  it("allows sensitive foundation roles or the uploader", () => {
+  it("allows super-admins (owner/developer) or the uploader only", () => {
     assert.equal(
       canMutateOpsDocument("developer-1", "developer", { uploaded_by: "someone-else" }),
       true,
     );
     assert.equal(
-      canMutateOpsDocument("md-1", "managing_director", { uploaded_by: "someone-else" }),
+      canMutateOpsDocument("owner-1", "owner", { uploaded_by: "someone-else" }),
       true,
     );
     assert.equal(
       canMutateOpsDocument("uploader-1", "engineer", { uploaded_by: "uploader-1" }),
       true,
+    );
+    // A plain MD does not edit documents they do not own — they approve via
+    // the approval flow instead (least privilege).
+    assert.equal(
+      canMutateOpsDocument("md-1", "managing_director", { uploaded_by: "someone-else" }),
+      false,
     );
     assert.equal(
       canMutateOpsDocument("engineer-1", "engineer", { uploaded_by: "someone-else" }),
@@ -97,7 +103,7 @@ describe("document download guards", () => {
       canDownloadOpsDocument("engineer", "engineer-1", {
         status: "active",
         uploaded_by: "someone-else",
-        visibility: "company",
+        visibility: "public",
       }),
       true,
     );
@@ -116,7 +122,7 @@ describe("document download guards", () => {
       canDownloadOpsDocument("engineer", "engineer-1", {
         status: "archived",
         uploaded_by: "engineer-1",
-        visibility: "company",
+        visibility: "public",
       }),
       false,
     );

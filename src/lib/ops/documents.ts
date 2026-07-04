@@ -5,9 +5,17 @@ import {
   type OpsListState,
   type OpsPaginatedResult,
 } from "@/lib/ops/listing";
-import { canViewSensitiveOpsFoundation } from "@/lib/ops/permissions";
+import {
+  canViewOpsDocumentVisibility,
+  isOpsDocumentSuperAdmin,
+} from "@/lib/ops/document-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
-import type { OpsApprovalStatus, OpsDocumentStatus, OpsDocumentVisibility } from "@/lib/ops/types";
+import type {
+  OpsApprovalStatus,
+  OpsDocumentStatus,
+  OpsDocumentVisibility,
+  OpsUserRole,
+} from "@/lib/ops/types";
 
 export type OpsDocumentVersionSummary = {
   checksum_sha256: string | null;
@@ -124,6 +132,23 @@ function normalizeUploader(uploader: RawDocumentWithUploader["uploader"]) {
   return Array.isArray(uploader) ? (uploader[0] ?? null) : uploader;
 }
 
+const ALL_VISIBILITIES: OpsDocumentVisibility[] = [
+  "public",
+  "management",
+  "finance",
+  "md_restricted",
+  "private",
+];
+
+/** Tiers a role can see regardless of uploader — pushed to the DB so
+ * pagination counts stay exact. Own uploads are added via an OR on
+ * uploaded_by, and super-admins bypass entirely. */
+function visibleTiersForRole(role: OpsUserRole): OpsDocumentVisibility[] {
+  return ALL_VISIBILITIES.filter((visibility) =>
+    canViewOpsDocumentVisibility(role, visibility, false),
+  );
+}
+
 function versionsByDocumentId(versions: RawDocumentVersion[]) {
   const grouped = new Map<string, OpsDocumentVersionSummary[]>();
 
@@ -195,7 +220,7 @@ async function fetchOpsDocumentLibraryItems(
 ) {
   const { profile } = await requireOpsUser();
   const supabase = getOpsSupabaseServiceClient();
-  const canViewAll = canViewSensitiveOpsFoundation(profile.role);
+  const isSuperAdmin = isOpsDocumentSuperAdmin(profile.role);
 
   let documentQuery = supabase
     .from("documents")
@@ -224,8 +249,13 @@ async function fetchOpsDocumentLibraryItems(
     documentQuery = documentQuery.ilike("title", searchPattern);
   }
 
-  if (!canViewAll) {
-    documentQuery = documentQuery.or(`visibility.eq.company,uploaded_by.eq.${profile.id}`);
+  if (!isSuperAdmin) {
+    // Exact tier gate pushed to the DB (pagination-safe): tiers this role can
+    // see, plus the viewer's own uploads.
+    const tiers = visibleTiersForRole(profile.role);
+    documentQuery = documentQuery.or(
+      `visibility.in.(${tiers.join(",")}),uploaded_by.eq.${profile.id}`,
+    );
   }
 
   const { data: documents, error: documentError, count } = await (listState
@@ -246,12 +276,13 @@ async function fetchOpsDocumentLibraryItems(
     };
   }
 
+  // All attachments in each group (every version row is a file in the group).
   const versionQuery = supabase
     .from("document_versions")
     .select(
       "id, document_id, version_number, file_name, content_type, file_size_bytes, checksum_sha256, uploaded_by, created_at",
     )
-    .or(currentVersionFilter(visibleDocuments))
+    .in("document_id", documentIds)
     .order("version_number", { ascending: false });
 
   const approvalQuery = supabase
@@ -337,12 +368,13 @@ export async function fetchOpsDocumentById(documentId: string) {
   }
 
   const rawDocument = document as unknown as RawDocumentWithUploader;
-  const canViewAll = canViewSensitiveOpsFoundation(profile.role);
 
   if (
-    !canViewAll &&
-    rawDocument.visibility !== "company" &&
-    rawDocument.uploaded_by !== profile.id
+    !canViewOpsDocumentVisibility(
+      profile.role,
+      rawDocument.visibility,
+      rawDocument.uploaded_by === profile.id,
+    )
   ) {
     return null;
   }
@@ -443,10 +475,12 @@ export async function fetchOpsDocumentsForRecord(input: FetchOpsDocumentsForReco
     throw documentError;
   }
 
-  const canViewAll = canViewSensitiveOpsFoundation(profile.role);
-  const visibleDocuments = ((documents ?? []) as RawDocument[]).filter(
-    (document) =>
-      canViewAll || document.visibility === "company" || document.uploaded_by === profile.id,
+  const visibleDocuments = ((documents ?? []) as RawDocument[]).filter((document) =>
+    canViewOpsDocumentVisibility(
+      profile.role,
+      document.visibility,
+      document.uploaded_by === profile.id,
+    ),
   );
   const visibleDocumentIds = visibleDocuments.map((document) => document.id);
 
@@ -529,10 +563,12 @@ export async function fetchOpsDocumentsForRecords(input: FetchOpsDocumentsForRec
     throw documentError;
   }
 
-  const canViewAll = canViewSensitiveOpsFoundation(profile.role);
-  const visibleDocuments = ((documents ?? []) as RawDocument[]).filter(
-    (document) =>
-      canViewAll || document.visibility === "company" || document.uploaded_by === profile.id,
+  const visibleDocuments = ((documents ?? []) as RawDocument[]).filter((document) =>
+    canViewOpsDocumentVisibility(
+      profile.role,
+      document.visibility,
+      document.uploaded_by === profile.id,
+    ),
   );
   const visibleDocumentIds = visibleDocuments.map((document) => document.id);
 

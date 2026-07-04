@@ -1,27 +1,39 @@
-import { Archive, Download, FileText, LibraryBig, Send, Shield, Upload, UploadCloud } from "lucide-react";
+import {
+  Archive,
+  Download,
+  FileText,
+  LibraryBig,
+  Lock,
+  Plus,
+  Send,
+  Shield,
+  Trash2,
+  Upload,
+  UploadCloud,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
-import {
-  OpsMobileRecordCard,
-  OpsMobileRecordList,
-  OpsMobileRecordRow,
-} from "@/components/ops/OpsMobileRecord";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
+  addOpsDocumentAttachmentAction,
   archiveOpsDocumentAction,
+  removeOpsDocumentAttachmentAction,
   requestDocumentApprovalAction,
   uploadOpsDocumentAction,
-  uploadOpsDocumentVersionAction,
 } from "@/lib/ops/document-actions";
+import {
+  assignableOpsDocumentVisibilities,
+  canMutateOpsDocument,
+  isOpsDocumentSuperAdmin,
+  OPS_DOCUMENT_VISIBILITY_LABELS,
+  OPS_DOCUMENT_VISIBILITY_SHORT,
+} from "@/lib/ops/document-permissions";
 import { fetchPaginatedOpsDocumentLibrary, type OpsDocumentLibraryItem } from "@/lib/ops/documents";
 import { parseOpsListState } from "@/lib/ops/listing";
-import {
-  canAccessOpsHref,
-  canManageOps,
-  canViewSensitiveOpsFoundation,
-} from "@/lib/ops/permissions";
+import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
+import type { OpsApprovalStatus, OpsDocumentStatus, OpsDocumentVisibility } from "@/lib/ops/types";
 import {
   OPS_DANGER_BUTTON_CLASS,
   OPS_FOCUS_CLASS,
@@ -30,14 +42,12 @@ import {
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
-  OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
 } from "@/lib/ops/ui";
-import type { OpsApprovalStatus, OpsDocumentStatus, OpsDocumentVisibility } from "@/lib/ops/types";
 
-type PageProps = {
-  searchParams?: Promise<OpsSearchParams>;
-};
+const FILE_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp";
+
+type PageProps = { searchParams?: Promise<OpsSearchParams> };
 
 const DOCUMENT_CATEGORIES = [
   { label: "General", value: "general" },
@@ -53,47 +63,49 @@ const DOCUMENT_CATEGORIES = [
   { label: "Commercial", value: "commercial" },
 ] as const;
 
+const VISIBILITIES: OpsDocumentVisibility[] = [
+  "public",
+  "management",
+  "finance",
+  "md_restricted",
+  "private",
+];
+
 function documentCategoryFromParam(value: string | undefined) {
   return DOCUMENT_CATEGORIES.some((category) => category.value === value) ? value : undefined;
 }
 
+function documentVisibilityFromParam(value: string | undefined) {
+  return VISIBILITIES.includes(value as OpsDocumentVisibility)
+    ? (value as OpsDocumentVisibility)
+    : undefined;
+}
+
 function statusClass(status: OpsDocumentStatus) {
-  if (status === "active") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "superseded") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
+  if (status === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "superseded") return "border-orange-200 bg-orange-50 text-orange-700";
   return "border-primary-dark/15 bg-primary-dark/[0.03] text-primary-dark/55";
 }
 
 function visibilityClass(visibility: OpsDocumentVisibility) {
-  if (visibility === "company") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
+  switch (visibility) {
+    case "public":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "management":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
+    case "finance":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "md_restricted":
+      return "border-purple-200 bg-purple-50 text-purple-700";
+    default:
+      return "border-red-200 bg-red-50 text-red-700";
   }
-
-  if (visibility === "private") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-primary-dark/15 bg-white text-primary-dark/65";
 }
 
 function approvalClass(status: OpsApprovalStatus | null) {
-  if (status === "approved") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "rejected" || status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted" || status === "in_review") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
+  if (status === "approved") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "rejected" || status === "cancelled") return "border-red-200 bg-red-50 text-red-700";
+  if (status === "submitted" || status === "in_review") return "border-sky-200 bg-sky-50 text-sky-700";
   return "border-primary-dark/15 bg-white text-primary-dark/55";
 }
 
@@ -102,38 +114,17 @@ function formatLabel(value: string) {
 }
 
 function formatApprovalStatus(status: OpsApprovalStatus | null) {
-  if (!status) {
-    return "Not requested";
-  }
-
-  return formatLabel(status);
+  return status ? formatLabel(status) : "Not requested";
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-ZM", { dateStyle: "medium" }).format(new Date(value));
 }
 
 function formatBytes(bytes: number) {
-  if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
-}
-
-function currentVersion(document: OpsDocumentLibraryItem) {
-  return (
-    document.versions.find(
-      (version) => version.version_number === document.current_version_number,
-    ) ?? document.versions[0]
-  );
 }
 
 function canRequestApproval(document: OpsDocumentLibraryItem) {
@@ -148,102 +139,12 @@ function hasOpenApproval(status: OpsApprovalStatus | null) {
   return status === "draft" || status === "submitted" || status === "in_review";
 }
 
-function canManageDocument(
-  document: OpsDocumentLibraryItem,
-  userId: string,
-  canUpload: boolean,
-  canControlAllDocuments: boolean,
-) {
-  return canUpload && (canControlAllDocuments || document.uploaded_by === userId);
-}
-
-type DocumentActionsProps = {
-  canEdit: boolean;
-  document: OpsDocumentLibraryItem;
-  version: ReturnType<typeof currentVersion>;
+const NOTICES: Record<string, string> = {
+  document: "Document group created.",
+  attachment_added: "Files added to the document.",
+  attachment_removed: "File removed from the document.",
+  archived: "Document archived.",
 };
-
-function DocumentActions({ canEdit, document, version }: DocumentActionsProps) {
-  const isApprovalOpen = hasOpenApproval(document.approval_status);
-  const canRequest = canEdit && canRequestApproval(document);
-
-  return (
-    <div className="grid min-w-44 gap-2">
-      {version ? (
-        <a
-          className={OPS_SECONDARY_BUTTON_CLASS}
-          href={`/api/ops/documents/${version.id}/download`}
-        >
-          <Download className="size-4" aria-hidden="true" />
-          Download document
-        </a>
-      ) : null}
-      {document.approval_request_id ? (
-        <Link
-          className={OPS_SECONDARY_BUTTON_CLASS}
-          href={`/ops/approvals/${document.approval_request_id}`}
-        >
-          View approval
-        </Link>
-      ) : null}
-      {canRequest ? (
-        <form action={requestDocumentApprovalAction}>
-          <input name="document_id" type="hidden" value={document.document_id} />
-          <OpsConfirmSubmitButton
-            className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`}
-            confirmText="Confirm request"
-          >
-            <Send className="size-4" aria-hidden="true" />
-            Request approval
-          </OpsConfirmSubmitButton>
-        </form>
-      ) : null}
-      {canEdit && !isApprovalOpen ? (
-        <details className="group rounded-md border border-primary-dark/10">
-          <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
-            <UploadCloud className="size-4" aria-hidden="true" />
-            New version
-          </summary>
-          <form
-            action={uploadOpsDocumentVersionAction}
-            className="grid gap-2 border-t border-primary-dark/10 p-2"
-          >
-            <input name="document_id" type="hidden" value={document.document_id} />
-            <label className={OPS_LABEL_CLASS}>
-              Replacement file
-              <input
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp"
-                className={OPS_INPUT_CLASS}
-                name="document"
-                required
-                type="file"
-              />
-            </label>
-            <OpsConfirmSubmitButton
-              className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`}
-              confirmText="Confirm upload"
-            >
-              <UploadCloud className="size-4" aria-hidden="true" />
-              Upload version
-            </OpsConfirmSubmitButton>
-          </form>
-        </details>
-      ) : null}
-      {canEdit && !isApprovalOpen ? (
-        <form action={archiveOpsDocumentAction}>
-          <input name="document_id" type="hidden" value={document.document_id} />
-          <OpsConfirmSubmitButton
-            className={`${OPS_DANGER_BUTTON_CLASS} w-full`}
-            confirmText="Confirm archive"
-          >
-            <Archive className="size-4" aria-hidden="true" />
-            Archive
-          </OpsConfirmSubmitButton>
-        </form>
-      ) : null}
-    </div>
-  );
-}
 
 export default async function OpsDocumentsPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
@@ -257,27 +158,23 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 10 });
   const category = documentCategoryFromParam(firstParam(params.category));
+  const visibility = documentVisibilityFromParam(firstParam(params.visibility));
   const documentPage = await fetchPaginatedOpsDocumentLibrary({
     category,
     listState,
     query: listState.query,
+    visibility,
   });
   const documents = documentPage.items;
-  const hasActiveListFilter = listState.query.length > 0 || Boolean(category);
+  const hasActiveListFilter = listState.query.length > 0 || Boolean(category) || Boolean(visibility);
   const canUpload = canManageOps(auth.profile.role);
-  const canControlAllDocuments = canViewSensitiveOpsFoundation(auth.profile.role);
+  const assignable = assignableOpsDocumentVisibilities(auth.profile.role);
   const error = firstParam(params.error);
-  const created = firstParam(params.created) === "document";
-  const updated = firstParam(params.updated);
-  const uploadedNewVersion = updated === "version_uploaded";
-  const archived = updated === "archived";
-  const totalVersions = documents.reduce(
-    (sum, document) => sum + document.current_version_number,
-    0,
-  );
-  const controlledDocuments = documents.filter((document) =>
-    ["drawing", "contract", "hse", "hr"].includes(document.category),
-  ).length;
+  const createdNotice = firstParam(params.created) === "document" ? NOTICES.document : null;
+  const updatedNotice = NOTICES[firstParam(params.updated) ?? ""] ?? null;
+  const notice = createdNotice ?? updatedNotice;
+
+  const totalAttachments = documents.reduce((sum, document) => sum + document.versions.length, 0);
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -291,14 +188,14 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
               Document library
             </h1>
             <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
-              Store internal documents securely while keeping searchable metadata, versions,
-              visibility, and audit history.
+              Group related files under one title, control who can see each group, and keep a full
+              audit trail. Downloads run through authenticated app routes only.
             </p>
           </div>
-          <div className="grid gap-3 min-[520px]:grid-cols-3">
+          <div className="grid gap-3 min-[420px]:grid-cols-2">
             <div className="rounded-md border border-primary-dark/10 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
-                Documents
+                Document groups
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
                 {documentPage.pagination.total}
@@ -306,18 +203,10 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
             </div>
             <div className="rounded-md border border-primary-dark/10 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
-                Shown versions
+                Attachments shown
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
-                {totalVersions}
-              </p>
-            </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
-                Controlled shown
-              </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
-                {controlledDocuments}
+                {totalAttachments}
               </p>
             </div>
           </div>
@@ -325,38 +214,13 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
       </section>
 
       {error ? (
-        <div
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
-          role="alert"
-        >
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
           {error}
         </div>
       ) : null}
-
-      {created ? (
-        <div
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
-          role="status"
-        >
-          Document uploaded successfully.
-        </div>
-      ) : null}
-
-      {uploadedNewVersion ? (
-        <div
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
-          role="status"
-        >
-          New document version uploaded successfully.
-        </div>
-      ) : null}
-
-      {archived ? (
-        <div
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
-          role="status"
-        >
-          Document archived successfully.
+      {notice ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700" role="status">
+          {notice}
         </div>
       ) : null}
 
@@ -367,61 +231,52 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
               <Upload className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
-                Upload document
-              </h2>
+              <h2 className="font-heading text-xl font-bold text-primary-dark">New document group</h2>
               <p className="text-sm text-primary-dark/60">
-                Files stay private. The app stores only controlled metadata and version records.
+                One title, one visibility level, and one or more files. Add or remove files later.
               </p>
             </div>
           </div>
-          <form
-            action={uploadOpsDocumentAction}
-            className="grid gap-4"
-          >
+          <form action={uploadOpsDocumentAction} className="grid gap-4">
             <div className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6">
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Title
-                <input className={OPS_INPUT_CLASS} name="title" required />
+                Group title
+                <input className={OPS_INPUT_CLASS} name="title" placeholder="e.g. Rubis contract pack" required />
               </label>
-              <label className={OPS_LABEL_CLASS}>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Category
                 <select className={OPS_INPUT_CLASS} defaultValue="general" name="category">
-                  {DOCUMENT_CATEGORIES.map((category) => (
-                    <option key={category.value} value={category.value}>
-                      {category.label}
+                  {DOCUMENT_CATEGORIES.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
                     </option>
                   ))}
                 </select>
               </label>
-              <label className={OPS_LABEL_CLASS}>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Visibility
-                <select className={OPS_INPUT_CLASS} defaultValue="restricted" name="visibility">
-                  <option value="restricted">Restricted</option>
-                  <option value="company">Company</option>
-                  <option value="private">Private</option>
+                <select className={OPS_INPUT_CLASS} defaultValue="private" name="visibility">
+                  {assignable.map((tier) => (
+                    <option key={tier} value={tier}>
+                      {OPS_DOCUMENT_VISIBILITY_LABELS[tier]}
+                    </option>
+                  ))}
                 </select>
               </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                File
-                <input
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp"
-                  className={OPS_INPUT_CLASS}
-                  name="document"
-                  required
-                  type="file"
-                />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-5`}>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
                 Description
-                <input className={OPS_INPUT_CLASS} name="description" />
+                <input className={OPS_INPUT_CLASS} name="description" placeholder="Optional notes" />
               </label>
-              <div className="flex items-end">
-                <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
-                  <Upload className="size-4" aria-hidden="true" />
-                  Upload
-                </button>
-              </div>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                Files (up to 10)
+                <input accept={FILE_ACCEPT} className={OPS_INPUT_CLASS} multiple name="documents" required type="file" />
+              </label>
+            </div>
+            <div>
+              <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                <Upload className="size-4" aria-hidden="true" />
+                Create document group
+              </button>
             </div>
           </form>
         </section>
@@ -434,11 +289,9 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
       <section className="rounded-lg border border-primary-dark/10 bg-white">
         <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
           <div>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
-              Current documents
-            </h2>
+            <h2 className="font-heading text-xl font-bold text-primary-dark">Documents</h2>
             <p className="mt-1 text-sm text-primary-dark/60">
-              Download links are generated through authenticated app routes.
+              Each group shows every file it holds and who can see it.
             </p>
           </div>
           <LibraryBig className="size-6 shrink-0 text-primary-blue" aria-hidden="true" />
@@ -451,12 +304,21 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
               name: "category",
               options: [
                 { label: "All categories", value: "" },
-                ...DOCUMENT_CATEGORIES.map((item) => ({
-                  label: item.label,
-                  value: item.value,
-                })),
+                ...DOCUMENT_CATEGORIES.map((item) => ({ label: item.label, value: item.value })),
               ],
               value: category ?? "",
+            },
+            {
+              label: "Visibility",
+              name: "visibility",
+              options: [
+                { label: "All visibility", value: "" },
+                ...VISIBILITIES.map((tier) => ({
+                  label: OPS_DOCUMENT_VISIBILITY_SHORT[tier],
+                  value: tier,
+                })),
+              ],
+              value: visibility ?? "",
             },
           ]}
           placeholder="Search by document title"
@@ -465,189 +327,139 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
         />
 
         {documents.length > 0 ? (
-          <>
-            <OpsMobileRecordList>
-              {documents.map((document) => {
-                const version = currentVersion(document);
-                const canEdit = canManageDocument(
-                  document,
-                  auth.profile.id,
-                  canUpload,
-                  canControlAllDocuments,
-                );
+          <ul className="divide-y divide-primary-dark/10">
+            {documents.map((document) => {
+              const canEdit = canMutateOpsDocument(auth.profile.id, auth.profile.role, document) &&
+                (canUpload || isOpsDocumentSuperAdmin(auth.profile.role));
+              const isApprovalOpen = hasOpenApproval(document.approval_status);
+              const canRequest = canEdit && canRequestApproval(document);
+              const attachments = [...document.versions].sort(
+                (a, b) => a.version_number - b.version_number,
+              );
 
-                return (
-                  <OpsMobileRecordCard key={document.document_id}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-heading text-lg font-bold text-primary-dark">
-                          {document.title}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
-                          {formatLabel(document.category)}
-                        </p>
+              return (
+                <li key={document.document_id} className="p-5">
+                  <div className="flex flex-col gap-3 min-[760px]:flex-row min-[760px]:items-start min-[760px]:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-dark text-white">
+                        <FileText className="size-5" aria-hidden="true" />
                       </div>
-                      <span
-                        className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                          document.status,
-                        )}`}
-                      >
+                      <div className="min-w-0">
+                        <p className="font-heading text-lg font-bold text-primary-dark">{document.title}</p>
+                        <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                          {formatLabel(document.category)} · {attachments.length} file
+                          {attachments.length === 1 ? "" : "s"} ·{" "}
+                          {document.uploader?.full_name ?? "Unknown"} · {formatDate(document.created_at)}
+                        </p>
+                        {document.description ? (
+                          <p className="mt-1 max-w-2xl text-sm leading-6 text-primary-dark/60">
+                            {document.description}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${visibilityClass(document.visibility)}`}>
+                        <Lock className="size-3" aria-hidden="true" />
+                        {OPS_DOCUMENT_VISIBILITY_SHORT[document.visibility]}
+                      </span>
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(document.status)}`}>
                         {document.status}
                       </span>
-                    </div>
-                    <OpsMobileRecordRow label="Visibility">
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${visibilityClass(
-                          document.visibility,
-                        )}`}
-                      >
-                        {formatLabel(document.visibility)}
-                      </span>
-                    </OpsMobileRecordRow>
-                    <OpsMobileRecordRow label="Current version">
-                      {version ? `v${version.version_number} / ${formatBytes(version.file_size_bytes)}` : "No version"}
-                    </OpsMobileRecordRow>
-                    <OpsMobileRecordRow label="Uploaded">
-                      {formatDate(document.created_at)}
-                    </OpsMobileRecordRow>
-                    <OpsMobileRecordRow label="Approval">
-                      <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${approvalClass(
-                          document.approval_status,
-                        )}`}
-                      >
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${approvalClass(document.approval_status)}`}>
                         {formatApprovalStatus(document.approval_status)}
                       </span>
-                    </OpsMobileRecordRow>
-                    <DocumentActions canEdit={canEdit} document={document} version={version} />
-                  </OpsMobileRecordCard>
-                );
-              })}
-            </OpsMobileRecordList>
-            <div
-              aria-label="Document library table"
-              className={`hidden md:block ${OPS_TABLE_SCROLL_CLASS}`}
-              tabIndex={0}
-            >
-              <table className="min-w-full divide-y divide-primary-dark/10 text-sm">
-                <caption className="sr-only">
-                  Document library with title, category, visibility, version, uploader, and download
-                  action.
-                </caption>
-                <thead className="bg-primary-dark/[0.03] text-left text-xs uppercase tracking-[0.12em] text-primary-dark/52">
-                  <tr>
-                    <th className="px-5 py-3" scope="col">
-                      Document
-                    </th>
-                    <th className="px-5 py-3" scope="col">
-                      Visibility
-                    </th>
-                    <th className="px-5 py-3" scope="col">
-                      Version
-                    </th>
-                    <th className="px-5 py-3" scope="col">
-                      Uploaded
-                    </th>
-                    <th className="px-5 py-3" scope="col">
-                      Status
-                    </th>
-                    <th className="px-5 py-3" scope="col">
-                      Approval
-                    </th>
-                    <th className="px-5 py-3" scope="col">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-primary-dark/10">
-                  {documents.map((document) => {
-                    const version = currentVersion(document);
-                    const canEdit = canManageDocument(
-                      document,
-                      auth.profile.id,
-                      canUpload,
-                      canControlAllDocuments,
-                    );
+                    </div>
+                  </div>
 
-                    return (
-                      <tr key={document.document_id}>
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-dark text-white">
-                              <FileText className="size-4" aria-hidden="true" />
-                            </div>
-                            <div>
-                              <p className="font-bold text-primary-dark">{document.title}</p>
-                              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
-                                {formatLabel(document.category)}
-                              </p>
-                              {document.description ? (
-                                <p className="mt-1 max-w-md text-xs leading-5 text-primary-dark/55">
-                                  {document.description}
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${visibilityClass(
-                              document.visibility,
-                            )}`}
-                          >
-                            {formatLabel(document.visibility)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 text-primary-dark/70">
-                          {version ? (
-                            <>
-                              <span className="font-semibold text-primary-dark">
-                                v{version.version_number}
-                              </span>
-                              <span className="mt-1 block text-xs text-primary-dark/45">
-                                {version.file_name} / {formatBytes(version.file_size_bytes)}
-                              </span>
-                            </>
-                          ) : (
-                            "No version"
-                          )}
-                        </td>
-                        <td className="px-5 py-4 text-primary-dark/70">
-                          {formatDate(document.created_at)}
-                          {document.uploader ? (
-                            <span className="mt-1 block text-xs text-primary-dark/45">
-                              {document.uploader.full_name}
+                  <ul className="mt-4 grid gap-2">
+                    {attachments.map((attachment) => (
+                      <li
+                        key={attachment.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-2.5"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <FileText className="size-4 shrink-0 text-primary-dark/45" aria-hidden="true" />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold text-primary-dark">
+                              {attachment.file_name}
                             </span>
+                            <span className="block text-xs text-primary-dark/45">
+                              {formatBytes(attachment.file_size_bytes)}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <a
+                            className={OPS_SECONDARY_BUTTON_CLASS}
+                            href={`/api/ops/documents/${attachment.id}/download`}
+                          >
+                            <Download className="size-4" aria-hidden="true" />
+                            Download
+                          </a>
+                          {canEdit && !isApprovalOpen && attachments.length > 1 ? (
+                            <form action={removeOpsDocumentAttachmentAction}>
+                              <input name="document_id" type="hidden" value={document.document_id} />
+                              <input name="version_id" type="hidden" value={attachment.id} />
+                              <OpsConfirmSubmitButton
+                                className={OPS_DANGER_BUTTON_CLASS}
+                                confirmText="Confirm remove"
+                              >
+                                <Trash2 className="size-4" aria-hidden="true" />
+                                Remove
+                              </OpsConfirmSubmitButton>
+                            </form>
                           ) : null}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                              document.status,
-                            )}`}
-                          >
-                            {document.status}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${approvalClass(
-                              document.approval_status,
-                            )}`}
-                          >
-                            {formatApprovalStatus(document.approval_status)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <DocumentActions canEdit={canEdit} document={document} version={version} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {document.approval_request_id ? (
+                      <Link className={OPS_SECONDARY_BUTTON_CLASS} href={`/ops/approvals/${document.approval_request_id}`}>
+                        View approval
+                      </Link>
+                    ) : null}
+                    {canRequest ? (
+                      <form action={requestDocumentApprovalAction}>
+                        <input name="document_id" type="hidden" value={document.document_id} />
+                        <OpsConfirmSubmitButton className={OPS_SECONDARY_BUTTON_CLASS} confirmText="Confirm request">
+                          <Send className="size-4" aria-hidden="true" />
+                          Request approval
+                        </OpsConfirmSubmitButton>
+                      </form>
+                    ) : null}
+                    {canEdit && !isApprovalOpen ? (
+                      <details className="group rounded-md border border-primary-dark/10">
+                        <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+                          <Plus className="size-4" aria-hidden="true" />
+                          Add files
+                        </summary>
+                        <form action={addOpsDocumentAttachmentAction} className="grid gap-2 border-t border-primary-dark/10 p-3">
+                          <input name="document_id" type="hidden" value={document.document_id} />
+                          <input accept={FILE_ACCEPT} className={OPS_INPUT_CLASS} multiple name="documents" required type="file" />
+                          <OpsConfirmSubmitButton className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} confirmText="Confirm upload">
+                            <UploadCloud className="size-4" aria-hidden="true" />
+                            Add to group
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      </details>
+                    ) : null}
+                    {canEdit && !isApprovalOpen ? (
+                      <form action={archiveOpsDocumentAction}>
+                        <input name="document_id" type="hidden" value={document.document_id} />
+                        <OpsConfirmSubmitButton className={OPS_DANGER_BUTTON_CLASS} confirmText="Confirm archive">
+                          <Archive className="size-4" aria-hidden="true" />
+                          Archive group
+                        </OpsConfirmSubmitButton>
+                      </form>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
           <div className="flex min-h-72 flex-col items-center justify-center gap-3 p-8 text-center">
             <Shield className="size-10 text-primary-blue" aria-hidden="true" />
@@ -657,8 +469,8 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
                 {hasActiveListFilter
-                  ? "Adjust the search or category filter to widen the document list."
-                  : "Upload drawings, contracts, delivery notes, HSE records, HR files, finance documents, and procurement documents as the ERP modules come online."}
+                  ? "Adjust the search, category, or visibility filter to widen the list."
+                  : "Create a document group above — give it a title, choose who can see it, and attach one or more files."}
               </p>
             </div>
           </div>
@@ -666,12 +478,8 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
         <OpsPaginationControls
           basePath="/ops/documents"
           filters={[
-            {
-              label: "Category",
-              name: "category",
-              options: [],
-              value: category ?? "",
-            },
+            { label: "Category", name: "category", options: [], value: category ?? "" },
+            { label: "Visibility", name: "visibility", options: [], value: visibility ?? "" },
           ]}
           pagination={documentPage.pagination}
           query={listState.query}
