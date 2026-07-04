@@ -1,4 +1,4 @@
-import { Download, Laptop, Plus, ShieldCheck, Wrench } from "lucide-react";
+import { Cpu, Download, Laptop, Plus, ShieldCheck, Wrench } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -9,6 +9,7 @@ import {
   archiveItAssetAction,
   assignItAssetAction,
   createItAssetAction,
+  updateItAssetSpecsAction,
   updateItAssetStatusAction,
 } from "@/lib/ops/it-asset-actions";
 import { fetchOpsItAssets, fetchOpsItAssetStats } from "@/lib/ops/it-assets";
@@ -205,6 +206,32 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
               Location
               <input className={OPS_INPUT_CLASS} name="location" placeholder="Desk / room / store" />
             </label>
+            <fieldset className="grid gap-4 min-[520px]:grid-cols-2 lg:col-span-6 lg:grid-cols-5">
+              <legend className="mb-2 flex items-center gap-2 text-sm font-bold text-primary-dark">
+                <Cpu className="size-4 text-primary-blue" aria-hidden="true" />
+                Hardware specifications
+              </legend>
+              <label className={OPS_LABEL_CLASS}>
+                Operating system
+                <input className={OPS_INPUT_CLASS} name="operating_system" placeholder="e.g. Windows 11 Pro" />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Processor
+                <input className={OPS_INPUT_CLASS} name="processor" placeholder="e.g. Intel Core i5-1145G7" />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                RAM
+                <input className={OPS_INPUT_CLASS} name="ram" placeholder="e.g. 16 GB DDR4" />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Hard drive / storage
+                <input className={OPS_INPUT_CLASS} name="storage" placeholder="e.g. 512 GB NVMe SSD" />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Hostname
+                <input className={OPS_INPUT_CLASS} name="hostname" placeholder="e.g. PCL-LT-014" />
+              </label>
+            </fieldset>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Purchase date
               <input className={OPS_INPUT_CLASS} name="purchase_date" type="date" />
@@ -262,6 +289,31 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
                     {asset.location ? ` · ${asset.location}` : ""}
                     {asset.warranty_expiry ? ` · Warranty to ${asset.warranty_expiry}` : ""}
                   </p>
+                  {[asset.operating_system, asset.processor, asset.ram, asset.storage, asset.hostname].some(Boolean) ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {[
+                        asset.operating_system,
+                        asset.processor,
+                        asset.ram,
+                        asset.storage,
+                        asset.hostname,
+                      ]
+                        .filter(Boolean)
+                        .map((spec) => (
+                          <span
+                            key={spec}
+                            className="inline-flex items-center gap-1 rounded-full border border-primary-dark/12 bg-primary-dark/[0.03] px-2 py-0.5 text-[11px] font-semibold text-primary-dark/65"
+                          >
+                            <Cpu className="size-3 text-primary-blue/70" aria-hidden="true" />
+                            {spec}
+                          </span>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[11px] font-semibold text-orange-600">
+                      Specs not recorded — add OS, processor, RAM, and storage below.
+                    </p>
+                  )}
                 </div>
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${STATUS_BADGE[asset.status]}`}>
                   {ASSET_STATUS_LABELS[asset.status]}
@@ -302,6 +354,39 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
                       <button className={`${OPS_DANGER_BUTTON_CLASS} w-full`} type="submit">Archive asset</button>
                     </form>
                   </div>
+                  <form
+                    action={updateItAssetSpecsAction}
+                    className="mt-4 grid gap-3 rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                  >
+                    <input name="asset_id" type="hidden" value={asset.id} />
+                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/55 min-[520px]:col-span-2 lg:col-span-6">
+                      <Cpu className="size-3.5 text-primary-blue" aria-hidden="true" />
+                      Hardware specifications
+                    </p>
+                    <label className={OPS_LABEL_CLASS}>
+                      Operating system
+                      <input className={OPS_INPUT_CLASS} defaultValue={asset.operating_system} name="operating_system" placeholder="Windows 11 Pro" />
+                    </label>
+                    <label className={OPS_LABEL_CLASS}>
+                      Processor
+                      <input className={OPS_INPUT_CLASS} defaultValue={asset.processor} name="processor" placeholder="Intel Core i5" />
+                    </label>
+                    <label className={OPS_LABEL_CLASS}>
+                      RAM
+                      <input className={OPS_INPUT_CLASS} defaultValue={asset.ram} name="ram" placeholder="16 GB" />
+                    </label>
+                    <label className={OPS_LABEL_CLASS}>
+                      Hard drive / storage
+                      <input className={OPS_INPUT_CLASS} defaultValue={asset.storage} name="storage" placeholder="512 GB SSD" />
+                    </label>
+                    <label className={OPS_LABEL_CLASS}>
+                      Hostname
+                      <input className={OPS_INPUT_CLASS} defaultValue={asset.hostname} name="hostname" placeholder="PCL-LT-014" />
+                    </label>
+                    <div className="flex items-end">
+                      <button className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} type="submit">Save specs</button>
+                    </div>
+                  </form>
                 </details>
               ) : null}
             </li>

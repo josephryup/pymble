@@ -41,7 +41,17 @@ const optionalDateSchema = z
   })
   .default("");
 
-const assetSchema = z.object({
+const specFieldSchema = z.string().trim().max(120).default("");
+
+const assetSpecsSchema = z.object({
+  hostname: specFieldSchema,
+  operating_system: specFieldSchema,
+  processor: specFieldSchema,
+  ram: specFieldSchema,
+  storage: specFieldSchema,
+});
+
+const assetSchema = assetSpecsSchema.extend({
   asset_type: z.enum(ASSET_TYPES).default("other"),
   assigned_to: z.string().trim().default(""),
   location: z.string().trim().max(160).default(""),
@@ -97,16 +107,21 @@ export async function createItAssetAction(formData: FormData) {
   const parsed = assetSchema.safeParse({
     asset_type: field(formData, "asset_type") || "other",
     assigned_to: field(formData, "assigned_to"),
+    hostname: field(formData, "hostname"),
     location: field(formData, "location"),
     manufacturer: field(formData, "manufacturer"),
     model: field(formData, "model"),
     name: field(formData, "name"),
     notes: field(formData, "notes"),
+    operating_system: field(formData, "operating_system"),
+    processor: field(formData, "processor"),
     purchase_cost: field(formData, "purchase_cost") || "",
     purchase_date: field(formData, "purchase_date"),
+    ram: field(formData, "ram"),
     serial_number: field(formData, "serial_number"),
     site_id: field(formData, "site_id"),
     status: field(formData, "status") || "in_use",
+    storage: field(formData, "storage"),
     warranty_expiry: field(formData, "warranty_expiry"),
   });
 
@@ -122,16 +137,21 @@ export async function createItAssetAction(formData: FormData) {
       asset_type: parsed.data.asset_type,
       assigned_to: assignedTo,
       created_by: profile.id,
+      hostname: parsed.data.hostname,
       location: parsed.data.location,
       manufacturer: parsed.data.manufacturer,
       model: parsed.data.model,
       name: parsed.data.name,
       notes: parsed.data.notes,
+      operating_system: parsed.data.operating_system,
+      processor: parsed.data.processor,
       purchase_cost: nullableNumber(parsed.data.purchase_cost),
       purchase_date: nullableDate(parsed.data.purchase_date),
+      ram: parsed.data.ram,
       serial_number: parsed.data.serial_number,
       site_id: nullableUuid(parsed.data.site_id),
       status: parsed.data.status,
+      storage: parsed.data.storage,
       warranty_expiry: nullableDate(parsed.data.warranty_expiry),
     })
     .select("id, asset_tag")
@@ -205,6 +225,67 @@ export async function updateItAssetStatusAction(formData: FormData) {
 
   revalidatePath(ASSETS_ROUTE);
   redirect(`${ASSETS_ROUTE}?updated=status`);
+}
+
+export async function updateItAssetSpecsAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageItAssets(profile.role)) {
+    assetError("Your role cannot manage IT assets.");
+  }
+
+  const parsed = assetIdSchema.merge(assetSpecsSchema).safeParse({
+    asset_id: field(formData, "asset_id"),
+    hostname: field(formData, "hostname"),
+    operating_system: field(formData, "operating_system"),
+    processor: field(formData, "processor"),
+    ram: field(formData, "ram"),
+    storage: field(formData, "storage"),
+  });
+
+  if (!parsed.success) {
+    assetError(parsed.error.issues[0]?.message ?? "Check the specification details.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: asset, error } = await supabase
+    .from("it_assets")
+    .update({
+      hostname: parsed.data.hostname,
+      operating_system: parsed.data.operating_system,
+      processor: parsed.data.processor,
+      ram: parsed.data.ram,
+      storage: parsed.data.storage,
+    })
+    .eq("id", parsed.data.asset_id)
+    .is("archived_at", null)
+    .select("id, asset_tag, name")
+    .maybeSingle<{ asset_tag: string; id: string; name: string }>();
+
+  if (error || !asset) {
+    assetError(error?.message ?? "The asset was not found or is archived.");
+  }
+
+  await recordOpsAuditEvent({
+    action: "it_asset.specs_updated",
+    actorUserId: profile.id,
+    entityId: asset.id,
+    entityType: "it_asset",
+    metadata: {
+      hostname: parsed.data.hostname,
+      operating_system: parsed.data.operating_system,
+      processor: parsed.data.processor,
+      ram: parsed.data.ram,
+      storage: parsed.data.storage,
+    },
+    moduleKey: "it-assets",
+    sourceId: asset.id,
+    sourceTable: "it_assets",
+    summary: `Updated specifications for ${asset.asset_tag} (${asset.name})`,
+  });
+
+  revalidatePath(ASSETS_ROUTE);
+  redirect(`${ASSETS_ROUTE}?updated=specs`);
 }
 
 export async function assignItAssetAction(formData: FormData) {

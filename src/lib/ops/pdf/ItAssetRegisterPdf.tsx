@@ -68,6 +68,9 @@ export function ItAssetRegisterPdf({ assets, generatedBy, org }: ItAssetRegister
     asset.assignee?.full_name ?? "Unassigned",
     asset.site?.code ?? "—",
     asset.warranty_expiry ?? "—",
+    [asset.operating_system, asset.processor, asset.ram, asset.storage]
+      .filter(Boolean)
+      .join(" · ") || "—",
   ]);
 
   return (
@@ -86,13 +89,14 @@ export function ItAssetRegisterPdf({ assets, generatedBy, org }: ItAssetRegister
         ) : (
           <Table
             columns={[
-              { label: "Tag", widthPct: 14 },
-              { label: "Name", widthPct: 22 },
-              { label: "Type", widthPct: 12 },
-              { label: "Status", widthPct: 12 },
-              { label: "Assigned to", widthPct: 18 },
-              { label: "Site", widthPct: 10 },
-              { label: "Warranty", widthPct: 12 },
+              { label: "Tag", widthPct: 10 },
+              { label: "Name", widthPct: 16 },
+              { label: "Type", widthPct: 8 },
+              { label: "Status", widthPct: 8 },
+              { label: "Assigned to", widthPct: 14 },
+              { label: "Site", widthPct: 6 },
+              { label: "Warranty", widthPct: 10 },
+              { label: "Specifications (OS · CPU · RAM · Storage)", widthPct: 28 },
             ]}
             rows={rows}
           />

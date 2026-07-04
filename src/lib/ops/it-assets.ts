@@ -19,18 +19,23 @@ export type OpsItAssetSummary = {
   assigned_to: string | null;
   assignee: OpsItAssetUserRef | null;
   created_at: string;
+  hostname: string;
   id: string;
   location: string;
   manufacturer: string;
   model: string;
   name: string;
   notes: string;
+  operating_system: string;
+  processor: string;
   purchase_cost: number | null;
   purchase_date: string | null;
+  ram: string;
   serial_number: string;
   site: OpsItAssetSiteRef | null;
   site_id: string | null;
   status: OpsItAssetStatus;
+  storage: string;
   warranty_expiry: string | null;
 };
 
@@ -51,7 +56,8 @@ type RawItAsset = Omit<OpsItAssetSummary, "assignee" | "purchase_cost" | "site">
 };
 
 const ASSET_SELECT =
-  "id, asset_tag, asset_type, name, manufacturer, model, serial_number, status, assigned_to, site_id, location, purchase_date, warranty_expiry, purchase_cost, notes, archived_at, created_at, " +
+  "id, asset_tag, asset_type, name, manufacturer, model, serial_number, status, assigned_to, site_id, location, purchase_date, warranty_expiry, purchase_cost, notes, " +
+  "operating_system, processor, ram, storage, hostname, archived_at, created_at, " +
   "assignee:users!it_assets_assigned_to_fkey(id, full_name), " +
   "site:sites!it_assets_site_id_fkey(id, name, code)";
 
