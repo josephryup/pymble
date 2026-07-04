@@ -49,14 +49,25 @@ test("Finance and HR stay isolated from other departments", () => {
   assert.ok(canViewDepartmentReport("human_resource", "hr"));
 });
 
-test("Projects Manager sees Engineering AND HSE (both route through them)", () => {
-  assert.deepEqual(departmentsCompiledBy("projects_manager").sort(), ["engineering", "hse"]);
-  assert.ok(canViewDepartmentReport("projects_manager", "engineering"));
-  assert.ok(canViewDepartmentReport("projects_manager", "hse"));
-  assert.equal(canViewDepartmentReport("projects_manager", "finance"), false);
-  assert.deepEqual(listAccessibleDepartments("projects_manager").sort(), [
+test("Projects Manager compiles Engineering, HSE and Commercial", () => {
+  assert.deepEqual(departmentsCompiledBy("projects_manager").sort(), [
+    "commercial",
     "engineering",
     "hse",
+  ]);
+  assert.ok(canViewDepartmentReport("projects_manager", "engineering"));
+  assert.ok(canViewDepartmentReport("projects_manager", "hse"));
+  assert.ok(canViewDepartmentReport("projects_manager", "commercial"));
+  // Ops + procurement compiled reports also route TO the PM for review.
+  assert.ok(canViewDepartmentReport("projects_manager", "operations"));
+  assert.ok(canViewDepartmentReport("projects_manager", "procurement"));
+  assert.equal(canViewDepartmentReport("projects_manager", "finance"), false);
+  assert.deepEqual(listAccessibleDepartments("projects_manager").sort(), [
+    "commercial",
+    "engineering",
+    "hse",
+    "operations",
+    "procurement",
   ]);
 });
 
@@ -66,9 +77,13 @@ test("Contributors file individual reports; managers file compiled ones", () => 
   assert.ok(canFileDepartmentReport("hse_officer", "hse", "individual"));
   assert.ok(canFileDepartmentReport("procurement", "procurement", "individual"));
   assert.equal(canFileDepartmentReport("procurement", "procurement", "compiled"), false);
+  // QS follows the engineer workflow: individual to the PM, not compiled.
+  assert.ok(canFileDepartmentReport("quantity_surveyor", "commercial", "individual"));
+  assert.equal(canFileDepartmentReport("quantity_surveyor", "commercial", "compiled"), false);
 
   assert.ok(canFileDepartmentReport("projects_manager", "engineering", "compiled"));
   assert.ok(canFileDepartmentReport("projects_manager", "hse", "compiled"));
+  assert.ok(canFileDepartmentReport("projects_manager", "commercial", "compiled"));
   assert.ok(canFileDepartmentReport("procurement_manager", "procurement", "compiled"));
   assert.ok(canFileDepartmentReport("operations_manager", "operations", "compiled"));
   assert.ok(canFileDepartmentReport("accountant", "finance", "compiled"));
@@ -84,7 +99,7 @@ test("Contributors file individual reports; managers file compiled ones", () => 
 });
 
 test("Reports route per the organogram", () => {
-  // Engineers & HSE -> Projects Manager.
+  // Engineers, HSE & QS -> Projects Manager.
   assert.deepEqual(reviewerRolesForReport({ department: "engineering", scope: "individual" }), [
     "projects_manager",
     "engineering_manager",
@@ -92,17 +107,38 @@ test("Reports route per the organogram", () => {
   assert.deepEqual(reviewerRolesForReport({ department: "hse", scope: "individual" }), [
     "projects_manager",
   ]);
-  // PM's compiled report -> MD.
+  assert.deepEqual(reviewerRolesForReport({ department: "commercial", scope: "individual" }), [
+    "projects_manager",
+  ]);
+  // PM's engineering/commercial compiled reports -> MD; HSE compiled -> MD + GM.
   assert.deepEqual(reviewerRolesForReport({ department: "engineering", scope: "compiled" }), [
     "managing_director",
   ]);
-  // Procurement Manager's compiled report -> GM + MD.
+  assert.deepEqual(reviewerRolesForReport({ department: "commercial", scope: "compiled" }), [
+    "managing_director",
+  ]);
+  assert.deepEqual(reviewerRolesForReport({ department: "hse", scope: "compiled" }), [
+    "managing_director",
+    "general_manager",
+  ]);
+  // Operations compiled -> MD + PM + GM.
+  assert.deepEqual(reviewerRolesForReport({ department: "operations", scope: "compiled" }), [
+    "managing_director",
+    "projects_manager",
+    "general_manager",
+  ]);
+  // Procurement Manager's compiled report -> GM + MD + PM.
   assert.deepEqual(reviewerRolesForReport({ department: "procurement", scope: "compiled" }), [
     "general_manager",
     "managing_director",
+    "projects_manager",
   ]);
-  // Accountant -> MD + GM. IT Manager -> MD only.
+  // Accountant & HR -> MD + GM. IT Manager -> MD only.
   assert.deepEqual(reviewerRolesForReport({ department: "finance", scope: "compiled" }), [
+    "managing_director",
+    "general_manager",
+  ]);
+  assert.deepEqual(reviewerRolesForReport({ department: "hr", scope: "compiled" }), [
     "managing_director",
     "general_manager",
   ]);
@@ -121,6 +157,38 @@ test("Line managers review individual reports but not their own compiled tier", 
   assert.ok(canReviewDepartmentReportRecord("developer", compiled));
   // A peer contributor never reviews.
   assert.equal(canReviewDepartmentReportRecord("engineer", individual), false);
+});
+
+test("Named final reviewers can review and see compiled reports routed to them", () => {
+  const opsCompiled = { department: "operations", scope: "compiled" } as const;
+  const procCompiled = { department: "procurement", scope: "compiled" } as const;
+  assert.ok(canReviewDepartmentReportRecord("projects_manager", opsCompiled));
+  assert.ok(canReviewDepartmentReportRecord("projects_manager", procCompiled));
+  // But NOT the tier-1 reports inside those departments.
+  assert.equal(
+    canReviewDepartmentReportRecord("projects_manager", {
+      department: "operations",
+      scope: "individual",
+    }),
+    false,
+  );
+  assert.ok(
+    canViewDepartmentReportRecord("projects_manager", "user-pm", {
+      created_by: "user-om",
+      department: "operations",
+      scope: "compiled",
+      submitted_by: "user-om",
+    }),
+  );
+  assert.equal(
+    canViewDepartmentReportRecord("projects_manager", "user-pm", {
+      created_by: "user-sup",
+      department: "operations",
+      scope: "individual",
+      submitted_by: "user-sup",
+    }),
+    false,
+  );
 });
 
 test("Contributors never see a colleague's individual report", () => {

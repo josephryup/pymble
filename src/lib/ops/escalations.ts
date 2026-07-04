@@ -1091,7 +1091,7 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     const reviewerRoles =
       report.scope === "individual" && route.compilerRoles.length > 0
         ? route.compilerRoles
-        : LEADERSHIP_ESCALATION_ROLES;
+        : uniqueRoles([...route.finalReviewerRoles, ...LEADERSHIP_ESCALATION_ROLES]);
     const queued = await queueEscalationNotifications({
       actionHref: `/ops/department-reports/${report.id}`,
       body: `${report.title} (${OPS_DEPARTMENT_LABELS[report.department]}) was submitted and is still awaiting review. Please acknowledge it or request revisions.`,

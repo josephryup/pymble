@@ -92,7 +92,7 @@ export const OPS_DEPARTMENT_REPORTING_ROUTES: Record<
   operations: {
     contributorRoles: ["supervisor"],
     compilerRoles: ["operations_manager"],
-    finalReviewerRoles: ["managing_director"],
+    finalReviewerRoles: ["managing_director", "projects_manager", "general_manager"],
   },
   engineering: {
     contributorRoles: ["engineer"],
@@ -102,27 +102,29 @@ export const OPS_DEPARTMENT_REPORTING_ROUTES: Record<
   hse: {
     contributorRoles: ["hse_officer", "hse_assistant_officer"],
     compilerRoles: ["projects_manager"],
-    finalReviewerRoles: ["managing_director"],
+    finalReviewerRoles: ["managing_director", "general_manager"],
   },
   procurement: {
     contributorRoles: ["procurement", "procurement_assistant"],
     compilerRoles: ["procurement_manager"],
-    finalReviewerRoles: ["general_manager", "managing_director"],
+    finalReviewerRoles: ["general_manager", "managing_director", "projects_manager"],
   },
   finance: {
     contributorRoles: [],
     compilerRoles: ["accountant", "finance_manager"],
     finalReviewerRoles: ["managing_director", "general_manager"],
   },
+  // QS follows the engineering workflow: individual report to the Projects
+  // Manager, who compiles commercial upward for the MD.
   commercial: {
-    contributorRoles: [],
-    compilerRoles: ["quantity_surveyor"],
-    finalReviewerRoles: ["managing_director", "general_manager"],
+    contributorRoles: ["quantity_surveyor"],
+    compilerRoles: ["projects_manager"],
+    finalReviewerRoles: ["managing_director"],
   },
   hr: {
     contributorRoles: [],
     compilerRoles: ["human_resource", "hr"],
-    finalReviewerRoles: ["general_manager", "managing_director"],
+    finalReviewerRoles: ["managing_director", "general_manager"],
   },
   it: {
     contributorRoles: [],
@@ -147,6 +149,17 @@ export function departmentsCompiledBy(role: OpsUserRole): OpsDepartmentKey[] {
 export function departmentsContributedBy(role: OpsUserRole): OpsDepartmentKey[] {
   return (Object.keys(OPS_DEPARTMENT_REPORTING_ROUTES) as OpsDepartmentKey[]).filter(
     (department) => OPS_DEPARTMENT_REPORTING_ROUTES[department].contributorRoles.includes(role),
+  );
+}
+
+/**
+ * Departments whose COMPILED reports route to this role for final review
+ * (e.g. the Projects Manager receives the Operations and Procurement
+ * compiled reports).
+ */
+export function departmentsFinallyReviewedBy(role: OpsUserRole): OpsDepartmentKey[] {
+  return (Object.keys(OPS_DEPARTMENT_REPORTING_ROUTES) as OpsDepartmentKey[]).filter(
+    (department) => OPS_DEPARTMENT_REPORTING_ROUTES[department].finalReviewerRoles.includes(role),
   );
 }
 
@@ -198,18 +211,20 @@ export function canSubmitDepartmentReport(role: OpsUserRole) {
 
 /**
  * Record-level review gate. MD/GM/Developer can always review; a compiler
- * (e.g. Projects Manager) can review the INDIVIDUAL reports routed to them,
- * but their own compiled report still needs leadership.
+ * (e.g. Projects Manager) reviews the INDIVIDUAL reports routed to them; a
+ * named final reviewer reviews the COMPILED reports routed to them (e.g. the
+ * PM on the Operations compiled report). A compiler's own compiled report
+ * still needs its final reviewers.
  */
 export function canReviewDepartmentReportRecord(
   role: OpsUserRole,
   report: { department: OpsDepartmentKey; scope: OpsDepartmentReportScope },
 ) {
   if (canReviewDepartmentReport(role)) return true;
-  return (
-    report.scope === "individual" &&
-    OPS_DEPARTMENT_REPORTING_ROUTES[report.department].compilerRoles.includes(role)
-  );
+  const route = OPS_DEPARTMENT_REPORTING_ROUTES[report.department];
+  return report.scope === "individual"
+    ? route.compilerRoles.includes(role)
+    : route.finalReviewerRoles.includes(role);
 }
 
 /**
@@ -236,6 +251,10 @@ export function canViewDepartmentReportRecord(
   const own = departmentForRole(role);
   const compiled = departmentsCompiledBy(role);
   if (compiled.includes(report.department)) return true;
+  if (report.scope === "compiled" && departmentsFinallyReviewedBy(role).includes(report.department)) {
+    // Named final reviewers see the compiled reports routed to them.
+    return true;
+  }
   if (own === report.department) {
     // Department mates see the compiled report, never each other's tier-1s.
     return report.scope === "compiled";
@@ -277,19 +296,24 @@ export function canViewDepartmentReport(
 ) {
   if (isLeadershipRole(role)) return true;
   if (departmentsCompiledBy(role).includes(reportDepartment)) return true;
+  if (departmentsFinallyReviewedBy(role).includes(reportDepartment)) return true;
   const own = departmentForRole(role);
   return own !== null && own === reportDepartment;
 }
 
 /**
  * List of departments a viewer can browse. Leadership sees all; managers see
- * their own plus the departments they compile; contributors see their own.
+ * their own, the departments they compile, and the departments whose
+ * compiled reports route to them; contributors see their own.
  */
 export function listAccessibleDepartments(role: OpsUserRole): OpsDepartmentKey[] {
   if (isLeadershipRole(role)) {
     return Object.keys(OPS_DEPARTMENT_LABELS) as OpsDepartmentKey[];
   }
-  const departments = new Set<OpsDepartmentKey>(departmentsCompiledBy(role));
+  const departments = new Set<OpsDepartmentKey>([
+    ...departmentsCompiledBy(role),
+    ...departmentsFinallyReviewedBy(role),
+  ]);
   const own = departmentForRole(role);
   if (own) departments.add(own);
   return Array.from(departments);

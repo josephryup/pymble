@@ -1,8 +1,8 @@
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   canViewDepartmentReport,
-  departmentForRole,
-  departmentsCompiledBy,
+  canViewDepartmentReportRecord,
+  listAccessibleDepartments,
   type OpsDepartmentKey,
   type OpsDepartmentReportScope,
 } from "@/lib/ops/department-report-permissions";
@@ -126,9 +126,7 @@ export async function fetchOpsDepartmentReports(
     // Leadership can drill into a specific dept or see all.
     if (deptOverride) query = query.eq("department", deptOverride);
   } else {
-    const own = departmentForRole(role);
-    const compiled = departmentsCompiledBy(role);
-    const visibleDepartments = Array.from(new Set([own, ...compiled].filter(Boolean))) as string[];
+    const visibleDepartments = listAccessibleDepartments(role);
     if (visibleDepartments.length === 0) return [];
 
     const scoped =
@@ -136,14 +134,6 @@ export async function fetchOpsDepartmentReports(
         ? [deptOverride]
         : visibleDepartments;
     query = query.in("department", scoped);
-
-    if (compiled.length === 0) {
-      // Contributors: their own reports plus the department's compiled
-      // reports — never a colleague's individual report (tier isolation).
-      query = query.or(
-        `scope.eq.compiled,created_by.eq.${profile.id},submitted_by.eq.${profile.id}`,
-      );
-    }
   }
 
   const { data, error } = await query;
@@ -154,7 +144,15 @@ export async function fetchOpsDepartmentReports(
     });
     throw error;
   }
-  return ((data ?? []) as unknown as RawDepartmentReport[]).map(normalize);
+  const rows = ((data ?? []) as unknown as RawDepartmentReport[]).map(normalize);
+
+  // Tier isolation is enforced by the same record-level rule the detail page
+  // uses, so the list can never show a row the viewer couldn't open (e.g. a
+  // colleague's individual report, or a tier-1 report in a department whose
+  // compiled output merely routes to this viewer).
+  return rows.filter((report) =>
+    canViewDepartmentReportRecord(role, profile.id, report),
+  );
 }
 
 export async function fetchOpsDepartmentReportById(
