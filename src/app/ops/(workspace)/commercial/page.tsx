@@ -18,8 +18,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  OpsCertifiedScurveChart,
+  OpsCommercialFunnel,
+} from "@/components/ops/OpsCommercialCharts";
 import { OpsCommercialKpiPanel } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
@@ -160,6 +165,7 @@ import type {
   OpsCommercialMarginReport,
   OpsCommercialMarginTone,
 } from "@/lib/ops/commercial-reporting";
+import { fetchOpsCommercialChartData } from "@/lib/ops/commercial-charts";
 import { fetchOpsCommercialKpis } from "@/lib/ops/finance-kpis";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -624,7 +630,12 @@ function CommercialMarginPanel({ report }: { report: OpsCommercialMarginReport }
                       {snapshot.site?.code ?? "Unmapped site"}
                     </p>
                     <h3 className="mt-1 truncate text-sm font-bold text-primary-dark">
-                      {snapshot.site?.name ?? snapshot.siteId}
+                      <Link
+                        className="hover:text-primary-blue hover:underline"
+                        href={`/ops/sites/${snapshot.siteId}`}
+                      >
+                        {snapshot.site?.name ?? snapshot.siteId}
+                      </Link>
                     </h3>
                   </div>
                   <StatusBadge className={marginToneClass(snapshot.tone)} value={marginToneLabel(snapshot.tone)} />
@@ -1655,6 +1666,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     variations,
     claims,
     commercialKpis,
+    commercialCharts,
   ] = await Promise.all([
     fetchActiveSiteOptions(),
     fetchCommercialBoqOptions(),
@@ -1678,6 +1690,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     fetchRecentCommercialVariations(),
     fetchRecentCommercialClaims(),
     fetchOpsCommercialKpis(),
+    fetchOpsCommercialChartData().catch(() => null),
   ]);
   const notice = commercialNotice(params);
   const canCreate = canCreateOpsCommercialRecord(auth.profile.role);
@@ -1849,6 +1862,25 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
       </section>
 
       <OpsCommercialKpiPanel kpis={commercialKpis} />
+
+      {commercialCharts?.hasActivity ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <OpsDashboardPanel
+            eyebrow="Revenue funnel"
+            title="Claimed → certified → invoiced → paid"
+            description="Where value is held up in the certification and payment chain."
+          >
+            <OpsCommercialFunnel stages={commercialCharts.funnel} />
+          </OpsDashboardPanel>
+          <OpsDashboardPanel
+            eyebrow="Certified value"
+            title="Cumulative certified (S-curve)"
+            description="Certified value to date by month, from certified IPCs."
+          >
+            <OpsCertifiedScurveChart points={commercialCharts.scurve} />
+          </OpsDashboardPanel>
+        </div>
+      ) : null}
 
       <CommercialMarginPanel report={marginReport} />
       <CommercialForecastPanel report={forecastReport} />

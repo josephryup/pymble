@@ -19,6 +19,10 @@ import {
   OpsCashflowChartPanel,
   OpsCommercialKpiPanel,
 } from "@/components/ops/OpsFinanceKpiPanels";
+import {
+  OpsCashBalanceTrendChart,
+  OpsRevenueCostTrendChart,
+} from "@/components/ops/OpsGlTrendCharts";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsProjectPnlPanel } from "@/components/ops/OpsProjectPnlPanel";
@@ -38,6 +42,7 @@ import {
   fetchOpsReceivablesAgeing,
   fetchOpsSupplierAgeing,
 } from "@/lib/ops/finance-kpis";
+import { fetchOpsGlMonthlyTrend } from "@/lib/ops/gl-trends";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchOpsProjectPnl } from "@/lib/ops/project-pnl";
 import {
@@ -71,6 +76,7 @@ export default async function OpsFinanceOverviewPage() {
     receivablesAgeing,
     pnl,
     commercialKpis,
+    glTrend,
   ] = await Promise.all([
     fetchOpsFinanceCashflowDashboard(),
     fetchOpsPaymentRequestStats(),
@@ -81,7 +87,11 @@ export default async function OpsFinanceOverviewPage() {
     fetchOpsReceivablesAgeing(),
     fetchOpsProjectPnl(),
     fetchOpsCommercialKpis(),
+    fetchOpsGlMonthlyTrend().catch(() => []),
   ]);
+  const hasGlActivity = glTrend.some(
+    (point) => point.income !== 0 || point.expenses !== 0 || point.cashBalance !== 0,
+  );
 
   const showAccountsLink = canViewOpsChartOfAccounts(profile.role);
 
@@ -185,6 +195,25 @@ export default async function OpsFinanceOverviewPage() {
         />
       </section>
 
+      {hasGlActivity ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <OpsDashboardPanel
+            eyebrow="General ledger"
+            title="Revenue vs expenses by month"
+            description="Posted journals bucketed by calendar month."
+          >
+            <OpsRevenueCostTrendChart points={glTrend} />
+          </OpsDashboardPanel>
+          <OpsDashboardPanel
+            eyebrow="General ledger"
+            title="Cash balance trend"
+            description="Cumulative bank and cash account balance at month end."
+          >
+            <OpsCashBalanceTrendChart points={glTrend} />
+          </OpsDashboardPanel>
+        </div>
+      ) : null}
+
       <OpsCashflowChartPanel data={cashflowChart} />
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -192,6 +221,8 @@ export default async function OpsFinanceOverviewPage() {
           description="Outstanding supplier payment requests by days since submission."
           emptyMessage="No outstanding payment requests."
           eyebrow="Supplier ageing"
+          registerHref="/ops/payment-requests#payment-request-register"
+          registerLabel="Payments"
           summary={supplierAgeing}
           title="Payables ageing 0/30/60/90"
         />
@@ -199,6 +230,8 @@ export default async function OpsFinanceOverviewPage() {
           description="Outstanding sent client invoices by days since issue."
           emptyMessage="No outstanding receivables."
           eyebrow="Receivables ageing"
+          registerHref="/ops/invoices"
+          registerLabel="Invoices"
           summary={receivablesAgeing}
           title="Receivables ageing 0/30/60/90"
         />
@@ -239,7 +272,16 @@ export default async function OpsFinanceOverviewPage() {
                 {variance.rows.map((row) => (
                   <tr className={OPS_TR_CLASS} key={row.id}>
                     <td className={OPS_TD_CLASS}>
-                      <p className="font-bold text-foreground">{row.title}</p>
+                      {row.site ? (
+                        <Link
+                          className="font-bold text-foreground hover:text-primary hover:underline"
+                          href={`/ops/sites/${row.site.id}`}
+                        >
+                          {row.title}
+                        </Link>
+                      ) : (
+                        <p className="font-bold text-foreground">{row.title}</p>
+                      )}
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {row.budget_number}
                         {row.site ? ` · ${row.site.code}` : ""}

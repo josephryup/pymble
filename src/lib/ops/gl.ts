@@ -65,6 +65,82 @@ async function fetchOpsLedgerAccountBalances(): Promise<OpsStatementAccountRow[]
   }));
 }
 
+/**
+ * Period-bounded account balances, aggregated straight from posted journal
+ * lines. The ops_trial_balance view is since-inception; this path powers the
+ * statement period selectors (P&L for a date range, Balance Sheet as at a
+ * date) without waiting for formal period close.
+ */
+async function fetchOpsLedgerAccountBalancesForPeriod(
+  from: string | null,
+  to: string | null,
+): Promise<OpsStatementAccountRow[]> {
+  const supabase = getOpsSupabaseServiceClient();
+
+  let query = supabase
+    .from("journal_lines")
+    .select(
+      [
+        "account_id",
+        "debit",
+        "credit",
+        "entry:journal_entries!journal_lines_entry_id_fkey!inner(entry_date, status)",
+        "account:chart_of_accounts!journal_lines_account_id_fkey(code, name, account_type, account_subtype)",
+      ].join(", "),
+    )
+    .eq("entry.status", "posted")
+    .limit(10000);
+
+  if (from) query = query.gte("entry.entry_date", from);
+  if (to) query = query.lte("entry.entry_date", to);
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  type RawPeriodLine = {
+    account_id: string;
+    debit: number | string;
+    credit: number | string;
+    account:
+      | { code: string; name: string; account_type: OpsGlAccountType; account_subtype: string }
+      | { code: string; name: string; account_type: OpsGlAccountType; account_subtype: string }[]
+      | null;
+  };
+
+  const totals = new Map<string, OpsStatementAccountRow>();
+  for (const raw of (data ?? []) as unknown as RawPeriodLine[]) {
+    const account = Array.isArray(raw.account) ? (raw.account[0] ?? null) : raw.account;
+    if (!account) continue;
+    const existing = totals.get(raw.account_id) ?? {
+      account_id: raw.account_id,
+      code: account.code,
+      name: account.name,
+      account_type: account.account_type,
+      account_subtype: account.account_subtype,
+      debit: 0,
+      credit: 0,
+    };
+    existing.debit = round2(existing.debit + toNumber(raw.debit));
+    existing.credit = round2(existing.credit + toNumber(raw.credit));
+    totals.set(raw.account_id, existing);
+  }
+
+  return Array.from(totals.values()).sort((first, second) =>
+    first.code.localeCompare(second.code),
+  );
+}
+
+export type OpsStatementPeriod = {
+  from?: string | null;
+  to?: string | null;
+};
+
+function hasPeriodBounds(period?: OpsStatementPeriod): period is Required<OpsStatementPeriod> {
+  return Boolean(period && (period.from || period.to));
+}
+
 // ---------------------------------------------------------------------------
 // Trial balance
 // ---------------------------------------------------------------------------
@@ -119,14 +195,16 @@ export async function fetchOpsTrialBalance(): Promise<OpsTrialBalance> {
 // Profit & Loss
 // ---------------------------------------------------------------------------
 
-export async function fetchOpsProfitAndLoss() {
+export async function fetchOpsProfitAndLoss(period?: OpsStatementPeriod) {
   const { profile } = await requireOpsUser();
 
   if (!canViewOpsChartOfAccounts(profile.role)) {
     return summarizeProfitAndLoss([]);
   }
 
-  const rows = await fetchOpsLedgerAccountBalances();
+  const rows = hasPeriodBounds(period)
+    ? await fetchOpsLedgerAccountBalancesForPeriod(period.from ?? null, period.to ?? null)
+    : await fetchOpsLedgerAccountBalances();
   return summarizeProfitAndLoss(rows);
 }
 
@@ -134,14 +212,18 @@ export async function fetchOpsProfitAndLoss() {
 // Balance Sheet
 // ---------------------------------------------------------------------------
 
-export async function fetchOpsBalanceSheet() {
+export async function fetchOpsBalanceSheet(asAt?: string | null) {
   const { profile } = await requireOpsUser();
 
   if (!canViewOpsChartOfAccounts(profile.role)) {
     return summarizeBalanceSheet([], 0);
   }
 
-  const rows = await fetchOpsLedgerAccountBalances();
+  // A balance sheet "as at" a date is simply every posted movement from
+  // inception up to that date.
+  const rows = asAt
+    ? await fetchOpsLedgerAccountBalancesForPeriod(null, asAt)
+    : await fetchOpsLedgerAccountBalances();
   const profitAndLoss = summarizeProfitAndLoss(rows);
   return summarizeBalanceSheet(rows, profitAndLoss.netProfit);
 }
@@ -259,7 +341,38 @@ function normalizeAccount(value: RawJournalLine["account"]) {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-export async function fetchOpsJournalEntries(limit = 25): Promise<OpsJournalEntry[]> {
+export type OpsJournalFilters = {
+  /** Restrict to entries touching this account code (e.g. "4010"). */
+  accountCode?: string | null;
+  /** Restrict to a source module (e.g. "invoices", "payment_requests"). */
+  sourceTable?: string | null;
+  from?: string | null;
+  to?: string | null;
+};
+
+/**
+ * Entry ids that touch a given account code — resolved first so the main
+ * query stays a clean entry-level fetch. Capped: the journal page is a
+ * drill-down, not an export.
+ */
+async function journalEntryIdsForAccount(accountCode: string): Promise<string[]> {
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("journal_lines")
+    .select("entry_id, account:chart_of_accounts!journal_lines_account_id_fkey!inner(code)")
+    .eq("account.code", accountCode)
+    .limit(500);
+
+  if (error) {
+    throw error;
+  }
+  return Array.from(new Set((data ?? []).map((row) => row.entry_id as string)));
+}
+
+export async function fetchOpsJournalEntries(
+  limit = 25,
+  filters: OpsJournalFilters = {},
+): Promise<OpsJournalEntry[]> {
   const { profile } = await requireOpsUser();
 
   if (!canViewOpsChartOfAccounts(profile.role)) {
@@ -267,7 +380,16 @@ export async function fetchOpsJournalEntries(limit = 25): Promise<OpsJournalEntr
   }
 
   const supabase = getOpsSupabaseServiceClient();
-  const { data, error } = await supabase
+
+  let entryIdFilter: string[] | null = null;
+  if (filters.accountCode) {
+    entryIdFilter = await journalEntryIdsForAccount(filters.accountCode);
+    if (entryIdFilter.length === 0) {
+      return [];
+    }
+  }
+
+  let query = supabase
     .from("journal_entries")
     .select(
       [
@@ -285,6 +407,13 @@ export async function fetchOpsJournalEntries(limit = 25): Promise<OpsJournalEntr
     .order("entry_date", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(Math.min(Math.max(limit, 1), 100));
+
+  if (entryIdFilter) query = query.in("id", entryIdFilter);
+  if (filters.sourceTable) query = query.eq("source_table", filters.sourceTable);
+  if (filters.from) query = query.gte("entry_date", filters.from);
+  if (filters.to) query = query.lte("entry_date", filters.to);
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;

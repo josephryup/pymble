@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   CircleAlert,
 } from "lucide-react";
+import Link from "next/link";
 import {
   OPS_AGEING_BUCKETS,
   type OpsAgeingBucket,
@@ -17,7 +18,7 @@ import {
   type OpsCashflowChartSummary,
   type OpsCommercialKpis,
 } from "@/lib/ops/finance-kpis";
-import { formatZmw, OPS_EYEBROW_CLASS } from "@/lib/ops/ui";
+import { formatZmw, OPS_EYEBROW_CLASS, OPS_SECONDARY_BUTTON_CLASS } from "@/lib/ops/ui";
 
 // ---------------------------------------------------------------------------
 // Cashflow chart panel
@@ -209,12 +210,17 @@ export function OpsAgeingPanel({
   description,
   emptyMessage,
   eyebrow,
+  registerHref,
+  registerLabel,
   summary,
   title,
 }: {
   description: string;
   emptyMessage: string;
   eyebrow: string;
+  /** Where the underlying records live — makes every row actionable. */
+  registerHref?: string;
+  registerLabel?: string;
   summary: OpsAgeingSummary;
   title: string;
 }) {
@@ -228,20 +234,24 @@ export function OpsAgeingPanel({
           <h2 className="mt-1 font-heading text-xl font-bold text-foreground">{title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
-        <p className="font-heading text-2xl font-bold text-foreground">
-          {formatZmw(summary.total)}
-        </p>
+        <div className="flex shrink-0 items-center gap-3">
+          <p className="font-heading text-2xl font-bold text-foreground">
+            {formatZmw(summary.total)}
+          </p>
+          {registerHref ? (
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href={registerHref}>
+              {registerLabel ?? "Open register"}
+            </Link>
+          ) : null}
+        </div>
       </header>
 
       <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {OPS_AGEING_BUCKETS.map((bucket) => {
           const meta = bucketMeta(bucket);
           const Icon = meta.icon;
-          return (
-            <div
-              className={`rounded-md border px-3 py-2.5 flex flex-col justify-between min-h-[5.5rem] ${meta.className}`}
-              key={bucket}
-            >
+          const tileBody = (
+            <>
               <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.1em] opacity-80">
                   {bucket} days
@@ -252,6 +262,18 @@ export function OpsAgeingPanel({
                 </span>
               </div>
               <p className="mt-2 text-base font-bold leading-none">{formatZmw(summary.bucketTotals[bucket])}</p>
+            </>
+          );
+          const tileClass = `rounded-md border px-3 py-2.5 flex flex-col justify-between min-h-[5.5rem] ${meta.className}`;
+          // Tiles open the underlying register so an overdue band is one click
+          // from the records behind it.
+          return registerHref ? (
+            <Link className={`${tileClass} transition hover:brightness-95`} href={registerHref} key={bucket}>
+              {tileBody}
+            </Link>
+          ) : (
+            <div className={tileClass} key={bucket}>
+              {tileBody}
             </div>
           );
         })}
@@ -259,22 +281,37 @@ export function OpsAgeingPanel({
 
       {summary.rows.length > 0 ? (
         <ul className="mt-4 grid gap-2">
-          {summary.rows.slice(0, 8).map((row) => (
-            <li
-              className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5"
-              key={row.id}
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-foreground">{row.label}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {row.days_outstanding} days outstanding · {row.reference}
+          {summary.rows.slice(0, 8).map((row) => {
+            const rowBody = (
+              <>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-foreground">{row.label}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {row.days_outstanding} days outstanding · {row.reference}
+                  </p>
+                </div>
+                <p className="shrink-0 text-sm font-bold text-foreground">
+                  {formatZmw(row.outstanding)}
                 </p>
-              </div>
-              <p className="shrink-0 text-sm font-bold text-foreground">
-                {formatZmw(row.outstanding)}
-              </p>
-            </li>
-          ))}
+              </>
+            );
+            return (
+              <li key={row.id}>
+                {registerHref ? (
+                  <Link
+                    className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5 transition hover:border-primary/50 hover:bg-muted/40"
+                    href={registerHref}
+                  >
+                    {rowBody}
+                  </Link>
+                ) : (
+                  <div className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2.5">
+                    {rowBody}
+                  </div>
+                )}
+              </li>
+            );
+          })}
           {summary.rows.length > 8 ? (
             <li className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               +{summary.rows.length - 8} more

@@ -82,7 +82,15 @@ export default async function OpsTrialBalancePage() {
                   <td className={`${OPS_TD_CLASS} font-mono text-xs text-muted-foreground`}>
                     {row.code}
                   </td>
-                  <td className={`${OPS_TD_CLASS} font-semibold text-foreground`}>{row.name}</td>
+                  <td className={`${OPS_TD_CLASS} font-semibold text-foreground`}>
+                    <Link
+                      className="hover:text-primary hover:underline"
+                      href={`/ops/finance/journal?account=${row.code}`}
+                      title={`Open journal entries touching ${row.code}`}
+                    >
+                      {row.name}
+                    </Link>
+                  </td>
                   <td className={`${OPS_TD_CLASS} text-xs capitalize text-muted-foreground`}>
                     {opsGlAccountTypeLabel(row.account_type)}
                   </td>

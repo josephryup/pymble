@@ -8,19 +8,26 @@ import {
   BriefcaseBusiness,
   ClipboardCheck,
   FileText,
+  Inbox,
   ShieldAlert,
 } from "lucide-react";
-import { OpsChartPanel } from "@/components/ops/OpsChartPanel";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import {
+  OpsCashBalanceTrendChart,
+  OpsRevenueCostTrendChart,
+} from "@/components/ops/OpsGlTrendCharts";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsReportShortcutGrid } from "@/components/ops/OpsReportShortcutGrid";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { OPS_BRAND } from "@/lib/ops/constants";
+import { OPS_DEPARTMENT_LABELS } from "@/lib/ops/department-report-permissions";
 import {
   fetchOpsExecutiveDashboardReport,
   type OpsExecutiveActionTone,
   type OpsExecutiveProjectSnapshot,
 } from "@/lib/ops/executive";
+import { fetchOpsExecutiveReportDigest } from "@/lib/ops/executive-report-digest";
+import { fetchOpsGlMonthlyTrend } from "@/lib/ops/gl-trends";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import {
   formatZmw,
@@ -89,7 +96,7 @@ function ProjectSnapshotCard({ project }: { project: OpsExecutiveProjectSnapshot
   return (
     <Link
       className={`block rounded-lg border bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm ${OPS_FOCUS_CLASS}`}
-      href="/ops/commercial"
+      href={`/ops/sites/${project.siteId}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -137,36 +144,57 @@ export default async function OpsExecutivePage() {
     redirect("/ops/profile");
   }
 
-  const report = await fetchOpsExecutiveDashboardReport();
+  const [report, reportDigest, glTrend] = await Promise.all([
+    fetchOpsExecutiveDashboardReport(),
+    fetchOpsExecutiveReportDigest().catch(() => null),
+    fetchOpsGlMonthlyTrend().catch(() => []),
+  ]);
+  const hasGlActivity = glTrend.some(
+    (point) => point.income !== 0 || point.expenses !== 0 || point.cashBalance !== 0,
+  );
   const unavailableSources = report.sourceHealth.filter((source) => source.status === "unavailable");
-  const chartData = [
+  // Each domain is reported in its OWN unit — the previous "pressure index"
+  // summed counts, thousands-of-ZMW, and an index score into a share-of-total
+  // bar, which was mathematically meaningless. This grid keeps each domain
+  // honest and links to the records behind it.
+  const pressureDomains = [
     {
       label: "Approvals",
-      tone: report.approvals.backlog > 0 ? ("warn" as const) : ("good" as const),
-      value: report.approvals.backlog,
+      href: "/ops/approvals",
+      value: numberText(report.approvals.backlog),
+      unit: "in backlog",
+      tone: report.approvals.backlog > 0 ? ("watch" as const) : ("good" as const),
     },
     {
-      label: "Over budget",
-      tone: report.finance.overBudgetAmount > 0 ? ("warn" as const) : ("good" as const),
-      value: Math.round(report.finance.overBudgetAmount / 1000),
+      label: "Budget",
+      href: "/ops/project-budgets",
+      value: formatZmw(report.finance.overBudgetAmount),
+      unit: "over budget",
+      tone: report.finance.overBudgetAmount > 0 ? ("urgent" as const) : ("good" as const),
     },
     {
-      label: "Delivery issues",
-      tone: report.delivery.highRiskActionable > 0 ? ("warn" as const) : ("good" as const),
-      value: report.delivery.totalActionable,
+      label: "Delivery",
+      href: "/ops/delivery-exceptions",
+      value: numberText(report.delivery.totalActionable),
+      unit: "actions needed",
+      tone: report.delivery.highRiskActionable > 0 ? ("watch" as const) : ("good" as const),
     },
     {
-      label: "HSE pressure",
-      tone: report.hse.pressureLevel === "steady" ? ("good" as const) : ("warn" as const),
-      value: report.hse.pressureScore,
+      label: "HSE",
+      href: "/ops/hse",
+      value: report.hse.pressureLevel,
+      unit: `score ${numberText(report.hse.pressureScore)}`,
+      tone: report.hse.pressureLevel === "steady" ? ("good" as const) : ("watch" as const),
     },
     {
-      label: "People readiness",
+      label: "People",
+      href: "/ops/employees",
+      value: numberText(report.people.expiredTraining + report.people.overdueOnboardingItems),
+      unit: "readiness gaps",
       tone:
         report.people.expiredTraining + report.people.overdueOnboardingItems > 0
-          ? ("warn" as const)
+          ? ("watch" as const)
           : ("good" as const),
-      value: report.people.expiredTraining + report.people.overdueOnboardingItems,
     },
   ];
   const shortcutGroups = [
@@ -265,6 +293,122 @@ export default async function OpsExecutivePage() {
         />
       </div>
 
+      {reportDigest ? (
+        <OpsDashboardPanel
+          actions={
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/department-reports">
+              <Inbox className="size-4" aria-hidden="true" />
+              All reports
+            </Link>
+          }
+          eyebrow="Weekly reporting"
+          title={`Department reports — week ${reportDigest.window.start} to ${reportDigest.window.end}`}
+        >
+          <div className="grid gap-4">
+            <div className="flex flex-wrap gap-2">
+              {reportDigest.filed.map((filedReport) => (
+                <Link
+                  className={`inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 transition hover:border-emerald-400 ${OPS_FOCUS_CLASS}`}
+                  href={`/ops/department-reports/${filedReport.id}`}
+                  key={filedReport.id}
+                >
+                  {OPS_DEPARTMENT_LABELS[filedReport.department]}
+                  <span className="font-semibold opacity-70">
+                    {filedReport.status.replace("_", " ")}
+                  </span>
+                </Link>
+              ))}
+              {reportDigest.missing.map((department) => (
+                <Link
+                  className={`inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-800 transition hover:border-red-400 ${OPS_FOCUS_CLASS}`}
+                  href={`/ops/department-reports/d/${department}`}
+                  key={department}
+                >
+                  {OPS_DEPARTMENT_LABELS[department]}
+                  <span className="font-semibold opacity-70">not filed</span>
+                </Link>
+              ))}
+            </div>
+
+            {reportDigest.pendingReview.length > 0 ? (
+              <div className="grid gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/50">
+                  Awaiting your review
+                </p>
+                {reportDigest.pendingReview.map((pending) => (
+                  <Link
+                    className={`flex items-center justify-between gap-3 rounded-md border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-orange-900 transition hover:translate-x-0.5 ${OPS_FOCUS_CLASS}`}
+                    href={`/ops/department-reports/${pending.id}`}
+                    key={pending.id}
+                  >
+                    <span className="min-w-0 truncate">
+                      {pending.title}
+                      {pending.submitter_name ? (
+                        <span className="ml-2 text-xs font-medium opacity-70">
+                          {pending.submitter_name}
+                        </span>
+                      ) : null}
+                    </span>
+                    <ArrowRight className="size-4 shrink-0 opacity-60" aria-hidden="true" />
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+
+            {reportDigest.summaries.length > 0 ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                {reportDigest.summaries.map((summary) => (
+                  <Link
+                    className={`rounded-lg border border-primary-dark/10 bg-primary-dark/[0.02] p-3 transition hover:border-primary-blue/50 ${OPS_FOCUS_CLASS}`}
+                    href={`/ops/department-reports/${summary.id}`}
+                    key={summary.id}
+                  >
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                      {OPS_DEPARTMENT_LABELS[summary.department]}
+                    </p>
+                    <p className="mt-1 line-clamp-3 text-sm leading-5 text-primary-dark/75">
+                      {summary.excerpt}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </OpsDashboardPanel>
+      ) : null}
+
+      {hasGlActivity ? (
+        <div className="grid gap-5 xl:grid-cols-2">
+          <OpsDashboardPanel
+            actions={
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/finance/profit-and-loss">
+                <FileText className="size-4" aria-hidden="true" />
+                P&amp;L
+              </Link>
+            }
+            eyebrow="General ledger"
+            title="Revenue vs expenses by month"
+          >
+            <OpsRevenueCostTrendChart points={glTrend} />
+          </OpsDashboardPanel>
+          <OpsDashboardPanel
+            actions={
+              <Link
+                className={OPS_SECONDARY_BUTTON_CLASS}
+                href="/ops/finance/cash-flow-statement"
+              >
+                <Banknote className="size-4" aria-hidden="true" />
+                Cash flow
+              </Link>
+            }
+            eyebrow="General ledger"
+            title="Cash balance trend"
+          >
+            <OpsCashBalanceTrendChart points={glTrend} />
+          </OpsDashboardPanel>
+        </div>
+      ) : null}
+
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <OpsDashboardPanel eyebrow="Leadership Queue" title="Needs attention">
           <div className="grid gap-2">
@@ -288,11 +432,33 @@ export default async function OpsExecutivePage() {
           </div>
         </OpsDashboardPanel>
 
-        <OpsChartPanel
-          data={chartData}
-          description="Cross-module pressure indicators for leadership review."
-          title="Executive pressure index"
-        />
+        <OpsDashboardPanel
+          eyebrow="Operational analytics"
+          title="Pressure by domain"
+          description="Each area in its own unit — click through to the records behind it."
+        >
+          <div className="grid gap-2 min-[520px]:grid-cols-2">
+            {pressureDomains.map((domain) => (
+              <Link
+                className={`flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 transition hover:translate-x-0.5 ${OPS_FOCUS_CLASS} ${projectToneClass(
+                  domain.tone,
+                )}`}
+                href={domain.href}
+                key={domain.label}
+              >
+                <span className="min-w-0">
+                  <span className="block text-xs font-bold uppercase tracking-[0.1em] opacity-70">
+                    {domain.label}
+                  </span>
+                  <span className="mt-0.5 block text-xs font-medium opacity-70">{domain.unit}</span>
+                </span>
+                <span className="shrink-0 font-heading text-lg font-bold capitalize">
+                  {domain.value}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </OpsDashboardPanel>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">

@@ -1,4 +1,5 @@
 import { Archive, HardHat, MapPin, Pencil, Plus } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import {
@@ -489,7 +490,9 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-heading text-lg font-bold text-primary-dark">
-                        {site.name}
+                        <Link className="hover:text-primary-blue hover:underline" href={`/ops/sites/${site.id}`}>
+                          {site.name}
+                        </Link>
                       </p>
                       <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
                         {site.code}
@@ -599,7 +602,11 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
                             <HardHat className="size-4" aria-hidden="true" />
                           </div>
                           <div>
-                            <p className="font-bold text-primary-dark">{site.name}</p>
+                            <p className="font-bold text-primary-dark">
+                              <Link className="hover:text-primary-blue hover:underline" href={`/ops/sites/${site.id}`}>
+                                {site.name}
+                              </Link>
+                            </p>
                             <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
                               {site.code}
                             </p>

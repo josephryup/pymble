@@ -1,4 +1,4 @@
-import { BookOpen, ScrollText } from "lucide-react";
+import { BookOpen, Filter, ScrollText } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
@@ -8,7 +8,10 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsJournalEntries } from "@/lib/ops/gl";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import {
+  firstParam,
   formatZmw,
+  OPS_INPUT_CLASS,
+  OPS_LABEL_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_CLASS,
   OPS_TD_CLASS,
@@ -17,9 +20,21 @@ import {
   OPS_TH_NUM_CLASS,
   OPS_THEAD_CLASS,
   OPS_TR_CLASS,
+  type OpsSearchParams,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const ACCOUNT_CODE_PATTERN = /^[0-9]{3,6}$/;
+
+// Matches the sourceTable values postOpsJournal writes (see gl-posting.ts).
+const SOURCE_OPTIONS = [
+  { value: "", label: "All sources" },
+  { value: "invoices", label: "Invoices" },
+  { value: "payment_requests", label: "Payment requests" },
+  { value: "payroll_runs", label: "Payroll" },
+];
 
 function formatDate(value: string | null) {
   if (!value) {
@@ -35,14 +50,31 @@ function formatEvent(value: string | null) {
   return value ? value.replace(/_/g, " ") : "manual";
 }
 
-export default async function OpsJournalPage() {
-  const { profile } = await requireOpsUser();
+type PageProps = { searchParams?: Promise<OpsSearchParams> };
+
+export default async function OpsJournalPage({ searchParams }: PageProps) {
+  const [params, { profile }] = await Promise.all([
+    searchParams ?? Promise.resolve({} as OpsSearchParams),
+    requireOpsUser(),
+  ]);
 
   if (!canAccessOpsHref(profile.role, "/ops/finance/journal")) {
     notFound();
   }
 
-  const entries = await fetchOpsJournalEntries(50);
+  const rawAccount = (firstParam(params.account) ?? "").trim();
+  const rawSource = firstParam(params.source) ?? "";
+  const rawFrom = firstParam(params.from) ?? "";
+  const rawTo = firstParam(params.to) ?? "";
+  const accountCode = ACCOUNT_CODE_PATTERN.test(rawAccount) ? rawAccount : null;
+  const sourceTable = SOURCE_OPTIONS.some((option) => option.value === rawSource && rawSource)
+    ? rawSource
+    : null;
+  const from = DATE_PATTERN.test(rawFrom) ? rawFrom : null;
+  const to = DATE_PATTERN.test(rawTo) ? rawTo : null;
+  const hasFilters = Boolean(accountCode || sourceTable || from || to);
+
+  const entries = await fetchOpsJournalEntries(50, { accountCode, sourceTable, from, to });
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -57,6 +89,62 @@ export default async function OpsJournalPage() {
           </Link>
         }
       />
+
+      <form
+        className="rounded-lg border border-border bg-card p-4 shadow-sm"
+        method="get"
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <label className={OPS_LABEL_CLASS}>
+            Account code
+            <input
+              className={OPS_INPUT_CLASS}
+              defaultValue={accountCode ?? ""}
+              inputMode="numeric"
+              name="account"
+              placeholder="e.g. 4010"
+            />
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Source
+            <select className={OPS_INPUT_CLASS} defaultValue={sourceTable ?? ""} name="source">
+              {SOURCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            From
+            <input className={OPS_INPUT_CLASS} defaultValue={from ?? ""} name="from" type="date" />
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            To
+            <input className={OPS_INPUT_CLASS} defaultValue={to ?? ""} name="to" type="date" />
+          </label>
+          <div className="flex items-end gap-2">
+            <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+              <Filter className="size-4" aria-hidden="true" />
+              Filter
+            </button>
+            {hasFilters ? (
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/finance/journal">
+                Clear
+              </Link>
+            ) : null}
+          </div>
+        </div>
+        {hasFilters ? (
+          <p className="mt-3 text-xs font-semibold text-muted-foreground">
+            Showing up to 50 posted entries
+            {accountCode ? ` touching account ${accountCode}` : ""}
+            {sourceTable ? ` from ${sourceTable.replace(/_/g, " ")}` : ""}
+            {from ? ` since ${from}` : ""}
+            {to ? ` until ${to}` : ""}.
+          </p>
+        ) : null}
+      </form>
 
       {entries.length > 0 ? (
         <div className="space-y-4">
