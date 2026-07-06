@@ -151,7 +151,7 @@ export default async function OpsFinanceOverviewPage() {
           icon={Banknote}
           label="Unpaid payables"
           tone={paymentStats.unpaidAmount > 0 ? "warn" : "default"}
-          trend="Submitted plus approved"
+          hint="Submitted plus approved"
           value={formatZmw(paymentStats.unpaidAmount)}
         />
         <OpsKpiCard

@@ -93,7 +93,7 @@ export default async function OpsItOverviewPage() {
             href="/ops/it/assets"
             icon={Laptop}
             label="Total assets"
-            trend="Register"
+            hint="Register"
             value={assetStats.total.toLocaleString("en-ZM")}
           />
           <OpsKpiCard

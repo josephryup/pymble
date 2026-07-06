@@ -74,6 +74,9 @@ export function OpsKpiCard({
 }: OpsKpiCardProps) {
   const classes = toneClasses(tone);
 
+  // Only show a directional arrow when the caller supplies a real direction.
+  // Inferring one from tone made "warn" cards show a downward trend that
+  // didn't exist in the data; without a direction the badge is a plain label.
   const TrendIcon =
     trendDirection === "up"
       ? TrendingUp
@@ -81,11 +84,7 @@ export function OpsKpiCard({
         ? TrendingDown
         : trendDirection === "flat"
           ? Minus
-          : tone === "good"
-            ? TrendingUp
-            : tone === "warn" || tone === "critical"
-              ? TrendingDown
-              : Minus;
+          : null;
 
   return (
     <Link
@@ -121,7 +120,7 @@ export function OpsKpiCard({
                 className={`h-auto w-fit px-2.5 py-1 text-xs font-semibold ${classes.surface}`}
                 variant="secondary"
               >
-                <TrendIcon className="size-3.5" aria-hidden="true" />
+                {TrendIcon ? <TrendIcon className="size-3.5" aria-hidden="true" /> : null}
                 {trend}
               </Badge>
             ) : (

@@ -956,7 +956,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
           icon={ClipboardList}
           label="Drafts shown"
           tone={draftCount > 0 ? "warn" : "default"}
-          trend="Editable"
+          hint="Editable"
           value={String(draftCount)}
         />
         <OpsKpiCard
@@ -972,7 +972,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
           icon={Clock}
           label="In review"
           tone={reviewCount > 0 ? "warn" : "default"}
-          trend="Approval queue"
+          hint="Approval queue"
           value={String(reviewCount)}
         />
         <OpsKpiCard
@@ -980,7 +980,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
           icon={AlertTriangle}
           label="Urgent shown"
           tone={urgentCount > 0 ? "warn" : "default"}
-          trend="Current filter"
+          hint="Current filter"
           value={String(urgentCount)}
         />
       </section>

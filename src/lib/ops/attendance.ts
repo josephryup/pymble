@@ -150,3 +150,111 @@ export async function fetchOpsAttendanceRecords(filters: OpsAttendanceFilters = 
     worker: normalizeRelation(record.worker),
   }));
 }
+
+export type OpsAttendanceDailyPoint = {
+  /** ISO date (Africa/Lusaka work day). */
+  date: string;
+  /** Short chart label, e.g. "Mon 30". */
+  label: string;
+  present: number;
+  late: number;
+  absent: number;
+  hoursWorked: number;
+};
+
+export type OpsAttendanceDailySummary = {
+  windowDays: number;
+  days: OpsAttendanceDailyPoint[];
+  today: {
+    present: number;
+    late: number;
+    absent: number;
+    pendingApproval: number;
+  };
+};
+
+const LUSAKA_DAY_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  day: "2-digit",
+  month: "2-digit",
+  timeZone: "Africa/Lusaka",
+  year: "numeric",
+});
+
+const LUSAKA_LABEL_FORMAT = new Intl.DateTimeFormat("en-ZM", {
+  day: "numeric",
+  timeZone: "Africa/Lusaka",
+  weekday: "short",
+});
+
+/**
+ * Trailing daily headcount for the attendance dashboard, aggregated on the
+ * Africa/Lusaka work day. Always unfiltered — the dashboard shows the whole
+ * operation even while the register below is filtered.
+ */
+export async function fetchOpsAttendanceDailySummary(
+  windowDays = 7,
+): Promise<OpsAttendanceDailySummary> {
+  const supabase = await createOpsServerSessionClient();
+  const windowStart = new Date(Date.now() - (windowDays - 1) * 24 * 60 * 60 * 1000);
+  const windowStartDay = LUSAKA_DAY_FORMAT.format(windowStart);
+
+  const { data, error } = await supabase
+    .from("attendance_records")
+    .select("clock_in_at, presence, hours_worked, approved_at")
+    .eq("is_active", true)
+    .is("cancelled_at", null)
+    .gte("clock_in_at", `${windowStartDay}T00:00:00+02:00`);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as Array<{
+    clock_in_at: string;
+    presence: OpsAttendancePresence;
+    hours_worked: number | string;
+    approved_at: string | null;
+  }>;
+
+  const byDay = new Map<string, OpsAttendanceDailyPoint>();
+  for (let offset = windowDays - 1; offset >= 0; offset -= 1) {
+    const day = new Date(Date.now() - offset * 24 * 60 * 60 * 1000);
+    const date = LUSAKA_DAY_FORMAT.format(day);
+    byDay.set(date, {
+      date,
+      label: LUSAKA_LABEL_FORMAT.format(day),
+      present: 0,
+      late: 0,
+      absent: 0,
+      hoursWorked: 0,
+    });
+  }
+
+  const todayKey = LUSAKA_DAY_FORMAT.format(new Date());
+  let pendingApproval = 0;
+
+  for (const row of rows) {
+    const date = LUSAKA_DAY_FORMAT.format(new Date(row.clock_in_at));
+    const point = byDay.get(date);
+    if (!point) continue;
+    if (row.presence === "present") point.present += 1;
+    else if (row.presence === "late") point.late += 1;
+    else point.absent += 1;
+    point.hoursWorked += normalizeMoney(row.hours_worked);
+    if (date === todayKey && !row.approved_at) pendingApproval += 1;
+  }
+
+  const days = [...byDay.values()];
+  const today = days.find((point) => point.date === todayKey);
+
+  return {
+    windowDays,
+    days,
+    today: {
+      present: today?.present ?? 0,
+      late: today?.late ?? 0,
+      absent: today?.absent ?? 0,
+      pendingApproval,
+    },
+  };
+}

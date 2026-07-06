@@ -1296,7 +1296,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           icon={Truck}
           label="Equipment"
           tone="default"
-          trend="Registered"
+          hint="Registered"
           value={String(stats.equipmentCount)}
         />
         <OpsKpiCard
@@ -1304,7 +1304,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           icon={CheckCircle2}
           label="Available"
           tone="good"
-          trend="Ready"
+          hint="Ready"
           value={String(stats.availableEquipment)}
         />
         <OpsKpiCard
@@ -1312,7 +1312,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           icon={Clock}
           label="Open requests"
           tone={stats.openRequests > 0 ? "warn" : "default"}
-          trend="Needs action"
+          hint="Needs action"
           value={String(stats.openRequests)}
         />
         <OpsKpiCard
@@ -1320,7 +1320,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           icon={CalendarCheck}
           label="Allocations"
           tone={stats.activeAllocations > 0 ? "warn" : "default"}
-          trend="Scheduled/active"
+          hint="Scheduled/active"
           value={String(stats.activeAllocations)}
         />
         <OpsKpiCard
@@ -1328,7 +1328,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           icon={Wrench}
           label="Maintenance"
           tone={stats.openMaintenanceJobs > 0 ? "warn" : "default"}
-          trend="Open jobs"
+          hint="Open jobs"
           value={String(stats.openMaintenanceJobs)}
         />
         <OpsKpiCard
@@ -1336,7 +1336,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           icon={Fuel}
           label="Fuel logs"
           tone="default"
-          trend="Posted"
+          hint="Posted"
           value={String(stats.fuelLogs)}
         />
       </section>

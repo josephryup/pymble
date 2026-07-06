@@ -7,6 +7,8 @@ import {
   Filter,
   Pencil,
   Plus,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import React from "react";
 import Link from "next/link";
@@ -28,10 +30,13 @@ import {
 } from "@/lib/ops/attendance-actions";
 import {
   fetchAttendanceWorkerOptions,
+  fetchOpsAttendanceDailySummary,
   fetchOpsAttendanceRecords,
   type OpsAttendanceFilters,
   type OpsAttendanceRecord,
 } from "@/lib/ops/attendance";
+import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
+import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { canAccessOpsHref, canRecordAttendance } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import type { OpsAttendancePresence } from "@/lib/ops/types";
@@ -318,15 +323,20 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
   };
   const hasActiveFilter = Object.values(filters).some(Boolean);
 
-  const [records, workerOptions, siteOptions] = await Promise.all([
+  const [records, workerOptions, siteOptions, dailySummary] = await Promise.all([
     fetchOpsAttendanceRecords(filters),
     fetchAttendanceWorkerOptions(),
     fetchActiveSiteOptions(),
+    fetchOpsAttendanceDailySummary(7),
   ]);
   const canRecord = canRecordAttendance(auth.profile.role);
   const notice = attendanceNotice(params);
   const pendingCount = records.filter((record) => !record.approved_at).length;
   const earnedTotal = records.reduce((sum, record) => sum + record.amount_earned, 0);
+
+  // Real day-over-day movement for the KPI trend arrows.
+  const yesterday = dailySummary.days.at(-2);
+  const presentDelta = yesterday ? dailySummary.today.present - yesterday.present : 0;
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -369,6 +379,70 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
               </p>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <OpsKpiCard
+          href="/ops/attendance?presence=present"
+          icon={UserCheck}
+          label="Present today"
+          tone={dailySummary.today.present > 0 ? "good" : "default"}
+          trend={
+            yesterday
+              ? `${presentDelta >= 0 ? "+" : ""}${presentDelta} vs yesterday`
+              : undefined
+          }
+          trendDirection={presentDelta > 0 ? "up" : presentDelta < 0 ? "down" : "flat"}
+          value={dailySummary.today.present.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
+          href="/ops/attendance?presence=late"
+          icon={Clock}
+          label="Late today"
+          tone={dailySummary.today.late > 0 ? "warn" : "good"}
+          value={dailySummary.today.late.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
+          href="/ops/attendance?presence=absent"
+          icon={UserX}
+          label="Absent today"
+          tone={dailySummary.today.absent > 0 ? "critical" : "good"}
+          value={dailySummary.today.absent.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
+          href="/ops/attendance?approval=pending"
+          icon={ClipboardCheck}
+          label="Pending approval today"
+          tone={dailySummary.today.pendingApproval > 0 ? "warn" : "good"}
+          hint={dailySummary.today.pendingApproval > 0 ? "Blocks payroll" : undefined}
+          value={dailySummary.today.pendingApproval.toLocaleString("en-ZM")}
+        />
+      </section>
+
+      <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <h2 className="font-heading text-xl font-bold text-primary-dark">
+          Daily headcount — last {dailySummary.windowDays} days
+        </h2>
+        <p className="mt-1 text-sm text-primary-dark/60">
+          Present, late and absent records per work day across all sites.
+        </p>
+        <div className="mt-4">
+          <OpsTrendChart
+            ariaLabel={`Daily attendance headcount for the last ${dailySummary.windowDays} days`}
+            emptyMessage="No attendance captured in the last 7 days"
+            points={dailySummary.days.map((day) => ({
+              label: day.label,
+              present: day.present,
+              late: day.late,
+              absent: day.absent,
+            }))}
+            series={[
+              { key: "present", label: "Present", color: OPS_CHART_COLORS.emerald, kind: "bar" },
+              { key: "late", label: "Late", color: OPS_CHART_COLORS.amber, kind: "bar" },
+              { key: "absent", label: "Absent", color: OPS_CHART_COLORS.red, kind: "bar" },
+            ]}
+          />
         </div>
       </section>
 

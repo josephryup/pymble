@@ -186,3 +186,97 @@ export async function fetchOpsHseComplianceKpis(): Promise<OpsHseComplianceSumma
     trainingTotalCount: trainings.length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// E3 — Incident trend & severity mix (dashboard charts)
+// ---------------------------------------------------------------------------
+
+export type OpsHseMonthlyIncidentPoint = {
+  /** Short chart label, e.g. "Feb". */
+  label: string;
+  recordable: number;
+  nearMisses: number;
+  lostTime: number;
+};
+
+export type OpsHseSeverityCount = {
+  severity: string;
+  count: number;
+};
+
+export type OpsHseIncidentTrend = {
+  months: number;
+  points: OpsHseMonthlyIncidentPoint[];
+  /** Severity mix across the same window (cancelled excluded). */
+  severity: OpsHseSeverityCount[];
+};
+
+const MONTH_LABEL_FORMAT = new Intl.DateTimeFormat("en-ZM", {
+  month: "short",
+  timeZone: "Africa/Lusaka",
+});
+
+/**
+ * Monthly incident counts for the HSE dashboard trend chart. One query,
+ * aggregated in-process — incident volume is small.
+ */
+export async function fetchOpsHseIncidentTrend(months = 6): Promise<OpsHseIncidentTrend> {
+  const supabase = getOpsSupabaseServiceClient();
+  const now = new Date();
+  const windowStart = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+
+  const { data, error } = await supabase
+    .from("hse_incidents")
+    .select("occurred_at, incident_type, severity")
+    .gte("occurred_at", windowStart.toISOString())
+    .neq("status", "cancelled");
+
+  const empty: OpsHseIncidentTrend = { months, points: [], severity: [] };
+  if (error) {
+    return empty;
+  }
+
+  const rows = (data ?? []) as Array<{
+    occurred_at: string;
+    incident_type: string;
+    severity: string;
+  }>;
+
+  const byMonth = new Map<string, OpsHseMonthlyIncidentPoint>();
+  for (let offset = months - 1; offset >= 0; offset -= 1) {
+    const month = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    const key = `${month.getFullYear()}-${month.getMonth()}`;
+    byMonth.set(key, {
+      label: MONTH_LABEL_FORMAT.format(month),
+      recordable: 0,
+      nearMisses: 0,
+      lostTime: 0,
+    });
+  }
+
+  const severityCounts = new Map<string, number>();
+  for (const row of rows) {
+    const occurred = new Date(row.occurred_at);
+    const point = byMonth.get(`${occurred.getFullYear()}-${occurred.getMonth()}`);
+    if (point) {
+      if (row.incident_type === "near_miss") point.nearMisses += 1;
+      else if (RECORDABLE_INCIDENT_TYPES.has(row.incident_type)) point.recordable += 1;
+      if (row.incident_type === "lost_time") point.lostTime += 1;
+    }
+    severityCounts.set(row.severity, (severityCounts.get(row.severity) ?? 0) + 1);
+  }
+
+  // Nothing recorded in the window — let the chart render its empty state.
+  if (rows.length === 0) {
+    return empty;
+  }
+
+  const SEVERITY_ORDER = ["low", "medium", "high", "critical"];
+  const severity = [...severityCounts.entries()]
+    .sort(
+      (a, b) => SEVERITY_ORDER.indexOf(a[0]) - SEVERITY_ORDER.indexOf(b[0]),
+    )
+    .map(([key, count]) => ({ severity: key, count }));
+
+  return { months, points: [...byMonth.values()], severity };
+}

@@ -750,7 +750,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
           icon={Boxes}
           label="Posted GRNs"
           tone="good"
-          trend="Audited receipts"
+          hint="Audited receipts"
           value={String(stats.postedGrns)}
         />
         <OpsKpiCard
@@ -761,7 +761,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
           }
           icon={MapPin}
           label="Locations"
-          trend="Active stores"
+          hint="Active stores"
           value={String(stats.activeLocations)}
         />
         <OpsKpiCard
@@ -772,7 +772,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
           }
           icon={PackagePlus}
           label="Stock items"
-          trend="Master data"
+          hint="Master data"
           value={String(stats.activeStockItems)}
         />
       </div>

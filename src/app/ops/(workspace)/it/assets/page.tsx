@@ -131,7 +131,7 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="grid gap-4 min-[720px]:grid-cols-4">
-        <OpsKpiCard href="/ops/it/assets" icon={Laptop} label="Total assets" trend="Register" value={stats.total.toLocaleString("en-ZM")} />
+        <OpsKpiCard href="/ops/it/assets" icon={Laptop} label="Total assets" hint="Register" value={stats.total.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/assets?status=in_use" icon={ShieldCheck} label="In use" tone="good" value={stats.in_use.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/assets?status=spare" icon={Laptop} label="Spare" tone="default" value={stats.spare.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/assets?status=repair" icon={Wrench} label="Under repair" tone={stats.in_repair > 0 ? "warn" : "default"} value={stats.in_repair.toLocaleString("en-ZM")} />

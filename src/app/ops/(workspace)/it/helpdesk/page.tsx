@@ -13,7 +13,16 @@ import {
   IT_TICKET_STATUS_BADGE,
   IT_TICKET_STATUS_LABELS,
 } from "@/lib/ops/it-helpdesk-labels";
-import { fetchOpsItTickets, fetchOpsItTicketStats } from "@/lib/ops/it-tickets";
+import {
+  fetchOpsItTicketAnalytics,
+  fetchOpsItTickets,
+  fetchOpsItTicketStats,
+} from "@/lib/ops/it-tickets";
+import {
+  OPS_CHART_COLORS,
+  OpsStatusDonut,
+  OpsTrendChart,
+} from "@/components/ops/OpsAnalyticsCharts";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import type { OpsItTicketStatus } from "@/lib/ops/types";
 import { firstParam, OPS_PRIMARY_BUTTON_CLASS, OPS_SECONDARY_BUTTON_CLASS, type OpsSearchParams } from "@/lib/ops/ui";
@@ -42,9 +51,10 @@ export default async function OpsItHelpdeskPage({ searchParams }: PageProps) {
   }
 
   const statusFilter = ticketStatusFromParam(firstParam(params.status));
-  const [tickets, stats] = await Promise.all([
+  const [tickets, stats, analytics] = await Promise.all([
     fetchOpsItTickets(statusFilter ? { status: statusFilter } : { openOnly: true }),
     fetchOpsItTicketStats(),
+    fetchOpsItTicketAnalytics(8),
   ]);
 
   return (
@@ -77,6 +87,56 @@ export default async function OpsItHelpdeskPage({ searchParams }: PageProps) {
         <OpsKpiCard href="/ops/it/helpdesk?status=in_progress" icon={MonitorCog} label="In progress" value={stats.in_progress.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/helpdesk" icon={AlertTriangle} label="Urgent & open" tone={stats.urgent_open > 0 ? "warn" : "default"} value={stats.urgent_open.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/helpdesk" icon={UserPlus} label="Unassigned" tone={stats.unassigned > 0 ? "warn" : "default"} value={stats.unassigned.toLocaleString("en-ZM")} />
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+        <div className="rounded-2xl border border-primary-dark/10 bg-white p-5 shadow-sm">
+          <h2 className="font-heading text-lg font-bold text-primary-dark">
+            Raised vs resolved — last {analytics.weeks} weeks
+          </h2>
+          <p className="mt-1 text-sm text-primary-dark/55">
+            Whether the queue is trending up or being worked down.
+          </p>
+          <div className="mt-4">
+            <OpsTrendChart
+              ariaLabel={`Tickets raised versus resolved per week over the last ${analytics.weeks} weeks`}
+              emptyMessage="No ticket activity in this window"
+              points={analytics.points.map((point) => ({
+                label: point.label,
+                raised: point.raised,
+                resolved: point.resolved,
+              }))}
+              series={[
+                { key: "raised", label: "Raised", color: OPS_CHART_COLORS.blue, kind: "bar" },
+                { key: "resolved", label: "Resolved", color: OPS_CHART_COLORS.emerald, kind: "line" },
+              ]}
+            />
+          </div>
+        </div>
+        <div className="rounded-2xl border border-primary-dark/10 bg-white p-5 shadow-sm">
+          <h2 className="font-heading text-lg font-bold text-primary-dark">Open by priority</h2>
+          <p className="mt-1 text-sm text-primary-dark/55">
+            Everything currently open, on hold or awaiting a user.
+          </p>
+          <div className="mt-4">
+            <OpsStatusDonut
+              ariaLabel="Open tickets by priority"
+              emptyMessage="No open tickets"
+              items={analytics.openByPriority.map((entry) => ({
+                label: IT_TICKET_PRIORITY_LABELS[entry.priority],
+                value: entry.count,
+                color:
+                  entry.priority === "urgent"
+                    ? OPS_CHART_COLORS.red
+                    : entry.priority === "high"
+                      ? OPS_CHART_COLORS.orange
+                      : entry.priority === "normal"
+                        ? OPS_CHART_COLORS.amber
+                        : OPS_CHART_COLORS.slate,
+              }))}
+            />
+          </div>
+        </div>
       </section>
 
       {tickets.length === 0 ? (

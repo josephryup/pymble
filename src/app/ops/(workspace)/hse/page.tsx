@@ -23,7 +23,16 @@ import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
-import { fetchOpsHseComplianceKpis, fetchOpsLtifr } from "@/lib/ops/hse-kpis";
+import {
+  OPS_CHART_COLORS,
+  OpsStatusDonut,
+  OpsTrendChart,
+} from "@/components/ops/OpsAnalyticsCharts";
+import {
+  fetchOpsHseComplianceKpis,
+  fetchOpsHseIncidentTrend,
+  fetchOpsLtifr,
+} from "@/lib/ops/hse-kpis";
 import {
   cancelCorrectiveActionAction,
   cancelHseIncidentAction,
@@ -390,7 +399,6 @@ function ExecutiveSafetyRollup({ rollup }: { rollup: OpsHseExecutiveSafetyRollup
 }
 
 function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport }) {
-  const maxTrend = Math.max(...report.trendRows.map((row) => row.total), 1);
   const statusTone =
     !report.configured || report.failed7d > 0
       ? "border-orange-200 bg-orange-50 text-orange-800"
@@ -421,7 +429,6 @@ function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport 
           icon={MailCheck}
           label="Sent 7 days"
           tone={report.sent7d > 0 ? "good" : "default"}
-          trend="Email"
           value={String(report.sent7d)}
         />
         <OpsKpiCard
@@ -429,7 +436,7 @@ function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport 
           icon={MailWarning}
           label="Failed 7 days"
           tone={report.failed7d > 0 ? "warn" : "good"}
-          trend={`${Math.round(report.failureRate7d)}% fail`}
+          hint={`${Math.round(report.failureRate7d)}% failure rate`}
           value={String(report.failed7d)}
         />
         <OpsKpiCard
@@ -437,7 +444,7 @@ function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport 
           icon={Clock}
           label="Skipped 7 days"
           tone={report.skipped7d > 0 ? "warn" : "default"}
-          trend={report.configured ? "Recipient/config" : "Config"}
+          hint={report.configured ? "Recipient or config gaps" : "Not configured"}
           value={String(report.skipped7d)}
         />
         <OpsKpiCard
@@ -445,7 +452,7 @@ function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport 
           icon={Send}
           label="Last sent"
           tone={report.lastSentAt ? "good" : "default"}
-          trend="Critical HSE"
+          hint="Critical HSE escalations"
           value={report.lastSentAt ? formatDate(report.lastSentAt) : "None"}
         />
       </div>
@@ -454,28 +461,22 @@ function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport 
           <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/50">
             7-day delivery trend
           </h3>
-          <div className="mt-4 grid gap-3">
-            {report.trendRows.map((row) => {
-              const width = `${Math.max((row.total / maxTrend) * 100, row.total > 0 ? 8 : 2)}%`;
-
-              return (
-                <div className="grid gap-1.5" key={row.date}>
-                  <div className="flex items-center justify-between gap-3 text-xs font-bold text-primary-dark/55">
-                    <span>{formatDate(row.date)}</span>
-                    <span>
-                      {row.sent} sent / {row.failed} failed / {row.skipped} skipped
-                    </span>
-                  </div>
-                  <div className="h-3 rounded-full bg-primary-dark/[0.04]">
-                    <div
-                      aria-label={`${formatDate(row.date)} HSE email attempts: ${row.total}`}
-                      className={`h-3 rounded-full ${row.failed > 0 ? "bg-orange-400" : "bg-emerald-500"}`}
-                      style={{ width }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+          <div className="mt-4">
+            <OpsTrendChart
+              ariaLabel="HSE escalation emails sent, failed and skipped per day over the last 7 days"
+              emptyMessage="No escalation emails attempted in the last 7 days"
+              points={report.trendRows.map((row) => ({
+                label: formatDate(row.date),
+                sent: row.sent,
+                failed: row.failed,
+                skipped: row.skipped,
+              }))}
+              series={[
+                { key: "sent", label: "Sent", color: OPS_CHART_COLORS.emerald, kind: "bar" },
+                { key: "failed", label: "Failed", color: OPS_CHART_COLORS.red, kind: "bar" },
+                { key: "skipped", label: "Skipped", color: OPS_CHART_COLORS.amber, kind: "bar" },
+              ]}
+            />
           </div>
         </div>
         <div className="rounded-md border border-primary-dark/10 p-4" id="email-delivery-health">
@@ -644,6 +645,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
     emailDeliveryReport,
     ltifr,
     hseCompliance,
+    incidentTrend,
   ] = await Promise.all([
     fetchPaginatedOpsHseIncidents({
       listState,
@@ -658,6 +660,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
     fetchOpsHseEmailDeliveryReport(),
     fetchOpsLtifr(),
     fetchOpsHseComplianceKpis(),
+    fetchOpsHseIncidentTrend(6),
   ]);
   const notice = hseNotice(params);
   const canCreateIncident = canCreateOpsHseIncident(auth.profile.role);
@@ -715,7 +718,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
           icon={AlertTriangle}
           label="Reported"
           tone={stats.reported > 0 ? "warn" : "default"}
-          trend="Needs triage"
+          hint="Needs triage"
           value={String(stats.reported)}
         />
         <OpsKpiCard
@@ -723,7 +726,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
           icon={Clock}
           label="Investigating"
           tone={stats.investigating > 0 ? "warn" : "default"}
-          trend="In progress"
+          hint="In progress"
           value={String(stats.investigating)}
         />
         <OpsKpiCard
@@ -731,7 +734,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
           icon={ShieldPlus}
           label="High risk open"
           tone={stats.criticalOpen > 0 ? "warn" : "default"}
-          trend="High/critical"
+          hint="High/critical severity"
           value={String(stats.criticalOpen)}
         />
         <OpsKpiCard
@@ -739,9 +742,62 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
           icon={Wrench}
           label="Open actions"
           tone={stats.openActions > 0 ? "warn" : "good"}
-          trend="Corrective work"
+          hint="Corrective work"
           value={String(stats.openActions)}
         />
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+        <div className="rounded-lg border border-primary-dark/10 bg-white p-5">
+          <h2 className="font-heading text-xl font-bold text-primary-dark">
+            Incident trend — last {incidentTrend.months} months
+          </h2>
+          <p className="mt-1 text-sm text-primary-dark/60">
+            Recordable incidents, near-misses and lost-time incidents per month.
+          </p>
+          <div className="mt-4">
+            <OpsTrendChart
+              ariaLabel={`Monthly recordable incidents, near-misses and lost-time incidents for the last ${incidentTrend.months} months`}
+              emptyMessage="No incidents recorded in this window"
+              points={incidentTrend.points.map((point) => ({
+                label: point.label,
+                recordable: point.recordable,
+                nearMisses: point.nearMisses,
+                lostTime: point.lostTime,
+              }))}
+              series={[
+                { key: "recordable", label: "Recordable", color: OPS_CHART_COLORS.amber, kind: "bar" },
+                { key: "nearMisses", label: "Near-misses", color: OPS_CHART_COLORS.blue, kind: "bar" },
+                { key: "lostTime", label: "Lost-time", color: OPS_CHART_COLORS.red, kind: "line" },
+              ]}
+            />
+          </div>
+        </div>
+        <div className="rounded-lg border border-primary-dark/10 bg-white p-5">
+          <h2 className="font-heading text-xl font-bold text-primary-dark">Severity mix</h2>
+          <p className="mt-1 text-sm text-primary-dark/60">
+            All incidents in the window by severity.
+          </p>
+          <div className="mt-4">
+            <OpsStatusDonut
+              ariaLabel="Incident severity distribution"
+              emptyMessage="No incidents recorded in this window"
+              items={incidentTrend.severity.map((entry) => ({
+                label:
+                  entry.severity.charAt(0).toUpperCase() + entry.severity.slice(1),
+                value: entry.count,
+                color:
+                  entry.severity === "critical"
+                    ? OPS_CHART_COLORS.red
+                    : entry.severity === "high"
+                      ? OPS_CHART_COLORS.orange
+                      : entry.severity === "medium"
+                        ? OPS_CHART_COLORS.amber
+                        : OPS_CHART_COLORS.slate,
+              }))}
+            />
+          </div>
+        </div>
       </section>
 
       <ExecutiveSafetyRollup rollup={executiveSafetyRollup} />

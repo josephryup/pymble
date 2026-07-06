@@ -146,7 +146,7 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
           icon={ShieldCheck}
           label="Active customers"
           tone="good"
-          trend="Billable"
+          hint="Billable"
           value={customerStats.active.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
@@ -159,7 +159,7 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
           href="/ops/customers"
           icon={Users}
           label="Total customers"
-          trend="Register"
+          hint="Register"
           value={customerStats.total.toLocaleString("en-ZM")}
         />
       </section>

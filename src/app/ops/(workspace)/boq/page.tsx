@@ -508,7 +508,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           href="/ops/boq#boq-register"
           icon={FileSpreadsheet}
           label="Bill of Quantities documents"
-          trend="Register"
+          hint="Register"
           value={documents.pagination.total.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
@@ -532,7 +532,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           icon={CheckCircle2}
           label="Issued shown"
           tone="good"
-          trend="Budget generated"
+          hint="Budget generated"
           value={issuedCount.toLocaleString("en-ZM")}
         />
       </section>
@@ -542,14 +542,14 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           href="/ops/boq#boq-register"
           icon={Calculator}
           label="Line items shown"
-          trend="Measured"
+          hint="Measured"
           value={visibleLineItems.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
           href="/ops/project-budgets"
           icon={Truck}
           label="Transport estimate shown"
-          trend="Planning"
+          hint="Planning"
           value={formatZmw(totalTransport)}
         />
       </section>

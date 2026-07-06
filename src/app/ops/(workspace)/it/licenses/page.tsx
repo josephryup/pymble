@@ -75,7 +75,7 @@ export default async function OpsItLicensesPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="grid gap-4 min-[720px]:grid-cols-4">
-        <OpsKpiCard href="/ops/it/licenses" icon={AppWindow} label="Total" trend="Tracked" value={stats.total.toLocaleString("en-ZM")} />
+        <OpsKpiCard href="/ops/it/licenses" icon={AppWindow} label="Total" hint="Tracked" value={stats.total.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/licenses" icon={AppWindow} label="Active" tone="good" value={stats.active.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/licenses" icon={CalendarClock} label="Renewing < 30 days" tone={stats.expiring_soon > 0 ? "warn" : "default"} value={stats.expiring_soon.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/licenses" icon={AlertTriangle} label="Expired" tone={stats.expired > 0 ? "warn" : "default"} value={stats.expired.toLocaleString("en-ZM")} />

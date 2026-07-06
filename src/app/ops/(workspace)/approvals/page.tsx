@@ -33,8 +33,10 @@ import {
   classifyApprovalForViewer,
   fetchApprovalStepsForRequests,
   fetchOpsApprovalsPersonalSummary,
+  fetchOpsApprovalsWeeklyThroughput,
   type OpsApprovalViewerInsight,
 } from "@/lib/ops/approvals-insight";
+import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { OPS_ESCALATION_SLA_DAYS } from "@/lib/ops/escalations";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
@@ -257,6 +259,9 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
       () => null,
     ),
   ]);
+  const weeklyThroughput = await fetchOpsApprovalsWeeklyThroughput(8).catch(
+    () => [] as Awaited<ReturnType<typeof fetchOpsApprovalsWeeklyThroughput>>,
+  );
 
   // Chain insight for the rows on this page: step progress, whose turn it is,
   // and how long each request has been waiting.
@@ -376,7 +381,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                 ? "warn"
                 : "good"
           }
-          trend={
+          hint={
             (personal?.overdueMyTurn ?? 0) > 0
               ? `${personal?.overdueMyTurn} past the ${OPS_APPROVAL_SLA_DAYS}-day SLA`
               : (personal?.myTurn.length ?? 0) > 0
@@ -389,7 +394,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
           href="/ops/approvals#approval-register"
           icon={ClipboardCheck}
           label="Your open requests"
-          trend="Submitted by you, still in flight"
+          hint="Submitted by you, still in flight"
           value={String(personal?.myOpenRequests.length ?? 0)}
         />
         <OpsKpiCard
@@ -401,7 +406,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
               ? "critical"
               : "default"
           }
-          trend={`SLA is ${OPS_APPROVAL_SLA_DAYS} days`}
+          hint={`SLA is ${OPS_APPROVAL_SLA_DAYS} days`}
           value={`${personal?.oldestWaitingDays ?? 0}d`}
         />
         <OpsKpiCard
@@ -409,10 +414,39 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
           icon={Bell}
           label="Unread alerts"
           tone={notifications.length > 0 ? "warn" : "good"}
-          trend="Workflow notices"
+          hint="Workflow notices"
           value={String(notifications.length)}
         />
       </div>
+
+      {weeklyThroughput.length > 0 ? (
+        <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+          <h2 className="font-heading text-xl font-bold text-primary-dark">
+            Approvals throughput — last 8 weeks
+          </h2>
+          <p className="mt-1 text-sm text-primary-dark/60">
+            Requests submitted per week against decisions made. A widening gap means the
+            queue is growing.
+          </p>
+          <div className="mt-4">
+            <OpsTrendChart
+              ariaLabel="Approval requests submitted, approved and rejected per week over the last 8 weeks"
+              emptyMessage="No approval activity in this window"
+              points={weeklyThroughput.map((point) => ({
+                label: point.label,
+                submitted: point.submitted,
+                approved: point.approved,
+                rejected: point.rejected,
+              }))}
+              series={[
+                { key: "submitted", label: "Submitted", color: OPS_CHART_COLORS.blue, kind: "bar" },
+                { key: "approved", label: "Approved", color: OPS_CHART_COLORS.emerald, kind: "bar" },
+                { key: "rejected", label: "Rejected", color: OPS_CHART_COLORS.red, kind: "bar" },
+              ]}
+            />
+          </div>
+        </section>
+      ) : null}
 
       {personal && personal.myTurn.length > 0 ? (
         <section

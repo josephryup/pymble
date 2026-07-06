@@ -175,3 +175,75 @@ export async function fetchOpsApprovalsPersonalSummary(
     overdueMyTurn: myTurn.filter((entry) => entry.insight.isOverdue).length,
   };
 }
+
+export type OpsApprovalWeeklyPoint = {
+  /** Short chart label — start of week, e.g. "23 Jun". */
+  label: string;
+  submitted: number;
+  approved: number;
+  rejected: number;
+};
+
+const APPROVAL_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+const APPROVAL_WEEK_LABEL_FORMAT = new Intl.DateTimeFormat("en-ZM", {
+  day: "numeric",
+  month: "short",
+  timeZone: "Africa/Lusaka",
+});
+
+/**
+ * Weekly approvals throughput for the dashboard trend chart. Decisions are
+ * bucketed on `updated_at` — the request table has no decision timestamp, and
+ * a decided request's last update is its decision.
+ */
+export async function fetchOpsApprovalsWeeklyThroughput(
+  weeks = 8,
+): Promise<OpsApprovalWeeklyPoint[]> {
+  const supabase = getOpsSupabaseServiceClient();
+  const windowStart = new Date(Date.now() - weeks * APPROVAL_WEEK_MS);
+
+  const { data, error } = await supabase
+    .from("approval_requests")
+    .select("created_at, updated_at, status")
+    .or(`created_at.gte.${windowStart.toISOString()},updated_at.gte.${windowStart.toISOString()}`);
+
+  if (error) {
+    return [];
+  }
+
+  const points: OpsApprovalWeeklyPoint[] = Array.from({ length: weeks }, (_, index) => ({
+    label: APPROVAL_WEEK_LABEL_FORMAT.format(
+      new Date(windowStart.getTime() + index * APPROVAL_WEEK_MS),
+    ),
+    submitted: 0,
+    approved: 0,
+    rejected: 0,
+  }));
+
+  const bucketFor = (iso: string) => {
+    const elapsed = new Date(iso).getTime() - windowStart.getTime();
+    if (elapsed < 0) return -1;
+    return Math.min(Math.floor(elapsed / APPROVAL_WEEK_MS), weeks - 1);
+  };
+
+  const rows = (data ?? []) as Array<{
+    created_at: string;
+    updated_at: string;
+    status: string;
+  }>;
+
+  for (const row of rows) {
+    const submittedBucket = bucketFor(row.created_at);
+    if (submittedBucket >= 0) points[submittedBucket].submitted += 1;
+    if (row.status === "approved" || row.status === "rejected") {
+      const decidedBucket = bucketFor(row.updated_at);
+      if (decidedBucket >= 0) {
+        if (row.status === "approved") points[decidedBucket].approved += 1;
+        else points[decidedBucket].rejected += 1;
+      }
+    }
+  }
+
+  return points;
+}

@@ -315,7 +315,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           icon={ClipboardList}
           label="Draft budgets"
           tone={stats.draftBudgets > 0 ? "warn" : "default"}
-          trend="Needs activation"
+          hint="Needs activation"
           value={String(stats.draftBudgets)}
         />
         <OpsKpiCard
@@ -323,7 +323,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           icon={CheckCircle2}
           label="Active budgets"
           tone="good"
-          trend="Live control"
+          hint="Live control"
           value={String(stats.activeBudgets)}
         />
         <OpsKpiCard
@@ -331,7 +331,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           icon={Landmark}
           label="Budgeted"
           tone="default"
-          trend="All lines"
+          hint="All lines"
           value={formatMoney(stats.totalBudgetedAmount)}
         />
         <OpsKpiCard
@@ -339,7 +339,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           icon={Banknote}
           label="Committed"
           tone={stats.committedAmount > 0 ? "warn" : "default"}
-          trend="Approved unpaid"
+          hint="Approved unpaid"
           value={formatMoney(stats.committedAmount)}
         />
       </section>

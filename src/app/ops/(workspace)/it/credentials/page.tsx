@@ -70,7 +70,7 @@ export default async function OpsItCredentialsPage({ searchParams }: PageProps) 
       ) : null}
 
       <section className="grid gap-4 min-[720px]:grid-cols-2">
-        <OpsKpiCard href="/ops/it/credentials" icon={KeySquare} label="Tracked credentials" trend="Register" value={stats.total.toLocaleString("en-ZM")} />
+        <OpsKpiCard href="/ops/it/credentials" icon={KeySquare} label="Tracked credentials" hint="Register" value={stats.total.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/credentials" icon={CalendarClock} label="Rotation due" tone={stats.rotation_due > 0 ? "warn" : "good"} value={stats.rotation_due.toLocaleString("en-ZM")} />
       </section>
 

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { canManageOpsJobPosting, canReviewOpsJobApplication } from "@/lib/ops/hr-permissions";
@@ -118,30 +119,6 @@ function recruitmentNotice(params: OpsSearchParams) {
   return null;
 }
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Briefcase;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-lg border border-primary-dark/10 bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
-          {label}
-        </p>
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-blue/10 text-primary-blue">
-          <Icon className="size-4" aria-hidden="true" />
-        </span>
-      </div>
-      <p className="mt-2 font-heading text-2xl font-bold text-primary-dark">{value}</p>
-    </div>
-  );
-}
-
 export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
     searchParams ?? Promise.resolve({} as OpsSearchParams),
@@ -234,12 +211,30 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={Briefcase} label="Job postings" value={stats.postings.toLocaleString("en-ZM")} />
-        <StatCard icon={Globe} label="Published" value={stats.published.toLocaleString("en-ZM")} />
-        <StatCard icon={Inbox} label="Applications" value={stats.applications.toLocaleString("en-ZM")} />
-        <StatCard
+        <OpsKpiCard
+          href="/ops/recruitment#create-posting"
+          icon={Briefcase}
+          label="Job postings"
+          value={stats.postings.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
+          href="/careers"
+          icon={Globe}
+          label="Published"
+          hint="Live on the website"
+          value={stats.published.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
+          href="/ops/recruitment#applications"
+          icon={Inbox}
+          label="Applications"
+          value={stats.applications.toLocaleString("en-ZM")}
+        />
+        <OpsKpiCard
+          href="/ops/recruitment#applications"
           icon={Users}
           label="New to review"
+          tone={stats.newApplications > 0 ? "warn" : "good"}
           value={stats.newApplications.toLocaleString("en-ZM")}
         />
       </section>

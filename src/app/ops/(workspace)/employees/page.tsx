@@ -1245,7 +1245,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           icon={Users}
           label="Active employees"
           tone="good"
-          trend="Active/probation"
+          hint="Active/probation"
           value={String(stats.activeEmployees)}
         />
         <OpsKpiCard
@@ -1253,7 +1253,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           icon={CalendarCheck}
           label="On leave"
           tone={stats.onLeave > 0 ? "warn" : "default"}
-          trend="Current status"
+          hint="Current status"
           value={String(stats.onLeave)}
         />
         <OpsKpiCard

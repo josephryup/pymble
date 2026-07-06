@@ -418,7 +418,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
           icon={AlertTriangle}
           label="Open"
           tone={stats.open > 0 ? "warn" : "default"}
-          trend="Needs action"
+          hint="Needs action"
           value={String(stats.open)}
         />
         <OpsKpiCard
@@ -426,7 +426,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
           icon={Clock}
           label="Investigating"
           tone={stats.investigating > 0 ? "warn" : "default"}
-          trend="In progress"
+          hint="In progress"
           value={String(stats.investigating)}
         />
         <OpsKpiCard
@@ -434,7 +434,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
           icon={ShieldAlert}
           label="High risk open"
           tone={stats.criticalOpen > 0 ? "warn" : "default"}
-          trend="High/critical"
+          hint="High/critical"
           value={String(stats.criticalOpen)}
         />
         <OpsKpiCard
@@ -442,7 +442,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
           icon={CheckCircle2}
           label="Resolved"
           tone="good"
-          trend="Awaiting close"
+          hint="Awaiting close"
           value={String(stats.resolved)}
         />
       </section>

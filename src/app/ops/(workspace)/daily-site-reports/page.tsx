@@ -402,7 +402,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
           icon={Clock}
           label="Draft shown"
           tone={draftCount > 0 ? "warn" : "default"}
-          trend="Editable"
+          hint="Editable"
           value={String(draftCount)}
         />
         <OpsKpiCard
@@ -410,7 +410,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
           icon={Send}
           label="Submitted"
           tone={submittedCount > 0 ? "warn" : "default"}
-          trend="Needs review"
+          hint="Needs review"
           value={String(submittedCount)}
         />
         <OpsKpiCard
@@ -418,7 +418,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
           icon={CheckCircle2}
           label="Reviewed"
           tone="good"
-          trend="Accepted"
+          hint="Accepted"
           value={String(reviewedCount)}
         />
         <OpsKpiCard
@@ -426,7 +426,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
           icon={AlertTriangle}
           label="Incidents shown"
           tone={incidentCount > 0 ? "warn" : "default"}
-          trend="Current filter"
+          hint="Current filter"
           value={String(incidentCount)}
         />
       </section>

@@ -262,7 +262,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
           href="/ops/invoices"
           icon={ReceiptText}
           label="Total invoices"
-          trend="Register"
+          hint="Register"
           value={invoiceStatusCounts.total.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
@@ -277,7 +277,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
           href="/ops/invoices?status=sent"
           icon={Wallet}
           label="Sent invoices"
-          trend="Receivables"
+          hint="Receivables"
           value={invoiceStatusCounts.sent.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
@@ -285,7 +285,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
           icon={Banknote}
           label="Paid invoices"
           tone="good"
-          trend="Collected"
+          hint="Collected"
           value={invoiceStatusCounts.paid.toLocaleString("en-ZM")}
         />
       </section>

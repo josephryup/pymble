@@ -26,6 +26,7 @@ import {
   updatePayrollRunAction,
 } from "@/lib/ops/payroll-actions";
 import { fetchOpsCashAdvances, fetchOpsPayrollRuns, type OpsPayrollRun } from "@/lib/ops/payroll";
+import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import { fetchAttendanceWorkerOptions } from "@/lib/ops/attendance";
 import {
@@ -199,6 +200,37 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
         >
           {notice.message}
         </div>
+      ) : null}
+
+      {payrollRuns.length > 1 ? (
+        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+          <h2 className="font-heading text-xl font-bold text-primary-dark">
+            Payroll run trend
+          </h2>
+          <p className="mt-1 text-sm text-primary-dark/60">
+            Gross pay, advance deductions and net payout per run (oldest to latest, last 12 runs).
+          </p>
+          <div className="mt-4">
+            <OpsTrendChart
+              ariaLabel="Gross, advances and net totals per payroll run"
+              points={payrollRuns
+                .slice(0, 12)
+                .reverse()
+                .map((run) => ({
+                  label: run.period_label,
+                  gross: run.total_gross,
+                  advances: run.total_advances,
+                  net: run.total_net,
+                }))}
+              series={[
+                { key: "gross", label: "Gross", color: OPS_CHART_COLORS.blue, kind: "bar" },
+                { key: "advances", label: "Advances", color: OPS_CHART_COLORS.amber, kind: "bar" },
+                { key: "net", label: "Net", color: OPS_CHART_COLORS.emerald, kind: "line" },
+              ]}
+              valueKind="zmw"
+            />
+          </div>
+        </section>
       ) : null}
 
       {canManage ? (

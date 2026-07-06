@@ -88,7 +88,7 @@ export default async function OpsItInfrastructurePage({ searchParams }: PageProp
       ) : null}
 
       <section className="grid gap-4 min-[720px]:grid-cols-4">
-        <OpsKpiCard href="/ops/it/infrastructure" icon={Network} label="Total" trend="Inventory" value={stats.total.toLocaleString("en-ZM")} />
+        <OpsKpiCard href="/ops/it/infrastructure" icon={Network} label="Total" hint="Inventory" value={stats.total.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/infrastructure" icon={Wifi} label="Online" tone="good" value={stats.online.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/infrastructure" icon={WifiOff} label="Offline" tone={stats.offline > 0 ? "warn" : "default"} value={stats.offline.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/infrastructure" icon={Wrench} label="Maintenance" tone={stats.maintenance > 0 ? "warn" : "default"} value={stats.maintenance.toLocaleString("en-ZM")} />

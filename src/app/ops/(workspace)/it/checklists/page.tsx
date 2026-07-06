@@ -55,7 +55,7 @@ export default async function OpsItChecklistsPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="grid gap-4 min-[720px]:grid-cols-3">
-        <OpsKpiCard href="/ops/it/checklists" icon={ListChecks} label="Total" trend="Runbooks" value={runs.length.toLocaleString("en-ZM")} />
+        <OpsKpiCard href="/ops/it/checklists" icon={ListChecks} label="Total" hint="Runbooks" value={runs.length.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/checklists" icon={ClipboardList} label="In progress" tone={inProgress > 0 ? "warn" : "default"} value={inProgress.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/checklists" icon={CheckCircle2} label="Completed" tone="good" value={completed.toLocaleString("en-ZM")} />
       </section>

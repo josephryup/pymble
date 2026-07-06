@@ -54,7 +54,7 @@ export default async function OpsItKbPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="grid gap-4 min-[720px]:grid-cols-2">
-        <OpsKpiCard href="/ops/it/kb" icon={LibraryBig} label="Articles" trend="Library" value={articles.length.toLocaleString("en-ZM")} />
+        <OpsKpiCard href="/ops/it/kb" icon={LibraryBig} label="Articles" hint="Library" value={articles.length.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/kb" icon={CheckCircle2} label="Published" tone="good" value={published.toLocaleString("en-ZM")} />
       </section>
 

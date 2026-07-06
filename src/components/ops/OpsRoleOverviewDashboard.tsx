@@ -25,7 +25,7 @@ import {
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
-import { OpsChartPanel } from "@/components/ops/OpsChartPanel";
+import { OPS_CHART_COLORS, OpsBreakdownBar } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsOverviewMapPanel } from "@/components/ops/OpsOverviewMapPanel";
@@ -773,7 +773,7 @@ function chartDataForGroup(
       { label: "Sites", tone: "good", value: overview.sites.length },
       { label: "Approvals", tone: overview.openApprovals > 0 ? "warn" : "good", value: overview.openApprovals },
       { label: "Payment queue", tone: metrics.finance.paymentRequestsPending > 0 ? "warn" : "good", value: metrics.finance.paymentRequestsPending },
-      { label: "Health, Safety and Environment pressure", tone: hseSafetyRollup?.pressureLevel === "urgent" ? "warn" : "default", value: hseSafetyRollup?.pressureScore ?? metrics.hse.openIncidents },
+      { label: "HSE pressure", tone: hseSafetyRollup?.pressureLevel === "urgent" ? "warn" : "default", value: hseSafetyRollup?.pressureScore ?? metrics.hse.openIncidents },
       { label: "Delivery exceptions", tone: metrics.procurement.deliveryExceptions > 0 ? "warn" : "good", value: metrics.procurement.deliveryExceptions },
     ];
   }
@@ -1810,11 +1810,39 @@ export function OpsRoleOverviewDashboard({
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <OpsChartPanel
-          data={chartDataForGroup(group, overview, metrics, hseSafetyRollup)}
-          description="Live counts from the records that matter most to this role."
-          title={`${copy.title} signals`}
-        />
+        <section className="space-y-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+              Operational analytics
+            </p>
+            <h2 className="mt-1 text-pretty font-heading text-xl font-semibold text-foreground">
+              {copy.title} signals
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Live counts from the records that matter most to this role.
+            </p>
+          </div>
+          <Card className="py-0 shadow-sm shadow-foreground/[0.03]">
+            <CardContent className="p-5 sm:p-6">
+              <OpsBreakdownBar
+                ariaLabel={`${copy.title} signal counts`}
+                emptyMessage="No operational data captured"
+                items={chartDataForGroup(group, overview, metrics, hseSafetyRollup).map(
+                  (datum) => ({
+                    label: datum.label,
+                    value: datum.value,
+                    color:
+                      datum.tone === "warn"
+                        ? OPS_CHART_COLORS.orange
+                        : datum.tone === "good"
+                          ? OPS_CHART_COLORS.emerald
+                          : OPS_CHART_COLORS.blue,
+                  }),
+                )}
+              />
+            </CardContent>
+          </Card>
+        </section>
         <ActionQueue actions={actionItems} />
       </div>
 

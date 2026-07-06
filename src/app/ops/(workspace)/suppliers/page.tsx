@@ -536,7 +536,7 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
           icon={ShieldCheck}
           label="Active suppliers"
           tone="good"
-          trend="Approved"
+          hint="Approved"
           value={supplierStats.active.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
@@ -551,7 +551,7 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
           href="/ops/suppliers"
           icon={Boxes}
           label="Total suppliers"
-          trend="Register"
+          hint="Register"
           value={supplierStats.total.toLocaleString("en-ZM")}
         />
       </section>

@@ -808,7 +808,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
           href="/ops/rfq-po?status=issued"
           icon={Send}
           label="Issued RFQs"
-          trend="In progress"
+          hint="In progress"
           value={stats.issuedRfqs.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
@@ -824,7 +824,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
           icon={FileCheck2}
           label="Awarded RFQs"
           tone="good"
-          trend="Awarded"
+          hint="Awarded"
           value={stats.awardedRfqs.toLocaleString("en-ZM")}
         />
       </section>

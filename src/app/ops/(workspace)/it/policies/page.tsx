@@ -55,7 +55,7 @@ export default async function OpsItPoliciesPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="grid gap-4 min-[720px]:grid-cols-3">
-        <OpsKpiCard href="/ops/it/policies" icon={ScrollText} label="Total" trend="Library" value={policies.length.toLocaleString("en-ZM")} />
+        <OpsKpiCard href="/ops/it/policies" icon={ScrollText} label="Total" hint="Library" value={policies.length.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/policies" icon={CheckCircle2} label="Published" tone="good" value={published.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/policies" icon={FileText} label="Drafts" value={drafts.toLocaleString("en-ZM")} />
       </section>

@@ -380,7 +380,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
           icon={FileText}
           label="Draft"
           tone={stats.draft > 0 ? "warn" : "default"}
-          trend="Not submitted"
+          hint="Not submitted"
           value={String(stats.draft)}
         />
         <OpsKpiCard
@@ -388,7 +388,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
           icon={Send}
           label="Submitted/review"
           tone={stats.submitted > 0 ? "warn" : "default"}
-          trend="Needs finance"
+          hint="Needs finance"
           value={String(stats.submitted)}
         />
         <OpsKpiCard
@@ -396,7 +396,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
           icon={CheckCircle2}
           label="Approved"
           tone={stats.approved > 0 ? "warn" : "default"}
-          trend="Awaiting pay"
+          hint="Awaiting pay"
           value={String(stats.approved)}
         />
         <OpsKpiCard
@@ -404,7 +404,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
           icon={Receipt}
           label="Unpaid exposure"
           tone={stats.unpaidAmount > 0 ? "warn" : "default"}
-          trend="Submitted plus approved"
+          hint="Submitted plus approved"
           value={formatMoney(stats.unpaidAmount)}
         />
       </section>

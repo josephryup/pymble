@@ -64,7 +64,7 @@ export default async function OpsItAccessPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="grid gap-4 min-[720px]:grid-cols-3">
-        <OpsKpiCard href="/ops/it/access" icon={KeyRound} label="Total grants" trend="Register" value={stats.total.toLocaleString("en-ZM")} />
+        <OpsKpiCard href="/ops/it/access" icon={KeyRound} label="Total grants" hint="Register" value={stats.total.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/access" icon={ShieldCheck} label="Active" tone="good" value={stats.active.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/access" icon={ShieldOff} label="Revoked" value={stats.revoked.toLocaleString("en-ZM")} />
       </section>
