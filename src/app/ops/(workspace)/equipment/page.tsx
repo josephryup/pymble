@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OPS_CHART_COLORS, OpsStatusDonut } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -59,6 +60,7 @@ import {
   fetchEquipmentCategoryOptions,
   fetchEquipmentOptions,
   fetchOpsEquipmentStats,
+  fetchOpsEquipmentStatusBreakdown,
   fetchOpsEquipmentUtilizationDashboard,
   fetchPaginatedOpsEquipmentRequests,
   fetchRecentEquipmentAllocations,
@@ -143,6 +145,13 @@ const MAINTENANCE_JOB_TYPE_OPTIONS: Array<{ label: string; value: OpsMaintenance
   { label: "Breakdown", value: "breakdown" },
   { label: "Other", value: "other" },
 ];
+
+const EQUIPMENT_STATUS_CHART_LABELS: Record<string, string> = {
+  available: "Available",
+  allocated: "Allocated",
+  maintenance: "In maintenance",
+  inactive: "Inactive",
+};
 
 function statusFromParam(value: string | undefined) {
   return REQUEST_STATUS_OPTIONS.some((status) => status.value === value)
@@ -1182,6 +1191,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
     requestPage,
     stats,
     utilizationDashboard,
+    statusBreakdown,
     siteOptions,
     categoryOptions,
     equipmentOptions,
@@ -1197,6 +1207,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
     }),
     fetchOpsEquipmentStats(),
     fetchOpsEquipmentUtilizationDashboard(),
+    fetchOpsEquipmentStatusBreakdown(),
     fetchActiveSiteOptions(),
     fetchEquipmentCategoryOptions(),
     fetchEquipmentOptions(40),
@@ -1340,6 +1351,32 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           value={String(stats.fuelLogs)}
         />
       </section>
+
+      {statusBreakdown.length > 0 ? (
+        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+          <h2 className="font-heading text-xl font-bold text-primary-dark">Fleet status mix</h2>
+          <p className="mt-1 text-sm text-primary-dark/60">
+            Every registered unit by current status.
+          </p>
+          <div className="mt-4">
+            <OpsStatusDonut
+              ariaLabel="Equipment count by status"
+              items={statusBreakdown.map((entry) => ({
+                label: EQUIPMENT_STATUS_CHART_LABELS[entry.status],
+                value: entry.count,
+                color:
+                  entry.status === "available"
+                    ? OPS_CHART_COLORS.emerald
+                    : entry.status === "allocated"
+                      ? OPS_CHART_COLORS.blue
+                      : entry.status === "maintenance"
+                        ? OPS_CHART_COLORS.amber
+                        : OPS_CHART_COLORS.slate,
+              }))}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <FleetFlowStep

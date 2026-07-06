@@ -719,6 +719,9 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
           label="Reported"
           tone={stats.reported > 0 ? "warn" : "default"}
           hint="Needs triage"
+          sparkline={incidentTrend.points.map(
+            (point) => point.recordable + point.nearMisses,
+          )}
           value={String(stats.reported)}
         />
         <OpsKpiCard

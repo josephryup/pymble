@@ -23,7 +23,7 @@ import {
   canReviewOpsPaymentRequest,
   canSubmitOpsPaymentRequest,
 } from "@/lib/ops/finance-permissions";
-import { postPaymentRequestJournalSafe, reverseOpsJournalSafe } from "@/lib/ops/gl-posting";
+import { postPaymentRequestJournalSafe } from "@/lib/ops/gl-posting";
 import { upsertProjectCostEntry } from "@/lib/ops/project-cost-entries";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {

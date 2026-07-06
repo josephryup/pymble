@@ -11,6 +11,7 @@ import {
   Inbox,
   ShieldAlert,
 } from "lucide-react";
+import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import {
   OpsCashBalanceTrendChart,
@@ -524,10 +525,34 @@ export default async function OpsExecutivePage() {
         title="Profitability and budget pressure"
       >
         {report.projectSnapshots.length > 0 ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {report.projectSnapshots.map((project) => (
-              <ProjectSnapshotCard key={project.siteId} project={project} />
-            ))}
+          <div className="space-y-5">
+            {report.projectSnapshots.some(
+              (project) =>
+                project.costExposure > 0 ||
+                project.remainingAmount > 0 ||
+                project.overBudgetAmount > 0,
+            ) ? (
+              <OpsTrendChart
+                ariaLabel="Cost exposure, remaining budget and over-budget amount per project site"
+                points={report.projectSnapshots.map((project) => ({
+                  label: project.siteCode,
+                  exposure: project.costExposure,
+                  remaining: project.remainingAmount,
+                  overBudget: project.overBudgetAmount,
+                }))}
+                series={[
+                  { key: "exposure", label: "Cost exposure", color: OPS_CHART_COLORS.blue, kind: "bar" },
+                  { key: "remaining", label: "Budget remaining", color: OPS_CHART_COLORS.emerald, kind: "bar" },
+                  { key: "overBudget", label: "Over budget", color: OPS_CHART_COLORS.red, kind: "bar" },
+                ]}
+                valueKind="zmw"
+              />
+            ) : null}
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {report.projectSnapshots.map((project) => (
+                <ProjectSnapshotCard key={project.siteId} project={project} />
+              ))}
+            </div>
           </div>
         ) : (
           <div className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] p-5 text-sm font-semibold text-primary-dark/60">

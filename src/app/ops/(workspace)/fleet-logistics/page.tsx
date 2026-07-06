@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -66,6 +67,7 @@ import {
   fetchOpsFleetDispatchReport,
   fetchOpsFleetMobilizationDashboard,
   fetchOpsFleetLogisticsStats,
+  fetchOpsFleetWeeklyActivity,
   fetchOpsFleetOperatorComplianceReport,
   fetchOpsFleetProfitabilityReport,
   fetchPaginatedOpsTransportRequests,
@@ -1187,6 +1189,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
     transportRequests,
     accommodationBookings,
     labourAllocations,
+    weeklyActivity,
   ] = await Promise.all([
     fetchActiveSiteOptions(),
     fetchFleetLogisticsEmployeeOptions(),
@@ -1204,6 +1207,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
     }),
     fetchRecentAccommodationBookings(),
     fetchRecentLabourAllocations(),
+    fetchOpsFleetWeeklyActivity(8),
   ]);
   const notice = fleetLogisticsNotice(params);
   const today = todayInLusaka();
@@ -1282,6 +1286,8 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           icon={Bus}
           label="Open transport"
           tone={stats.openTransports > 0 ? "warn" : "default"}
+          sparkline={weeklyActivity.map((point) => point.raised)}
+          hint="Weekly requests trend"
           value={String(stats.openTransports)}
         />
         <OpsKpiCard
@@ -1320,6 +1326,32 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           value={formatZmw(stats.totalEstimatedCost)}
         />
       </section>
+
+      {weeklyActivity.some((point) => point.raised > 0 || point.completed > 0) ? (
+        <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+          <h2 className="font-heading text-xl font-bold text-primary-dark">
+            Transport activity — last 8 weeks
+          </h2>
+          <p className="mt-1 text-sm text-primary-dark/60">
+            Requests raised per week against trips completed.
+          </p>
+          <div className="mt-4">
+            <OpsTrendChart
+              ariaLabel="Transport requests raised versus trips completed per week over the last 8 weeks"
+              emptyMessage="No transport activity in this window"
+              points={weeklyActivity.map((point) => ({
+                label: point.label,
+                raised: point.raised,
+                completed: point.completed,
+              }))}
+              series={[
+                { key: "raised", label: "Raised", color: OPS_CHART_COLORS.blue, kind: "bar" },
+                { key: "completed", label: "Completed", color: OPS_CHART_COLORS.emerald, kind: "line" },
+              ]}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-6 xl:grid-cols-2" id="fleet-planning-panel">
         <FleetDispatchCalendarPanel report={dispatchReport} />

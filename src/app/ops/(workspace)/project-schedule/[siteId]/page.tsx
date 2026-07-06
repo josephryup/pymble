@@ -35,11 +35,13 @@ import {
   canViewProjectTasks,
 } from "@/lib/ops/project-task-permissions";
 import {
+  buildOpsPlannedProgressCurve,
   computeOpsSiteProgress,
   fetchOpsProjectTasksForSite,
   type OpsProjectTask,
   type OpsProjectTaskStatus,
 } from "@/lib/ops/project-tasks";
+import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { fetchOpsStaffMembers } from "@/lib/ops/staff";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import { formatOpsRole } from "@/lib/ops/roles";
@@ -101,6 +103,7 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
   const canEdit = canEditProjectTask(profile.role);
   const canArchive = canArchiveProjectTask(profile.role);
   const rollup = computeOpsSiteProgress(tasks);
+  const plannedCurve = buildOpsPlannedProgressCurve(tasks);
   const notice = noticeFromParams(search, "task", "Project task created.");
   const errorMessage = firstParam(search.error);
   const assignableStaff = staff.filter(
@@ -212,6 +215,46 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
           </p>
         </Link>
       </section>
+
+      {plannedCurve.points.length > 0 ? (
+        <section className="rounded-2xl border border-primary-dark/10 bg-white p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="font-heading text-xl font-bold text-primary-dark">
+                Planned progress curve
+              </h2>
+              <p className="mt-1 max-w-3xl text-sm text-primary-dark/60">
+                Cumulative planned completion across the programme, assuming each task
+                progresses linearly through its planned window (equal task weights).
+              </p>
+            </div>
+            {plannedCurve.plannedToday !== null ? (
+              <p
+                className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] ${
+                  rollup.averageCompletion >= plannedCurve.plannedToday
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-orange-200 bg-orange-50 text-orange-800"
+                }`}
+              >
+                Actual {rollup.averageCompletion}% vs planned {plannedCurve.plannedToday}%
+              </p>
+            ) : null}
+          </div>
+          <div className="mt-4">
+            <OpsTrendChart
+              ariaLabel="Cumulative planned completion percentage across the site programme"
+              points={plannedCurve.points.map((point) => ({
+                label: point.label,
+                planned: point.planned,
+              }))}
+              series={[
+                { key: "planned", label: "Planned completion", color: OPS_CHART_COLORS.blue, kind: "area" },
+              ]}
+              valueKind="percent"
+            />
+          </div>
+        </section>
+      ) : null}
 
       {canCreate ? (
         <details className="rounded-2xl border border-primary-dark/10 bg-white">

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsBreakdownBar } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -651,6 +652,24 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
     fetchOpsDeliveryTracker(),
   ]);
   const notice = storesNotice(params);
+
+  // Estimated on-hand value per category from the levels already fetched.
+  // Items with no recorded last unit cost contribute nothing rather than a
+  // misleading zero-cost quantity.
+  const valueByCategory = new Map<string, number>();
+  for (const level of stockLevels) {
+    const unitCost = level.stock_item?.last_unit_cost ?? 0;
+    if (unitCost <= 0 || level.quantity_on_hand <= 0) continue;
+    const category = level.stock_item?.category || "Uncategorised";
+    valueByCategory.set(
+      category,
+      (valueByCategory.get(category) ?? 0) + level.quantity_on_hand * unitCost,
+    );
+  }
+  const stockValueByCategory = [...valueByCategory.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([label, value]) => ({ label, value: Math.round(value) }));
   const canAdjustStock = canAdjustOpsStock(auth.profile.role);
   const canIssueStock = canIssueOpsStock(auth.profile.role);
   const canManageMasterData = canManageOpsInventoryMasterData(auth.profile.role);
@@ -776,6 +795,25 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
           value={String(stats.activeStockItems)}
         />
       </div>
+
+      {stockValueByCategory.length > 0 ? (
+        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+          <h2 className="font-heading text-xl font-bold text-primary-dark">
+            Stock value by category
+          </h2>
+          <p className="mt-1 text-sm text-primary-dark/60">
+            On-hand quantity valued at each item&apos;s last unit cost. Items without a
+            recorded cost are excluded.
+          </p>
+          <div className="mt-4">
+            <OpsBreakdownBar
+              ariaLabel="Estimated on-hand stock value per category"
+              items={stockValueByCategory}
+              valueKind="zmw"
+            />
+          </div>
+        </section>
+      ) : null}
 
       <OpsStockAlertsPanel summary={stockAlerts} />
       <OpsDeliveryTrackerPanel summary={deliveryTracker} />

@@ -1,26 +1,27 @@
 import { AlertOctagon, Award, GraduationCap, HardHat, ShieldCheck } from "lucide-react";
+import { OpsStatTile, type OpsStatTileTone } from "@/components/ops/OpsStatTile";
 import type { OpsHseComplianceSummary, OpsLtifrSummary } from "@/lib/ops/hse-kpis";
 import { OPS_EYEBROW_CLASS } from "@/lib/ops/ui";
 
-function pctClass(value: number | null, goodThreshold: number, warnThreshold: number) {
-  if (value === null) return "text-muted-foreground";
-  if (value >= goodThreshold) return "text-emerald-700";
-  if (value >= warnThreshold) return "text-amber-700";
-  return "text-red-700";
+function pctTone(value: number | null, goodThreshold: number, warnThreshold: number): OpsStatTileTone {
+  if (value === null) return "muted";
+  if (value >= goodThreshold) return "good";
+  if (value >= warnThreshold) return "warn";
+  return "critical";
 }
 
-function rateClass(value: number | null, lowGood: number, highWarn: number) {
-  if (value === null) return "text-muted-foreground";
-  if (value <= lowGood) return "text-emerald-700";
-  if (value <= highWarn) return "text-amber-700";
-  return "text-red-700";
+function rateTone(value: number | null, lowGood: number, highWarn: number): OpsStatTileTone {
+  if (value === null) return "muted";
+  if (value <= lowGood) return "good";
+  if (value <= highWarn) return "warn";
+  return "critical";
 }
 
-function scoreClass(value: number | null) {
-  if (value === null) return "text-muted-foreground";
-  if (value >= 80) return "text-emerald-700";
-  if (value >= 60) return "text-amber-700";
-  return "text-red-700";
+function scoreTone(value: number | null): OpsStatTileTone {
+  if (value === null) return "muted";
+  if (value >= 80) return "good";
+  if (value >= 60) return "warn";
+  return "critical";
 }
 
 export function OpsHseKpiPanel({
@@ -50,88 +51,58 @@ export function OpsHseKpiPanel({
       </header>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <article className="rounded-md border border-border p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-            LTIFR
-            <AlertOctagon className="size-3.5 text-red-600" aria-hidden="true" />
-          </p>
-          <p className={`mt-1 font-heading text-2xl font-bold ${rateClass(ltifr.ltifr, 5, 15)}`}>
-            {ltifr.ltifr !== null ? ltifr.ltifr.toLocaleString("en-ZM") : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {ltifr.lostTimeIncidents} LTI · {ltifr.hoursWorked.toLocaleString("en-ZM")} hrs worked
-          </p>
-        </article>
-
-        <article className="rounded-md border border-border p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-            TRIFR (all recordable)
-            <AlertOctagon className="size-3.5 text-amber-600" aria-hidden="true" />
-          </p>
-          <p className={`mt-1 font-heading text-2xl font-bold ${rateClass(ltifr.trifr, 10, 30)}`}>
-            {ltifr.trifr !== null ? ltifr.trifr.toLocaleString("en-ZM") : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {ltifr.totalRecordable} recordable · {ltifr.totalNearMisses} near-misses
-          </p>
-        </article>
-
-        <article className="rounded-md border border-border p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-            Personal Protective Equipment compliance
-            <HardHat className="size-3.5 text-primary-blue" aria-hidden="true" />
-          </p>
-          <p className={`mt-1 font-heading text-2xl font-bold ${pctClass(compliance.ppeCompliancePct, 90, 70)}`}>
-            {compliance.ppeCompliancePct !== null ? `${compliance.ppeCompliancePct}%` : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {compliance.ppeIssued} of {compliance.activeEmployees} active employees with PPE issued
-          </p>
-        </article>
-
-        <article className="rounded-md border border-border p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-            Inspection avg score
-            <ShieldCheck className="size-3.5 text-primary-blue" aria-hidden="true" />
-          </p>
-          <p className={`mt-1 font-heading text-2xl font-bold ${scoreClass(compliance.inspectionsAvgScore)}`}>
-            {compliance.inspectionsAvgScore !== null
+        <OpsStatTile
+          icon={AlertOctagon}
+          iconClassName="text-red-600"
+          label="LTIFR"
+          sub={`${ltifr.lostTimeIncidents} LTI · ${ltifr.hoursWorked.toLocaleString("en-ZM")} hrs worked`}
+          tone={rateTone(ltifr.ltifr, 5, 15)}
+          value={ltifr.ltifr !== null ? ltifr.ltifr.toLocaleString("en-ZM") : "—"}
+        />
+        <OpsStatTile
+          icon={AlertOctagon}
+          iconClassName="text-amber-600"
+          label="TRIFR (all recordable)"
+          sub={`${ltifr.totalRecordable} recordable · ${ltifr.totalNearMisses} near-misses`}
+          tone={rateTone(ltifr.trifr, 10, 30)}
+          value={ltifr.trifr !== null ? ltifr.trifr.toLocaleString("en-ZM") : "—"}
+        />
+        <OpsStatTile
+          icon={HardHat}
+          label="Personal Protective Equipment compliance"
+          sub={`${compliance.ppeIssued} of ${compliance.activeEmployees} active employees with PPE issued`}
+          tone={pctTone(compliance.ppeCompliancePct, 90, 70)}
+          value={compliance.ppeCompliancePct !== null ? `${compliance.ppeCompliancePct}%` : "—"}
+        />
+        <OpsStatTile
+          icon={ShieldCheck}
+          label="Inspection avg score"
+          sub={`From ${compliance.inspectionsCount} completed inspection${compliance.inspectionsCount === 1 ? "" : "s"}`}
+          tone={scoreTone(compliance.inspectionsAvgScore)}
+          value={
+            compliance.inspectionsAvgScore !== null
               ? `${compliance.inspectionsAvgScore}/100`
-              : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            From {compliance.inspectionsCount} completed inspection
-            {compliance.inspectionsCount === 1 ? "" : "s"}
-          </p>
-        </article>
-
-        <article className="rounded-md border border-border p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-            Audit avg score
-            <Award className="size-3.5 text-primary-blue" aria-hidden="true" />
-          </p>
-          <p className={`mt-1 font-heading text-2xl font-bold ${scoreClass(compliance.auditsAvgScore)}`}>
-            {compliance.auditsAvgScore !== null ? `${compliance.auditsAvgScore}/100` : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            From {compliance.auditsCount} completed audit{compliance.auditsCount === 1 ? "" : "s"}
-          </p>
-        </article>
-
-        <article className="rounded-md border border-border p-4">
-          <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-            Training currency
-            <GraduationCap className="size-3.5 text-primary-blue" aria-hidden="true" />
-          </p>
-          <p className={`mt-1 font-heading text-2xl font-bold ${pctClass(compliance.trainingCompliancePct, 90, 70)}`}>
-            {compliance.trainingCompliancePct !== null
+              : "—"
+          }
+        />
+        <OpsStatTile
+          icon={Award}
+          label="Audit avg score"
+          sub={`From ${compliance.auditsCount} completed audit${compliance.auditsCount === 1 ? "" : "s"}`}
+          tone={scoreTone(compliance.auditsAvgScore)}
+          value={compliance.auditsAvgScore !== null ? `${compliance.auditsAvgScore}/100` : "—"}
+        />
+        <OpsStatTile
+          icon={GraduationCap}
+          label="Training currency"
+          sub={`${compliance.trainingCompletedCount} of ${compliance.trainingTotalCount} records in date`}
+          tone={pctTone(compliance.trainingCompliancePct, 90, 70)}
+          value={
+            compliance.trainingCompliancePct !== null
               ? `${compliance.trainingCompliancePct}%`
-              : "—"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {compliance.trainingCompletedCount} of {compliance.trainingTotalCount} records in date
-          </p>
-        </article>
+              : "—"
+          }
+        />
       </div>
     </section>
   );

@@ -212,3 +212,81 @@ export function computeOpsSiteProgress(tasks: OpsProjectTask[]): OpsSiteProgress
     averageCompletion: Math.round(total / live.length),
   };
 }
+
+export type OpsPlannedProgressPoint = {
+  /** ISO date of the sample. */
+  date: string;
+  /** Short chart label, e.g. "23 Jun". */
+  label: string;
+  /** Cumulative planned completion (0–100) if every task tracked its window. */
+  planned: number;
+};
+
+export type OpsPlannedProgressCurve = {
+  points: OpsPlannedProgressPoint[];
+  /** Where the plan says the site should be today (0–100), null if today is outside the programme. */
+  plannedToday: number | null;
+};
+
+const CURVE_LABEL_FORMAT = new Intl.DateTimeFormat("en-ZM", {
+  day: "numeric",
+  month: "short",
+  timeZone: "Africa/Lusaka",
+});
+
+/**
+ * Planned S-curve for a site programme, assuming linear progress inside each
+ * task's planned window and equal task weights — the same weighting as
+ * computeOpsSiteProgress, so "planned today" is directly comparable to
+ * averageCompletion. We deliberately do NOT plot an "actual" curve: only the
+ * current completion is stored, not its history, and inventing one would be
+ * decorative data.
+ */
+export function buildOpsPlannedProgressCurve(
+  tasks: OpsProjectTask[],
+  today = new Date(),
+  samples = 13,
+): OpsPlannedProgressCurve {
+  const live = tasks.filter(
+    (task) => task.status !== "cancelled" && task.planned_start_date && task.planned_end_date,
+  );
+  if (live.length === 0) {
+    return { points: [], plannedToday: null };
+  }
+
+  const starts = live.map((task) => new Date(task.planned_start_date).getTime());
+  const ends = live.map((task) => new Date(task.planned_end_date).getTime());
+  const programmeStart = Math.min(...starts);
+  const programmeEnd = Math.max(...ends);
+  if (!Number.isFinite(programmeStart) || programmeEnd <= programmeStart) {
+    return { points: [], plannedToday: null };
+  }
+
+  const plannedAt = (time: number) => {
+    const total = live.reduce((sum, task) => {
+      const start = new Date(task.planned_start_date).getTime();
+      const end = new Date(task.planned_end_date).getTime();
+      if (time <= start) return sum;
+      if (time >= end || end <= start) return sum + 100;
+      return sum + ((time - start) / (end - start)) * 100;
+    }, 0);
+    return Math.round(total / live.length);
+  };
+
+  const step = (programmeEnd - programmeStart) / (samples - 1);
+  const points = Array.from({ length: samples }, (_, index) => {
+    const time = programmeStart + index * step;
+    const date = new Date(time);
+    return {
+      date: date.toISOString().slice(0, 10),
+      label: CURVE_LABEL_FORMAT.format(date),
+      planned: plannedAt(time),
+    };
+  });
+
+  const now = today.getTime();
+  const plannedToday =
+    now < programmeStart || now > programmeEnd ? null : plannedAt(now);
+
+  return { points, plannedToday };
+}

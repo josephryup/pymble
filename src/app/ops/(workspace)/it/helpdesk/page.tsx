@@ -83,7 +83,7 @@ export default async function OpsItHelpdeskPage({ searchParams }: PageProps) {
       />
 
       <section className="grid gap-4 min-[720px]:grid-cols-4">
-        <OpsKpiCard href="/ops/it/helpdesk?status=open" icon={LifeBuoy} label="Open" tone={stats.open > 0 ? "warn" : "good"} value={stats.open.toLocaleString("en-ZM")} />
+        <OpsKpiCard href="/ops/it/helpdesk?status=open" icon={LifeBuoy} label="Open" tone={stats.open > 0 ? "warn" : "good"} sparkline={analytics.points.map((point) => point.raised)} hint="Weekly raised trend" value={stats.open.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/helpdesk?status=in_progress" icon={MonitorCog} label="In progress" value={stats.in_progress.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/helpdesk" icon={AlertTriangle} label="Urgent & open" tone={stats.urgent_open > 0 ? "warn" : "default"} value={stats.urgent_open.toLocaleString("en-ZM")} />
         <OpsKpiCard href="/ops/it/helpdesk" icon={UserPlus} label="Unassigned" tone={stats.unassigned > 0 ? "warn" : "default"} value={stats.unassigned.toLocaleString("en-ZM")} />

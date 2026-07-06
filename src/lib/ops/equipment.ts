@@ -761,6 +761,33 @@ export async function fetchRecentMaintenanceJobs(limit = 30) {
   }));
 }
 
+export type OpsEquipmentStatusBreakdown = Array<{
+  status: OpsEquipmentStatus;
+  count: number;
+}>;
+
+/** Fleet mix by status for the equipment dashboard donut. */
+export async function fetchOpsEquipmentStatusBreakdown(): Promise<OpsEquipmentStatusBreakdown> {
+  const { profile } = await requireOpsUser();
+  if (!canViewOpsEquipment(profile.role)) {
+    return [];
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase.from("equipment").select("status");
+
+  if (error) {
+    return [];
+  }
+
+  const rows = (data ?? []) as Array<{ status: OpsEquipmentStatus }>;
+  const ORDER: OpsEquipmentStatus[] = ["available", "allocated", "maintenance", "inactive"];
+  return ORDER.map((status) => ({
+    status,
+    count: rows.filter((row) => row.status === status).length,
+  })).filter((entry) => entry.count > 0);
+}
+
 export async function fetchOpsEquipmentStats(): Promise<OpsEquipmentStats> {
   const { profile } = await requireOpsUser();
 

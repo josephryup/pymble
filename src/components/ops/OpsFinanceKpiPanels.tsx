@@ -11,6 +11,7 @@ import {
   CircleAlert,
 } from "lucide-react";
 import Link from "next/link";
+import { OpsStatTile } from "@/components/ops/OpsStatTile";
 import {
   OPS_AGEING_BUCKETS,
   type OpsAgeingBucket,
@@ -58,17 +59,19 @@ export function OpsCashflowChartPanel({ data }: { data: OpsCashflowChartSummary 
       </header>
 
       <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <KpiTile label="Forecast inflow" value={formatZmw(totals.forecast_inflow)} />
-        <KpiTile label="Forecast outflow" value={formatZmw(totals.forecast_outflow)} />
-        <KpiTile
+        <OpsStatTile label="Forecast inflow" size="sm" value={formatZmw(totals.forecast_inflow)} />
+        <OpsStatTile label="Forecast outflow" size="sm" value={formatZmw(totals.forecast_outflow)} />
+        <OpsStatTile
           label="Forecast net"
+          size="sm"
           value={formatZmw(totals.forecast_net)}
-          tone={totals.forecast_net >= 0 ? "good" : "warn"}
+          tone={totals.forecast_net >= 0 ? "good" : "critical"}
         />
-        <KpiTile
+        <OpsStatTile
           label="Actual net"
+          size="sm"
           value={formatZmw(totals.actual_net)}
-          tone={totals.actual_net >= 0 ? "good" : "warn"}
+          tone={totals.actual_net >= 0 ? "good" : "critical"}
         />
       </dl>
 
@@ -144,31 +147,6 @@ function BarRow({
       <span className="w-28 shrink-0 text-right text-xs font-semibold text-foreground/75">
         {formatZmw(amount)}
       </span>
-    </div>
-  );
-}
-
-function KpiTile({
-  label,
-  tone = "default",
-  value,
-}: {
-  label: string;
-  tone?: "default" | "good" | "warn";
-  value: string;
-}) {
-  const toneClass =
-    tone === "good"
-      ? "text-emerald-700"
-      : tone === "warn"
-        ? "text-red-700"
-        : "text-foreground";
-  return (
-    <div className="rounded-md border border-border px-3 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-        {label}
-      </p>
-      <p className={`mt-0.5 text-sm font-bold ${toneClass}`}>{value}</p>
     </div>
   );
 }

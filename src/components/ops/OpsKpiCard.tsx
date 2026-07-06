@@ -23,7 +23,54 @@ type OpsKpiCardProps = {
   hint?: string;
   /** Call-to-action label (defaults to "View"). */
   cta?: string;
+  /**
+   * Chronological series of REAL datapoints (oldest first) rendered as a tiny
+   * sparkline under the value. Only pass genuine history — the synthetic
+   * sparkline was removed on purpose; never reintroduce decorative data.
+   */
+  sparkline?: number[];
 };
+
+function sparklinePath(values: number[], width: number, height: number) {
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+  const step = width / (values.length - 1);
+  return values
+    .map((value, index) => {
+      const x = index * step;
+      const y = height - ((value - min) / range) * height;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function KpiSparkline({ values, className }: { values: number[]; className: string }) {
+  const width = 96;
+  const height = 24;
+  // Inset so the 1.5px stroke isn't clipped at the extremes.
+  const path = sparklinePath(values, width, height - 3);
+
+  return (
+    <svg
+      aria-hidden="true"
+      className={`mt-2 h-6 w-24 ${className}`}
+      fill="none"
+      preserveAspectRatio="none"
+      viewBox={`0 0 ${width} ${height}`}
+    >
+      <path
+        d={path}
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.5}
+        transform="translate(0, 1.5)"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
 
 function toneClasses(tone: OpsKpiTone) {
   if (tone === "good") {
@@ -71,6 +118,7 @@ export function OpsKpiCard({
   trendDirection,
   hint,
   cta = "View",
+  sparkline,
 }: OpsKpiCardProps) {
   const classes = toneClasses(tone);
 
@@ -105,6 +153,9 @@ export function OpsKpiCard({
               </p>
               {hint ? (
                 <p className={`mt-1 truncate text-xs font-semibold ${classes.accent}`}>{hint}</p>
+              ) : null}
+              {sparkline && sparkline.length > 1 ? (
+                <KpiSparkline className={classes.accent} values={sparkline} />
               ) : null}
             </div>
             <span

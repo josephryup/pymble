@@ -1470,3 +1470,68 @@ export async function fetchOpsFleetDispatchReport(): Promise<OpsFleetDispatchRep
     transports: (data ?? []) as unknown as OpsFleetDispatchTransportSource[],
   });
 }
+
+export type OpsFleetWeeklyActivityPoint = {
+  /** Short chart label — start of week, e.g. "23 Jun". */
+  label: string;
+  raised: number;
+  completed: number;
+};
+
+const FLEET_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+const FLEET_WEEK_LABEL_FORMAT = new Intl.DateTimeFormat("en-ZM", {
+  day: "numeric",
+  month: "short",
+  timeZone: "Africa/Lusaka",
+});
+
+/**
+ * Weekly transport activity for the fleet dashboard trend chart: requests
+ * raised (created_at) against trips completed (completed_at) per week.
+ */
+export async function fetchOpsFleetWeeklyActivity(
+  weeks = 8,
+): Promise<OpsFleetWeeklyActivityPoint[]> {
+  const { profile } = await requireOpsUser();
+  if (!canViewOpsFleetLogistics(profile.role)) {
+    return [];
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const windowStart = new Date(Date.now() - weeks * FLEET_WEEK_MS);
+
+  const { data, error } = await supabase
+    .from("transport_requests")
+    .select("created_at, completed_at")
+    .or(
+      `created_at.gte.${windowStart.toISOString()},completed_at.gte.${windowStart.toISOString()}`,
+    );
+
+  if (error) {
+    return [];
+  }
+
+  const points: OpsFleetWeeklyActivityPoint[] = Array.from({ length: weeks }, (_, index) => ({
+    label: FLEET_WEEK_LABEL_FORMAT.format(new Date(windowStart.getTime() + index * FLEET_WEEK_MS)),
+    raised: 0,
+    completed: 0,
+  }));
+
+  const bucketFor = (iso: string | null) => {
+    if (!iso) return -1;
+    const elapsed = new Date(iso).getTime() - windowStart.getTime();
+    if (elapsed < 0) return -1;
+    return Math.min(Math.floor(elapsed / FLEET_WEEK_MS), weeks - 1);
+  };
+
+  const rows = (data ?? []) as Array<{ created_at: string; completed_at: string | null }>;
+  for (const row of rows) {
+    const raisedBucket = bucketFor(row.created_at);
+    if (raisedBucket >= 0) points[raisedBucket].raised += 1;
+    const completedBucket = bucketFor(row.completed_at);
+    if (completedBucket >= 0) points[completedBucket].completed += 1;
+  }
+
+  return points;
+}

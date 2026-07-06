@@ -112,13 +112,31 @@ trial balance, journal). KPI cards / tables are correct there; charts would be d
 
 ### Phase 5 — Later / needs data or design work first
 
-- [ ] Executive portfolio budget-vs-actual chart (needs per-site rollup fetcher).
-- [ ] Schedule S-curve on `/ops/project-schedule/[siteId]`.
-- [ ] Real KPI sparklines (7/30-day series behind headline numbers) — only once cheap
-      per-metric history queries exist; never synthetic.
-- [ ] Stores/equipment/fleet charts (fleet utilization needs a trend fetcher).
-- [ ] Migrate `OpsHseKpiPanel` / `OpsFinanceKpiPanels` tiles onto a shared non-link
-      KPI tile variant.
+- [x] Executive portfolio chart (done 2026-07-06): cost exposure / budget remaining /
+      over-budget per site, from the `projectSnapshots` the executive report already
+      builds out of the commercial margin + budget variance layers.
+- [x] Schedule planned-progress curve on `/ops/project-schedule/[siteId]`
+      (done 2026-07-06): `buildOpsPlannedProgressCurve` (unit-tested) plots the
+      cumulative *planned* curve (linear within each task window, equal weights to
+      match `computeOpsSiteProgress`) with an actual-vs-planned-today badge.
+      Deliberately no "actual" curve — completion history isn't stored, and inventing
+      one would be decorative data.
+- [x] Equipment fleet-status donut (done 2026-07-06): `fetchOpsEquipmentStatusBreakdown`.
+- [x] Stores stock-value-by-category bars (done 2026-07-06): valued at last unit cost,
+      zero-cost items excluded, computed from the levels the page already fetches.
+- [x] Real KPI sparklines (done 2026-07-06): `OpsKpiCard` takes an optional
+      `sparkline` prop rendered as a tiny server-side SVG (no client boundary /
+      hydration cost). Wired only where a genuine series is already fetched:
+      attendance (daily present), helpdesk (weekly raised), HSE (monthly
+      recordable + near-miss), fleet (weekly transport requests). Approvals was
+      deliberately skipped — its throughput series is register-wide while those
+      KPI cards are personal, so the signal wouldn't match the number.
+- [x] Fleet weekly activity trend (done 2026-07-06): `fetchOpsFleetWeeklyActivity`
+      buckets transport requests raised (created_at) vs completed (completed_at)
+      per week; chart on the fleet-logistics page.
+- [x] Shared `OpsStatTile` (done 2026-07-06): non-link metric tile with tone
+      (default/good/warn/critical/muted) and sm/md sizes; `OpsHseKpiPanel` and
+      `OpsFinanceKpiPanels` migrated off their private tile implementations.
 
 ## Additional Improvements (beyond charts)
 

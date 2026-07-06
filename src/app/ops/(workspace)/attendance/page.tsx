@@ -394,6 +394,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
               : undefined
           }
           trendDirection={presentDelta > 0 ? "up" : presentDelta < 0 ? "down" : "flat"}
+          sparkline={dailySummary.days.map((day) => day.present)}
           value={dailySummary.today.present.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
