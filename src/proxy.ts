@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { buildOpsContentSecurityPolicy, generateOpsCspNonce } from "@/lib/ops/csp";
+import { buildOpsContentSecurityPolicy } from "@/lib/ops/csp";
 import {
   canUseOpsLocalRolePreview,
   OPS_LOCAL_ROLE_PREVIEW_COOKIE,
@@ -193,18 +193,10 @@ export async function proxy(request: NextRequest) {
   const host = request.headers.get("host") ?? "";
   const { pathname } = request.nextUrl;
   const isDev = process.env.NODE_ENV !== "production";
-  const nonce = isDev ? undefined : generateOpsCspNonce();
-  const contentSecurityPolicy = buildOpsContentSecurityPolicy({ isDev, nonce });
-
-  if (nonce && shouldApplyOpsSecurityHeaders(host, pathname)) {
-    // Forward the policy on the request itself: Next.js reads the nonce out
-    // of the request's Content-Security-Policy header and stamps it onto
-    // every framework <script> tag it renders. x-nonce is for route handlers
-    // that build HTML by hand (see /ops/auth/callback). Both are overwritten
-    // here so a client can never smuggle its own values in.
-    request.headers.set("content-security-policy", contentSecurityPolicy);
-    request.headers.set("x-nonce", nonce);
-  }
+  // Static (cache-stable) policy: the offline-first service worker caches
+  // page HTML with its CSP header, so a per-request value cannot be used
+  // without breaking offline navigation. See src/lib/ops/csp.ts.
+  const contentSecurityPolicy = buildOpsContentSecurityPolicy({ isDev });
 
   if (shouldBlockOpsLocalRolePreviewMutation(request, host)) {
     const response = pathname.startsWith("/api/ops")

@@ -1,33 +1,29 @@
 /**
- * Content-Security-Policy for the ops workspace. Built per-request in
- * src/proxy.ts so production can use a nonce instead of 'unsafe-inline':
- * the proxy forwards the policy on the request headers, Next.js reads the
- * nonce from there and stamps it onto every framework <script> tag, and
- * 'strict-dynamic' lets those trusted scripts load the chunks they import.
+ * Content-Security-Policy for the ops workspace.
+ *
+ * NOTE ON script-src: production uses `'self' 'unsafe-inline'`, NOT a
+ * per-request nonce. The ops workspace is an offline-first PWA whose service
+ * worker caches page HTML (and its CSP response header) so field crews can
+ * keep working with no signal. A per-request nonce is fundamentally
+ * incompatible with that: each cached page carries a different `nonce-XYZ`,
+ * and client-side (RSC) navigation between cached pages then runs one page's
+ * scripts under another page's enforced nonce. With `'strict-dynamic'` the
+ * browser ignores `'self'`, so those mismatched scripts are blocked and
+ * offline navigation dies. Offline is a hard requirement here, so the policy
+ * must be cache-stable. Every other directive below is already static and is
+ * kept as tight as the app allows.
  */
 
-/** Base64 nonce from 16 crypto-random bytes. Edge- and Node-runtime safe. */
-export function generateOpsCspNonce() {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
-}
+export function buildOpsContentSecurityPolicy(options: { isDev: boolean }) {
+  const { isDev } = options;
 
-export function buildOpsContentSecurityPolicy(options: {
-  isDev: boolean;
-  nonce?: string;
-}) {
-  const { isDev, nonce } = options;
-
-  // React in development uses eval() for hot reload + dev tooling, and dev
-  // pages are not guaranteed a fresh nonce per render, so development keeps
-  // the permissive policy. Production requires the nonce.
+  // React in development uses eval() for hot reload + dev tooling. Production
+  // never calls eval(). Inline is required because Next.js emits inline
+  // bootstrap/flight scripts and the SW must be able to replay them offline
+  // (a nonce cannot survive caching — see the file header).
   const scriptSrc = isDev
     ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-    : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`;
+    : "script-src 'self' 'unsafe-inline'";
   // Supabase Realtime opens a websocket (`wss://*.supabase.co/realtime/...`),
   // so `wss:` to the Supabase origins must be allowed in production too,
   // otherwise the OpsAutoRefresh + OpsRealtimeRefresh subscriptions silently

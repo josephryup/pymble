@@ -58,6 +58,33 @@ const serwist = new Serwist({
 serwist.addEventListeners();
 
 /**
+ * One-time purge of the page runtime caches on activation.
+ *
+ * Earlier builds cached page HTML alongside a per-request nonce CSP header.
+ * That made cached soft-navigation break offline (a page's scripts ran under
+ * another page's enforced nonce). The CSP is now static and cache-stable, but
+ * clients that installed the old worker still hold those poisoned entries in
+ * the NetworkFirst page caches. Dropping them here forces a clean re-cache
+ * from the first online navigation after this worker takes over.
+ */
+const OPS_PAGE_CACHES_TO_RESET = [
+  "pages",
+  "pages-rsc",
+  "pages-rsc-prefetch",
+  "others",
+];
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      await Promise.all(
+        OPS_PAGE_CACHES_TO_RESET.map((name) => caches.delete(name).catch(() => false)),
+      );
+    })(),
+  );
+});
+
+/**
  * Web Push handlers.
  *
  * Independent of Serwist's precache/runtime-cache listeners above — this is
