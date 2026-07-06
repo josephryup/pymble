@@ -1,13 +1,15 @@
 import {
-  AlertTriangle,
   Bell,
   CheckCircle2,
   ClipboardCheck,
   Clock,
-  FileCheck2,
+  Hourglass,
   Inbox,
   ListChecks,
   ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
+  UserCheck,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -21,11 +23,19 @@ import {
   OpsMobileRecordList,
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
+import { decideOpsApprovalAction } from "@/lib/ops/approval-actions";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   fetchOpsApprovalRequests,
   fetchOpsOpenApprovalCountsByModule,
 } from "@/lib/ops/approvals";
+import {
+  classifyApprovalForViewer,
+  fetchApprovalStepsForRequests,
+  fetchOpsApprovalsPersonalSummary,
+  type OpsApprovalViewerInsight,
+} from "@/lib/ops/approvals-insight";
+import { OPS_ESCALATION_SLA_DAYS } from "@/lib/ops/escalations";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import {
@@ -40,6 +50,9 @@ import { formatOpsRole, formatOpsUserName } from "@/lib/ops/roles";
 import {
   firstParam,
   formatZmw,
+  OPS_DANGER_BUTTON_CLASS,
+  OPS_INPUT_CLASS,
+  OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
@@ -49,6 +62,9 @@ import type { OpsApprovalStatus, OpsPriority } from "@/lib/ops/types";
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
 };
+
+// Mirrors the escalation sweep: open approvals older than this are nagged.
+const OPS_APPROVAL_SLA_DAYS = OPS_ESCALATION_SLA_DAYS.approvals;
 
 const APPROVAL_STATUS_OPTIONS: Array<{ label: string; value: OpsApprovalStatus | "" }> = [
   { label: "All statuses", value: "" },
@@ -126,6 +142,51 @@ function approvalAmount(amount: number | null, currencyCode: string) {
   return `${currencyCode} ${amount.toLocaleString("en-ZM")}`;
 }
 
+function ApprovalProgress({ insight }: { insight: OpsApprovalViewerInsight | undefined }) {
+  if (!insight || insight.totalSteps === 0) {
+    return <span className="text-xs text-primary-dark/45">—</span>;
+  }
+
+  const currentStep = Math.min(insight.decidedSteps + 1, insight.totalSteps);
+  return (
+    <div className="min-w-36">
+      <div className="flex items-center gap-1.5">
+        {Array.from({ length: insight.totalSteps }, (_, index) => (
+          <span
+            className={`h-1.5 flex-1 rounded-full ${
+              index < insight.decidedSteps ? "bg-emerald-500" : "bg-primary-dark/12"
+            }`}
+            key={index}
+          />
+        ))}
+      </div>
+      <p className="mt-1.5 text-xs font-semibold text-primary-dark/60">
+        {insight.waitingOn ? (
+          <>
+            Step {currentStep}/{insight.totalSteps} ·{" "}
+            {insight.isMyTurn ? (
+              <span className="font-bold text-orange-600">waiting on you</span>
+            ) : (
+              <>waiting on {insight.waitingOn}</>
+            )}
+          </>
+        ) : (
+          `${insight.decidedSteps}/${insight.totalSteps} steps decided`
+        )}
+      </p>
+      {insight.waitingOn ? (
+        <p
+          className={`mt-0.5 text-[11px] font-bold ${
+            insight.isOverdue ? "text-red-600" : "text-primary-dark/45"
+          }`}
+        >
+          {insight.ageDays}d in queue{insight.isOverdue ? " — overdue" : ""}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ApprovalFlowStep({
   description,
   icon: Icon,
@@ -181,7 +242,8 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
       ? requestedDept
       : visibleDepartments[0];
 
-  const [approvalPage, notifications, openCountsByModule] = await Promise.all([
+  const viewer = { id: auth.profile.id, role: auth.profile.role };
+  const [approvalPage, notifications, openCountsByModule, personal] = await Promise.all([
     fetchOpsApprovalRequests({
       listState,
       query: listState.query,
@@ -191,7 +253,22 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
     }),
     fetchOpsNotifications({ limit: 8, status: "unread" }),
     fetchOpsOpenApprovalCountsByModule().catch(() => ({} as Record<string, number>)),
+    fetchOpsApprovalsPersonalSummary({ id: auth.profile.id, role: auth.profile.role }).catch(
+      () => null,
+    ),
   ]);
+
+  // Chain insight for the rows on this page: step progress, whose turn it is,
+  // and how long each request has been waiting.
+  const pageSteps = await fetchApprovalStepsForRequests(
+    approvalPage.items.map((request) => request.id),
+  ).catch(() => new Map());
+  const insightByRequest = new Map<string, OpsApprovalViewerInsight>(
+    approvalPage.items.map((request) => [
+      request.id,
+      classifyApprovalForViewer(request, pageSteps.get(request.id) ?? [], viewer),
+    ]),
+  );
   const departmentOpenCounts = new Map<string, number>(
     visibleDepartments.map((dept) => {
       if (dept.moduleKeys.length === 0) {
@@ -211,18 +288,20 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
   const openRequests = requests.filter((request) =>
     ["submitted", "in_review"].includes(request.status),
   );
-  const submittedRequests = requests.filter((request) => request.status === "submitted").length;
-  const reviewRequests = requests.filter((request) => request.status === "in_review").length;
   const resolvedRequests = requests.filter((request) =>
     ["approved", "closed"].includes(request.status),
   ).length;
-  const urgentRequests = requests.filter((request) => request.priority === "urgent").length;
   const visibleZmwAmount = requests.reduce(
     (sum, request) =>
       request.currency_code === "ZMW" && request.amount !== null ? sum + request.amount : sum,
     0,
   );
-  const moduleCount = new Set(requests.map((request) => request.module_key)).size;
+  const shownMyTurn = requests.filter(
+    (request) => insightByRequest.get(request.id)?.isMyTurn,
+  ).length;
+  const shownOverdue = requests.filter(
+    (request) => insightByRequest.get(request.id)?.isOverdue,
+  ).length;
   const latestRequest = requests[0];
   const error = firstParam(params.error);
   const notificationUpdated = firstParam(params.updated) === "notification_read";
@@ -287,28 +366,43 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <OpsKpiCard
-          href="/ops/approvals?status=submitted#approval-register"
-          icon={ClipboardCheck}
-          label="Submitted"
-          tone={submittedRequests > 0 ? "warn" : "default"}
-          trend="Visible queue"
-          value={String(submittedRequests)}
-        />
-        <OpsKpiCard
-          href="/ops/approvals?status=in_review#approval-register"
-          icon={ShieldCheck}
-          label="In review"
-          tone={reviewRequests > 0 ? "warn" : "default"}
-          trend={`${openRequests.length} open shown`}
-          value={String(reviewRequests)}
+          href="#your-decision-queue"
+          icon={UserCheck}
+          label="Needs your decision"
+          tone={
+            (personal?.overdueMyTurn ?? 0) > 0
+              ? "critical"
+              : (personal?.myTurn.length ?? 0) > 0
+                ? "warn"
+                : "good"
+          }
+          trend={
+            (personal?.overdueMyTurn ?? 0) > 0
+              ? `${personal?.overdueMyTurn} past the ${OPS_APPROVAL_SLA_DAYS}-day SLA`
+              : (personal?.myTurn.length ?? 0) > 0
+                ? "Decide below"
+                : "All clear"
+          }
+          value={String(personal?.myTurn.length ?? 0)}
         />
         <OpsKpiCard
           href="/ops/approvals#approval-register"
-          icon={AlertTriangle}
-          label="Urgent shown"
-          tone={urgentRequests > 0 ? "warn" : "default"}
-          trend="Current filter"
-          value={String(urgentRequests)}
+          icon={ClipboardCheck}
+          label="Your open requests"
+          trend="Submitted by you, still in flight"
+          value={String(personal?.myOpenRequests.length ?? 0)}
+        />
+        <OpsKpiCard
+          href="#your-decision-queue"
+          icon={Hourglass}
+          label="Oldest waiting on you"
+          tone={
+            (personal?.oldestWaitingDays ?? 0) >= OPS_APPROVAL_SLA_DAYS
+              ? "critical"
+              : "default"
+          }
+          trend={`SLA is ${OPS_APPROVAL_SLA_DAYS} days`}
+          value={`${personal?.oldestWaitingDays ?? 0}d`}
         />
         <OpsKpiCard
           href="/ops/notifications"
@@ -319,6 +413,104 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
           value={String(notifications.length)}
         />
       </div>
+
+      {personal && personal.myTurn.length > 0 ? (
+        <section
+          className="scroll-mt-24 rounded-lg border border-orange-200 bg-white shadow-sm"
+          id="your-decision-queue"
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-orange-200/70 bg-orange-50/60 p-5">
+            <div>
+              <h2 className="flex items-center gap-2 font-heading text-xl font-bold text-primary-dark">
+                <UserCheck className="size-5 text-orange-600" aria-hidden="true" />
+                Your decision needed
+              </h2>
+              <p className="mt-1 text-sm text-primary-dark/60">
+                The chain has reached you on {personal.myTurn.length} request
+                {personal.myTurn.length === 1 ? "" : "s"} — approve or reject right here, oldest
+                first. Rejections need a short reason.
+              </p>
+            </div>
+          </div>
+          <ul className="divide-y divide-primary-dark/10">
+            {personal.myTurn.slice(0, 6).map(({ insight, request }) => (
+              <li className="p-5" key={request.id}>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <Link
+                      className="font-heading text-base font-bold text-primary-dark hover:text-primary-blue"
+                      href={`/ops/approvals/${request.id}`}
+                    >
+                      {request.title}
+                    </Link>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      {formatModule(request.module_key)} ·{" "}
+                      {formatOpsUserName(request.requester?.full_name, request.requester?.id)} ·{" "}
+                      {approvalAmount(request.amount, request.currency_code)}
+                    </p>
+                    <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="font-semibold text-primary-dark/60">
+                        Step {Math.min(insight.decidedSteps + 1, insight.totalSteps)} of{" "}
+                        {insight.totalSteps}
+                      </span>
+                      <span
+                        className={`inline-flex rounded-full border px-2 py-0.5 font-bold ${
+                          insight.isOverdue
+                            ? "border-red-200 bg-red-50 text-red-700"
+                            : "border-primary-dark/15 bg-primary-dark/[0.03] text-primary-dark/60"
+                        }`}
+                      >
+                        waiting {insight.ageDays}d{insight.isOverdue ? " — overdue" : ""}
+                      </span>
+                      {request.priority === "urgent" || request.priority === "high" ? (
+                        <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2 py-0.5 font-bold uppercase text-red-700">
+                          {request.priority}
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                  <form
+                    action={decideOpsApprovalAction}
+                    className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end"
+                  >
+                    <input name="approval_request_id" type="hidden" value={request.id} />
+                    <input
+                      aria-label={`Comment for ${request.title}`}
+                      className={`${OPS_INPUT_CLASS} min-w-40 flex-1 lg:max-w-64`}
+                      maxLength={500}
+                      name="comment"
+                      placeholder="Comment (required to reject)"
+                    />
+                    <OpsConfirmSubmitButton
+                      className={OPS_PRIMARY_BUTTON_CLASS}
+                      confirmText="Confirm approve"
+                      name="action"
+                      value="approve"
+                    >
+                      <ThumbsUp className="size-4" aria-hidden="true" />
+                      Approve
+                    </OpsConfirmSubmitButton>
+                    <OpsConfirmSubmitButton
+                      className={OPS_DANGER_BUTTON_CLASS}
+                      confirmText="Confirm reject"
+                      name="action"
+                      value="reject"
+                    >
+                      <ThumbsDown className="size-4" aria-hidden="true" />
+                      Reject
+                    </OpsConfirmSubmitButton>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {personal.myTurn.length > 6 ? (
+            <p className="border-t border-primary-dark/10 px-5 py-3 text-sm font-semibold text-primary-dark/60">
+              {personal.myTurn.length - 6} more in the register below.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <OpsDashboardPanel
         actions={
@@ -339,25 +531,25 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
       >
         <div className="grid gap-3 lg:grid-cols-4">
           <ApprovalFlowStep
-            description="Source modules submit controlled records into this shared queue."
-            icon={FileCheck2}
-            label="Modules shown"
-            value={String(moduleCount)}
+            description="Requests in this view whose current step is assigned to you."
+            icon={UserCheck}
+            label="Your turn (shown)"
+            value={String(shownMyTurn)}
           />
           <ApprovalFlowStep
-            description="Submitted and in-review records are still waiting for a final decision."
+            description={`Open past the ${OPS_APPROVAL_SLA_DAYS}-day SLA — the daily escalation sweep is already nagging these.`}
             icon={Clock}
-            label="Open shown"
-            value={String(openRequests.length)}
+            label="Overdue shown"
+            value={String(shownOverdue)}
           />
           <ApprovalFlowStep
-            description="Visible page totals are kept separate from global financial reporting."
+            description="Combined ZMW value of the requests visible on this page."
             icon={ListChecks}
             label="Visible ZMW value"
             value={formatZmw(visibleZmwAmount)}
           />
           <ApprovalFlowStep
-            description="Resolved records remain traceable through approval detail pages."
+            description={`${openRequests.length} still open in this view; resolved records stay traceable.`}
             icon={CheckCircle2}
             label="Resolved shown"
             value={String(resolvedRequests)}
@@ -450,41 +642,52 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
           {requests.length > 0 ? (
             <>
               <OpsMobileRecordList>
-                {requests.map((request) => (
-                  <OpsMobileRecordCard key={request.id}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-heading text-lg font-bold text-primary-dark">
-                          <Link className="hover:text-primary-blue" href={`/ops/approvals/${request.id}`}>
-                            {request.title}
-                          </Link>
-                        </p>
-                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
-                          {formatModule(request.module_key)}
-                        </p>
+                {requests.map((request) => {
+                  const insight = insightByRequest.get(request.id);
+                  return (
+                    <OpsMobileRecordCard key={request.id}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-heading text-lg font-bold text-primary-dark">
+                            <Link className="hover:text-primary-blue" href={`/ops/approvals/${request.id}`}>
+                              {request.title}
+                            </Link>
+                          </p>
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                            {formatModule(request.module_key)}
+                          </p>
+                          {insight?.isMyTurn ? (
+                            <span className="mt-1.5 inline-flex rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-orange-700">
+                              Your turn
+                            </span>
+                          ) : null}
+                        </div>
+                        <span
+                          className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
+                            request.status,
+                          )}`}
+                        >
+                          {formatStatus(request.status)}
+                        </span>
                       </div>
-                      <span
-                        className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                          request.status,
-                        )}`}
-                      >
-                        {formatStatus(request.status)}
-                      </span>
-                    </div>
-                    <OpsMobileRecordRow label="Requested by">
-                      {formatOpsUserName(request.requester?.full_name, request.requester?.id)}
-                    </OpsMobileRecordRow>
-                    <OpsMobileRecordRow label="Priority">
-                      <span className={priorityClass(request.priority)}>{request.priority}</span>
-                    </OpsMobileRecordRow>
-                    <OpsMobileRecordRow label="Amount">
-                      {approvalAmount(request.amount, request.currency_code)}
-                    </OpsMobileRecordRow>
-                    <OpsMobileRecordRow label="Due">
-                      {formatDateTime(request.due_at)}
-                    </OpsMobileRecordRow>
-                  </OpsMobileRecordCard>
-                ))}
+                      <OpsMobileRecordRow label="Progress">
+                        <ApprovalProgress insight={insight} />
+                      </OpsMobileRecordRow>
+                      <OpsMobileRecordRow label="Requested by">
+                        {formatOpsUserName(request.requester?.full_name, request.requester?.id)}
+                      </OpsMobileRecordRow>
+                      <OpsMobileRecordRow label="Priority">
+                        <span className={priorityClass(request.priority)}>{request.priority}</span>
+                      </OpsMobileRecordRow>
+                      <OpsMobileRecordRow label="Amount">
+                        {approvalAmount(request.amount, request.currency_code)}
+                      </OpsMobileRecordRow>
+                      <OpsMobileRecordRow label="Due">
+                        {formatDateTime(request.due_at)}
+                      </OpsMobileRecordRow>
+                    </OpsMobileRecordCard>
+                  );
+                })}
               </OpsMobileRecordList>
               <div
                 aria-label="Approval requests table"
@@ -501,6 +704,9 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                         Request
                       </th>
                       <th className="px-5 py-3" scope="col">
+                        Progress
+                      </th>
+                      <th className="px-5 py-3" scope="col">
                         Requester
                       </th>
                       <th className="px-5 py-3" scope="col">
@@ -510,55 +716,69 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                         Amount
                       </th>
                       <th className="px-5 py-3" scope="col">
-                        Due
-                      </th>
-                      <th className="px-5 py-3" scope="col">
                         Status
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-primary-dark/10">
-                    {requests.map((request) => (
-                      <tr key={request.id}>
-                        <td className="px-5 py-4">
-                          <Link
-                            className="font-bold text-primary-dark hover:text-primary-blue"
-                            href={`/ops/approvals/${request.id}`}
-                          >
-                            {request.title}
-                          </Link>
-                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
-                            {formatModule(request.module_key)} / {request.source_table}
-                          </p>
-                        </td>
-                        <td className="px-5 py-4 text-primary-dark/70">
-                          {formatOpsUserName(request.requester?.full_name, request.requester?.id)}
-                          {request.requester ? (
-                            <span className="mt-1 block text-xs text-primary-dark/45">
-                              {formatOpsRole(request.requester.role)}
+                    {requests.map((request) => {
+                      const insight = insightByRequest.get(request.id);
+                      return (
+                        <tr
+                          className={insight?.isMyTurn ? "bg-orange-50/40" : undefined}
+                          key={request.id}
+                        >
+                          <td className="px-5 py-4">
+                            <div className="flex items-start gap-2">
+                              {insight?.isMyTurn ? (
+                                <span
+                                  aria-hidden="true"
+                                  className="mt-1 block h-4 w-1 shrink-0 rounded-full bg-orange-500"
+                                />
+                              ) : null}
+                              <div className="min-w-0">
+                                <Link
+                                  className="font-bold text-primary-dark hover:text-primary-blue"
+                                  href={`/ops/approvals/${request.id}`}
+                                >
+                                  {request.title}
+                                </Link>
+                                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                                  {formatModule(request.module_key)}
+                                  {insight?.isMine ? " · raised by you" : ""}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            <ApprovalProgress insight={insight} />
+                          </td>
+                          <td className="px-5 py-4 text-primary-dark/70">
+                            {formatOpsUserName(request.requester?.full_name, request.requester?.id)}
+                            {request.requester ? (
+                              <span className="mt-1 block text-xs text-primary-dark/45">
+                                {formatOpsRole(request.requester.role)}
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className={`px-5 py-4 font-semibold ${priorityClass(request.priority)}`}>
+                            {request.priority}
+                          </td>
+                          <td className="px-5 py-4 font-semibold text-primary-dark">
+                            {approvalAmount(request.amount, request.currency_code)}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
+                                request.status,
+                              )}`}
+                            >
+                              {formatStatus(request.status)}
                             </span>
-                          ) : null}
-                        </td>
-                        <td className={`px-5 py-4 font-semibold ${priorityClass(request.priority)}`}>
-                          {request.priority}
-                        </td>
-                        <td className="px-5 py-4 font-semibold text-primary-dark">
-                          {approvalAmount(request.amount, request.currency_code)}
-                        </td>
-                        <td className="px-5 py-4 text-primary-dark/70">
-                          {formatDateTime(request.due_at)}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                              request.status,
-                            )}`}
-                          >
-                            {formatStatus(request.status)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -11,7 +11,11 @@ type OpsConfirmSubmitButtonProps = {
   children: React.ReactNode;
   className: string;
   confirmText: string;
+  /** Forwarded to the underlying button so multi-action forms can submit a
+   * named value (e.g. name="action" value="approve"). */
+  name?: string;
   pendingText?: string;
+  value?: string;
 };
 
 /**
@@ -30,7 +34,9 @@ export function OpsConfirmSubmitButton({
   children,
   className,
   confirmText,
+  name,
   pendingText = "Working...",
+  value,
 }: OpsConfirmSubmitButtonProps) {
   const { pending } = useFormStatus();
   const [isConfirming, setIsConfirming] = useState(false);
@@ -65,6 +71,8 @@ export function OpsConfirmSubmitButton({
       )}
       data-armed={isConfirming ? "true" : undefined}
       disabled={pending}
+      name={name}
+      value={value}
       onClick={(event) => {
         // Already committing, or a rapid second dispatch slipped through — block.
         if (pending || firedRef.current) {
