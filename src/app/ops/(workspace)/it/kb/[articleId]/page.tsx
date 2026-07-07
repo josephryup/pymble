@@ -14,6 +14,7 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_ERROR_CLASS,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
@@ -58,10 +59,10 @@ export default async function OpsItKbArticlePage({ params, searchParams }: PageP
       />
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">{error}</div>
+        <div className={OPS_NOTICE_ERROR_CLASS} role="alert">{error}</div>
       ) : null}
 
-      <article className="whitespace-pre-wrap rounded-2xl border border-primary-dark/10 bg-white p-5 text-sm text-primary-dark/80">
+      <article className="whitespace-pre-wrap rounded-lg border border-border bg-card p-5 text-sm text-foreground/80">
         {article.body || "No content yet."}
       </article>
 

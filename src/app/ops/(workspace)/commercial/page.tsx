@@ -171,21 +171,13 @@ import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import type {
-  OpsCommercialClaimStatus,
   OpsCommercialClaimType,
-  OpsCommercialCashflowStatus,
-  OpsCommercialContractStatus,
   OpsCommercialContractType,
   OpsCommercialForecastConfidence,
   OpsCommercialIpcStatus,
-  OpsCommercialMilestoneStatus,
-  OpsCommercialRetentionReleaseStatus,
   OpsCommercialRetentionReleaseType,
   OpsCommercialRiskCategory,
   OpsCommercialRiskSeverity,
-  OpsCommercialRiskStatus,
-  OpsCommercialValuationStatus,
-  OpsCommercialVariationStatus,
   OpsUserRole,
 } from "@/lib/ops/types";
 import {
@@ -199,7 +191,10 @@ import {
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
+  opsStatusBadgeClass,
+  type OpsStatusTone,
 } from "@/lib/ops/ui";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -355,193 +350,17 @@ function commercialNotice(params: OpsSearchParams) {
     : null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value.slice(0, 10)}T00:00:00+02:00`));
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function ipcStatusClass(status: OpsCommercialIpcStatus) {
-  if (status === "paid" || status === "certified" || status === "invoiced") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled" || status === "rejected") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function variationStatusClass(status: OpsCommercialVariationStatus) {
-  if (status === "approved" || status === "closed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled" || status === "rejected") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted" || status === "priced") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function claimStatusClass(status: OpsCommercialClaimStatus) {
-  if (status === "agreed" || status === "closed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled" || status === "rejected") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted" || status === "under_review") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function contractStatusClass(status: OpsCommercialContractStatus) {
-  if (status === "active" || status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled" || status === "terminated") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "on_hold") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function valuationStatusClass(status: OpsCommercialValuationStatus) {
-  if (status === "certified") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled" || status === "rejected") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function riskStatusClass(status: OpsCommercialRiskStatus, severity?: OpsCommercialRiskSeverity) {
-  if (status === "closed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (severity === "critical" || severity === "high") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "mitigating") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function retentionStatusClass(status: OpsCommercialRetentionReleaseStatus) {
-  if (status === "released" || status === "approved") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled" || status === "rejected") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function cashflowStatusClass(status: OpsCommercialCashflowStatus) {
-  if (status === "approved" || status === "locked") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "archived") {
-    return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function milestoneStatusClass(status: OpsCommercialMilestoneStatus) {
-  if (status === "certified" || status === "achieved") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled" || status === "delayed") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "due") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function StatusBadge({ className, value }: { className: string; value: string }) {
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${className}`}>
-      {formatLabel(value)}
-    </span>
-  );
+function StatusBadge({ value, tone }: { value: string; tone?: OpsStatusTone }) {
+  return <span className={opsStatusBadgeClass(value, tone)}>{formatLabel(value)}</span>;
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary-dark/40">
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-sm font-semibold text-primary-dark">{value}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -552,22 +371,6 @@ function formatPercent(value: number | null) {
   }
 
   return `${value.toFixed(1)}%`;
-}
-
-function marginToneClass(tone: OpsCommercialMarginTone) {
-  if (tone === "danger") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (tone === "warn") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (tone === "good") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58";
 }
 
 function marginToneLabel(tone: OpsCommercialMarginTone) {
@@ -590,20 +393,20 @@ function CommercialMarginPanel({ report }: { report: OpsCommercialMarginReport }
   const snapshots = report.snapshots.slice(0, 6);
 
   return (
-    <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="margin-watch">
-      <div className="flex flex-col gap-3 border-b border-primary-dark/10 p-5 min-[760px]:flex-row min-[760px]:items-center min-[760px]:justify-between">
+    <section className="rounded-lg border border-border bg-card shadow-sm" id="margin-watch">
+      <div className="flex flex-col gap-3 border-b border-border p-5 min-[760px]:flex-row min-[760px]:items-center min-[760px]:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-blue">
             Commercial margin
           </p>
-          <h2 className="mt-1 text-lg font-bold text-primary-dark">Project margin watch</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-primary-dark/56">
+          <h2 className="mt-1 text-lg font-bold text-foreground">Project margin watch</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
             Forecast revenue is built from active contracts, approved variations, and agreed claims;
             cost exposure comes from committed and posted project cost entries.
           </p>
         </div>
         <StatusBadge
-          className={report.totals.watchCount > 0 ? "border-orange-200 bg-orange-50 text-orange-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}
+          tone={report.totals.watchCount > 0 ? "attention" : "positive"}
           value={`${report.totals.watchCount} watches`}
         />
       </div>
@@ -623,13 +426,13 @@ function CommercialMarginPanel({ report }: { report: OpsCommercialMarginReport }
         <div className="mt-5 grid gap-3 lg:grid-cols-3">
           {snapshots.length > 0 ? (
             snapshots.map((snapshot) => (
-              <article className="rounded-lg border border-primary-dark/10 p-4" key={snapshot.siteId}>
+              <article className="rounded-lg border border-border p-4" key={snapshot.siteId}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                       {snapshot.site?.code ?? "Unmapped site"}
                     </p>
-                    <h3 className="mt-1 truncate text-sm font-bold text-primary-dark">
+                    <h3 className="mt-1 truncate text-sm font-bold text-foreground">
                       <Link
                         className="hover:text-primary-blue hover:underline"
                         href={`/ops/sites/${snapshot.siteId}`}
@@ -638,7 +441,7 @@ function CommercialMarginPanel({ report }: { report: OpsCommercialMarginReport }
                       </Link>
                     </h3>
                   </div>
-                  <StatusBadge className={marginToneClass(snapshot.tone)} value={marginToneLabel(snapshot.tone)} />
+                  <StatusBadge value={marginToneLabel(snapshot.tone)} />
                 </div>
                 <div className="mt-4 grid gap-4 min-[520px]:grid-cols-2">
                   <DetailItem label="Forecast margin" value={formatPercent(snapshot.forecastMarginPercent)} />
@@ -649,7 +452,7 @@ function CommercialMarginPanel({ report }: { report: OpsCommercialMarginReport }
               </article>
             ))
           ) : (
-            <div className="rounded-lg border border-dashed border-primary-dark/15 p-5 text-sm font-semibold text-primary-dark/56 lg:col-span-3">
+            <div className="rounded-lg border border-dashed border-border p-5 text-sm font-semibold text-muted-foreground lg:col-span-3">
               Create an active contract and post or commit project costs to start margin tracking.
             </div>
           )}
@@ -660,24 +463,24 @@ function CommercialMarginPanel({ report }: { report: OpsCommercialMarginReport }
 }
 
 function CommercialForecastPanel({ report }: { report: OpsCommercialForecastReport }) {
-  const cashflowTone =
-    report.totals.cashflowDangerCount > 0 ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  const cashflowTone: OpsStatusTone =
+    report.totals.cashflowDangerCount > 0 ? "negative" : "positive";
 
   return (
-    <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="forecast-watch">
-      <div className="flex flex-col gap-3 border-b border-primary-dark/10 p-5 min-[760px]:flex-row min-[760px]:items-center min-[760px]:justify-between">
+    <section className="rounded-lg border border-border bg-card shadow-sm" id="forecast-watch">
+      <div className="flex flex-col gap-3 border-b border-border p-5 min-[760px]:flex-row min-[760px]:items-center min-[760px]:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-blue">
             Forecast controls
           </p>
-          <h2 className="mt-1 text-lg font-bold text-primary-dark">Retention, cashflow, and milestone watch</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-primary-dark/56">
+          <h2 className="mt-1 text-lg font-bold text-foreground">Retention, cashflow, and milestone watch</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
             These figures show near-term commercial cash pressure from retention due, forecast cash
             movement, and contract milestone delivery.
           </p>
         </div>
         <StatusBadge
-          className={cashflowTone}
+          tone={cashflowTone}
           value={`${report.totals.cashflowDangerCount} negative forecasts`}
         />
       </div>
@@ -742,8 +545,8 @@ function IpcActions({
         </InlineActionForm>
       ) : null}
       {canCertifyOpsCommercialIpc(role, ipc) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Certify IPC
           </summary>
           <form action={certifyCommercialIpcAction} className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -781,8 +584,8 @@ function IpcActions({
         </InlineActionForm>
       ) : null}
       {canCreateOpsCommercialInvoiceFromIpc(role, ipc) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Create invoice from IPC
           </summary>
           <form action={createInvoiceFromCommercialIpcAction} className="mt-3 grid gap-3">
@@ -874,8 +677,8 @@ function VariationActions({
         </InlineActionForm>
       ) : null}
       {canPriceOpsCommercialVariation(role, variation) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Price variation
           </summary>
           <form action={priceCommercialVariationAction} className="mt-3 grid gap-3">
@@ -895,8 +698,8 @@ function VariationActions({
         </details>
       ) : null}
       {canApproveOpsCommercialVariation(role, variation) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Approve variation
           </summary>
           <form action={approveCommercialVariationAction} className="mt-3 grid gap-3">
@@ -988,8 +791,8 @@ function ClaimActions({
         </InlineActionForm>
       ) : null}
       {canAgreeOpsCommercialClaim(role, claim) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Agree claim
           </summary>
           <form action={agreeCommercialClaimAction} className="mt-3 grid gap-3">
@@ -1168,13 +971,12 @@ function ValuationLineEditor({
   const canEditLines = canEditOpsCommercialValuationLines(actorId, role, valuation);
 
   return (
-    <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+    <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/52">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
           Measurement lines
         </p>
         <StatusBadge
-          className="border-primary-dark/10 bg-white text-primary-dark/58"
           value={`${valuation.lines.length} lines`}
         />
       </div>
@@ -1182,7 +984,7 @@ function ValuationLineEditor({
         {valuation.lines.length > 0 ? (
           valuation.lines.map((line, index) => (
             <details
-              className="rounded-md border border-primary-dark/10 bg-white p-3"
+              className="rounded-md border border-border bg-card p-3"
               key={line.id}
               open={canEditLines && valuation.lines.length === 1}
             >
@@ -1192,11 +994,11 @@ function ValuationLineEditor({
                     <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                       Line {index + 1}
                     </p>
-                    <h4 className="mt-1 truncate text-sm font-bold text-primary-dark">
+                    <h4 className="mt-1 truncate text-sm font-bold text-foreground">
                       {line.description}
                     </h4>
                   </div>
-                  <p className="text-sm font-bold text-primary-dark">
+                  <p className="text-sm font-bold text-foreground">
                     {formatZmw(line.claimed_amount)} claimed / {formatZmw(line.certified_amount)} certified
                   </p>
                 </div>
@@ -1209,7 +1011,7 @@ function ValuationLineEditor({
                   <DetailItem label="Certified value" value={formatZmw(line.certified_amount)} />
                 </div>
                 {line.notes ? (
-                  <p className="rounded-md bg-primary-dark/[0.03] px-3 py-2 text-sm leading-6 text-primary-dark/62">
+                  <p className="rounded-md bg-muted/40 px-3 py-2 text-sm leading-6 text-muted-foreground">
                     {line.notes}
                   </p>
                 ) : null}
@@ -1290,12 +1092,12 @@ function ValuationLineEditor({
             </details>
           ))
         ) : (
-          <p className="rounded-md border border-dashed border-primary-dark/15 p-3 text-sm font-semibold text-primary-dark/56">
+          <p className="rounded-md border border-dashed border-border p-3 text-sm font-semibold text-muted-foreground">
             No lines have been captured for this valuation yet.
           </p>
         )}
         {canEditLines ? (
-          <details className="rounded-md border border-primary-blue/20 bg-white p-3">
+          <details className="rounded-md border border-primary-blue/20 bg-card p-3">
             <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
               Add valuation line
             </summary>
@@ -1405,8 +1207,8 @@ function RetentionReleaseActions({
         </InlineActionForm>
       ) : null}
       {canApproveOpsCommercialRetentionRelease(role, release) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Approve release
           </summary>
           <form action={approveCommercialRetentionReleaseAction} className="mt-3 grid gap-3">
@@ -1433,8 +1235,8 @@ function RetentionReleaseActions({
         </details>
       ) : null}
       {canReleaseOpsCommercialRetentionRelease(role, release) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Release retention
           </summary>
           <form action={releaseCommercialRetentionReleaseAction} className="mt-3 grid gap-3 min-[520px]:grid-cols-2">
@@ -1568,8 +1370,8 @@ function MilestoneActions({
         </InlineActionForm>
       ) : null}
       {canAchieveOpsCommercialMilestone(actorId, role, milestone) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Achieve milestone
           </summary>
           <form action={achieveCommercialMilestoneAction} className="mt-3 grid gap-3 min-[520px]:grid-cols-2">
@@ -1707,16 +1509,16 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
 
   return (
     <div className="grid gap-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-blue">
               QS and Commercial
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               IPCs, Variations, and Claims
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/62">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
               Control valuations, client-facing changes, and commercial claim exposure before they
               become invoices or financial risk.
             </p>
@@ -1888,11 +1690,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
       {canCreate ? (
         <section className="grid gap-4 lg:grid-cols-3">
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="contract-create-panel"
             open={openContractPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create contract
             </summary>
             {sites.length === 0 ? (
@@ -2003,11 +1805,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </details>
 
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="valuation-create-panel"
             open={openValuationPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create valuation
             </summary>
             {sites.length === 0 ? (
@@ -2093,11 +1895,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </details>
 
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="risk-create-panel"
             open={openRiskPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create commercial risk
             </summary>
             {sites.length === 0 ? (
@@ -2180,11 +1982,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </details>
 
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="retention-create-panel"
             open={openRetentionPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create retention release
             </summary>
             {contractOptions.length === 0 ? (
@@ -2255,11 +2057,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </details>
 
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="cashflow-create-panel"
             open={openCashflowPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create cashflow forecast
             </summary>
             {sites.length === 0 ? (
@@ -2340,11 +2142,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </details>
 
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="milestone-create-panel"
             open={openMilestonePanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create contract milestone
             </summary>
             {contractOptions.length === 0 ? (
@@ -2392,7 +2194,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                     <input className={OPS_INPUT_CLASS} max="100" min="0" name="billing_weight_percent" step="0.01" type="number" />
                   </label>
                 </div>
-                <div className="grid gap-2 text-sm font-semibold text-primary-dark/70 min-[520px]:grid-cols-2">
+                <div className="grid gap-2 text-sm font-semibold text-foreground/70 min-[520px]:grid-cols-2">
                   <label className="flex items-center gap-2">
                     <input name="invoice_trigger" type="checkbox" />
                     Invoice trigger
@@ -2414,11 +2216,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </details>
 
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="ipc-create-panel"
             open={openIpcPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create IPC
             </summary>
             {sites.length === 0 ? (
@@ -2489,11 +2291,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </details>
 
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="variation-create-panel"
             open={openVariationPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create variation
             </summary>
             {sites.length === 0 ? (
@@ -2552,11 +2354,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </details>
 
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="claim-create-panel"
             open={openClaimPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create claim
             </summary>
             {sites.length === 0 ? (
@@ -2633,11 +2435,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
       ) : null}
 
       <section className="grid gap-4 xl:grid-cols-3">
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="contract-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="contract-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Contract register</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Contract register</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Client contracts, sums, retention, and commercial source control.
               </p>
             </div>
@@ -2646,18 +2448,18 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <div className="grid gap-3 p-5">
             {contracts.length > 0 ? (
               contracts.map((contract) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={contract.id}>
+                <article className="rounded-lg border border-border p-4" key={contract.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {contract.contract_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{contract.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{contract.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {contract.site ? `${contract.site.code} - ${contract.site.name}` : "No site"}
                       </p>
                     </div>
-                    <StatusBadge className={contractStatusClass(contract.status)} value={contract.status} />
+                    <StatusBadge value={contract.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <DetailItem label="Client" value={contract.client_name} />
@@ -2666,7 +2468,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                     <DetailItem label="Retention" value={`${contract.retention_percent}%`} />
                   </div>
                   <ContractActions actorId={auth.profile.id} contract={contract} role={auth.profile.role} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreate}
                       sourceId={contract.id}
@@ -2677,9 +2479,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               ))
             ) : (
               <div className="p-6 text-center">
-                <Briefcase className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No contracts yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <Briefcase className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No contracts yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Create contracts before linking valuations and certified IPC invoices.
                 </p>
               </div>
@@ -2687,11 +2489,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="valuation-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="valuation-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Line valuations</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Line valuations</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Measured progress with line-level claimed and certified values.
               </p>
             </div>
@@ -2700,18 +2502,18 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <div className="grid gap-3 p-5">
             {valuations.length > 0 ? (
               valuations.map((valuation) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={valuation.id}>
+                <article className="rounded-lg border border-border p-4" key={valuation.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {valuation.valuation_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{valuation.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{valuation.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {valuation.site ? `${valuation.site.code} - ${valuation.site.name}` : "No site"}
                       </p>
                     </div>
-                    <StatusBadge className={valuationStatusClass(valuation.status)} value={valuation.status} />
+                    <StatusBadge value={valuation.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <DetailItem label="Claimed" value={formatZmw(valuation.claimed_total)} />
@@ -2725,7 +2527,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                     valuation={valuation}
                   />
                   <ValuationActions actorId={auth.profile.id} role={auth.profile.role} valuation={valuation} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreate}
                       sourceId={valuation.id}
@@ -2736,9 +2538,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               ))
             ) : (
               <div className="p-6 text-center">
-                <FileSpreadsheet className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No valuations yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <FileSpreadsheet className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No valuations yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Create valuations when measured progress needs line evidence before IPC certification.
                 </p>
               </div>
@@ -2746,11 +2548,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="risk-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="risk-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Commercial risks</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Commercial risks</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Track cost, payment, scope, and contract risks before they hit margin.
               </p>
             </div>
@@ -2759,18 +2561,18 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <div className="grid gap-3 p-5">
             {risks.length > 0 ? (
               risks.map((risk) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={risk.id}>
+                <article className="rounded-lg border border-border p-4" key={risk.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {risk.risk_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{risk.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{risk.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {risk.site ? `${risk.site.code} - ${risk.site.name}` : "No site"}
                       </p>
                     </div>
-                    <StatusBadge className={riskStatusClass(risk.status, risk.severity)} value={risk.status} />
+                    <StatusBadge value={risk.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <DetailItem label="Severity" value={formatLabel(risk.severity)} />
@@ -2779,12 +2581,12 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                     <DetailItem label="Due" value={formatDate(risk.due_date)} />
                   </div>
                   {risk.description || risk.mitigation_plan ? (
-                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">
                       {[risk.description, risk.mitigation_plan].filter(Boolean).join(" ")}
                     </p>
                   ) : null}
                   <RiskActions actorId={auth.profile.id} risk={risk} role={auth.profile.role} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreate}
                       sourceId={risk.id}
@@ -2795,9 +2597,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               ))
             ) : (
               <div className="p-6 text-center">
-                <AlertTriangle className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No commercial risks yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <AlertTriangle className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No commercial risks yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Add risks when cost, payment, scope, or contract exposure needs management.
                 </p>
               </div>
@@ -2807,11 +2609,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="retention-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="retention-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Retention releases</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Retention releases</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Track retention due, approved, and released back to contract cashflow.
               </p>
             </div>
@@ -2820,20 +2622,20 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <div className="grid gap-3 p-5">
             {retentionReleases.length > 0 ? (
               retentionReleases.map((release) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={release.id}>
+                <article className="rounded-lg border border-border p-4" key={release.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {release.release_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{release.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{release.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {release.contract
                           ? `${release.contract.contract_number} - ${release.contract.title}`
                           : "No contract"}
                       </p>
                     </div>
-                    <StatusBadge className={retentionStatusClass(release.status)} value={release.status} />
+                    <StatusBadge value={release.status} />
                   </div>
                   <div className="mt-4 grid gap-4 min-[520px]:grid-cols-2">
                     <DetailItem label="Claimed" value={formatZmw(release.claimed_amount)} />
@@ -2842,7 +2644,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                     <DetailItem label="Due" value={formatDate(release.due_date)} />
                   </div>
                   <RetentionReleaseActions actorId={auth.profile.id} release={release} role={auth.profile.role} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreate}
                       sourceId={release.id}
@@ -2853,9 +2655,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               ))
             ) : (
               <div className="p-6 text-center">
-                <Banknote className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No retention releases yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <Banknote className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No retention releases yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Create a release when retention becomes recoverable under a contract.
                 </p>
               </div>
@@ -2863,11 +2665,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="cashflow-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="cashflow-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Cashflow forecasts</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Cashflow forecasts</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Forecast revenue, retention release, and cost movement by period.
               </p>
             </div>
@@ -2876,18 +2678,18 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <div className="grid gap-3 p-5">
             {cashflowForecasts.length > 0 ? (
               cashflowForecasts.map((forecast) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={forecast.id}>
+                <article className="rounded-lg border border-border p-4" key={forecast.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {forecast.forecast_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{forecast.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{forecast.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {formatDate(forecast.period_start)} to {formatDate(forecast.period_end)}
                       </p>
                     </div>
-                    <StatusBadge className={cashflowStatusClass(forecast.status)} value={forecast.status} />
+                    <StatusBadge value={forecast.status} />
                   </div>
                   <div className="mt-4 grid gap-4 min-[520px]:grid-cols-2">
                     <DetailItem label="Forecast revenue" value={formatZmw(forecast.forecast_revenue)} />
@@ -2896,7 +2698,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                     <DetailItem label="Net cash" value={formatZmw(forecast.forecast_net_cash)} />
                   </div>
                   <CashflowForecastActions actorId={auth.profile.id} forecast={forecast} role={auth.profile.role} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreate}
                       sourceId={forecast.id}
@@ -2907,9 +2709,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               ))
             ) : (
               <div className="p-6 text-center">
-                <TrendingUp className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No cashflow forecasts yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <TrendingUp className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No cashflow forecasts yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Add forecast periods to expose near-term cash pressure.
                 </p>
               </div>
@@ -2917,11 +2719,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="milestone-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="milestone-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Contract milestones</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Contract milestones</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Forecast delivery gates that can trigger billing or retention release.
               </p>
             </div>
@@ -2930,20 +2732,20 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <div className="grid gap-3 p-5">
             {milestones.length > 0 ? (
               milestones.map((milestone) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={milestone.id}>
+                <article className="rounded-lg border border-border p-4" key={milestone.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {milestone.milestone_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{milestone.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{milestone.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {milestone.contract
                           ? `${milestone.contract.contract_number} - ${milestone.contract.title}`
                           : "No contract"}
                       </p>
                     </div>
-                    <StatusBadge className={milestoneStatusClass(milestone.status)} value={milestone.status} />
+                    <StatusBadge value={milestone.status} />
                   </div>
                   <div className="mt-4 grid gap-4 min-[520px]:grid-cols-2">
                     <DetailItem label="Target" value={formatZmw(milestone.target_amount)} />
@@ -2953,14 +2755,14 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {milestone.invoice_trigger ? (
-                      <StatusBadge className="border-primary-blue/20 bg-primary-blue/5 text-primary-blue" value="Invoice trigger" />
+                      <StatusBadge tone="info" value="Invoice trigger" />
                     ) : null}
                     {milestone.retention_trigger ? (
-                      <StatusBadge className="border-orange-200 bg-orange-50 text-orange-700" value="Retention trigger" />
+                      <StatusBadge tone="attention" value="Retention trigger" />
                     ) : null}
                   </div>
                   <MilestoneActions actorId={auth.profile.id} milestone={milestone} role={auth.profile.role} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreate}
                       sourceId={milestone.id}
@@ -2971,9 +2773,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               ))
             ) : (
               <div className="p-6 text-center">
-                <Flag className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No milestones yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <Flag className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No milestones yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Add contract milestones to forecast delivery, billing, and retention events.
                 </p>
               </div>
@@ -2982,15 +2784,15 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
         </div>
       </section>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="ipc-register">
-        <div className="flex flex-col gap-3 border-b border-primary-dark/10 p-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="rounded-lg border border-border bg-card shadow-sm" id="ipc-register">
+        <div className="flex flex-col gap-3 border-b border-border p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-primary-dark">IPC register</h2>
-            <p className="mt-1 text-sm text-primary-dark/56">
+            <h2 className="text-lg font-bold text-foreground">IPC register</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Track valuations from draft claim to certification, invoicing, and payment.
             </p>
           </div>
-          <StatusBadge className="border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58" value={`${ipcs.pagination.total} records`} />
+          <StatusBadge value={`${ipcs.pagination.total} records`} />
         </div>
         <OpsListControls
           action="/ops/commercial"
@@ -3007,7 +2809,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           resultLabel="IPCs"
         />
         <div className={OPS_TABLE_SCROLL_CLASS} tabIndex={0}>
-          <div className="min-w-[960px] divide-y divide-primary-dark/10">
+          <div className="min-w-[960px] divide-y divide-border">
             {ipcs.items.length > 0 ? (
               ipcs.items.map((ipc) => (
                 <article className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]" key={ipc.id}>
@@ -3017,12 +2819,12 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                         <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                           {ipc.ipc_number}
                         </p>
-                        <h3 className="mt-1 text-lg font-bold text-primary-dark">{ipc.title}</h3>
-                        <p className="mt-1 text-sm text-primary-dark/58">
+                        <h3 className="mt-1 text-lg font-bold text-foreground">{ipc.title}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
                           {ipc.site ? `${ipc.site.code} - ${ipc.site.name}` : "No site"}
                         </p>
                       </div>
-                      <StatusBadge className={ipcStatusClass(ipc.status)} value={ipc.status} />
+                      <StatusBadge value={ipc.status} />
                     </div>
                     <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                       <DetailItem label="Valuation date" value={formatDate(ipc.valuation_date)} />
@@ -3041,11 +2843,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                       <DetailItem label="Client ref" value={ipc.client_reference || "None"} />
                     </div>
                     {ipc.description ? (
-                      <p className="mt-4 text-sm leading-6 text-primary-dark/62">{ipc.description}</p>
+                      <p className="mt-4 text-sm leading-6 text-muted-foreground">{ipc.description}</p>
                     ) : null}
                     <IpcActions actorId={auth.profile.id} ipc={ipc} role={auth.profile.role} />
                   </div>
-                  <div className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreate}
                       sourceId={ipc.id}
@@ -3056,11 +2858,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               ))
             ) : (
               <div className="p-8 text-center">
-                <FileCheck2 className="mx-auto size-10 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 text-lg font-bold text-primary-dark">
+                <FileCheck2 className="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 text-lg font-bold text-foreground">
                   {hasActiveListFilter ? "No matching IPCs" : "No IPCs yet"}
                 </h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <p className="mt-2 text-sm text-muted-foreground">
                   {hasActiveListFilter
                     ? "Adjust the search or status filter to widen the IPC register."
                     : "Create the first IPC when a valuation is ready to be controlled."}
@@ -3086,11 +2888,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="variation-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="variation-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Variation register</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Variation register</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Commercial change control with pricing and approval status.
               </p>
             </div>
@@ -3099,18 +2901,18 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <div className="grid gap-3 p-5">
             {variations.length > 0 ? (
               variations.map((variation) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={variation.id}>
+                <article className="rounded-lg border border-border p-4" key={variation.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {variation.variation_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{variation.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{variation.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {variation.site ? `${variation.site.code} - ${variation.site.name}` : "No site"}
                       </p>
                     </div>
-                    <StatusBadge className={variationStatusClass(variation.status)} value={variation.status} />
+                    <StatusBadge value={variation.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-3">
                     <DetailItem label="Submitted" value={formatZmw(variation.submitted_amount)} />
@@ -3118,12 +2920,12 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                     <DetailItem label="Instruction" value={variation.instruction_reference || "None"} />
                   </div>
                   {variation.description || variation.reason ? (
-                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">
                       {[variation.description, variation.reason].filter(Boolean).join(" ")}
                     </p>
                   ) : null}
                   <VariationActions actorId={auth.profile.id} role={auth.profile.role} variation={variation} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreate}
                       sourceId={variation.id}
@@ -3134,9 +2936,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               ))
             ) : (
               <div className="p-6 text-center">
-                <Gavel className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No variations yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <Gavel className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No variations yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Create variations when instructed changes need pricing and approval control.
                 </p>
               </div>
@@ -3144,11 +2946,11 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="claim-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="claim-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Claims register</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Claims register</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Track EOT, loss/expense, disruption, and disputed variation exposure.
               </p>
             </div>
@@ -3157,18 +2959,18 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <div className="grid gap-3 p-5">
             {claims.length > 0 ? (
               claims.map((claim) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={claim.id}>
+                <article className="rounded-lg border border-border p-4" key={claim.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {claim.claim_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{claim.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{claim.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {claim.site ? `${claim.site.code} - ${claim.site.name}` : "No site"}
                       </p>
                     </div>
-                    <StatusBadge className={claimStatusClass(claim.status)} value={claim.status} />
+                    <StatusBadge value={claim.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-3">
                     <DetailItem label="Type" value={formatLabel(claim.claim_type)} />
@@ -3181,10 +2983,10 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                     <DetailItem label="Variation" value={claim.variation?.variation_number ?? "None"} />
                   </div>
                   {claim.description ? (
-                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">{claim.description}</p>
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">{claim.description}</p>
                   ) : null}
                   <ClaimActions actorId={auth.profile.id} claim={claim} role={auth.profile.role} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreate}
                       sourceId={claim.id}
@@ -3195,9 +2997,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               ))
             ) : (
               <div className="p-6 text-center">
-                <Scale className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No claims yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <Scale className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No claims yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Create claims when commercial entitlement needs formal tracking.
                 </p>
               </div>
@@ -3206,7 +3008,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
         </div>
       </section>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="grid gap-4 md:grid-cols-4">
           <DetailItem label="IPC" value="Draft -> submitted -> certified" />
           <DetailItem label="Contract" value="Draft -> active -> completed" />
@@ -3215,7 +3017,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <DetailItem label="Claim" value="Submitted -> review -> agreed" />
           <DetailItem label="Invoice" value="Certified IPC can create draft invoice" />
         </div>
-        <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-primary-dark/52">
+        <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
           <ClipboardCheck className="size-4" aria-hidden="true" />
           <span>Invoice generation is deliberate: a certified IPC creates a draft invoice, then Finance sends and receives payment.</span>
         </div>

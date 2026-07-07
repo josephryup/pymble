@@ -89,14 +89,16 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 import type {
-  OpsCorrectiveActionStatus,
   OpsHseIncidentSeverity,
   OpsHseIncidentStatus,
   OpsHseIncidentType,
   OpsPriority,
 } from "@/lib/ops/types";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -187,89 +189,6 @@ function hseNotice(params: OpsSearchParams) {
     : null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value.slice(0, 10)}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function incidentStatusClass(status: OpsHseIncidentStatus) {
-  if (status === "closed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "investigating" || status === "action_required") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function severityClass(severity: OpsHseIncidentSeverity) {
-  if (severity === "critical") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (severity === "high") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (severity === "medium") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
-}
-
-function actionStatusClass(status: OpsCorrectiveActionStatus) {
-  if (status === "verified") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "completed") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
 function pressureClass(level: OpsHseExecutivePressureLevel) {
   if (level === "urgent") {
     return "border-red-200 bg-red-50 text-red-700";
@@ -291,32 +210,32 @@ function executiveSignalClass(tone: OpsHseExecutiveSignal["tone"]) {
     return "border-orange-200 bg-orange-50 text-orange-700";
   }
 
-  return "border-primary-dark/10 bg-primary-dark/[0.02] text-primary-dark/62";
+  return "border-border bg-muted/40 text-muted-foreground";
 }
 
 function HseMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-bold text-foreground">{value}</dd>
     </div>
   );
 }
 
 function ExecutiveSafetyRollup({ rollup }: { rollup: OpsHseExecutiveSafetyRollup }) {
   return (
-    <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-blue">
             Executive safety rollup
           </p>
-          <h2 className="mt-2 font-heading text-xl font-bold text-primary-dark">
+          <h2 className="mt-2 font-heading text-xl font-bold text-foreground">
             HSE pressure index
           </h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-primary-dark/60">
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
             {rollup.headline}
           </p>
         </div>
@@ -325,17 +244,17 @@ function ExecutiveSafetyRollup({ rollup }: { rollup: OpsHseExecutiveSafetyRollup
         </span>
       </div>
       <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rounded-md border border-primary-dark/10 p-4">
+        <div className="rounded-md border border-border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-4xl font-bold text-primary-dark">{rollup.pressureScore}</p>
-              <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/42">
+              <p className="text-4xl font-bold text-foreground">{rollup.pressureScore}</p>
+              <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Safety pressure
               </p>
             </div>
             <BarChart3 className="size-8 text-primary-blue" aria-hidden="true" />
           </div>
-          <div className="mt-4 h-3 overflow-hidden rounded-full bg-primary-dark/8" aria-hidden="true">
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-muted/40" aria-hidden="true">
             <div
               className={`h-full rounded-full ${
                 rollup.pressureLevel === "urgent"
@@ -371,10 +290,10 @@ function ExecutiveSafetyRollup({ rollup }: { rollup: OpsHseExecutiveSafetyRollup
       </div>
       <div className="mt-5">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/50">
+          <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Executive trend snapshot
           </h3>
-          <p className="text-xs font-semibold text-primary-dark/45">Generated {formatDate(rollup.today)}</p>
+          <p className="text-xs font-semibold text-muted-foreground">Generated {formatDate(rollup.today)}</p>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {rollup.trendSnapshots.map((snapshot) => (
@@ -405,16 +324,16 @@ function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport 
       : "border-emerald-200 bg-emerald-50 text-emerald-800";
 
   return (
-    <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-blue">
             Email observability
           </p>
-          <h2 className="mt-2 font-heading text-xl font-bold text-primary-dark">
+          <h2 className="mt-2 font-heading text-xl font-bold text-foreground">
             Critical HSE email health
           </h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-primary-dark/60">
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
             Delivery tracking for high-priority HSE escalation emails. In-app notifications remain
             the system of record.
           </p>
@@ -457,8 +376,8 @@ function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport 
         />
       </div>
       <div className="mt-5 grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-md border border-primary-dark/10 p-4">
-          <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/50">
+        <div className="rounded-md border border-border p-4">
+          <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
             7-day delivery trend
           </h3>
           <div className="mt-4">
@@ -479,8 +398,8 @@ function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport 
             />
           </div>
         </div>
-        <div className="rounded-md border border-primary-dark/10 p-4" id="email-delivery-health">
-          <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/50">
+        <div className="rounded-md border border-border p-4" id="email-delivery-health">
+          <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Recent delivery events
           </h3>
           {report.recentEvents.length > 0 ? (
@@ -510,7 +429,7 @@ function HseEmailDeliveryHealth({ report }: { report: OpsHseEmailDeliveryReport 
               ))}
             </div>
           ) : (
-            <div className="mt-4 rounded-md border border-dashed border-primary-dark/15 bg-primary-dark/[0.03] p-5 text-sm leading-6 text-primary-dark/60">
+            <div className="mt-4 rounded-md border border-dashed border-border bg-muted/40 p-5 text-sm leading-6 text-muted-foreground">
               Critical HSE email delivery events will appear after the observability migration is
               applied and an escalation email is attempted.
             </div>
@@ -547,11 +466,11 @@ function ActionControls({
         </form>
       ) : null}
       {canComplete ? (
-        <details className="rounded-md border border-primary-dark/10 md:col-span-2">
-          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-primary-dark [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+        <details className="rounded-md border border-border md:col-span-2">
+          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-foreground [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
             Complete action
           </summary>
-          <form action={completeCorrectiveActionAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+          <form action={completeCorrectiveActionAction} className="grid gap-3 border-t border-border p-3">
             <input name="action_id" type="hidden" value={action.id} />
             <label className={OPS_LABEL_CLASS}>
               Completion notes
@@ -565,11 +484,11 @@ function ActionControls({
         </details>
       ) : null}
       {canVerify ? (
-        <details className="rounded-md border border-primary-dark/10 md:col-span-2">
-          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-primary-dark [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+        <details className="rounded-md border border-border md:col-span-2">
+          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-foreground [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
             Verify action
           </summary>
-          <form action={verifyCorrectiveActionAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+          <form action={verifyCorrectiveActionAction} className="grid gap-3 border-t border-border p-3">
             <input name="action_id" type="hidden" value={action.id} />
             <label className={OPS_LABEL_CLASS}>
               Verification notes
@@ -600,11 +519,11 @@ function ActionControls({
 
 function IncidentActionRequiredForm({ incident }: { incident: OpsHseIncidentSummary }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className={`cursor-pointer list-none px-4 py-3 text-sm font-bold text-primary-dark [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+    <details className="rounded-md border border-border">
+      <summary className={`cursor-pointer list-none px-4 py-3 text-sm font-bold text-foreground [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
         Move to corrective action
       </summary>
-      <form action={requireHseCorrectiveActionAction} className="grid gap-3 border-t border-primary-dark/10 p-4">
+      <form action={requireHseCorrectiveActionAction} className="grid gap-3 border-t border-border p-4">
         <input name="incident_id" type="hidden" value={incident.id} />
         <label className={OPS_LABEL_CLASS}>
           Investigation summary
@@ -751,11 +670,11 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
-        <div className="rounded-lg border border-primary-dark/10 bg-white p-5">
-          <h2 className="font-heading text-xl font-bold text-primary-dark">
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-heading text-xl font-bold text-foreground">
             Incident trend — last {incidentTrend.months} months
           </h2>
-          <p className="mt-1 text-sm text-primary-dark/60">
+          <p className="mt-1 text-sm text-muted-foreground">
             Recordable incidents, near-misses and lost-time incidents per month.
           </p>
           <div className="mt-4">
@@ -776,9 +695,9 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
             />
           </div>
         </div>
-        <div className="rounded-lg border border-primary-dark/10 bg-white p-5">
-          <h2 className="font-heading text-xl font-bold text-primary-dark">Severity mix</h2>
-          <p className="mt-1 text-sm text-primary-dark/60">
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-heading text-xl font-bold text-foreground">Severity mix</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             All incidents in the window by severity.
           </p>
           <div className="mt-4">
@@ -809,7 +728,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
 
       {canCreateIncident ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="incident-create-panel"
           open={openIncidentPanel}
         >
@@ -818,25 +737,25 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
               <AlertTriangle className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Report Health, Safety and Environment incident
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Capture site, severity, date, people involved, and immediate controls.
               </span>
             </span>
-            <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           {siteOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add an active site before reporting incidents.
               </div>
             </div>
           ) : (
-            <form action={createHseIncidentAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+            <form action={createHseIncidentAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
                 <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -905,7 +824,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
 
       {canCreateAction ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="action-create-panel"
           open={openActionPanel}
         >
@@ -914,18 +833,18 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
               <Wrench className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create corrective action
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Link it to an incident when available, assign an owner, and track due date.
               </span>
             </span>
-            <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
-          <form action={createCorrectiveActionAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createCorrectiveActionAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Related incident
               <select className={OPS_INPUT_CLASS} name="incident_id">
@@ -991,16 +910,16 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
         </details>
       ) : null}
 
-      <section className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white" id="incident-register">
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+      <section className="scroll-mt-24 rounded-lg border border-border bg-card" id="incident-register">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               HSE register
             </p>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Incident records
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               {incidentPage.pagination.total} matching incident records.
             </p>
           </div>
@@ -1028,7 +947,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
         />
 
         {incidentPage.items.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {incidentPage.items.map((incident) => {
               const canStart = canStartOpsHseInvestigation(auth.profile.role, incident);
               const canRequireAction = canRequireOpsCorrectiveAction(auth.profile.role, incident);
@@ -1040,18 +959,18 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {incident.incident_number}
                         </h3>
-                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${incidentStatusClass(incident.status)}`}>
+                        <span className={opsStatusBadgeClass(incident.status)}>
                           {formatLabel(incident.status)}
                         </span>
-                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${severityClass(incident.severity)}`}>
+                        <span className={opsStatusBadgeClass(incident.severity)}>
                           {formatLabel(incident.severity)}
                         </span>
                       </div>
-                      <p className="mt-2 font-bold text-primary-dark">{incident.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-2 font-bold text-foreground">{incident.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
                         {incident.site ? `${incident.site.code} - ${incident.site.name}` : "Site unavailable"} /{" "}
                         {formatLabel(incident.incident_type)}
                       </p>
@@ -1108,10 +1027,10 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
 
                   {incident.description || incident.immediate_action ? (
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                      <p className="rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                         {incident.description || "No incident description recorded."}
                       </p>
-                      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                      <p className="rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                         {incident.immediate_action || "No immediate action recorded."}
                       </p>
                     </div>
@@ -1126,22 +1045,22 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
                   {incident.actions.length > 0 ? (
                     <div className="mt-4 space-y-3">
                       {incident.actions.map((action) => (
-                        <div className="rounded-md border border-primary-dark/10 p-4" key={action.id}>
+                        <div className="rounded-md border border-border p-4" key={action.id}>
                           <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                             <div>
-                              <p className="font-bold text-primary-dark">
+                              <p className="font-bold text-foreground">
                                 {action.action_number} - {action.title}
                               </p>
-                              <p className="mt-1 text-sm text-primary-dark/60">
+                              <p className="mt-1 text-sm text-muted-foreground">
                                 Owner: {action.owner?.full_name ?? "Unassigned"} / Due: {formatDate(action.due_date)}
                               </p>
                             </div>
-                            <span className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${actionStatusClass(action.status)}`}>
+                            <span className={`w-fit ${opsStatusBadgeClass(action.status)}`}>
                               {formatLabel(action.status)}
                             </span>
                           </div>
                           {action.description ? (
-                            <p className="mt-3 text-sm leading-6 text-primary-dark/65">
+                            <p className="mt-3 text-sm leading-6 text-muted-foreground">
                               {action.description}
                             </p>
                           ) : null}
@@ -1169,10 +1088,10 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
             <ShieldCheck className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 {hasActiveListFilter ? "No matching incidents" : "No Health, Safety and Environment incidents yet"}
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 {hasActiveListFilter
                   ? "Adjust the search, status, or severity filter to widen the register."
                   : "Create the first incident or near-miss record when something needs HSE follow-up."}

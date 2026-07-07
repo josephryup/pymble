@@ -110,17 +110,12 @@ import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions, type OpsSiteOption } from "@/lib/ops/sites";
 import type {
-  OpsDrawingRegisterStatus,
-  OpsMaterialTestStatus,
   OpsPriority,
   OpsProgrammeMilestoneStatus,
   OpsQaFindingCategory,
   OpsQaInspectionItemResult,
-  OpsQaInspectionStatus,
-  OpsSiteInstructionFollowUpStatus,
   OpsSiteInstructionFollowUpType,
   OpsSiteInstructionStatus,
-  OpsSnagItemStatus,
   OpsUserRole,
 } from "@/lib/ops/types";
 import {
@@ -132,7 +127,10 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  opsStatusBadgeClass,
+  type OpsStatusTone,
 } from "@/lib/ops/ui";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -261,155 +259,28 @@ function engineeringNotice(params: OpsSearchParams) {
     : null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value.slice(0, 10)}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function statusClass(
-  status:
-    | OpsSiteInstructionStatus
-    | OpsQaInspectionStatus
-    | OpsMaterialTestStatus
-    | OpsSnagItemStatus
-    | OpsDrawingRegisterStatus
-    | OpsProgrammeMilestoneStatus
-    | OpsSiteInstructionFollowUpStatus,
-) {
-  if (
-    status === "closed" ||
-    status === "completed" ||
-    status === "passed" ||
-    status === "verified" ||
-    status === "current"
-  ) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (
-    status === "cancelled" ||
-    status === "failed" ||
-    status === "archived" ||
-    status === "superseded"
-  ) {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "action_required" || status === "delayed") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (status === "in_progress") {
-    return "border-primary-blue/20 bg-primary-blue/[0.06] text-primary-blue";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function priorityClass(priority: OpsPriority) {
-  if (priority === "urgent") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (priority === "high") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (priority === "low") {
-    return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function qaItemResultClass(result: OpsQaInspectionItemResult) {
-  if (result === "pass") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (result === "fail") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (result === "observation") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55";
-}
-
-function qaFindingCategoryClass(category: OpsQaFindingCategory) {
-  if (category === "safety" || category === "environmental") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (category === "design" || category === "coordination") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (category === "documentation" || category === "testing") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55";
-}
-
 function formatPercent(value: number) {
   return `${value.toLocaleString("en-ZM", { maximumFractionDigits: 1 })}%`;
 }
 
-function StatusBadge({ className, value }: { className: string; value: string }) {
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${className}`}>
-      {formatLabel(value)}
-    </span>
-  );
+function StatusBadge({ value, tone }: { value: string; tone?: OpsStatusTone }) {
+  return <span className={opsStatusBadgeClass(value, tone)}>{formatLabel(value)}</span>;
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary-dark/40">
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-sm font-semibold text-primary-dark">{value}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }
 
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-3 text-sm text-primary-dark/60">
+    <p className="rounded-md border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
       {children}
     </p>
   );
@@ -425,11 +296,11 @@ function QaCategoryPressurePanel({
       {rows.length > 0 ? (
         <ul className="grid gap-2">
           {rows.slice(0, 6).map((row) => (
-            <li className="rounded-md border border-primary-dark/10 px-3 py-3" key={row.category}>
+            <li className="rounded-md border border-border px-3 py-3" key={row.category}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <StatusBadge className={qaFindingCategoryClass(row.category)} value={row.category} />
-                  <p className="mt-2 font-bold text-primary-dark">{row.total} items</p>
+                  <StatusBadge value={row.category} />
+                  <p className="mt-2 font-bold text-foreground">{row.total} items</p>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-right">
                   <DetailItem label="Action" value={String(row.action_required)} />
@@ -462,24 +333,20 @@ function ProgrammePressurePanel({
       </dl>
       <div className="mt-4">
         {report.siteRows.length > 0 ? (
-          <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+          <ul className="divide-y divide-border rounded-md border border-border">
             {report.siteRows.map((site) => (
               <li className="px-3 py-3" key={site.site_id}>
                 <div className="flex flex-col gap-3 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                   <div>
-                    <p className="font-bold text-primary-dark">
+                    <p className="font-bold text-foreground">
                       {site.site_code} - {site.site_name}
                     </p>
-                    <p className="mt-1 text-xs text-primary-dark/50">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Next due {formatDate(site.next_due_date)}
                     </p>
                   </div>
                   <StatusBadge
-                    className={
-                      site.overdue > 0 || site.delayed > 0
-                        ? "border-orange-200 bg-orange-50 text-orange-700"
-                        : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    }
+                    tone={site.overdue > 0 || site.delayed > 0 ? "attention" : "positive"}
                     value={`${formatPercent(site.progress_percent)} avg`}
                   />
                 </div>
@@ -514,18 +381,17 @@ function ActiveFollowUpsPanel({
       {followUps.length > 0 ? (
         <ul className="grid gap-2">
           {followUps.map((followUp) => (
-            <li className="rounded-md border border-primary-dark/10 px-3 py-3" key={followUp.id}>
+            <li className="rounded-md border border-border px-3 py-3" key={followUp.id}>
               <div className="flex flex-col gap-3 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                 <div>
                   <div className="flex flex-wrap gap-2">
-                    <StatusBadge className={statusClass(followUp.status)} value={followUp.status} />
+                    <StatusBadge value={followUp.status} />
                     <StatusBadge
-                      className="border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55"
                       value={followUp.task_type}
                     />
                   </div>
-                  <p className="mt-2 font-bold text-primary-dark">{followUp.title}</p>
-                  <p className="mt-1 text-xs text-primary-dark/50">
+                  <p className="mt-2 font-bold text-foreground">{followUp.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {followUp.instruction?.instruction_number ?? "Instruction"} / {followUp.site?.code ?? "Site"}
                   </p>
                 </div>
@@ -637,15 +503,15 @@ function CreateSiteInstructionForm({
   }
 
   return (
-    <details className="rounded-lg border border-primary-dark/10 bg-white">
-      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+    <details className="rounded-lg border border-border bg-card">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <Plus className="size-4" aria-hidden="true" />
           Create site instruction
         </span>
-        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
       </summary>
-      <form action={createSiteInstructionAction} className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-2 xl:grid-cols-6">
+      <form action={createSiteInstructionAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
         <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
           Project/site
           <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -713,15 +579,15 @@ function CreateQaInspectionForm({
   }
 
   return (
-    <details className="rounded-lg border border-primary-dark/10 bg-white">
-      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+    <details className="rounded-lg border border-border bg-card">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <ClipboardCheck className="size-4" aria-hidden="true" />
           Create QA inspection
         </span>
-        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
       </summary>
-      <form action={createQaInspectionAction} className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-2 xl:grid-cols-6">
+      <form action={createQaInspectionAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
         <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
           Project/site
           <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -776,15 +642,15 @@ function CreateLinkedRecordsForm({
 
   return (
     <div className="grid gap-4">
-      <details className="rounded-lg border border-primary-dark/10 bg-white">
-        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+      <details className="rounded-lg border border-border bg-card">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <AlertTriangle className="size-4" aria-hidden="true" />
             Create material test
           </span>
-          <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+          <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
         </summary>
-        <form action={createMaterialTestAction} className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-2 xl:grid-cols-6">
+        <form action={createMaterialTestAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
           <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
             Project/site
             <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -838,15 +704,15 @@ function CreateLinkedRecordsForm({
         </form>
       </details>
 
-      <details className="rounded-lg border border-primary-dark/10 bg-white">
-        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+      <details className="rounded-lg border border-border bg-card">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <ListChecks className="size-4" aria-hidden="true" />
             Create snag item
           </span>
-          <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+          <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
         </summary>
-        <form action={createSnagItemAction} className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-2 xl:grid-cols-6">
+        <form action={createSnagItemAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
           <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
             Project/site
             <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -900,15 +766,15 @@ function CreateLinkedRecordsForm({
         </form>
       </details>
 
-      <details className="rounded-lg border border-primary-dark/10 bg-white">
-        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+      <details className="rounded-lg border border-border bg-card">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <FileText className="size-4" aria-hidden="true" />
             Create drawing record
           </span>
-          <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+          <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
         </summary>
-        <form action={createDrawingRecordAction} className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-2 xl:grid-cols-6">
+        <form action={createDrawingRecordAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
           <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
             Project/site
             <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -958,15 +824,15 @@ function CreateLinkedRecordsForm({
         </form>
       </details>
 
-      <details className="rounded-lg border border-primary-dark/10 bg-white">
-        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+      <details className="rounded-lg border border-border bg-card">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <ClipboardList className="size-4" aria-hidden="true" />
             Create programme milestone
           </span>
-          <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+          <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
         </summary>
-        <form action={createProgrammeMilestoneAction} className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-2 xl:grid-cols-6">
+        <form action={createProgrammeMilestoneAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
           <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
             Project/site
             <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -1034,8 +900,8 @@ function InstructionActions({
         </InlineActionForm>
       ) : null}
       {canAcknowledgeOpsSiteInstruction(userId, role, instruction) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Acknowledge
           </summary>
           <form action={acknowledgeSiteInstructionAction} className="mt-3 grid gap-3">
@@ -1142,25 +1008,24 @@ function InstructionFollowUps({
       {followUps.length > 0 ? (
         <ul className="grid gap-2">
           {followUps.map((followUp) => (
-            <li className="rounded-md border border-primary-dark/10 p-3" key={followUp.id}>
+            <li className="rounded-md border border-border p-3" key={followUp.id}>
               <div className="flex flex-col gap-3 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                 <div>
                   <div className="flex flex-wrap gap-2">
-                    <StatusBadge className={statusClass(followUp.status)} value={followUp.status} />
+                    <StatusBadge value={followUp.status} />
                     <StatusBadge
-                      className="border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55"
                       value={followUp.task_type}
                     />
                   </div>
-                  <p className="mt-2 font-bold text-primary-dark">{followUp.title}</p>
-                  <p className="mt-1 text-sm text-primary-dark/60">
+                  <p className="mt-2 font-bold text-foreground">{followUp.title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {followUp.assigned_to_user?.full_name ?? "Unassigned"} / Due {formatDate(followUp.due_date)}
                   </p>
                 </div>
                 <DetailItem label="Created" value={formatDateTime(followUp.created_at)} />
               </div>
               {followUp.description ? (
-                <p className="mt-2 text-sm leading-6 text-primary-dark/60">{followUp.description}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{followUp.description}</p>
               ) : null}
               <FollowUpActions followUp={followUp} role={role} userId={userId} />
             </li>
@@ -1168,15 +1033,15 @@ function InstructionFollowUps({
         </ul>
       ) : null}
       {canCreate && !["closed", "cancelled"].includes(instruction.status) ? (
-        <details className="rounded-md border border-primary-dark/10">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+        <details className="rounded-md border border-border">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
             <span className="inline-flex items-center gap-2">
               <GitPullRequest className="size-4" aria-hidden="true" />
               Add follow-up task
             </span>
-            <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+            <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
           </summary>
-          <form action={createSiteInstructionFollowUpAction} className="grid gap-3 border-t border-primary-dark/10 p-4 md:grid-cols-2 xl:grid-cols-6">
+          <form action={createSiteInstructionFollowUpAction} className="grid gap-3 border-t border-border p-4 md:grid-cols-2 xl:grid-cols-6">
             <input name="instruction_id" type="hidden" value={instruction.id} />
             <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
               Title
@@ -1227,8 +1092,8 @@ function QaInspectionActions({
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsQaInspection(role, inspection) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Complete inspection
           </summary>
           <form action={completeQaInspectionAction} className="mt-3 grid gap-3 md:grid-cols-3">
@@ -1314,29 +1179,26 @@ function QaInspectionItems({
       {inspection.items.length > 0 ? (
         <ul className="grid gap-2">
           {inspection.items.map((item: OpsQaInspectionItemSummary) => (
-            <li className="rounded-md border border-primary-dark/10 p-3" key={item.id}>
+            <li className="rounded-md border border-border p-3" key={item.id}>
               <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                 <div>
-                  <p className="font-bold text-primary-dark">
+                  <p className="font-bold text-foreground">
                     {item.line_number}. {item.checklist_item}
                   </p>
-                  <p className="mt-1 text-sm text-primary-dark/60">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Owner: {item.responsible_user?.full_name ?? "Unassigned"} / Due {formatDate(item.due_date)}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <StatusBadge
-                    className={qaFindingCategoryClass(item.finding_category)}
-                    value={item.finding_category}
-                  />
-                  <StatusBadge className={qaItemResultClass(item.result)} value={item.result} />
+                  <StatusBadge tone={item.finding_category === "safety" || item.finding_category === "environmental" ? "negative" : "neutral"} value={item.finding_category} />
+                  <StatusBadge value={item.result} />
                   {item.action_required ? (
-                    <StatusBadge className="border-orange-200 bg-orange-50 text-orange-700" value="action required" />
+                    <StatusBadge tone="attention" value="action required" />
                   ) : null}
                 </div>
               </div>
               {item.notes ? (
-                <p className="mt-2 text-sm leading-6 text-primary-dark/60">{item.notes}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.notes}</p>
               ) : null}
             </li>
           ))}
@@ -1345,15 +1207,15 @@ function QaInspectionItems({
         <EmptyState>No checklist items added yet.</EmptyState>
       )}
       {canCreate && !["closed", "cancelled"].includes(inspection.status) ? (
-        <details className="rounded-md border border-primary-dark/10">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+        <details className="rounded-md border border-border">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
             <span className="inline-flex items-center gap-2">
               <Plus className="size-4" aria-hidden="true" />
               Add checklist item
             </span>
-            <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+            <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
           </summary>
-          <form action={addQaInspectionItemAction} className="grid gap-3 border-t border-primary-dark/10 p-4 md:grid-cols-2 xl:grid-cols-6">
+          <form action={addQaInspectionItemAction} className="grid gap-3 border-t border-border p-4 md:grid-cols-2 xl:grid-cols-6">
             <input name="inspection_id" type="hidden" value={inspection.id} />
             <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
               Checklist item
@@ -1393,8 +1255,8 @@ function QaInspectionItems({
               Notes
               <input className={OPS_INPUT_CLASS} name="notes" />
             </label>
-            <label className="flex items-center gap-2 text-sm font-bold text-primary-dark/70">
-              <input className="size-4 rounded border-primary-dark/20 text-primary-blue" name="action_required" type="checkbox" />
+            <label className="flex items-center gap-2 text-sm font-bold text-foreground/70">
+              <input className="size-4 rounded border-border text-primary-blue" name="action_required" type="checkbox" />
               Action required
             </label>
             <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
@@ -1412,8 +1274,8 @@ function MaterialTestActions({ role, test }: { role: OpsUserRole; test: OpsMater
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canUpdateOpsMaterialTest(role, test) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Update result
           </summary>
           <form action={updateMaterialTestResultAction} className="mt-3 grid gap-3 md:grid-cols-3">
@@ -1473,8 +1335,8 @@ function SnagActions({ role, snag, userId }: { role: OpsUserRole; snag: OpsSnagI
         </InlineActionForm>
       ) : null}
       {canResolveOpsSnagItem(userId, role, snag) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Resolve snag
           </summary>
           <form action={resolveSnagItemAction} className="mt-3 grid gap-3">
@@ -1549,8 +1411,8 @@ function MilestoneActions({ milestone, role }: { milestone: OpsProgrammeMileston
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canUpdateOpsProgrammeMilestone(role, milestone) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Update milestone
           </summary>
           <form action={updateProgrammeMilestoneAction} className="mt-3 grid gap-3 md:grid-cols-3">
@@ -1677,20 +1539,20 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
 
   return (
     <div className="grid gap-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-6">
+      <section className="rounded-lg border border-border bg-card p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-blue">
               Engineering Controls
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Site Instructions and Quality Assurance and Quality Control
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/62">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
               Control issued instructions, QA inspections, material tests, snags, drawings, and programme milestones against the active project/site master.
             </p>
           </div>
-          <div className="grid gap-2 text-sm text-primary-dark/65 min-[520px]:grid-cols-2 lg:min-w-96">
+          <div className="grid gap-2 text-sm text-muted-foreground min-[520px]:grid-cols-2 lg:min-w-96">
             <DetailItem label="Open instructions" value={String(stats.openInstructions)} />
             <DetailItem label="Follow-ups" value={String(stats.openFollowUps)} />
           </div>
@@ -1738,7 +1600,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
 
       <OpsDashboardPanel
         actions={
-          <span className="rounded-full border border-primary-dark/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/45">
+          <span className="rounded-full border border-border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             {instructionPage.pagination.total} records
           </span>
         }
@@ -1756,18 +1618,18 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
             <EmptyState>No site instructions found.</EmptyState>
           ) : (
             instructionPage.items.map((instruction) => (
-              <article className="rounded-lg border border-primary-dark/10 bg-white" key={instruction.id}>
+              <article className="rounded-lg border border-border bg-card" key={instruction.id}>
                 <div className="p-5">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="flex flex-wrap gap-2">
-                        <StatusBadge className={statusClass(instruction.status)} value={instruction.status} />
-                        <StatusBadge className={priorityClass(instruction.priority)} value={instruction.priority} />
+                        <StatusBadge value={instruction.status} />
+                        <StatusBadge value={instruction.priority} />
                       </div>
-                      <h2 className="mt-3 font-heading text-xl font-bold text-primary-dark">
+                      <h2 className="mt-3 font-heading text-xl font-bold text-foreground">
                         {instruction.instruction_number} - {instruction.title}
                       </h2>
-                      <p className="mt-1 text-sm text-primary-dark/60">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {instruction.site?.code ?? "Site"} / {formatLabel(instruction.instruction_type)}
                       </p>
                     </div>
@@ -1777,7 +1639,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
                     </div>
                   </div>
                   {instruction.description ? (
-                    <p className="mt-3 text-sm leading-6 text-primary-dark/62">{instruction.description}</p>
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">{instruction.description}</p>
                   ) : null}
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
                     <DetailItem label="Assigned to" value={instruction.assigned_to_user?.full_name ?? "Unassigned"} />
@@ -1785,7 +1647,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
                     <DetailItem label="Acknowledged" value={formatDateTime(instruction.acknowledged_at)} />
                   </div>
                   {instruction.response_notes ? (
-                    <p className="mt-3 rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-3 text-sm text-primary-dark/62">
+                    <p className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
                       {instruction.response_notes}
                     </p>
                   ) : null}
@@ -1827,15 +1689,15 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
               <EmptyState>No QA inspections found.</EmptyState>
             ) : (
               inspections.map((inspection) => (
-                <article className="rounded-lg border border-primary-dark/10 bg-white" key={inspection.id}>
+                <article className="rounded-lg border border-border bg-card" key={inspection.id}>
                 <div className="p-5">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                      <StatusBadge className={statusClass(inspection.status)} value={inspection.status} />
-                      <h3 className="mt-3 font-heading text-lg font-bold text-primary-dark">
+                      <StatusBadge value={inspection.status} />
+                      <h3 className="mt-3 font-heading text-lg font-bold text-foreground">
                         {inspection.inspection_number} - {inspection.title}
                       </h3>
-                      <p className="mt-1 text-sm text-primary-dark/60">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {inspection.site?.code ?? "Site"} / {formatLabel(inspection.inspection_type)}
                       </p>
                     </div>
@@ -1846,7 +1708,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
                     </div>
                   </div>
                   {inspection.summary ? (
-                    <p className="mt-3 text-sm leading-6 text-primary-dark/62">{inspection.summary}</p>
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">{inspection.summary}</p>
                   ) : null}
                   {inspection.action_required ? (
                     <p className="mt-3 rounded-md border border-orange-100 bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-700">
@@ -1878,15 +1740,15 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
               <EmptyState>No material tests found.</EmptyState>
             ) : (
               materialTests.map((test) => (
-                <article className="rounded-lg border border-primary-dark/10 bg-white" key={test.id}>
+                <article className="rounded-lg border border-border bg-card" key={test.id}>
                   <div className="p-5">
                     <div className="flex flex-col gap-3 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                       <div>
-                        <StatusBadge className={statusClass(test.status)} value={test.status} />
-                        <h3 className="mt-3 font-heading text-lg font-bold text-primary-dark">
+                        <StatusBadge value={test.status} />
+                        <h3 className="mt-3 font-heading text-lg font-bold text-foreground">
                           {test.test_number} - {test.test_type}
                         </h3>
-                        <p className="mt-1 text-sm text-primary-dark/60">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           {test.site?.code ?? "Site"} / {test.location || "No location"}
                         </p>
                       </div>
@@ -1898,7 +1760,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
                       <DetailItem label="Result" value={test.result_value || "Pending"} />
                     </div>
                     {test.result_summary ? (
-                      <p className="mt-3 text-sm leading-6 text-primary-dark/62">{test.result_summary}</p>
+                      <p className="mt-3 text-sm leading-6 text-muted-foreground">{test.result_summary}</p>
                     ) : null}
                     <MaterialTestActions role={auth.profile.role} test={test} />
                   </div>
@@ -1922,18 +1784,18 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
               <EmptyState>No snag items found.</EmptyState>
             ) : (
               snags.map((snag) => (
-                <article className="rounded-lg border border-primary-dark/10 bg-white" key={snag.id}>
+                <article className="rounded-lg border border-border bg-card" key={snag.id}>
                   <div className="p-5">
                     <div className="flex flex-col gap-3 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                       <div>
                         <div className="flex flex-wrap gap-2">
-                          <StatusBadge className={statusClass(snag.status)} value={snag.status} />
-                          <StatusBadge className={priorityClass(snag.priority)} value={snag.priority} />
+                          <StatusBadge value={snag.status} />
+                          <StatusBadge value={snag.priority} />
                         </div>
-                        <h3 className="mt-3 font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="mt-3 font-heading text-lg font-bold text-foreground">
                           {snag.snag_number} - {snag.title}
                         </h3>
-                        <p className="mt-1 text-sm text-primary-dark/60">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           {snag.site?.code ?? "Site"} / {snag.location || "No location"}
                         </p>
                       </div>
@@ -1944,10 +1806,10 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
                       <DetailItem label="Resolved" value={formatDateTime(snag.resolved_at)} />
                     </div>
                     {snag.description ? (
-                      <p className="mt-3 text-sm leading-6 text-primary-dark/62">{snag.description}</p>
+                      <p className="mt-3 text-sm leading-6 text-muted-foreground">{snag.description}</p>
                     ) : null}
                     {snag.resolution_notes ? (
-                      <p className="mt-3 rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-3 text-sm text-primary-dark/62">
+                      <p className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
                         {snag.resolution_notes}
                       </p>
                     ) : null}
@@ -1964,7 +1826,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
       <section className="grid gap-6 xl:grid-cols-2">
         <OpsDashboardPanel
           actions={
-            <span className="rounded-full border border-primary-dark/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/45">
+            <span className="rounded-full border border-border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
               Drawing control
             </span>
           }
@@ -1975,15 +1837,15 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
               <EmptyState>No drawing records found.</EmptyState>
             ) : (
               drawings.map((drawing) => (
-                <article className="rounded-lg border border-primary-dark/10 bg-white" key={drawing.id}>
+                <article className="rounded-lg border border-border bg-card" key={drawing.id}>
                   <div className="p-5">
                     <div className="flex flex-col gap-3 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                       <div>
-                        <StatusBadge className={statusClass(drawing.status)} value={drawing.status} />
-                        <h3 className="mt-3 font-heading text-lg font-bold text-primary-dark">
+                        <StatusBadge value={drawing.status} />
+                        <h3 className="mt-3 font-heading text-lg font-bold text-foreground">
                           {drawing.drawing_number} Rev {drawing.revision}
                         </h3>
-                        <p className="mt-1 text-sm text-primary-dark/60">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           {drawing.title} / {drawing.site?.code ?? "Site"}
                         </p>
                       </div>
@@ -2004,13 +1866,13 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
                       />
                     </div>
                     {drawing.document_version ? (
-                      <p className="mt-3 inline-flex items-center gap-2 rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-2 text-sm font-semibold text-primary-dark/62">
+                      <p className="mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-semibold text-muted-foreground">
                         <LinkIcon className="size-4 text-primary-blue" aria-hidden="true" />
                         {drawing.document_version.file_name}
                       </p>
                     ) : null}
                     {drawing.notes ? (
-                      <p className="mt-3 text-sm leading-6 text-primary-dark/62">{drawing.notes}</p>
+                      <p className="mt-3 text-sm leading-6 text-muted-foreground">{drawing.notes}</p>
                     ) : null}
                     <DrawingActions drawing={drawing} role={auth.profile.role} />
                   </div>
@@ -2034,21 +1896,21 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
               <EmptyState>No programme milestones found.</EmptyState>
             ) : (
               milestones.map((milestone) => (
-                <article className="rounded-lg border border-primary-dark/10 bg-white" key={milestone.id}>
+                <article className="rounded-lg border border-border bg-card" key={milestone.id}>
                   <div className="p-5">
                     <div className="flex flex-col gap-3 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                       <div>
-                        <StatusBadge className={statusClass(milestone.status)} value={milestone.status} />
-                        <h3 className="mt-3 font-heading text-lg font-bold text-primary-dark">
+                        <StatusBadge value={milestone.status} />
+                        <h3 className="mt-3 font-heading text-lg font-bold text-foreground">
                           {milestone.milestone_number} - {milestone.title}
                         </h3>
-                        <p className="mt-1 text-sm text-primary-dark/60">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           {milestone.site?.code ?? "Site"} / Owner {milestone.owner?.full_name ?? "Unassigned"}
                         </p>
                       </div>
                       <DetailItem label="Progress" value={`${milestone.progress_percent}%`} />
                     </div>
-                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-primary-dark/10">
+                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-primary-blue"
                         style={{ width: `${Math.min(Math.max(milestone.progress_percent, 0), 100)}%` }}
@@ -2065,7 +1927,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
                       </p>
                     ) : null}
                     {milestone.notes ? (
-                      <p className="mt-3 text-sm leading-6 text-primary-dark/62">{milestone.notes}</p>
+                      <p className="mt-3 text-sm leading-6 text-muted-foreground">{milestone.notes}</p>
                     ) : null}
                     <MilestoneActions milestone={milestone} role={auth.profile.role} />
                   </div>

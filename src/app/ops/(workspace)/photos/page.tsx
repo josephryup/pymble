@@ -17,7 +17,9 @@ import {
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
 } from "@/lib/ops/ui";
+import { formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -33,14 +35,6 @@ function tagClass(tag: OpsSitePhoto["tag"]) {
   }
 
   return "border-emerald-200 bg-emerald-50 text-emerald-700";
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(value));
 }
 
 export default async function OpsPhotosPage({ searchParams }: PageProps) {
@@ -69,41 +63,41 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Pymble Photos
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Private site photo log
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               Upload progress, delivery, and safety photos to the secure Pymble archive.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Photos
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {photos.length}
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Deliveries
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {deliveryCount}
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Safety
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {safetyCount}
               </p>
             </div>
@@ -125,20 +119,20 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
       ) : null}
 
       {canUpload ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
               <Plus className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">Upload photo</h2>
-              <p className="text-sm text-primary-dark/60">
+              <h2 className="font-heading text-xl font-bold text-foreground">Upload photo</h2>
+              <p className="text-sm text-muted-foreground">
                 Photos are stored securely. Each upload is logged with site, tag, and timestamp.
               </p>
             </div>
           </div>
           {siteOptions.length === 0 ? (
-            <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className={OPS_NOTICE_WARNING_CLASS}>
               Add at least one site before uploading photos.
             </div>
           ) : (
@@ -203,12 +197,12 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
           <div className="grid gap-4 min-[520px]:grid-cols-2 xl:grid-cols-3">
             {photos.map((photo) => (
               <article
-                className="overflow-hidden rounded-lg border border-primary-dark/10 bg-white"
+                className="overflow-hidden rounded-lg border border-border bg-card"
                 key={photo.id}
               >
                 <a
                   aria-label={`Open ${photo.caption || photo.tag} photo`}
-                  className={`block aspect-[4/3] bg-primary-dark/5 bg-cover bg-center ${OPS_FOCUS_CLASS}`}
+                  className={`block aspect-[4/3] bg-muted/40 bg-cover bg-center ${OPS_FOCUS_CLASS}`}
                   href={photo.signed_url}
                   rel="noreferrer"
                   style={{ backgroundImage: `url("${photo.signed_url}")` }}
@@ -217,11 +211,11 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
                 <div className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-bold text-primary-dark">
+                      <p className="font-bold text-foreground">
                         {photo.site?.code ?? "Site code unavailable"} -{" "}
                         {photo.site?.name ?? "Site record unavailable"}
                       </p>
-                      <p className="mt-1 text-sm text-primary-dark/60">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {formatDateTime(photo.taken_at)}
                       </p>
                     </div>
@@ -231,11 +225,11 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
                       {photo.tag}
                     </span>
                   </div>
-                  <p className="mt-3 min-h-10 text-sm leading-6 text-primary-dark/68">
+                  <p className="mt-3 min-h-10 text-sm leading-6 text-foreground/68">
                     {photo.caption || "Caption not recorded"}
                   </p>
                   <a
-                    className={`mt-3 inline-flex min-h-11 items-center gap-2 rounded-md text-sm font-semibold text-primary-blue hover:text-primary-dark ${OPS_FOCUS_CLASS}`}
+                    className={`mt-3 inline-flex min-h-11 items-center gap-2 rounded-md text-sm font-semibold text-primary-blue hover:text-foreground ${OPS_FOCUS_CLASS}`}
                     href={photo.signed_url}
                     rel="noreferrer"
                     target="_blank"
@@ -260,13 +254,13 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
             ))}
           </div>
         ) : (
-          <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-primary-dark/10 bg-white p-8 text-center">
+          <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-border bg-card p-8 text-center">
             <Camera className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 No site photos yet
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 Site photos will appear here after the first upload.
               </p>
             </div>

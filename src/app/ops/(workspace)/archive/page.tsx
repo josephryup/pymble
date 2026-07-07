@@ -24,6 +24,8 @@ import {
   OPS_DANGER_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_ERROR_CLASS,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +82,7 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
 
       {restored ? (
         <div
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+          className={OPS_NOTICE_SUCCESS_CLASS}
           role="status"
         >
           Record restored. It is active again in its module.
@@ -88,7 +90,7 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
       ) : null}
       {deleted ? (
         <div
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
+          className={OPS_NOTICE_SUCCESS_CLASS}
           role="status"
         >
           Record permanently deleted.
@@ -96,7 +98,7 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
       ) : null}
       {error ? (
         <div
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+          className={OPS_NOTICE_ERROR_CLASS}
           role="alert"
         >
           {error}
@@ -111,7 +113,7 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
               className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-semibold transition ${
                 isActive
                   ? "border-primary-blue bg-primary-blue text-white"
-                  : "border-primary-dark/15 bg-white text-primary-dark/70 hover:border-primary-blue/40"
+                  : "border-border bg-card text-foreground/70 hover:border-primary-blue/40"
               }`}
               href={`/ops/archive?type=${entry.type}`}
               key={entry.type}
@@ -119,7 +121,7 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
               {entry.label}
               <span
                 className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-black ${
-                  isActive ? "bg-white/20" : "bg-primary-dark/8 text-primary-dark/60"
+                  isActive ? "bg-white/20" : "bg-muted/40 text-muted-foreground"
                 }`}
               >
                 {entry.count}
@@ -129,13 +131,13 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
         })}
       </div>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white">
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+      <section className="rounded-lg border border-border bg-card">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Archived {activeEntry?.label ?? ""}
             </p>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               {result.pagination.total} archived record
               {result.pagination.total === 1 ? "" : "s"}
             </h2>
@@ -152,15 +154,15 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
         </div>
 
         {result.items.length > 0 ? (
-          <ul className="divide-y divide-primary-dark/10">
+          <ul className="divide-y divide-border">
             {result.items.map((item) => (
               <li
                 className="flex flex-col gap-3 p-4 min-[640px]:flex-row min-[640px]:items-center min-[640px]:justify-between"
                 key={`${item.type}-${item.id}`}
               >
                 <div className="min-w-0">
-                  <p className="font-bold text-primary-dark">{item.title}</p>
-                  <p className="mt-0.5 text-xs text-primary-dark/55">
+                  <p className="font-bold text-foreground">{item.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     {item.subtitle ? `${item.subtitle} · ` : ""}
                     Archived {formatWhen(item.archivedAt)}
                   </p>
@@ -203,7 +205,7 @@ export default async function OpsArchivePage({ searchParams }: PageProps) {
           />
         )}
 
-        <div className="border-t border-primary-dark/10 p-4">
+        <div className="border-t border-border p-4">
           <OpsPaginationControls
             basePath="/ops/archive"
             filters={paginationFilters}

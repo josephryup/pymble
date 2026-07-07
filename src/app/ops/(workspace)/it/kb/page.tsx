@@ -59,11 +59,11 @@ export default async function OpsItKbPage({ searchParams }: PageProps) {
       </section>
 
       {canManage ? (
-        <details className="rounded-lg border border-primary-dark/10 bg-white" id="kb-create">
-          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-primary-dark [&::-webkit-details-marker]:hidden">
+        <details className="rounded-lg border border-border bg-card" id="kb-create">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <LibraryBig className="size-5 text-primary-blue" aria-hidden="true" /> New article
           </summary>
-          <form action={createItKbArticleAction} className="grid gap-4 border-t border-primary-dark/10 p-5 lg:grid-cols-6">
+          <form action={createItKbArticleAction} className="grid gap-4 border-t border-border p-5 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>Title<input className={OPS_INPUT_CLASS} name="title" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Category<input className={OPS_INPUT_CLASS} defaultValue="general" name="category" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>Body<textarea className={`${OPS_INPUT_CLASS} min-h-40`} name="body" placeholder="Step-by-step how-to..." /></label>
@@ -77,15 +77,15 @@ export default async function OpsItKbPage({ searchParams }: PageProps) {
       ) : (
         <ul className="space-y-3">
           {articles.map((article) => (
-            <li key={article.id} className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm">
+            <li key={article.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">{article.category.replace(/_/g, " ")}</p>
-                  <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{article.category.replace(/_/g, " ")}</p>
+                  <h2 className="mt-1 font-heading text-lg font-bold text-foreground">
                     <Link className="hover:underline" href={`/ops/it/kb/${article.id}`}>{article.title}</Link>
                   </h2>
                 </div>
-                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${article.status === "published" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : article.status === "draft" ? "border-sky-200 bg-sky-50 text-sky-700" : "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65"}`}>
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${article.status === "published" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : article.status === "draft" ? "border-sky-200 bg-sky-50 text-sky-700" : "border-border bg-muted/40 text-muted-foreground"}`}>
                   {article.status}
                 </span>
               </div>

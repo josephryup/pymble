@@ -25,7 +25,7 @@ import {
   updateCashAdvanceAction,
   updatePayrollRunAction,
 } from "@/lib/ops/payroll-actions";
-import { fetchOpsCashAdvances, fetchOpsPayrollRuns, type OpsPayrollRun } from "@/lib/ops/payroll";
+import { fetchOpsCashAdvances, fetchOpsPayrollRuns } from "@/lib/ops/payroll";
 import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import { fetchAttendanceWorkerOptions } from "@/lib/ops/attendance";
@@ -40,27 +40,14 @@ import {
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { todayInLusaka, formatOpsDate as formatDate } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
 };
-
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
 
 function payrollNotice(params: OpsSearchParams) {
   const createdAdvance = noticeFromParams(
@@ -115,18 +102,6 @@ function payrollNotice(params: OpsSearchParams) {
   return null;
 }
 
-function statusClass(status: OpsPayrollRun["status"]) {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "approved" || status === "disbursing") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
 export default async function OpsPayrollPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({}), requireOpsUser()]);
 
@@ -148,40 +123,40 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Pymble Payroll
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Payroll loop
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               Convert approved attendance into payroll runs, deduct open cash advances, and track
               payout status.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Open advances
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {formatZmw(openAdvanceTotal)}
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Draft runs
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">{draftRuns}</p>
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">{draftRuns}</p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Latest net
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {formatZmw(latestNet)}
               </p>
             </div>
@@ -203,11 +178,11 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
       ) : null}
 
       {payrollRuns.length > 1 ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
-          <h2 className="font-heading text-xl font-bold text-primary-dark">
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-heading text-xl font-bold text-foreground">
             Payroll run trend
           </h2>
-          <p className="mt-1 text-sm text-primary-dark/60">
+          <p className="mt-1 text-sm text-muted-foreground">
             Gross pay, advance deductions and net payout per run (oldest to latest, last 12 runs).
           </p>
           <div className="mt-4">
@@ -235,22 +210,22 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
 
       {canManage ? (
         <section className="grid gap-5 xl:grid-cols-2">
-          <div className="rounded-lg border border-primary-dark/10 bg-white p-5">
+          <div className="rounded-lg border border-border bg-card p-5">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
                 <Plus className="size-5" aria-hidden="true" />
               </div>
               <div>
-                <h2 className="font-heading text-xl font-bold text-primary-dark">
+                <h2 className="font-heading text-xl font-bold text-foreground">
                   Record cash advance
                 </h2>
-                <p className="text-sm text-primary-dark/60">
+                <p className="text-sm text-muted-foreground">
                   Open advances are deducted from the next payroll run.
                 </p>
               </div>
             </div>
             {workerOptions.length === 0 ? (
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one worker before recording advances.
               </div>
             ) : (
@@ -304,16 +279,16 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
             )}
           </div>
 
-          <div className="rounded-lg border border-primary-dark/10 bg-white p-5">
+          <div className="rounded-lg border border-border bg-card p-5">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
                 <ReceiptText className="size-5" aria-hidden="true" />
               </div>
               <div>
-                <h2 className="font-heading text-xl font-bold text-primary-dark">
+                <h2 className="font-heading text-xl font-bold text-foreground">
                   Create payroll run
                 </h2>
-                <p className="text-sm text-primary-dark/60">
+                <p className="text-sm text-muted-foreground">
                   Uses approved attendance that is not already in payroll.
                 </p>
               </div>
@@ -346,18 +321,18 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
           </div>
         </section>
       ) : (
-        <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 text-sm text-primary-dark/65">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           Your role does not have payroll management permissions. Contact your manager to request
           access.
         </div>
       )}
 
       <section className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-lg border border-primary-dark/10 bg-white">
-          <div className="border-b border-primary-dark/10 p-5">
-            <h2 className="font-heading text-xl font-bold text-primary-dark">Cash advances</h2>
+        <div className="rounded-lg border border-border bg-card">
+          <div className="border-b border-border p-5">
+            <h2 className="font-heading text-xl font-bold text-foreground">Cash advances</h2>
           </div>
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {advances.length > 0 ? (
               advances.map((advance) => (
                 <div className="flex items-start gap-3 p-5" key={advance.id}>
@@ -367,19 +342,19 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                       <div>
-                        <p className="font-bold text-primary-dark">
+                        <p className="font-bold text-foreground">
                           {advance.worker?.full_name ?? "Worker record unavailable"}
                         </p>
-                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           {advance.worker?.worker_code ?? "Worker code unavailable"} -{" "}
                           {formatDate(advance.issued_at)}
                         </p>
                       </div>
-                      <p className="font-heading text-lg font-bold text-primary-dark">
+                      <p className="font-heading text-lg font-bold text-foreground">
                         {formatZmw(advance.amount)}
                       </p>
                     </div>
-                    <p className="mt-2 text-sm text-primary-dark/62">
+                    <p className="mt-2 text-sm text-muted-foreground">
                       {advance.note || "Advance note not recorded"}
                     </p>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -405,14 +380,14 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                       ) : null}
                     </div>
                     {canManage && !advance.deducted_in_run_id ? (
-                      <details className="mt-3 rounded-md border border-primary-dark/10">
-                        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                      <details className="mt-3 rounded-md border border-border">
+                        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
                           <Pencil className="size-4" aria-hidden="true" />
                           Edit advance
                         </summary>
                         <form
                           action={updateCashAdvanceAction}
-                          className="grid gap-3 border-t border-primary-dark/10 p-3 md:grid-cols-2"
+                          className="grid gap-3 border-t border-border p-3 md:grid-cols-2"
                         >
                           <input name="id" type="hidden" value={advance.id} />
                           <label className={OPS_LABEL_CLASS}>
@@ -475,10 +450,10 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
             ) : (
               <div className="p-8 text-center">
                 <Banknote className="mx-auto size-10 text-primary-blue" aria-hidden="true" />
-                <p className="mt-3 font-heading text-xl font-bold text-primary-dark">
+                <p className="mt-3 font-heading text-xl font-bold text-foreground">
                   No cash advances recorded
                 </p>
-                <p className="mt-2 text-sm text-primary-dark/60">
+                <p className="mt-2 text-sm text-muted-foreground">
                   Cash advances will appear here after they are recorded.
                 </p>
               </div>
@@ -486,26 +461,26 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white">
-          <div className="border-b border-primary-dark/10 p-5">
-            <h2 className="font-heading text-xl font-bold text-primary-dark">Payroll runs</h2>
+        <div className="rounded-lg border border-border bg-card">
+          <div className="border-b border-border p-5">
+            <h2 className="font-heading text-xl font-bold text-foreground">Payroll runs</h2>
           </div>
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {payrollRuns.length > 0 ? (
               payrollRuns.map((run) => (
                 <div className="p-5" key={run.id}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div>
-                      <p className="font-heading text-lg font-bold text-primary-dark">
+                      <p className="font-heading text-lg font-bold text-foreground">
                         {run.period_label}
                       </p>
-                      <p className="mt-1 text-sm text-primary-dark/60">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {formatDate(run.period_start)} - {formatDate(run.period_end)}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(run.status)}`}
+                        className={opsStatusBadgeClass(run.status)}
                       >
                         {run.status}
                       </span>
@@ -537,14 +512,14 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                   </div>
 
                   {canManage && run.status === "draft" ? (
-                    <details className="mt-3 rounded-md border border-primary-dark/10">
-                      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                    <details className="mt-3 rounded-md border border-border">
+                      <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
                         <Pencil className="size-4" aria-hidden="true" />
                         Edit period label
                       </summary>
                       <form
                         action={updatePayrollRunAction}
-                        className="flex flex-col gap-3 border-t border-primary-dark/10 p-3 sm:flex-row sm:items-end"
+                        className="flex flex-col gap-3 border-t border-border p-3 sm:flex-row sm:items-end"
                       >
                         <input name="id" type="hidden" value={run.id} />
                         <label className={`${OPS_LABEL_CLASS} flex-1`}>
@@ -566,27 +541,27 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                   ) : null}
 
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Gross
                       </p>
-                      <p className="mt-1 font-bold text-primary-dark">
+                      <p className="mt-1 font-bold text-foreground">
                         {formatZmw(run.total_gross)}
                       </p>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Advances
                       </p>
-                      <p className="mt-1 font-bold text-primary-dark">
+                      <p className="mt-1 font-bold text-foreground">
                         {formatZmw(run.total_advances)}
                       </p>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Net
                       </p>
-                      <p className="mt-1 font-bold text-primary-dark">
+                      <p className="mt-1 font-bold text-foreground">
                         {formatZmw(run.total_net)}
                       </p>
                     </div>
@@ -597,10 +572,10 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                       {run.line_items.map((item) => (
                         <OpsMobileRecordCard key={item.id}>
                           <div>
-                            <p className="font-heading text-lg font-bold text-primary-dark">
+                            <p className="font-heading text-lg font-bold text-foreground">
                               {item.worker?.full_name ?? "Worker record unavailable"}
                             </p>
-                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                               {item.worker?.worker_code ?? "Worker code unavailable"}
                             </p>
                           </div>
@@ -624,10 +599,10 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                             {formatZmw(item.net_pay)}
                           </OpsMobileRecordRow>
                           <OpsMobileRecordRow label="Payout">
-                            <span className="inline-flex rounded-full border border-primary-dark/10 bg-primary-dark/[0.03] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/70">
+                            <span className="inline-flex rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/70">
                               {item.payout_status}
                             </span>
-                            <p className="mt-1 text-xs text-primary-dark/50">
+                            <p className="mt-1 text-xs text-muted-foreground">
                               {item.payout_reference ?? "Awaiting payout reference"}
                             </p>
                           </OpsMobileRecordRow>
@@ -637,15 +612,15 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                   </div>
                   <div
                     aria-label={`${run.period_label} payroll line items table`}
-                    className={`mt-4 hidden rounded-md border border-primary-dark/10 md:block ${OPS_TABLE_SCROLL_CLASS}`}
+                    className={`mt-4 hidden rounded-md border border-border md:block ${OPS_TABLE_SCROLL_CLASS}`}
                     tabIndex={0}
                   >
-                    <table className="min-w-full divide-y divide-primary-dark/10 text-sm">
+                    <table className="min-w-full divide-y divide-border text-sm">
                       <caption className="sr-only">
                         Payroll line items for {run.period_label}, including gross pay,
                         deductions, net pay, and payout status.
                       </caption>
-                      <thead className="bg-primary-dark/[0.03] text-left text-xs uppercase tracking-[0.12em] text-primary-dark/52">
+                      <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.12em] text-muted-foreground">
                         <tr>
                           <th className="px-4 py-3" scope="col">
                             Worker
@@ -670,40 +645,40 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-primary-dark/10">
+                      <tbody className="divide-y divide-border">
                         {run.line_items.map((item) => (
                           <tr key={item.id}>
                             <td className="px-4 py-3">
-                              <p className="font-bold text-primary-dark">
+                              <p className="font-bold text-foreground">
                                 {item.worker?.full_name ?? "Worker record unavailable"}
                               </p>
-                              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                 {item.worker?.worker_code ?? "Worker code unavailable"}
                               </p>
                             </td>
-                            <td className="px-4 py-3 text-primary-dark/70">
+                            <td className="px-4 py-3 text-foreground/70">
                               {formatZmw(item.gross_pay)}
                             </td>
-                            <td className="px-4 py-3 text-primary-dark/70">
+                            <td className="px-4 py-3 text-foreground/70">
                               {item.overtime_hours > 0 ? `${item.overtime_hours}h` : "—"}
                             </td>
-                            <td className="px-4 py-3 text-primary-dark/70">
+                            <td className="px-4 py-3 text-foreground/70">
                               {item.overtime_amount > 0 ? formatZmw(item.overtime_amount) : "—"}
                             </td>
-                            <td className="px-4 py-3 text-primary-dark/70">
+                            <td className="px-4 py-3 text-foreground/70">
                               {formatZmw(item.advance_deduction)}
                             </td>
-                            <td className="px-4 py-3 font-semibold text-primary-dark">
+                            <td className="px-4 py-3 font-semibold text-foreground">
                               <span className="inline-flex items-center gap-2">
                                 <BadgeDollarSign className="size-4 text-primary-blue" aria-hidden="true" />
                                 {formatZmw(item.net_pay)}
                               </span>
                             </td>
                             <td className="px-4 py-3">
-                              <span className="inline-flex rounded-full border border-primary-dark/10 bg-primary-dark/[0.03] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/70">
+                              <span className="inline-flex rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/70">
                                 {item.payout_status}
                               </span>
-                              <p className="mt-1 text-xs text-primary-dark/50">
+                              <p className="mt-1 text-xs text-muted-foreground">
                                 {item.payout_reference ?? "Awaiting payout reference"}
                               </p>
                             </td>
@@ -717,10 +692,10 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
             ) : (
               <div className="p-8 text-center">
                 <CircleDollarSign className="mx-auto size-10 text-primary-blue" aria-hidden="true" />
-                <p className="mt-3 font-heading text-xl font-bold text-primary-dark">
+                <p className="mt-3 font-heading text-xl font-bold text-foreground">
                   No payroll runs yet
                 </p>
-                <p className="mt-2 text-sm text-primary-dark/60">
+                <p className="mt-2 text-sm text-muted-foreground">
                   Payroll runs will appear here after approved attendance is processed.
                 </p>
               </div>

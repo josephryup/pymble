@@ -18,6 +18,8 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_ERROR_CLASS,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
@@ -64,20 +66,20 @@ export default async function OpsItChecklistDetailPage({ params, searchParams }:
       />
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">{error}</div>
+        <div className={OPS_NOTICE_ERROR_CLASS} role="alert">{error}</div>
       ) : null}
 
       {run.status === "completed" ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700" role="status">
+        <div className={OPS_NOTICE_SUCCESS_CLASS} role="status">
           Checklist completed{run.completed_at ? ` on ${run.completed_at.slice(0, 10)}` : ""}.
         </div>
       ) : null}
 
       <ul className="space-y-2">
         {run.items.map((item) => (
-          <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-primary-dark/10 bg-white p-3">
-            <span className={`flex items-center gap-2 text-sm ${item.is_done ? "text-primary-dark/50 line-through" : "text-primary-dark"}`}>
-              {item.is_done ? <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" /> : <Circle className="size-4 text-primary-dark/30" aria-hidden="true" />}
+          <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+            <span className={`flex items-center gap-2 text-sm ${item.is_done ? "text-muted-foreground line-through" : "text-foreground"}`}>
+              {item.is_done ? <CheckCircle2 className="size-4 text-emerald-600" aria-hidden="true" /> : <Circle className="size-4 text-muted-foreground" aria-hidden="true" />}
               {item.label}
             </span>
             {canManage && run.status !== "completed" ? (

@@ -36,6 +36,9 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_ERROR_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
@@ -44,13 +47,6 @@ type PageProps = {
   params: Promise<{ subcontractorId: string }>;
   searchParams?: Promise<OpsSearchParams>;
 };
-
-function paymentStatusClass(status: string) {
-  if (status === "paid") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "approved") return "border-sky-200 bg-sky-50 text-sky-700";
-  if (status === "rejected") return "border-red-200 bg-red-50 text-red-700";
-  return "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65";
-}
 
 export default async function OpsSubcontractorDetailPage({
   params,
@@ -92,12 +88,12 @@ export default async function OpsSubcontractorDetailPage({
       />
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+        <div className={OPS_NOTICE_ERROR_CLASS} role="alert">
           {error}
         </div>
       ) : null}
       {updated ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+        <div className={OPS_NOTICE_SUCCESS_CLASS}>
           Saved.
         </div>
       ) : null}
@@ -110,14 +106,14 @@ export default async function OpsSubcontractorDetailPage({
       </section>
 
       {canEdit ? (
-        <details className="rounded-2xl border border-primary-dark/10 bg-white">
-          <summary className="flex cursor-pointer items-center gap-2 px-5 py-4 text-sm font-semibold text-primary-dark">
+        <details className="rounded-lg border border-border bg-card">
+          <summary className="flex cursor-pointer items-center gap-2 px-5 py-4 text-sm font-semibold text-foreground">
             <Pencil className="size-4" aria-hidden="true" />
             Edit subcontractor
           </summary>
           <form
             action={updateSubcontractorAction}
-            className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-3"
+            className="grid gap-3 border-t border-border p-5 md:grid-cols-3"
           >
             <input name="id" type="hidden" value={sub.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -266,18 +262,18 @@ export default async function OpsSubcontractorDetailPage({
       ) : null}
 
       <section>
-        <h2 className="mb-2 flex items-center gap-2 font-heading text-lg font-bold text-primary-dark">
+        <h2 className="mb-2 flex items-center gap-2 font-heading text-lg font-bold text-foreground">
           <Briefcase className="size-5" aria-hidden="true" />
           Assignments
         </h2>
         {canAllocate ? (
-          <details className="mb-3 rounded-2xl border border-primary-dark/10 bg-white">
-            <summary className="cursor-pointer px-5 py-3 text-sm font-semibold text-primary-dark">
+          <details className="mb-3 rounded-lg border border-border bg-card">
+            <summary className="cursor-pointer px-5 py-3 text-sm font-semibold text-foreground">
               Allocate to a site
             </summary>
             <form
               action={createSubcontractorAssignmentAction}
-              className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-6"
+              className="grid gap-3 border-t border-border p-5 md:grid-cols-6"
             >
               <input name="subcontractor_id" type="hidden" value={sub.id} />
               <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
@@ -333,7 +329,7 @@ export default async function OpsSubcontractorDetailPage({
         ) : null}
 
         {assignments.length === 0 ? (
-          <p className="rounded-md border border-primary-dark/10 bg-white p-4 text-sm text-primary-dark/55">
+          <p className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
             No assignments yet.
           </p>
         ) : (
@@ -345,38 +341,38 @@ export default async function OpsSubcontractorDetailPage({
               return (
                 <li
                   key={assignment.id}
-                  className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm"
+                  className="rounded-lg border border-border bg-card p-4 shadow-sm"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                         {assignment.site
                           ? `${assignment.site.code} — ${assignment.site.name}`
                           : "Site"}
                       </p>
-                      <h3 className="mt-1 font-heading text-base font-bold text-primary-dark">
+                      <h3 className="mt-1 font-heading text-base font-bold text-foreground">
                         {assignment.scope}
                       </h3>
-                      <p className="mt-1 text-xs text-primary-dark/55">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {assignment.start_date}
                         {assignment.end_date ? ` → ${assignment.end_date}` : ""} ·{" "}
                         {assignment.status}
                       </p>
                     </div>
-                    <p className="font-heading text-lg font-bold text-primary-dark">
+                    <p className="font-heading text-lg font-bold text-foreground">
                       {formatZmw(Number(assignment.agreed_amount))}
                     </p>
                   </div>
 
                   {canRequest ? (
-                    <details className="mt-3 rounded-md border border-primary-dark/10">
-                      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-primary-dark/70">
+                    <details className="mt-3 rounded-md border border-border">
+                      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-foreground/70">
                         <Banknote className="mr-1 inline size-3.5" aria-hidden="true" />
                         Request payment
                       </summary>
                       <form
                         action={requestSubcontractorPaymentAction}
-                        className="grid gap-2 border-t border-primary-dark/10 p-3 sm:grid-cols-5"
+                        className="grid gap-2 border-t border-border p-3 sm:grid-cols-5"
                       >
                         <input name="assignment_id" type="hidden" value={assignment.id} />
                         <label className={OPS_LABEL_CLASS}>
@@ -436,20 +432,20 @@ export default async function OpsSubcontractorDetailPage({
                       {assignmentPayments.map((payment) => (
                         <li
                           key={payment.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary-dark/10 px-3 py-2 text-sm"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
                         >
                           <div>
-                            <p className="font-semibold text-primary-dark">
+                            <p className="font-semibold text-foreground">
                               {payment.payment_type.replace("_", " ")} ·{" "}
                               {formatZmw(Number(payment.amount))}
                             </p>
-                            <p className="text-xs text-primary-dark/55">
+                            <p className="text-xs text-muted-foreground">
                               {payment.reference || "no ref"}
                               {payment.scheduled_for ? ` · ${payment.scheduled_for}` : ""}
                             </p>
                           </div>
                           <span
-                            className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.1em] ${paymentStatusClass(payment.status)}`}
+                            className={opsStatusBadgeClass(payment.status)}
                           >
                             {payment.status}
                           </span>
@@ -513,11 +509,11 @@ function FinancialTile({
     tone === "watch"
       ? "text-orange-700"
       : tone === "muted"
-        ? "text-primary-dark/65"
-        : "text-primary-dark";
+        ? "text-muted-foreground"
+        : "text-foreground";
   return (
-    <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+    <div className="rounded-md border border-border bg-card px-4 py-3 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {label}
       </p>
       <p className={`mt-1 font-heading text-xl font-bold ${colourClass}`}>

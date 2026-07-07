@@ -46,13 +46,13 @@ export function OpsCommercialFunnel({ stages }: { stages: OpsCommercialFunnelSta
         return (
           <div key={stage.key} className="space-y-1">
             <div className="flex items-center justify-between text-sm">
-              <span className="font-semibold text-primary-dark">{stage.label}</span>
-              <span className="font-bold tabular-nums text-primary-dark">
+              <span className="font-semibold text-foreground">{stage.label}</span>
+              <span className="font-bold tabular-nums text-foreground">
                 {formatZmw(stage.amount)}{" "}
-                <span className="text-xs font-normal text-primary-dark/50">({stage.pct}%)</span>
+                <span className="text-xs font-normal text-muted-foreground">({stage.pct}%)</span>
               </span>
             </div>
-            <div className="h-3.5 w-full overflow-hidden rounded-full bg-primary-dark/8">
+            <div className="h-3.5 w-full overflow-hidden rounded-full bg-muted/40">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${STAGE_COLORS[stage.key] ?? "bg-primary-blue"}`}
                 style={{ width: `${Math.max(stage.pct > 0 ? 2 : 0, stage.pct)}%` }}

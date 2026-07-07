@@ -50,7 +50,7 @@ const STATUS_BADGE: Record<OpsItNetworkStatus, string> = {
   maintenance: "border-orange-200 bg-orange-50 text-orange-700",
   offline: "border-red-200 bg-red-50 text-red-700",
   online: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  retired: "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65",
+  retired: "border-border bg-muted/40 text-muted-foreground",
 };
 
 export default async function OpsItInfrastructurePage({ searchParams }: PageProps) {
@@ -95,11 +95,11 @@ export default async function OpsItInfrastructurePage({ searchParams }: PageProp
       </section>
 
       {canManage ? (
-        <details className="rounded-lg border border-primary-dark/10 bg-white" id="device-create">
-          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-primary-dark [&::-webkit-details-marker]:hidden">
+        <details className="rounded-lg border border-border bg-card" id="device-create">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <Network className="size-5 text-primary-blue" aria-hidden="true" /> Add device
           </summary>
-          <form action={createItNetworkDeviceAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItNetworkDeviceAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Name<input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Head office core switch" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-1`}>Type<select className={OPS_INPUT_CLASS} defaultValue="router" name="device_type">{Object.entries(TYPE_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Status<select className={OPS_INPUT_CLASS} defaultValue="online" name="status">{Object.entries(STATUS_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
@@ -118,12 +118,12 @@ export default async function OpsItInfrastructurePage({ searchParams }: PageProp
       ) : (
         <ul className="space-y-3">
           {devices.map((device) => (
-            <li key={device.id} className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm">
+            <li key={device.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">{TYPE_LABELS[device.device_type]}{device.site ? ` · ${device.site.code}` : ""}</p>
-                  <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">{device.name}</h2>
-                  <p className="mt-1 text-xs text-primary-dark/55">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{TYPE_LABELS[device.device_type]}{device.site ? ` · ${device.site.code}` : ""}</p>
+                  <h2 className="mt-1 font-heading text-lg font-bold text-foreground">{device.name}</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {device.ip_address || "—"}
                     {device.isp_provider ? ` · ${device.isp_provider}` : ""}
                     {device.location ? ` · ${device.location}` : ""}
@@ -132,7 +132,7 @@ export default async function OpsItInfrastructurePage({ searchParams }: PageProp
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${STATUS_BADGE[device.status]}`}>{STATUS_LABELS[device.status]}</span>
               </div>
               {canManage ? (
-                <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-primary-dark/10 pt-3">
+                <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
                   <form action={setItNetworkDeviceStatusAction} className="flex items-end gap-2">
                     <input name="device_id" type="hidden" value={device.id} />
                     <label className={OPS_LABEL_CLASS}>Status<select className={OPS_INPUT_CLASS} defaultValue={device.status} name="status">{Object.entries(STATUS_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>

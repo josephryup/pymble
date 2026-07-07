@@ -27,7 +27,6 @@ import {
 } from "@/lib/ops/hse-weekly-report-permissions";
 import {
   fetchOpsHseWeeklyReports,
-  type OpsHseWeeklyReportSummary,
 } from "@/lib/ops/hse-weekly-reports";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
@@ -41,24 +40,13 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { formatOpsDate as formatDate } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
 };
-
-function statusClass(status: OpsHseWeeklyReportSummary["status"]) {
-  if (status === "reviewed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "submitted") return "border-sky-200 bg-sky-50 text-sky-700";
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
 
 function weeklyNotice(params: OpsSearchParams) {
   const error = firstParam(params.error);
@@ -121,7 +109,7 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
       ) : null}
 
       {canCreate ? (
-        <details className="rounded-lg border border-primary-dark/10 bg-white" id="create-weekly">
+        <details className="rounded-lg border border-border bg-card" id="create-weekly">
           <summary
             className={`flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
           >
@@ -129,20 +117,20 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
               <Plus className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create weekly HSE report
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 One report per site per week. Drafts can be edited before submission.
               </span>
             </span>
-            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           <form
             action={createHseWeeklyReportAction}
-            className="grid gap-4 border-t border-primary-dark/10 p-5 sm:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 border-t border-border p-5 sm:grid-cols-2 lg:grid-cols-6"
           >
             <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-2`}>
               Site
@@ -204,7 +192,7 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="space-y-4">
-        <h2 className="font-heading text-xl font-bold text-primary-dark">
+        <h2 className="font-heading text-xl font-bold text-foreground">
           Weekly reports
         </h2>
         {reports.length > 0 ? (
@@ -216,30 +204,28 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
               const canArchive = canArchiveHseWeeklyReport(auth.profile.role);
               return (
                 <article
-                  className="rounded-lg border border-primary-dark/10 bg-white p-5"
+                  className="rounded-lg border border-border bg-card p-5"
                   id={`wr-${report.id}`}
                   key={report.id}
                 >
                   <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {report.report_number}
                         </h3>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            report.status,
-                          )}`}
+                          className={opsStatusBadgeClass(report.status)}
                         >
                           {report.status}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-primary-dark/60">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {report.site ? `${report.site.code} - ${report.site.name}` : "Site unavailable"}
                         {" · "}
                         Week {formatDate(report.week_start)} to {formatDate(report.week_end)}
                       </p>
-                      <p className="mt-1 text-xs text-primary-dark/50">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Prepared by {report.preparer?.full_name ?? "Unknown"}
                       </p>
                     </div>
@@ -266,7 +252,7 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
                         <form action={archiveHseWeeklyReportAction}>
                           <input name="report_id" type="hidden" value={report.id} />
                           <button
-                            className="inline-flex items-center gap-2 rounded-md border border-primary-dark/15 bg-white px-3 py-1.5 text-sm font-semibold text-primary-dark/70 hover:bg-primary-dark/5"
+                            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-semibold text-foreground/70 hover:bg-muted/40"
                             type="submit"
                           >
                             <Archive className="size-4" aria-hidden="true" />
@@ -302,7 +288,7 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
                     </p>
                   ) : null}
                   {report.actions_planned_next_week ? (
-                    <p className="mt-3 whitespace-pre-line rounded-md border border-primary-blue/15 bg-primary-blue/[0.04] px-3 py-2 text-sm leading-6 text-primary-dark/80">
+                    <p className="mt-3 whitespace-pre-line rounded-md border border-primary-blue/15 bg-primary-blue/[0.04] px-3 py-2 text-sm leading-6 text-foreground/80">
                       <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-primary-blue">
                         Actions planned next week
                       </span>
@@ -311,21 +297,21 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
                   ) : null}
 
                   {canEdit ? (
-                    <details className="mt-3 rounded-md border border-primary-dark/10">
+                    <details className="mt-3 rounded-md border border-border">
                       <summary
-                        className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+                        className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
                       >
                         <span className="inline-flex items-center gap-2">
                           <Pencil className="size-4" aria-hidden="true" />
                           Edit report
                         </span>
-                        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+                        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                           Open
                         </span>
                       </summary>
                       <form
                         action={updateHseWeeklyReportAction}
-                        className="grid gap-3 border-t border-primary-dark/10 p-4 sm:grid-cols-2 lg:grid-cols-6"
+                        className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-6"
                       >
                         <input name="report_id" type="hidden" value={report.id} />
                         <input name="site_id" type="hidden" value={report.site_id} />
@@ -379,9 +365,9 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
             })}
           </div>
         ) : (
-          <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-primary-dark/10 bg-white p-8 text-center">
+          <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-card p-8 text-center">
             <ShieldCheck className="size-8 text-primary-blue" aria-hidden="true" />
-            <p className="text-sm text-primary-dark/60">
+            <p className="text-sm text-muted-foreground">
               No weekly Health, Safety &amp; Environment reports yet. Create one above to start
               the weekly safety rollup.
             </p>
@@ -402,12 +388,12 @@ function Metric({
   value: string | number;
 }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 p-3">
-      <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/45">
+    <div className="rounded-md border border-border p-3">
+      <p className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
         {label}
         <Icon className="size-3.5 text-primary-blue" aria-hidden="true" />
       </p>
-      <p className="mt-1 font-heading text-xl font-bold text-primary-dark">{value}</p>
+      <p className="mt-1 font-heading text-xl font-bold text-foreground">{value}</p>
     </div>
   );
 }

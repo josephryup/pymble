@@ -46,7 +46,7 @@ export default async function OpsItOverviewPage() {
       />
 
       <section>
-        <h2 className="mb-3 flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-primary-dark/55">
+        <h2 className="mb-3 flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           <LifeBuoy className="size-4" aria-hidden="true" />
           Help desk
         </h2>
@@ -84,7 +84,7 @@ export default async function OpsItOverviewPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-primary-dark/55">
+        <h2 className="mb-3 flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           <Laptop className="size-4" aria-hidden="true" />
           Assets
         </h2>

@@ -19,6 +19,9 @@ import {
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_ERROR_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
@@ -26,14 +29,6 @@ export const dynamic = "force-dynamic";
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
 };
-
-function statusClass(status: string) {
-  if (status === "approved") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "kyc_pending") return "border-sky-200 bg-sky-50 text-sky-700";
-  if (status === "suspended") return "border-orange-200 bg-orange-50 text-orange-700";
-  if (status === "blacklisted") return "border-red-200 bg-red-50 text-red-700";
-  return "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65";
-}
 
 export default async function OpsSubcontractorsPage({ searchParams }: PageProps) {
   const search = (await (searchParams ?? Promise.resolve({} as OpsSearchParams))) ?? {};
@@ -58,25 +53,25 @@ export default async function OpsSubcontractorsPage({ searchParams }: PageProps)
       />
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+        <div className={OPS_NOTICE_ERROR_CLASS} role="alert">
           {error}
         </div>
       ) : null}
       {notice ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+        <div className={OPS_NOTICE_SUCCESS_CLASS}>
           {notice.message}
         </div>
       ) : null}
 
       {canCreate ? (
-        <details className="rounded-2xl border border-primary-dark/10 bg-white">
-          <summary className="flex cursor-pointer items-center gap-2 px-5 py-4 text-sm font-semibold text-primary-dark">
+        <details className="rounded-lg border border-border bg-card">
+          <summary className="flex cursor-pointer items-center gap-2 px-5 py-4 text-sm font-semibold text-foreground">
             <Plus className="size-4" aria-hidden="true" />
             Add a subcontractor
           </summary>
           <form
             action={createSubcontractorAction}
-            className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-3"
+            className="grid gap-3 border-t border-border p-5 md:grid-cols-3"
           >
             <label className={OPS_LABEL_CLASS}>
               Type
@@ -170,18 +165,18 @@ export default async function OpsSubcontractorsPage({ searchParams }: PageProps)
           {subs.map((sub) => (
             <li
               key={sub.id}
-              className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm"
+              className="rounded-lg border border-border bg-card p-4 shadow-sm"
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 {sub.trade_specialty || "—"}
               </p>
-              <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">
+              <h2 className="mt-1 font-heading text-lg font-bold text-foreground">
                 <Link className="hover:underline" href={`/ops/subcontractors/${sub.id}`}>
                   {sub.company_name}
                 </Link>
               </h2>
               <span
-                className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(sub.status)}`}
+                className={`mt-2 ${opsStatusBadgeClass(sub.status)}`}
               >
                 {sub.status.replace("_", " ")}
               </span>
@@ -190,7 +185,7 @@ export default async function OpsSubcontractorsPage({ searchParams }: PageProps)
                   Individual
                 </span>
               ) : null}
-              <p className="mt-2 text-xs text-primary-dark/55">
+              <p className="mt-2 text-xs text-muted-foreground">
                 Retention {sub.retention_percent}% · {sub.contact_name || "no contact"}
               </p>
             </li>

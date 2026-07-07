@@ -12,7 +12,7 @@ import {
   type OpsDepartmentKey,
 } from "@/lib/ops/department-report-permissions";
 import { fetchOpsDepartmentReports } from "@/lib/ops/department-reports";
-import { OPS_PRIMARY_BUTTON_CLASS } from "@/lib/ops/ui";
+import { OPS_PRIMARY_BUTTON_CLASS, opsStatusBadgeClass } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -24,14 +24,6 @@ const DEPARTMENT_KEYS = Object.keys(OPS_DEPARTMENT_LABELS) as OpsDepartmentKey[]
 
 function isDepartmentKey(value: string): value is OpsDepartmentKey {
   return (DEPARTMENT_KEYS as string[]).includes(value);
-}
-
-function statusClass(status: string) {
-  if (status === "acknowledged") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "revision_requested") return "border-orange-200 bg-orange-50 text-orange-700";
-  if (status === "submitted" || status === "under_review")
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  return "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65";
 }
 
 function StatTile({
@@ -47,7 +39,7 @@ function StatTile({
     sky: "border-sky-200 bg-sky-50 text-sky-700",
     orange: "border-orange-200 bg-orange-50 text-orange-700",
     emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    muted: "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/65",
+    muted: "border-border bg-muted/40 text-muted-foreground",
   };
   return (
     <div className={`rounded-xl border px-4 py-3 ${colors[accent]}`}>
@@ -97,7 +89,7 @@ export default async function OpsDepartmentReportHubPage({ params }: PageProps) 
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              className="inline-flex items-center gap-1.5 rounded-md border border-primary-dark/15 px-3 py-2 text-xs font-semibold text-primary-dark/65 hover:bg-primary-dark/5"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/40"
               href="/ops/department-reports"
             >
               All departments
@@ -143,14 +135,14 @@ export default async function OpsDepartmentReportHubPage({ params }: PageProps) 
           {reports.map((report) => (
             <li
               key={report.id}
-              className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm"
+              className="rounded-lg border border-border bg-card p-4 shadow-sm"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     {label} · {report.period}
                   </p>
-                  <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">
+                  <h2 className="mt-1 font-heading text-lg font-bold text-foreground">
                     <Link
                       className="hover:underline"
                       href={`/ops/department-reports/${report.id}`}
@@ -158,13 +150,13 @@ export default async function OpsDepartmentReportHubPage({ params }: PageProps) 
                       {report.title}
                     </Link>
                   </h2>
-                  <p className="mt-1 text-xs text-primary-dark/55">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {report.period_start_date} → {report.period_end_date}
                     {report.submitter ? ` · Submitted by ${report.submitter.full_name}` : ""}
                   </p>
                 </div>
                 <span
-                  className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(report.status)}`}
+                  className={opsStatusBadgeClass(report.status)}
                 >
                   {report.status.replace(/_/g, " ")}
                 </span>

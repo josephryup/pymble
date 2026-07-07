@@ -73,25 +73,25 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Pymble Settings
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Organization profile
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               Manage Pymble company details, headquarters address, map position, invoice prefix,
               and VAT defaults.
             </p>
           </div>
-          <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+          <div className="rounded-md border border-border px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Access
             </p>
-            <p className="mt-1 font-heading text-lg font-bold text-primary-dark">
+            <p className="mt-1 font-heading text-lg font-bold text-foreground">
               {canManage ? "Full access" : "Read only"}
             </p>
           </div>
@@ -112,22 +112,22 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
       ) : null}
 
       {!canManage ? (
-        <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 text-sm text-primary-dark/65">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           Your role has read-only access to organization settings.
         </div>
       ) : null}
 
       <form action={updateOrganizationProfileAction} className="space-y-5">
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
               <Building2 className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Company details
               </h2>
-              <p className="text-sm text-primary-dark/60">
+              <p className="text-sm text-muted-foreground">
                 These values feed invoices, profile checks, and internal ops surfaces.
               </p>
             </div>
@@ -194,16 +194,16 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
           </div>
         </section>
 
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
               <MapPin className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Headquarters location
               </h2>
-              <p className="text-sm text-primary-dark/60">
+              <p className="text-sm text-muted-foreground">
                 The headquarters coordinates appear on the overview map with Pymble site pins.
               </p>
             </div>
@@ -269,16 +269,16 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
           </div>
         </section>
 
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
               <Save className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Invoice defaults
               </h2>
-              <p className="text-sm text-primary-dark/60">
+              <p className="text-sm text-muted-foreground">
                 These defaults are used when Pymble invoices are generated.
               </p>
             </div>
@@ -334,45 +334,45 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
       </form>
 
       <form action={updatePurchaseOrderApprovalSettingsAction} className="space-y-5">
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
               <ShieldCheck className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Purchase order approvals
               </h2>
-              <p className="text-sm text-primary-dark/60">
+              <p className="text-sm text-muted-foreground">
                 Draft purchase orders must pass this chain before they can be issued.
               </p>
             </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 First review
               </p>
-              <p className="mt-1 font-heading text-lg font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-lg font-bold text-foreground">
                 {formatOpsRole(purchaseOrderApprovalSettings.first_step_role)}
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Budget check
               </p>
-              <p className="mt-1 font-heading text-lg font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-lg font-bold text-foreground">
                 {purchaseOrderApprovalSettings.second_step_role
                   ? formatOpsRole(purchaseOrderApprovalSettings.second_step_role)
                   : "Not required"}
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Threshold approver
               </p>
-              <p className="mt-1 font-heading text-lg font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-lg font-bold text-foreground">
                 {purchaseOrderApprovalSettings.threshold_step_role
                   ? formatOpsRole(purchaseOrderApprovalSettings.threshold_step_role)
                   : "Not required"}
@@ -394,7 +394,7 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
                 type="number"
               />
             </label>
-            <label className="flex min-h-11 items-center gap-3 rounded-md border border-primary-dark/10 px-4 py-3 text-sm font-semibold text-primary-dark lg:col-span-2">
+            <label className="flex min-h-11 items-center gap-3 rounded-md border border-border px-4 py-3 text-sm font-semibold text-foreground lg:col-span-2">
               <input
                 className="size-4 accent-primary-blue"
                 defaultChecked={purchaseOrderApprovalSettings.threshold_enabled}
@@ -404,11 +404,11 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
               />
               Add Managing Director review at threshold
             </label>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3 lg:col-span-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3 lg:col-span-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Current trigger
               </p>
-              <p className="mt-1 font-heading text-lg font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-lg font-bold text-foreground">
                 {purchaseOrderApprovalSettings.threshold_enabled
                   ? `${formatZmw(purchaseOrderApprovalSettings.threshold_amount)} and above`
                   : "Disabled"}

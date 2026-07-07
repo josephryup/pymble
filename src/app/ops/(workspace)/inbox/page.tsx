@@ -27,7 +27,7 @@ export default async function OpsInboxPage() {
   return (
     <div className="space-y-6">
       <OpsRealtimeRefresh tables={["record_comments"]} />
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <header className="rounded-lg border border-slate-200 bg-card p-6 shadow-sm">
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-violet-100 p-2 text-violet-700">
             <MessageSquare className="h-5 w-5" aria-hidden />
@@ -68,7 +68,7 @@ export default async function OpsInboxPage() {
               <li
                 key={conversation.key}
                 id={`rc-${conversation.source_id}`}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                className="rounded-lg border border-slate-200 bg-card p-5 shadow-sm"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-violet-700">

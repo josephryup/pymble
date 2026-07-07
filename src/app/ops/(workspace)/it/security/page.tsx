@@ -44,7 +44,7 @@ const SEVERITY_LABELS: Record<OpsItIncidentSeverity, string> = {
 const SEVERITY_BADGE: Record<OpsItIncidentSeverity, string> = {
   critical: "border-red-200 bg-red-50 text-red-700",
   high: "border-orange-200 bg-orange-50 text-orange-700",
-  low: "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65",
+  low: "border-border bg-muted/40 text-muted-foreground",
   medium: "border-sky-200 bg-sky-50 text-sky-700",
 };
 
@@ -108,11 +108,11 @@ export default async function OpsItSecurityPage({ searchParams }: PageProps) {
 
       {/* Incidents */}
       <section className="space-y-3">
-        <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-primary-dark/55">
+        <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           <ShieldAlert className="size-4" aria-hidden="true" /> Security incidents
         </h2>
         {canManage ? (
-          <form action={createItSecurityIncidentAction} className="grid gap-3 rounded-xl border border-primary-dark/10 bg-white p-4 lg:grid-cols-6">
+          <form action={createItSecurityIncidentAction} className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Title<input className={OPS_INPUT_CLASS} name="title" placeholder="e.g. Phishing email reported" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-1`}>Severity<select className={OPS_INPUT_CLASS} defaultValue="medium" name="severity">{Object.entries(SEVERITY_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Summary<input className={OPS_INPUT_CLASS} name="summary" /></label>
@@ -120,23 +120,23 @@ export default async function OpsItSecurityPage({ searchParams }: PageProps) {
           </form>
         ) : null}
         {incidents.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-primary-dark/15 bg-white p-4 text-sm text-primary-dark/55">No security incidents logged. Good.</p>
+          <p className="rounded-xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">No security incidents logged. Good.</p>
         ) : (
           <ul className="space-y-2">
             {incidents.map((incident) => (
-              <li key={incident.id} className="rounded-xl border border-primary-dark/10 bg-white p-4">
+              <li key={incident.id} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h3 className="font-heading text-base font-bold text-primary-dark">{incident.title}</h3>
-                    <p className="mt-1 text-xs text-primary-dark/55">Detected {incident.detected_at}{incident.resolved_at ? ` · Resolved ${incident.resolved_at}` : ""}{incident.summary ? ` · ${incident.summary}` : ""}</p>
+                    <h3 className="font-heading text-base font-bold text-foreground">{incident.title}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">Detected {incident.detected_at}{incident.resolved_at ? ` · Resolved ${incident.resolved_at}` : ""}{incident.summary ? ` · ${incident.summary}` : ""}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${SEVERITY_BADGE[incident.severity]}`}>{SEVERITY_LABELS[incident.severity]}</span>
-                    <span className="text-[11px] font-semibold text-primary-dark/55">{INCIDENT_STATUS_LABELS[incident.status]}</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground">{INCIDENT_STATUS_LABELS[incident.status]}</span>
                   </div>
                 </div>
                 {canManage ? (
-                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-primary-dark/10 pt-3">
+                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
                     <form action={setItSecurityIncidentStatusAction} className="flex items-end gap-2">
                       <input name="incident_id" type="hidden" value={incident.id} />
                       <label className={OPS_LABEL_CLASS}>Status<select className={OPS_INPUT_CLASS} defaultValue={incident.status} name="status">{Object.entries(INCIDENT_STATUS_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
@@ -156,11 +156,11 @@ export default async function OpsItSecurityPage({ searchParams }: PageProps) {
 
       {/* Backups */}
       <section className="space-y-3">
-        <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-primary-dark/55">
+        <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           <DatabaseBackup className="size-4" aria-hidden="true" /> Backup jobs
         </h2>
         {canManage ? (
-          <form action={createItBackupRecordAction} className="grid gap-3 rounded-xl border border-primary-dark/10 bg-white p-4 lg:grid-cols-6">
+          <form action={createItBackupRecordAction} className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Job name<input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Nightly DB backup" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Target<input className={OPS_INPUT_CLASS} name="target" placeholder="e.g. Cloudflare R2 + NAS" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-1`}>Frequency<input className={OPS_INPUT_CLASS} name="frequency" placeholder="Daily" /></label>
@@ -169,20 +169,20 @@ export default async function OpsItSecurityPage({ searchParams }: PageProps) {
           </form>
         ) : null}
         {backups.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-primary-dark/15 bg-white p-4 text-sm text-primary-dark/55">No backup jobs recorded yet.</p>
+          <p className="rounded-xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">No backup jobs recorded yet.</p>
         ) : (
           <ul className="space-y-2">
             {backups.map((backup) => (
-              <li key={backup.id} className="rounded-xl border border-primary-dark/10 bg-white p-4">
+              <li key={backup.id} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h3 className="font-heading text-base font-bold text-primary-dark">{backup.name}</h3>
-                    <p className="mt-1 text-xs text-primary-dark/55">{backup.target || "—"}{backup.frequency ? ` · ${backup.frequency}` : ""}{backup.last_run_at ? ` · Last run ${backup.last_run_at.slice(0, 10)}` : ""}</p>
+                    <h3 className="font-heading text-base font-bold text-foreground">{backup.name}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">{backup.target || "—"}{backup.frequency ? ` · ${backup.frequency}` : ""}{backup.last_run_at ? ` · Last run ${backup.last_run_at.slice(0, 10)}` : ""}</p>
                   </div>
                   <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${BACKUP_STATUS_BADGE[backup.status]}`}>{BACKUP_STATUS_LABELS[backup.status]}</span>
                 </div>
                 {canManage ? (
-                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-primary-dark/10 pt-3">
+                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
                     <form action={setItBackupStatusAction} className="flex items-end gap-2">
                       <input name="backup_id" type="hidden" value={backup.id} />
                       <label className={OPS_LABEL_CLASS}>Status<select className={OPS_INPUT_CLASS} defaultValue={backup.status} name="status">{Object.entries(BACKUP_STATUS_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>

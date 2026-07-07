@@ -82,11 +82,11 @@ export default async function OpsItLicensesPage({ searchParams }: PageProps) {
       </section>
 
       {canManage ? (
-        <details className="rounded-lg border border-primary-dark/10 bg-white" id="license-create">
-          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-primary-dark [&::-webkit-details-marker]:hidden">
+        <details className="rounded-lg border border-border bg-card" id="license-create">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <AppWindow className="size-5 text-primary-blue" aria-hidden="true" /> Add licence
           </summary>
-          <form action={createItLicenseAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItLicenseAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Software<input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Microsoft 365 Business" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Vendor<input className={OPS_INPUT_CLASS} name="vendor" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Billing<select className={OPS_INPUT_CLASS} defaultValue="annual" name="billing">{Object.entries(BILLING_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
@@ -107,12 +107,12 @@ export default async function OpsItLicensesPage({ searchParams }: PageProps) {
           {licenses.map((license) => {
             const tone = renewalTone(license.renewal_date);
             return (
-              <li key={license.id} className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm">
+              <li key={license.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">{BILLING_LABELS[license.billing]}{license.vendor ? ` · ${license.vendor}` : ""}</p>
-                    <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">{license.name}</h2>
-                    <p className="mt-1 text-xs text-primary-dark/55">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{BILLING_LABELS[license.billing]}{license.vendor ? ` · ${license.vendor}` : ""}</p>
+                    <h2 className="mt-1 font-heading text-lg font-bold text-foreground">{license.name}</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {license.seats_total !== null ? `${license.seats_used}/${license.seats_total} seats` : `${license.seats_used} seats`}
                       {license.unit_cost !== null ? ` · ZMW ${license.unit_cost.toLocaleString("en-ZM")}` : ""}
                       {license.renewal_date ? ` · Renews ${license.renewal_date}` : ""}
@@ -120,7 +120,7 @@ export default async function OpsItLicensesPage({ searchParams }: PageProps) {
                   </div>
                   <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${
                     license.status === "cancelled"
-                      ? "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65"
+                      ? "border-border bg-muted/40 text-muted-foreground"
                       : tone === "danger"
                         ? "border-red-200 bg-red-50 text-red-700"
                         : tone === "warn"
@@ -131,7 +131,7 @@ export default async function OpsItLicensesPage({ searchParams }: PageProps) {
                   </span>
                 </div>
                 {canManage ? (
-                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-primary-dark/10 pt-3">
+                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
                     <form action={setItLicenseStatusAction} className="flex items-end gap-2">
                       <input name="license_id" type="hidden" value={license.id} />
                       <label className={OPS_LABEL_CLASS}>Status<select className={OPS_INPUT_CLASS} defaultValue={license.status} name="status"><option value="active">Active</option><option value="cancelled">Cancelled</option></select></label>

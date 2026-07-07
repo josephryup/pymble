@@ -22,6 +22,7 @@ import {
   noticeFromParams,
   OPS_PRIMARY_BUTTON_CLASS,
   type OpsSearchParams,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
@@ -29,14 +30,6 @@ export const dynamic = "force-dynamic";
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
 };
-
-function statusClass(status: string) {
-  if (status === "acknowledged") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "revision_requested") return "border-orange-200 bg-orange-50 text-orange-700";
-  if (status === "submitted" || status === "under_review")
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  return "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65";
-}
 
 function StatTile({
   label,
@@ -51,7 +44,7 @@ function StatTile({
     sky: "border-sky-200 bg-sky-50 text-sky-700",
     orange: "border-orange-200 bg-orange-50 text-orange-700",
     emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    muted: "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/65",
+    muted: "border-border bg-muted/40 text-muted-foreground",
   };
   return (
     <div className={`rounded-xl border px-4 py-3 ${colors[accent]}`}>
@@ -65,18 +58,18 @@ function DeptCard({ stat, canReview }: { stat: OpsDeptReportStat; canReview: boo
   const needsAttention = stat.pendingReview > 0 || stat.revisionRequested > 0;
   return (
     <div
-      className={`rounded-2xl border bg-white p-5 shadow-sm ${
+      className={`rounded-lg border bg-card p-5 shadow-sm ${
         needsAttention && canReview
           ? "border-sky-300 ring-1 ring-sky-200"
-          : "border-primary-dark/10"
+          : "border-border"
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Department
           </p>
-          <h2 className="mt-0.5 font-heading text-base font-bold text-primary-dark">
+          <h2 className="mt-0.5 font-heading text-base font-bold text-foreground">
             {OPS_DEPARTMENT_LABELS[stat.department]}
           </h2>
         </div>
@@ -103,29 +96,29 @@ function DeptCard({ stat, canReview }: { stat: OpsDeptReportStat; canReview: boo
       </div>
 
       {stat.latestReport ? (
-        <div className="mt-3 rounded-lg border border-primary-dark/8 bg-primary-dark/[0.02] px-3 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-primary-dark/45">
+        <div className="mt-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
             Latest report
           </p>
           <Link
-            className="mt-0.5 block truncate text-sm font-semibold text-primary-dark hover:underline"
+            className="mt-0.5 block truncate text-sm font-semibold text-foreground hover:underline"
             href={`/ops/department-reports/${stat.latestReport.id}`}
           >
             {stat.latestReport.title}
           </Link>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <p className="text-xs text-primary-dark/50">
+            <p className="text-xs text-muted-foreground">
               {stat.latestReport.period_end_date}
             </p>
             <span
-              className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${statusClass(stat.latestReport.status)}`}
+              className={opsStatusBadgeClass(stat.latestReport.status)}
             >
               {stat.latestReport.status.replace(/_/g, " ")}
             </span>
           </div>
         </div>
       ) : (
-        <p className="mt-3 text-xs text-primary-dark/45">No reports submitted yet.</p>
+        <p className="mt-3 text-xs text-muted-foreground">No reports submitted yet.</p>
       )}
 
       <Link
@@ -239,7 +232,7 @@ export default async function OpsDepartmentReportsPage({ searchParams }: PagePro
           <div className="flex flex-wrap items-center gap-2">
             {isLeadership && deptFilter ? (
               <Link
-                className="inline-flex items-center gap-1.5 rounded-md border border-primary-dark/15 px-3 py-2 text-xs font-semibold text-primary-dark/65 hover:bg-primary-dark/5"
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/40"
                 href="/ops/department-reports"
               >
                 ← All departments
@@ -287,14 +280,14 @@ export default async function OpsDepartmentReportsPage({ searchParams }: PagePro
           {reports.map((report) => (
             <li
               key={report.id}
-              className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm"
+              className="rounded-lg border border-border bg-card p-4 shadow-sm"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     {OPS_DEPARTMENT_LABELS[report.department]} · {report.period}
                   </p>
-                  <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">
+                  <h2 className="mt-1 font-heading text-lg font-bold text-foreground">
                     <Link
                       className="hover:underline"
                       href={`/ops/department-reports/${report.id}`}
@@ -302,7 +295,7 @@ export default async function OpsDepartmentReportsPage({ searchParams }: PagePro
                       {report.title}
                     </Link>
                   </h2>
-                  <p className="mt-1 text-xs text-primary-dark/55">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {report.period_start_date} → {report.period_end_date}
                     {report.submitter
                       ? ` · Submitted by ${report.submitter.full_name}`
@@ -310,7 +303,7 @@ export default async function OpsDepartmentReportsPage({ searchParams }: PagePro
                   </p>
                 </div>
                 <span
-                  className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(report.status)}`}
+                  className={opsStatusBadgeClass(report.status)}
                 >
                   {report.status.replace(/_/g, " ")}
                 </span>

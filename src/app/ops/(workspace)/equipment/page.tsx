@@ -81,22 +81,22 @@ import {
   firstParam,
   noticeFromParams,
   OPS_DANGER_BUTTON_CLASS,
+  opsStatusBadgeClass,
   OPS_FOCUS_CLASS,
   OPS_INPUT_CLASS,
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
 } from "@/lib/ops/ui";
 import type {
-  OpsEquipmentAllocationStatus,
   OpsEquipmentOwnership,
   OpsEquipmentRequestStatus,
-  OpsEquipmentStatus,
-  OpsMaintenanceJobStatus,
   OpsMaintenanceJobType,
   OpsPriority,
 } from "@/lib/ops/types";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -197,26 +197,6 @@ function equipmentNotice(params: OpsSearchParams) {
     : null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-ZM", {
     currency: "ZMW",
@@ -233,85 +213,13 @@ function formatLitres(value: number) {
   return `${value.toLocaleString("en-ZM", { maximumFractionDigits: 0 })} L`;
 }
 
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function requestStatusClass(status: OpsEquipmentRequestStatus) {
-  if (status === "closed" || status === "allocated") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "approved") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (status === "rejected" || status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
-}
-
-function equipmentStatusClass(status: OpsEquipmentStatus) {
-  if (status === "available") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "allocated") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "maintenance") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
-}
-
-function allocationStatusClass(status: OpsEquipmentAllocationStatus) {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "active") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function maintenanceStatusClass(status: OpsMaintenanceJobStatus) {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "in_progress") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
 function FleetMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-bold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -328,21 +236,21 @@ function FleetFlowStep({
   value: string;
 }) {
   return (
-    <div className="rounded-lg border border-primary-dark/10 bg-primary-dark/[0.02] p-4">
+    <div className="rounded-lg border border-border bg-muted/40 p-4">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-white text-primary-blue shadow-sm shadow-primary-dark/5">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-card text-primary-blue shadow-sm shadow-foreground/5">
           <Icon className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             {label}
           </p>
-          <p className="mt-1 truncate font-heading text-xl font-bold text-primary-dark">
+          <p className="mt-1 truncate font-heading text-xl font-bold text-foreground">
             {value}
           </p>
         </div>
       </div>
-      <p className="mt-3 text-sm leading-6 text-primary-dark/60">{description}</p>
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -363,11 +271,11 @@ function EquipmentUtilizationPanel({
 
       <div className="mt-4">
         {dashboard.allocationRows.length === 0 ? (
-          <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+          <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
             No active or scheduled equipment allocations yet.
           </p>
         ) : (
-          <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+          <ul className="divide-y divide-border rounded-md border border-border">
             {dashboard.allocationRows.map((allocation) => (
               <li
                 className="grid gap-2 px-3 py-3 min-[640px]:grid-cols-[1fr_auto]"
@@ -375,28 +283,26 @@ function EquipmentUtilizationPanel({
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-bold text-primary-dark">
+                    <p className="font-bold text-foreground">
                       {allocation.equipment_code} - {allocation.equipment_name}
                     </p>
                     <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${allocationStatusClass(
-                        allocation.status,
-                      )}`}
+                      className={opsStatusBadgeClass(allocation.status)}
                     >
                       {formatLabel(allocation.status)}
                     </span>
                   </div>
-                  <p className="mt-1 text-xs text-primary-dark/50">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {allocation.site_code} - {allocation.site_name} /{" "}
                     {formatDate(allocation.allocated_from)} to{" "}
                     {formatDate(allocation.allocated_until)}
                   </p>
                 </div>
                 <div className="text-left min-[640px]:text-right">
-                  <p className="font-bold text-primary-dark">
+                  <p className="font-bold text-foreground">
                     {formatMoney(allocation.daily_rate)}
                   </p>
-                  <p className="mt-1 text-xs text-primary-dark/45">Daily charge</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Daily charge</p>
                 </div>
               </li>
             ))}
@@ -428,38 +334,36 @@ function EquipmentMaintenancePressurePanel({
 
       <div className="mt-4">
         {dashboard.maintenanceRows.length === 0 ? (
-          <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+          <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
             No open maintenance jobs. Scheduled and in-progress jobs will appear here.
           </p>
         ) : (
-          <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+          <ul className="divide-y divide-border rounded-md border border-border">
             {dashboard.maintenanceRows.map((job) => (
               <li className="px-3 py-3" key={job.job_number}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-bold text-primary-dark">{job.job_number}</p>
+                      <p className="font-bold text-foreground">{job.job_number}</p>
                       <span
-                        className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${maintenanceStatusClass(
-                          job.status,
-                        )}`}
+                        className={opsStatusBadgeClass(job.status)}
                       >
                         {formatLabel(job.status)}
                       </span>
-                      <span className="inline-flex rounded-full border border-primary-dark/10 bg-primary-dark/[0.03] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary-dark/55">
+                      <span className="inline-flex rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                         {formatLabel(job.priority)}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm font-semibold text-primary-dark">{job.title}</p>
-                    <p className="mt-1 text-xs text-primary-dark/50">
+                    <p className="mt-1 text-sm font-semibold text-foreground">{job.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {job.equipment_code} - {job.equipment_name} / {job.site_code}
                     </p>
                   </div>
                   <div className="text-left min-[640px]:text-right">
-                    <p className="font-bold text-primary-dark">
+                    <p className="font-bold text-foreground">
                       {formatMoney(job.estimated_cost)}
                     </p>
-                    <p className="mt-1 text-xs text-primary-dark/45">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {formatDate(job.scheduled_for)}
                     </p>
                   </div>
@@ -482,41 +386,39 @@ function EquipmentRegister({
 }) {
   if (equipment.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
         No equipment records yet. Add equipment master data before scheduling allocations.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+    <ul className="divide-y divide-border rounded-md border border-border">
       {equipment.map((item) => (
         <li className="grid gap-2 px-3 py-3 min-[640px]:grid-cols-[1fr_auto]" key={item.id}>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-bold text-primary-dark">
+              <p className="font-bold text-foreground">
                 {item.equipment_code} - {item.name}
               </p>
               <span
-                className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${equipmentStatusClass(
-                  item.status,
-                )}`}
+                className={opsStatusBadgeClass(item.status)}
               >
                 {formatLabel(item.status)}
               </span>
             </div>
-            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               {item.category?.name ?? "No category"} / {formatLabel(item.ownership)}
             </p>
-            <p className="mt-1 text-xs text-primary-dark/50">
+            <p className="mt-1 text-xs text-muted-foreground">
               {item.current_site ? `${item.current_site.code} - ${item.current_site.name}` : item.base_location || "No current site"}
             </p>
           </div>
           <div className="text-left min-[640px]:text-right">
-            <p className="font-heading text-xl font-bold text-primary-dark">
+            <p className="font-heading text-xl font-bold text-foreground">
               {formatMoney(item.daily_rate)}
             </p>
-            <p className="mt-1 text-xs text-primary-dark/45">Daily rate</p>
+            <p className="mt-1 text-xs text-muted-foreground">Daily rate</p>
             {canManage && item.status !== "inactive" ? (
               <form action={archiveEquipmentAction} className="mt-2">
                 <input name="id" type="hidden" value={item.id} />
@@ -538,42 +440,40 @@ function EquipmentRegister({
 function AllocationList({ allocations }: { allocations: OpsEquipmentAllocationSummary[] }) {
   if (allocations.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
         No equipment allocations yet.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+    <ul className="divide-y divide-border rounded-md border border-border">
       {allocations.map((allocation) => (
         <li className="grid gap-2 px-3 py-3 min-[640px]:grid-cols-[1fr_auto]" key={allocation.id}>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-bold text-primary-dark">{allocation.allocation_number}</p>
+              <p className="font-bold text-foreground">{allocation.allocation_number}</p>
               <span
-                className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${allocationStatusClass(
-                  allocation.status,
-                )}`}
+                className={opsStatusBadgeClass(allocation.status)}
               >
                 {formatLabel(allocation.status)}
               </span>
             </div>
-            <p className="mt-1 text-sm text-primary-dark/65">
+            <p className="mt-1 text-sm text-muted-foreground">
               {allocation.equipment
                 ? `${allocation.equipment.equipment_code} - ${allocation.equipment.name}`
                 : "Equipment unavailable"}
             </p>
-            <p className="mt-1 text-xs text-primary-dark/50">
+            <p className="mt-1 text-xs text-muted-foreground">
               {allocation.site ? `${allocation.site.code} - ${allocation.site.name}` : "Site unavailable"} /{" "}
               {formatDate(allocation.allocated_from)} to {formatDate(allocation.allocated_until)}
             </p>
           </div>
           <div className="text-left min-[640px]:text-right">
-            <p className="font-bold text-primary-dark">
+            <p className="font-bold text-foreground">
               {formatMoney(allocation.actual_daily_rate || allocation.planned_daily_rate)}
             </p>
-            <p className="mt-1 text-xs text-primary-dark/45">Daily charge</p>
+            <p className="mt-1 text-xs text-muted-foreground">Daily charge</p>
           </div>
         </li>
       ))}
@@ -637,39 +537,39 @@ function FuelLogList({
 }) {
   if (fuelLogs.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
         No fuel logs yet.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+    <ul className="divide-y divide-border rounded-md border border-border">
       {fuelLogs.map((log) => (
         <li className="px-3 py-3" key={log.id}>
           <div className="grid gap-2 min-[640px]:grid-cols-[1fr_auto]">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="font-bold text-primary-dark">{log.fuel_log_number}</p>
+                <p className="font-bold text-foreground">{log.fuel_log_number}</p>
                 <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-700">
                   {formatLabel(log.status)}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-primary-dark/65">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {log.equipment
                   ? `${log.equipment.equipment_code} - ${log.equipment.name}`
                   : "Equipment unavailable"}
               </p>
-              <p className="mt-1 text-xs text-primary-dark/50">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {formatDate(log.fuel_date)} / {formatLabel(log.fuel_type)}
                 {log.site ? ` / ${log.site.code} - ${log.site.name}` : ""}
               </p>
             </div>
             <div className="text-left min-[640px]:text-right">
-              <p className="font-bold text-primary-dark">
+              <p className="font-bold text-foreground">
                 {log.quantity_litres.toLocaleString("en-ZM")} L
               </p>
-              <p className="mt-1 text-xs text-primary-dark/45">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {formatMoney(log.total_amount)}
               </p>
             </div>
@@ -723,21 +623,21 @@ function MaintenanceJobControls({
       </div>
 
       {canComplete ? (
-        <details className="rounded-md border border-primary-dark/10">
+        <details className="rounded-md border border-border">
           <summary
-            className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+            className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
           >
             <span className="inline-flex items-center gap-2">
               <CheckCircle2 className="size-4" aria-hidden="true" />
               Complete maintenance
             </span>
-            <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           <form
             action={completeMaintenanceJobAction}
-            className="grid gap-3 border-t border-primary-dark/10 p-4 min-[520px]:grid-cols-2"
+            className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2"
           >
             <input name="job_id" type="hidden" value={job.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -778,14 +678,14 @@ function MaintenanceJobList({
 }) {
   if (jobs.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
         No maintenance jobs yet.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+    <ul className="divide-y divide-border rounded-md border border-border">
       {jobs.map((job) => {
         const canStart = canStartOpsMaintenanceJob(role, job);
         const canComplete = canCompleteOpsMaintenanceJob(role, job);
@@ -796,34 +696,32 @@ function MaintenanceJobList({
             <div className="grid gap-2 min-[640px]:grid-cols-[1fr_auto]">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-bold text-primary-dark">{job.job_number}</p>
+                  <p className="font-bold text-foreground">{job.job_number}</p>
                   <span
-                    className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${maintenanceStatusClass(
-                      job.status,
-                    )}`}
+                    className={opsStatusBadgeClass(job.status)}
                   >
                     {formatLabel(job.status)}
                   </span>
-                  <span className="inline-flex rounded-full border border-primary-dark/10 bg-primary-dark/[0.03] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary-dark/55">
+                  <span className="inline-flex rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                     {formatLabel(job.priority)}
                   </span>
                 </div>
-                <p className="mt-1 text-sm font-bold text-primary-dark">{job.title}</p>
-                <p className="mt-1 text-sm text-primary-dark/65">
+                <p className="mt-1 text-sm font-bold text-foreground">{job.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
                   {job.equipment
                     ? `${job.equipment.equipment_code} - ${job.equipment.name}`
                     : "Equipment unavailable"}
                 </p>
-                <p className="mt-1 text-xs text-primary-dark/50">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {formatLabel(job.job_type)} / Reported {formatDate(job.reported_at)}
                   {job.scheduled_for ? ` / Scheduled ${formatDate(job.scheduled_for)}` : ""}
                 </p>
               </div>
               <div className="text-left min-[640px]:text-right">
-                <p className="font-bold text-primary-dark">
+                <p className="font-bold text-foreground">
                   {formatMoney(job.actual_cost || job.estimated_cost)}
                 </p>
-                <p className="mt-1 text-xs text-primary-dark/45">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {job.actual_cost > 0 ? "Actual cost" : "Estimated cost"}
                 </p>
               </div>
@@ -856,7 +754,7 @@ function RecordFuelLogForm({
 }) {
   return (
     <details
-      className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+      className="scroll-mt-24 rounded-lg border border-border bg-card"
       id="fuel-log-create-panel"
       open={open}
     >
@@ -867,25 +765,25 @@ function RecordFuelLogForm({
           <Fuel className="size-5" aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-heading text-lg font-bold text-primary-dark">
+          <span className="block font-heading text-lg font-bold text-foreground">
             Record fuel
           </span>
-          <span className="mt-1 block text-sm text-primary-dark/60">
+          <span className="mt-1 block text-sm text-muted-foreground">
             Post consumption for equipment, allocation, and site visibility.
           </span>
         </span>
-        <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
           Open
         </span>
       </summary>
       {equipmentOptions.length === 0 ? (
-        <div className="border-t border-primary-dark/10 p-5">
-          <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+        <div className="border-t border-border p-5">
+          <div className={OPS_NOTICE_WARNING_CLASS}>
             Add equipment before recording fuel.
           </div>
         </div>
       ) : (
-        <form action={recordFuelLogAction} className="grid gap-3 border-t border-primary-dark/10 p-5">
+        <form action={recordFuelLogAction} className="grid gap-3 border-t border-border p-5">
           <label className={OPS_LABEL_CLASS}>
             Equipment
             <select className={OPS_INPUT_CLASS} defaultValue="" name="equipment_id" required>
@@ -976,7 +874,7 @@ function CreateMaintenanceJobForm({
 }) {
   return (
     <details
-      className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+      className="scroll-mt-24 rounded-lg border border-border bg-card"
       id="maintenance-job-create-panel"
       open={open}
     >
@@ -987,25 +885,25 @@ function CreateMaintenanceJobForm({
           <Wrench className="size-5" aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-heading text-lg font-bold text-primary-dark">
+          <span className="block font-heading text-lg font-bold text-foreground">
             Create maintenance job
           </span>
-          <span className="mt-1 block text-sm text-primary-dark/60">
+          <span className="mt-1 block text-sm text-muted-foreground">
             Schedule equipment repair, inspection, service, or breakdown work.
           </span>
         </span>
-        <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
           Open
         </span>
       </summary>
       {equipmentOptions.length === 0 ? (
-        <div className="border-t border-primary-dark/10 p-5">
-          <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+        <div className="border-t border-border p-5">
+          <div className={OPS_NOTICE_WARNING_CLASS}>
             Add equipment before creating maintenance jobs.
           </div>
         </div>
       ) : (
-        <form action={createMaintenanceJobAction} className="grid gap-3 border-t border-primary-dark/10 p-5">
+        <form action={createMaintenanceJobAction} className="grid gap-3 border-t border-border p-5">
           <label className={OPS_LABEL_CLASS}>
             Equipment
             <select className={OPS_INPUT_CLASS} defaultValue="" name="equipment_id" required>
@@ -1098,26 +996,26 @@ function AllocateEquipmentForm({
   today: string;
 }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
+    <details className="rounded-md border border-border">
       <summary
-        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
       >
         <span className="inline-flex items-center gap-2">
           <Truck className="size-4" aria-hidden="true" />
           Allocate equipment
         </span>
-        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
           Open
         </span>
       </summary>
       {equipmentOptions.length === 0 ? (
-        <p className="border-t border-primary-dark/10 px-4 py-3 text-sm text-orange-800">
+        <p className="border-t border-border px-4 py-3 text-sm text-orange-800">
           No available equipment can be allocated right now.
         </p>
       ) : (
         <form
           action={allocateEquipmentAction}
-          className="grid gap-3 border-t border-primary-dark/10 p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+          className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
         >
           <input name="request_id" type="hidden" value={request.id} />
           <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -1250,10 +1148,10 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             Operations and fleet
           </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+          <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
             Equipment
           </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+          <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
             Equipment register, site requests, allocation scheduling, utilization control, and cost
             handoff to finance.
           </p>
@@ -1353,9 +1251,9 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
       </section>
 
       {statusBreakdown.length > 0 ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
-          <h2 className="font-heading text-xl font-bold text-primary-dark">Fleet status mix</h2>
-          <p className="mt-1 text-sm text-primary-dark/60">
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-heading text-xl font-bold text-foreground">Fleet status mix</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Every registered unit by current status.
           </p>
           <div className="mt-4">
@@ -1436,7 +1334,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
 
           {canCreateRequest ? (
             <details
-              className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+              className="scroll-mt-24 rounded-lg border border-border bg-card"
               id="equipment-request-create-panel"
               open={openRequestPanel}
             >
@@ -1447,27 +1345,27 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
                   <Truck className="size-5" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-heading text-xl font-bold text-primary-dark">
+                  <span className="block font-heading text-xl font-bold text-foreground">
                     Create equipment request
                   </span>
-                  <span className="mt-1 block text-sm text-primary-dark/60">
+                  <span className="mt-1 block text-sm text-muted-foreground">
                     Request equipment for a site before operations schedules allocation.
                   </span>
                 </span>
-                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                   Open
                 </span>
               </summary>
               {siteOptions.length === 0 ? (
-                <div className="border-t border-primary-dark/10 p-5">
-                  <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+                <div className="border-t border-border p-5">
+                  <div className={OPS_NOTICE_WARNING_CLASS}>
                     Add at least one active site before creating equipment requests.
                   </div>
                 </div>
               ) : (
                 <form
                   action={createEquipmentRequestAction}
-                  className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                  className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
                 >
                   <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                     Site
@@ -1546,18 +1444,18 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           ) : null}
 
           <section
-            className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+            className="scroll-mt-24 rounded-lg border border-border bg-card"
             id="equipment-request-register"
           >
-            <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+            <div className="flex items-center justify-between gap-3 border-b border-border p-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   Request register
                 </p>
-                <h2 className="font-heading text-xl font-bold text-primary-dark">
+                <h2 className="font-heading text-xl font-bold text-foreground">
                   Equipment requests
                 </h2>
-                <p className="mt-1 text-sm text-primary-dark/60">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {requestPage.pagination.total} matching requests filtered by status and search.
                 </p>
               </div>
@@ -1579,7 +1477,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
             />
 
             {requestPage.items.length > 0 ? (
-              <div className="divide-y divide-primary-dark/10">
+              <div className="divide-y divide-border">
                 {requestPage.items.map((request) => {
                   const canSubmit = canSubmitOpsEquipmentRequest(auth.profile.id, auth.profile.role, request);
                   const canApprove = canApproveOpsEquipmentRequest(auth.profile.role, request);
@@ -1593,22 +1491,20 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-heading text-lg font-bold text-primary-dark">
+                            <h3 className="font-heading text-lg font-bold text-foreground">
                               {request.request_number}
                             </h3>
                             <span
-                              className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${requestStatusClass(
-                                request.status,
-                              )}`}
+                              className={opsStatusBadgeClass(request.status)}
                             >
                               {formatLabel(request.status)}
                             </span>
-                            <span className="inline-flex rounded-full border border-primary-dark/10 bg-primary-dark/[0.03] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/55">
+                            <span className="inline-flex rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                               {formatLabel(request.priority)}
                             </span>
                           </div>
-                          <p className="mt-2 font-bold text-primary-dark">{request.title}</p>
-                          <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                          <p className="mt-2 font-bold text-foreground">{request.title}</p>
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">
                             {request.site ? `${request.site.code} - ${request.site.name}` : "Site unavailable"} /{" "}
                             {request.equipment_category?.name ?? "No category preference"}
                           </p>
@@ -1670,7 +1566,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
                       </dl>
 
                       {request.description ? (
-                        <p className="mt-4 rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                        <p className="mt-4 rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                           {request.description}
                         </p>
                       ) : null}
@@ -1711,10 +1607,10 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
               <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
                 <Truck className="size-10 text-primary-blue" aria-hidden="true" />
                 <div>
-                  <p className="font-heading text-xl font-bold text-primary-dark">
+                  <p className="font-heading text-xl font-bold text-foreground">
                     {hasActiveListFilter ? "No matching equipment requests" : "No equipment requests yet"}
                   </p>
-                  <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+                  <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                     {hasActiveListFilter
                       ? "Adjust the search or status filter to widen the equipment request register."
                       : "Create the first request when a site needs equipment scheduled."}
@@ -1767,7 +1663,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
 
           {canManageMaster ? (
             <details
-              className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+              className="scroll-mt-24 rounded-lg border border-border bg-card"
               id="equipment-category-create-panel"
               open={openCategoryPanel}
             >
@@ -1778,18 +1674,18 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
                   <Wrench className="size-5" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-heading text-lg font-bold text-primary-dark">
+                  <span className="block font-heading text-lg font-bold text-foreground">
                     Add category
                   </span>
-                  <span className="mt-1 block text-sm text-primary-dark/60">
+                  <span className="mt-1 block text-sm text-muted-foreground">
                     Excavator, roller, truck, pump, or plant class.
                   </span>
                 </span>
-                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                   Open
                 </span>
               </summary>
-              <form action={createEquipmentCategoryAction} className="grid gap-3 border-t border-primary-dark/10 p-5">
+              <form action={createEquipmentCategoryAction} className="grid gap-3 border-t border-border p-5">
                 <label className={OPS_LABEL_CLASS}>
                   Name
                   <input className={OPS_INPUT_CLASS} name="name" required />
@@ -1816,7 +1712,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
 
           {canManageMaster ? (
             <details
-              className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+              className="scroll-mt-24 rounded-lg border border-border bg-card"
               id="equipment-create-panel"
               open={openEquipmentPanel}
             >
@@ -1827,25 +1723,25 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
                   <Truck className="size-5" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-heading text-lg font-bold text-primary-dark">
+                  <span className="block font-heading text-lg font-bold text-foreground">
                     Add equipment
                   </span>
-                  <span className="mt-1 block text-sm text-primary-dark/60">
+                  <span className="mt-1 block text-sm text-muted-foreground">
                     Register owned, hired, or leased equipment.
                   </span>
                 </span>
-                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                   Open
                 </span>
               </summary>
               {categoryOptions.length === 0 ? (
-                <div className="border-t border-primary-dark/10 p-5">
-                  <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+                <div className="border-t border-border p-5">
+                  <div className={OPS_NOTICE_WARNING_CLASS}>
                     Add at least one equipment category before creating equipment records.
                   </div>
                 </div>
               ) : (
-                <form action={createEquipmentAction} className="grid gap-3 border-t border-primary-dark/10 p-5">
+                <form action={createEquipmentAction} className="grid gap-3 border-t border-border p-5">
                   <label className={OPS_LABEL_CLASS}>
                     Equipment name
                     <input className={OPS_INPUT_CLASS} name="name" required />
@@ -1904,7 +1800,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
                     Serial number
                     <input className={OPS_INPUT_CLASS} name="serial_number" />
                   </label>
-                  <label className="inline-flex min-h-11 items-center gap-2 rounded-md border border-primary-dark/10 px-3 py-2 text-sm font-bold text-primary-dark/65">
+                  <label className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-bold text-muted-foreground">
                     <input className="size-4" name="fuel_tracking_enabled" type="checkbox" />
                     Track fuel
                   </label>

@@ -24,44 +24,15 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
-import type { OpsApprovalStatus, OpsUserRole } from "@/lib/ops/types";
+import type { OpsUserRole } from "@/lib/ops/types";
+import { formatOpsLabel as formatLabel, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   params: Promise<{ approvalId: string }>;
   searchParams?: Promise<OpsSearchParams>;
 };
-
-function statusClass(status: OpsApprovalStatus | string) {
-  if (status === "approved" || status === "closed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "rejected" || status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted" || status === "in_review" || status === "pending") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
 
 function formatBytes(bytes: number) {
   if (bytes >= 1024 * 1024) {
@@ -216,37 +187,35 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Approval Detail
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               {request.title}
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               {request.description || "Review the approval source, timeline, and comments before deciding."}
             </p>
           </div>
           <div className="grid gap-3 min-[520px]:grid-cols-2">
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Status
               </p>
               <span
-                className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                  request.status,
-                )}`}
+                className={`mt-2 ${opsStatusBadgeClass(request.status)}`}
               >
                 {formatLabel(request.status)}
               </span>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Requested
               </p>
-              <p className="mt-2 text-sm font-bold text-primary-dark">
+              <p className="mt-2 text-sm font-bold text-foreground">
                 {formatDateTime(request.submitted_at ?? request.created_at)}
               </p>
             </div>
@@ -269,13 +238,13 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="space-y-6">
-          <section className="rounded-lg border border-primary-dark/10 bg-white">
-            <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+          <section className="rounded-lg border border-border bg-card">
+            <div className="flex items-center justify-between gap-3 border-b border-border p-5">
               <div>
-                <h2 className="font-heading text-xl font-bold text-primary-dark">
+                <h2 className="font-heading text-xl font-bold text-foreground">
                   Source record
                 </h2>
-                <p className="mt-1 text-sm text-primary-dark/60">
+                <p className="mt-1 text-sm text-muted-foreground">
                   The operational record attached to this approval.
                 </p>
               </div>
@@ -286,14 +255,14 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
               <div className="p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <p className="font-heading text-xl font-bold text-primary-dark">
+                    <p className="font-heading text-xl font-bold text-foreground">
                       {sourceDocument.title}
                     </p>
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       {formatLabel(sourceDocument.category)} / {formatLabel(sourceDocument.visibility)}
                     </p>
                     {sourceDocument.description ? (
-                      <p className="mt-3 max-w-2xl text-sm leading-6 text-primary-dark/65">
+                      <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
                         {sourceDocument.description}
                       </p>
                     ) : null}
@@ -310,27 +279,27 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
                 </div>
                 {currentDocumentVersion ? (
                   <div className="mt-5 grid gap-3 min-[520px]:grid-cols-3">
-                    <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Version
                       </p>
-                      <p className="mt-1 font-bold text-primary-dark">
+                      <p className="mt-1 font-bold text-foreground">
                         v{currentDocumentVersion.version_number}
                       </p>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         File
                       </p>
-                      <p className="mt-1 truncate font-bold text-primary-dark">
+                      <p className="mt-1 truncate font-bold text-foreground">
                         {currentDocumentVersion.file_name}
                       </p>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Size
                       </p>
-                      <p className="mt-1 font-bold text-primary-dark">
+                      <p className="mt-1 font-bold text-foreground">
                         {formatBytes(currentDocumentVersion.file_size_bytes)}
                       </p>
                     </div>
@@ -339,23 +308,23 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
               </div>
             ) : (
               <div className="p-5">
-                <p className="text-sm leading-6 text-primary-dark/62">
+                <p className="text-sm leading-6 text-muted-foreground">
                   Source details are available from the linked module register.
                 </p>
                 <div className="mt-4 grid gap-3 min-[520px]:grid-cols-3">
-                  <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                  <div className="rounded-md border border-border px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       Module
                     </p>
-                    <p className="mt-1 font-bold text-primary-dark">
+                    <p className="mt-1 font-bold text-foreground">
                       {formatLabel(request.module_key)}
                     </p>
                   </div>
-                  <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                  <div className="rounded-md border border-border px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       Source
                     </p>
-                    <p className="mt-1 font-bold text-primary-dark">
+                    <p className="mt-1 font-bold text-foreground">
                       {formatLabel(request.source_table)}
                     </p>
                   </div>
@@ -371,13 +340,13 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
             )}
           </section>
 
-          <section className="rounded-lg border border-primary-dark/10 bg-white">
-            <div className="border-b border-primary-dark/10 p-5">
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+          <section className="rounded-lg border border-border bg-card">
+            <div className="border-b border-border p-5">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Approval timeline
               </h2>
             </div>
-            <ol className="divide-y divide-primary-dark/10">
+            <ol className="divide-y divide-border">
               {steps.map((step) => (
                 <li className="p-5" key={step.id}>
                   <div className="flex items-start gap-3">
@@ -387,35 +356,33 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between">
                         <div>
-                          <p className="font-bold text-primary-dark">
+                          <p className="font-bold text-foreground">
                             {step.step_label || `Step ${step.step_number}`}
                           </p>
-                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             {step.approver_role
                               ? formatOpsRole(step.approver_role)
                               : "Named approver"}
                           </p>
                         </div>
                         <span
-                          className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            step.status,
-                          )}`}
+                          className={`w-fit ${opsStatusBadgeClass(step.status)}`}
                         >
                           {formatLabel(step.status)}
                         </span>
                       </div>
                       {step.decision_user ? (
-                        <p className="mt-3 text-sm text-primary-dark/65">
+                        <p className="mt-3 text-sm text-muted-foreground">
                           Decided by <strong>{step.decision_user.full_name}</strong> on{" "}
                           {formatDateTime(step.decision_at)}.
                         </p>
                       ) : (
-                        <p className="mt-3 text-sm text-primary-dark/65">
+                        <p className="mt-3 text-sm text-muted-foreground">
                           Waiting for decision.
                         </p>
                       )}
                       {step.comments ? (
-                        <p className="mt-3 rounded-md bg-primary-dark/[0.03] p-3 text-sm leading-6 text-primary-dark/70">
+                        <p className="mt-3 rounded-md bg-muted/40 p-3 text-sm leading-6 text-foreground/70">
                           {step.comments}
                         </p>
                       ) : null}
@@ -426,14 +393,14 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
             </ol>
           </section>
 
-          <section className="rounded-lg border border-primary-dark/10 bg-white">
-            <div className="border-b border-primary-dark/10 p-5">
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+          <section className="rounded-lg border border-border bg-card">
+            <div className="border-b border-border p-5">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Comments
               </h2>
             </div>
             {comments.length > 0 ? (
-              <ol className="divide-y divide-primary-dark/10">
+              <ol className="divide-y divide-border">
                 {comments.map((comment) => (
                   <li className="p-5" key={comment.id}>
                     <div className="flex items-start gap-3">
@@ -442,19 +409,19 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-col gap-1 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between">
-                          <p className="font-bold text-primary-dark">
+                          <p className="font-bold text-foreground">
                             {formatOpsUserName(comment.author?.full_name, comment.author_id)}
                           </p>
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             {formatDateTime(comment.created_at)}
                           </p>
                         </div>
                         {comment.author ? (
-                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             {formatOpsRole(comment.author.role)}
                           </p>
                         ) : null}
-                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-primary-dark/70">
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground/70">
                           {comment.body}
                         </p>
                       </div>
@@ -463,9 +430,9 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
                 ))}
               </ol>
             ) : (
-              <div className="p-5 text-sm text-primary-dark/62">No comments yet.</div>
+              <div className="p-5 text-sm text-muted-foreground">No comments yet.</div>
             )}
-            <form action={addOpsApprovalCommentAction} className="border-t border-primary-dark/10 p-5">
+            <form action={addOpsApprovalCommentAction} className="border-t border-border p-5">
               <input name="approval_request_id" type="hidden" value={request.id} />
               <label className={OPS_LABEL_CLASS}>
                 Add comment
@@ -484,8 +451,8 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
         </div>
 
         <aside className="space-y-6">
-          <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+          <section className="rounded-lg border border-border bg-card p-5">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Decision
             </h2>
             {canDecide && currentStep ? (
@@ -508,7 +475,7 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
                     Approve
                   </OpsConfirmSubmitButton>
                 </form>
-                <form action={decideOpsApprovalAction} className="space-y-3 border-t border-primary-dark/10 pt-4">
+                <form action={decideOpsApprovalAction} className="space-y-3 border-t border-border pt-4">
                   <input name="approval_request_id" type="hidden" value={request.id} />
                   <input name="action" type="hidden" value="reject" />
                   <label className={OPS_LABEL_CLASS}>
@@ -529,7 +496,7 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
                 </form>
               </div>
             ) : (
-              <p className="mt-3 text-sm leading-6 text-primary-dark/62">
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
                 {request.status === "approved" || request.status === "rejected"
                   ? "This request has already been decided."
                   : "This request is waiting for the assigned approver."}

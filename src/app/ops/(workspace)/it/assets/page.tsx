@@ -58,11 +58,11 @@ const ASSET_STATUS_LABELS: Record<OpsItAssetStatus, string> = {
 };
 
 const STATUS_BADGE: Record<OpsItAssetStatus, string> = {
-  disposed: "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65",
+  disposed: "border-border bg-muted/40 text-muted-foreground",
   in_use: "border-emerald-200 bg-emerald-50 text-emerald-700",
   lost: "border-red-200 bg-red-50 text-red-700",
   repair: "border-orange-200 bg-orange-50 text-orange-700",
-  retired: "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65",
+  retired: "border-border bg-muted/40 text-muted-foreground",
   spare: "border-sky-200 bg-sky-50 text-sky-700",
 };
 
@@ -138,20 +138,20 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
       </section>
 
       {canManage ? (
-        <details className="rounded-lg border border-primary-dark/10 bg-white" id="asset-create-panel">
-          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-primary-dark/[0.02] [&::-webkit-details-marker]:hidden">
+        <details className="rounded-lg border border-border bg-card" id="asset-create-panel">
+          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
             <span className="flex min-w-0 items-center gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
                 <Laptop className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0">
-                <span className="block font-heading text-lg font-bold text-primary-dark">Register asset</span>
-                <span className="mt-1 block text-sm text-primary-dark/60">Add a new device to the IT asset register.</span>
+                <span className="block font-heading text-lg font-bold text-foreground">Register asset</span>
+                <span className="mt-1 block text-sm text-muted-foreground">Add a new device to the IT asset register.</span>
               </span>
             </span>
             <Plus className="size-5 shrink-0 text-primary-blue" aria-hidden="true" />
           </summary>
-          <form action={createItAssetAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItAssetAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
               Asset name
               <input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Dell Latitude 5420" required />
@@ -207,7 +207,7 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
               <input className={OPS_INPUT_CLASS} name="location" placeholder="Desk / room / store" />
             </label>
             <fieldset className="grid gap-4 min-[520px]:grid-cols-2 lg:col-span-6 lg:grid-cols-5">
-              <legend className="mb-2 flex items-center gap-2 text-sm font-bold text-primary-dark">
+              <legend className="mb-2 flex items-center gap-2 text-sm font-bold text-foreground">
                 <Cpu className="size-4 text-primary-blue" aria-hidden="true" />
                 Hardware specifications
               </legend>
@@ -272,18 +272,18 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
       ) : (
         <ul className="space-y-3">
           {assets.map((asset) => (
-            <li key={asset.id} className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm">
+            <li key={asset.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     {asset.asset_tag} · {ASSET_TYPE_LABELS[asset.asset_type]}
                   </p>
-                  <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">{asset.name}</h2>
-                  <p className="mt-1 text-xs text-primary-dark/55">
+                  <h2 className="mt-1 font-heading text-lg font-bold text-foreground">{asset.name}</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {[asset.manufacturer, asset.model].filter(Boolean).join(" ") || "—"}
                     {asset.serial_number ? ` · S/N ${asset.serial_number}` : ""}
                   </p>
-                  <p className="mt-1 text-xs text-primary-dark/55">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {asset.assignee ? `Assigned to ${asset.assignee.full_name}` : "Unassigned"}
                     {asset.site ? ` · ${asset.site.code}` : ""}
                     {asset.location ? ` · ${asset.location}` : ""}
@@ -302,7 +302,7 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
                         .map((spec) => (
                           <span
                             key={spec}
-                            className="inline-flex items-center gap-1 rounded-full border border-primary-dark/12 bg-primary-dark/[0.03] px-2 py-0.5 text-[11px] font-semibold text-primary-dark/65"
+                            className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"
                           >
                             <Cpu className="size-3 text-primary-blue/70" aria-hidden="true" />
                             {spec}
@@ -321,7 +321,7 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
               </div>
 
               {canManage ? (
-                <details className="mt-3 border-t border-primary-dark/10 pt-3">
+                <details className="mt-3 border-t border-border pt-3">
                   <summary className="cursor-pointer text-xs font-semibold text-primary-blue [&::-webkit-details-marker]:hidden">Manage asset</summary>
                   <div className="mt-3 grid gap-4 lg:grid-cols-3">
                     <form action={updateItAssetStatusAction} className="flex items-end gap-2">
@@ -356,10 +356,10 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
                   </div>
                   <form
                     action={updateItAssetSpecsAction}
-                    className="mt-4 grid gap-3 rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                    className="mt-4 grid gap-3 rounded-md border border-border bg-muted/40 p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
                   >
                     <input name="asset_id" type="hidden" value={asset.id} />
-                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/55 min-[520px]:col-span-2 lg:col-span-6">
+                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground min-[520px]:col-span-2 lg:col-span-6">
                       <Cpu className="size-3.5 text-primary-blue" aria-hidden="true" />
                       Hardware specifications
                     </p>

@@ -28,15 +28,17 @@ import {
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
+  type OpsStatusTone,
 } from "@/lib/ops/ui";
 import { formatOpsProfileName, formatOpsRole } from "@/lib/ops/roles";
 import type {
-  OpsEmployeeStatus,
   OpsEmployeeDocumentStatus,
-  OpsLeaveRequestStatus,
   OpsLeaveType,
   OpsSafetyTrainingStatus,
 } from "@/lib/ops/types";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -98,88 +100,29 @@ function profileNotice(params: OpsSearchParams) {
   return null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function employeeStatusClass(status: OpsEmployeeStatus) {
-  if (status === "active" || status === "probation") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "on_leave") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-red-200 bg-red-50 text-red-700";
-}
-
-function leaveStatusClass(status: OpsLeaveRequestStatus) {
-  if (status === "approved" || status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (status === "rejected" || status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
-}
-
-function trainingStatusClass(status: OpsSafetyTrainingStatus, expiryDate: string | null) {
+function trainingStatusTone(status: OpsSafetyTrainingStatus, expiryDate: string | null): OpsStatusTone {
   const today = new Date().toISOString().slice(0, 10);
-
   if (status === "expired" || (expiryDate && expiryDate < today)) {
-    return "border-red-200 bg-red-50 text-red-700";
+    return "negative";
   }
-
   if (status === "completed") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
+    return "positive";
   }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
+  return "neutral";
 }
 
-function employeeDocumentStatusClass(status: OpsEmployeeDocumentStatus, expiryDate: string | null) {
+function employeeDocumentStatusTone(status: OpsEmployeeDocumentStatus, expiryDate: string | null): OpsStatusTone {
   const today = new Date().toISOString().slice(0, 10);
-
-  if (status === "accepted" && (!expiryDate || expiryDate >= today)) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
   if (status === "rejected" || status === "expired" || (expiryDate && expiryDate < today)) {
-    return "border-red-200 bg-red-50 text-red-700";
+    return "negative";
   }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
+  if (status === "accepted") {
+    return "positive";
+  }
+  if (status === "submitted") {
+    return "attention";
+  }
+  return "neutral";
 }
 
 function currentEmployeeDocumentVersion(document: OpsEmployeeDocumentSummary) {
@@ -188,11 +131,11 @@ function currentEmployeeDocumentVersion(document: OpsEmployeeDocumentSummary) {
 
 function DetailMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-bold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -218,24 +161,24 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 md:p-7">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
           My Account
         </p>
         <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-primary-dark md:text-4xl">
+            <h1 className="font-heading text-3xl font-bold tracking-tight text-foreground md:text-4xl">
               Profile
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               Manage your Pymble account details and password.
             </p>
           </div>
-          <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+          <div className="rounded-md border border-border px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Access role
             </p>
-            <p className="mt-1 font-heading text-xl font-bold text-primary-dark">
+            <p className="mt-1 font-heading text-xl font-bold text-foreground">
               {formatOpsRole(auth.profile.role)}
             </p>
           </div>
@@ -256,10 +199,10 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
       ) : null}
 
       <section
-        className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white p-5"
+        className="scroll-mt-24 rounded-lg border border-border bg-card p-5"
         id="employee-self-service"
       >
-        <div className="flex flex-col gap-3 border-b border-primary-dark/10 pb-5 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-3 border-b border-border pb-5 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
               <BriefcaseBusiness className="size-5" aria-hidden="true" />
@@ -268,16 +211,14 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
                 Employee Self-Service
               </p>
-              <h2 className="mt-1 font-heading text-xl font-bold text-primary-dark">
+              <h2 className="mt-1 font-heading text-xl font-bold text-foreground">
                 My employment workspace
               </h2>
             </div>
           </div>
           {selfService.employee ? (
             <span
-              className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${employeeStatusClass(
-                selfService.employee.status,
-              )}`}
+              className={`w-fit ${opsStatusBadgeClass(selfService.employee.status)}`}
             >
               {formatLabel(selfService.employee.status)}
             </span>
@@ -307,16 +248,16 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
             </dl>
 
             <div className="grid gap-5 lg:grid-cols-2">
-              <section className="scroll-mt-24 rounded-md border border-primary-dark/10" id="my-leave">
-                <div className="flex items-center gap-3 border-b border-primary-dark/10 p-4">
+              <section className="scroll-mt-24 rounded-md border border-border" id="my-leave">
+                <div className="flex items-center gap-3 border-b border-border p-4">
                   <div className="flex size-9 items-center justify-center rounded-md bg-sky-50 text-sky-700">
                     <CalendarCheck className="size-5" aria-hidden="true" />
                   </div>
                   <div>
-                    <h3 className="font-heading text-lg font-bold text-primary-dark">
+                    <h3 className="font-heading text-lg font-bold text-foreground">
                       My leave
                     </h3>
-                    <p className="text-sm text-primary-dark/58">
+                    <p className="text-sm text-muted-foreground">
                       Balances and recent requests.
                     </p>
                   </div>
@@ -335,7 +276,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                       ))}
                     </dl>
                   ) : (
-                    <div className="rounded-md border border-primary-dark/10 px-4 py-3 text-sm text-primary-dark/60">
+                    <div className="rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
                       Leave balances have not been posted yet.
                     </div>
                   )}
@@ -343,7 +284,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                   <div className="grid gap-2">
                     {selfService.employee.leave_requests.slice(0, 4).map((request) => (
                       <article
-                        className="rounded-md border border-primary-dark/10 px-4 py-3"
+                        className="rounded-md border border-border px-4 py-3"
                         key={request.id}
                       >
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -351,19 +292,17 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                             <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                               {request.leave_number}
                             </p>
-                            <p className="mt-1 font-bold text-primary-dark">
+                            <p className="mt-1 font-bold text-foreground">
                               {formatDate(request.start_date)} to {formatDate(request.end_date)}
                             </p>
                           </div>
                           <span
-                            className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${leaveStatusClass(
-                              request.status,
-                            )}`}
+                            className={`w-fit ${opsStatusBadgeClass(request.status)}`}
                           >
                             {formatLabel(request.status)}
                           </span>
                         </div>
-                        <p className="mt-2 text-sm text-primary-dark/60">
+                        <p className="mt-2 text-sm text-muted-foreground">
                           {formatLabel(request.leave_type)} /{" "}
                           {request.days_requested.toLocaleString("en-ZM", {
                             maximumFractionDigits: 2,
@@ -374,14 +313,14 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                     ))}
                   </div>
 
-                  <details className="rounded-md border border-primary-dark/10">
-                    <summary className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+                  <details className="rounded-md border border-border">
+                    <summary className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
                       <span>Request leave</span>
                       <Plus className="size-4 text-primary-blue" aria-hidden="true" />
                     </summary>
                     <form
                       action={createMyLeaveRequestAction}
-                      className="grid gap-3 border-t border-primary-dark/10 p-4 sm:grid-cols-2"
+                      className="grid gap-3 border-t border-border p-4 sm:grid-cols-2"
                     >
                       <label className={OPS_LABEL_CLASS}>
                         Leave type
@@ -422,16 +361,16 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                 </div>
               </section>
 
-              <section className="scroll-mt-24 rounded-md border border-primary-dark/10" id="my-training">
-                <div className="flex items-center gap-3 border-b border-primary-dark/10 p-4">
+              <section className="scroll-mt-24 rounded-md border border-border" id="my-training">
+                <div className="flex items-center gap-3 border-b border-border p-4">
                   <div className="flex size-9 items-center justify-center rounded-md bg-orange-50 text-orange-700">
                     <GraduationCap className="size-5" aria-hidden="true" />
                   </div>
                   <div>
-                    <h3 className="font-heading text-lg font-bold text-primary-dark">
+                    <h3 className="font-heading text-lg font-bold text-foreground">
                       My training
                     </h3>
-                    <p className="text-sm text-primary-dark/58">
+                    <p className="text-sm text-muted-foreground">
                       Safety training and certificate renewal status.
                     </p>
                   </div>
@@ -440,7 +379,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                   {selfService.trainingRecords.length > 0 ? (
                     selfService.trainingRecords.map((training) => (
                       <article
-                        className="rounded-md border border-primary-dark/10 px-4 py-3"
+                        className="rounded-md border border-border px-4 py-3"
                         key={training.id}
                       >
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -448,15 +387,12 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                             <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                               {training.training_number}
                             </p>
-                            <p className="mt-1 font-bold text-primary-dark">
+                            <p className="mt-1 font-bold text-foreground">
                               {training.training_title}
                             </p>
                           </div>
                           <span
-                            className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${trainingStatusClass(
-                              training.status,
-                              training.expiry_date,
-                            )}`}
+                            className={`w-fit ${opsStatusBadgeClass(training.status, trainingStatusTone(training.status, training.expiry_date))}`}
                           >
                             {training.status === "completed" &&
                             training.expiry_date &&
@@ -472,43 +408,43 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                       </article>
                     ))
                   ) : (
-                    <div className="rounded-md border border-primary-dark/10 px-4 py-3 text-sm text-primary-dark/60">
+                    <div className="rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
                       No safety training records linked yet.
                     </div>
                   )}
                 </div>
               </section>
 
-              <section className="scroll-mt-24 rounded-md border border-primary-dark/10 lg:col-span-2" id="my-payslips">
-                <div className="flex items-center gap-3 border-b border-primary-dark/10 p-4">
+              <section className="scroll-mt-24 rounded-md border border-border lg:col-span-2" id="my-payslips">
+                <div className="flex items-center gap-3 border-b border-border p-4">
                   <div className="flex size-9 items-center justify-center rounded-md bg-primary-blue/10 text-primary-blue">
                     <Download className="size-5" aria-hidden="true" />
                   </div>
                   <div>
-                    <h3 className="font-heading text-lg font-bold text-primary-dark">
+                    <h3 className="font-heading text-lg font-bold text-foreground">
                       My payslips
                     </h3>
-                    <p className="text-sm text-primary-dark/58">
+                    <p className="text-sm text-muted-foreground">
                       Download your monthly payslip PDFs. Only you and HR / Finance / Leadership can see them.
                     </p>
                   </div>
                 </div>
                 {myPayslips.length === 0 ? (
-                  <p className="p-4 text-sm text-primary-dark/55">
+                  <p className="p-4 text-sm text-muted-foreground">
                     No payslips yet. Once your monthly staff payroll run is created, your payslip will appear here.
                   </p>
                 ) : (
-                  <ul className="divide-y divide-primary-dark/10">
+                  <ul className="divide-y divide-border">
                     {myPayslips.map((slip) => (
                       <li
                         className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
                         key={slip.id}
                       >
                         <div className="min-w-0">
-                          <p className="font-semibold text-primary-dark">{slip.period_label}</p>
-                          <p className="mt-0.5 text-xs text-primary-dark/55">
+                          <p className="font-semibold text-foreground">{slip.period_label}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
                             Gross {formatZmwShort(slip.gross_pay)} · Net{" "}
-                            <span className="font-semibold text-primary-dark">{formatZmwShort(slip.net_pay)}</span>
+                            <span className="font-semibold text-foreground">{formatZmwShort(slip.net_pay)}</span>
                           </p>
                         </div>
                         <a
@@ -524,30 +460,30 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                 )}
               </section>
 
-              <section className="scroll-mt-24 rounded-md border border-primary-dark/10 lg:col-span-2" id="my-documents">
-                <div className="flex items-center gap-3 border-b border-primary-dark/10 p-4">
+              <section className="scroll-mt-24 rounded-md border border-border lg:col-span-2" id="my-documents">
+                <div className="flex items-center gap-3 border-b border-border p-4">
                   <div className="flex size-9 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
                     <FileCheck2 className="size-5" aria-hidden="true" />
                   </div>
                   <div>
-                    <h3 className="font-heading text-lg font-bold text-primary-dark">
+                    <h3 className="font-heading text-lg font-bold text-foreground">
                       My HR documents
                     </h3>
-                    <p className="text-sm text-primary-dark/58">
+                    <p className="text-sm text-muted-foreground">
                       Required employee files, review status, and private downloads.
                     </p>
                   </div>
                 </div>
                 <div className="grid gap-4 p-4">
                   {selfService.documentCategories.length > 0 ? (
-                    <details className="rounded-md border border-primary-dark/10">
-                      <summary className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+                    <details className="rounded-md border border-border">
+                      <summary className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
                         <span>Upload HR document</span>
                         <Upload className="size-4 text-primary-blue" aria-hidden="true" />
                       </summary>
                       <form
                         action={uploadEmployeeDocumentAction}
-                        className="grid gap-3 border-t border-primary-dark/10 p-4 sm:grid-cols-2"
+                        className="grid gap-3 border-t border-border p-4 sm:grid-cols-2"
                       >
                         <input name="employee_id" type="hidden" value={selfService.employee.id} />
                         <input name="return_to" type="hidden" value="/ops/profile#my-documents" />
@@ -584,7 +520,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                       </form>
                     </details>
                   ) : (
-                    <div className="rounded-md border border-primary-dark/10 px-4 py-3 text-sm text-primary-dark/60">
+                    <div className="rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
                       HR document categories have not been configured yet.
                     </div>
                   )}
@@ -598,7 +534,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
 
                         return (
                           <article
-                            className="rounded-md border border-primary-dark/10 px-4 py-3"
+                            className="rounded-md border border-border px-4 py-3"
                             key={document.id}
                           >
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -606,15 +542,12 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                                   {document.category?.category_code ?? "hr"}
                                 </p>
-                                <p className="mt-1 font-bold text-primary-dark">
+                                <p className="mt-1 font-bold text-foreground">
                                   {document.document?.title ?? document.category?.name ?? "Employee document"}
                                 </p>
                               </div>
                               <span
-                                className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${employeeDocumentStatusClass(
-                                  document.status,
-                                  document.expiry_date,
-                                )}`}
+                                className={`w-fit ${opsStatusBadgeClass(document.status, employeeDocumentStatusTone(document.status, document.expiry_date))}`}
                               >
                                 {isExpired ? "Expired" : formatLabel(document.status)}
                               </span>
@@ -642,7 +575,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                       })}
                     </div>
                   ) : (
-                    <div className="rounded-md border border-primary-dark/10 px-4 py-3 text-sm text-primary-dark/60">
+                    <div className="rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
                       No HR documents linked to your employee record yet.
                     </div>
                   )}
@@ -652,7 +585,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
           </div>
         ) : (
           <div className="pt-5">
-            <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">
+            <div className={OPS_NOTICE_WARNING_CLASS}>
               No employee record is linked to this account yet.
             </div>
           </div>
@@ -662,17 +595,17 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
       <section className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
         <form
           action={updateMyProfileAction}
-          className="rounded-lg border border-primary-dark/10 bg-white p-5"
+          className="rounded-lg border border-border bg-card p-5"
         >
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
               <UserCircle className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Personal details
               </h2>
-              <p className="text-sm text-primary-dark/60">
+              <p className="text-sm text-muted-foreground">
                 These details appear in the ops workspace and activity records.
               </p>
             </div>
@@ -698,7 +631,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
             <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
               Email
               <input
-                className={`${OPS_INPUT_CLASS} bg-primary-dark/[0.03] text-primary-dark/55`}
+                className={`${OPS_INPUT_CLASS} bg-muted/40 text-muted-foreground`}
                 defaultValue={auth.profile.email ?? auth.authUser.email ?? ""}
                 disabled
               />
@@ -715,7 +648,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
         <div className="space-y-5">
           <form
             action={updateMyPasswordAction}
-            className="rounded-lg border border-primary-dark/10 bg-white p-5"
+            className="rounded-lg border border-border bg-card p-5"
             id="password"
           >
             <div className="mb-5 flex items-center gap-3">
@@ -723,10 +656,10 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                 <KeyRound className="size-5" aria-hidden="true" />
               </div>
               <div>
-                <h2 className="font-heading text-xl font-bold text-primary-dark">
+                <h2 className="font-heading text-xl font-bold text-foreground">
                   Password
                 </h2>
-                <p className="text-sm text-primary-dark/60">
+                <p className="text-sm text-muted-foreground">
                   Choose a new password for your login.
                 </p>
               </div>
@@ -742,7 +675,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                   required
                   type="password"
                 />
-                <span className="mt-1 block text-xs text-primary-dark/55">
+                <span className="mt-1 block text-xs text-muted-foreground">
                   At least 12 characters with an uppercase letter, a lowercase letter, and a digit.
                 </span>
               </label>
@@ -766,16 +699,16 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
             </button>
           </form>
 
-          <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+          <section className="rounded-lg border border-border bg-card p-5">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-md bg-emerald-50 text-emerald-700">
                 <ShieldCheck className="size-5" aria-hidden="true" />
               </div>
               <div>
-                <h2 className="font-heading text-xl font-bold text-primary-dark">
+                <h2 className="font-heading text-xl font-bold text-foreground">
                   Session
                 </h2>
-                <p className="text-sm text-primary-dark/60">
+                <p className="text-sm text-muted-foreground">
                   Sign out of this browser when you finish.
                 </p>
               </div>

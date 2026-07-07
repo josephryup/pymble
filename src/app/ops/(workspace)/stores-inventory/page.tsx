@@ -77,7 +77,12 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime } from "@/lib/ops/format";
+
+const formatDateTime = (value: string | null | undefined) => formatOpsDateTime(value, "Not moved");
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -148,10 +153,6 @@ function storesNotice(params: OpsSearchParams) {
     : null;
 }
 
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
 function formatQuantity(value: number, unit?: string) {
   return `${value.toLocaleString("en-ZM", {
     maximumFractionDigits: 2,
@@ -164,32 +165,6 @@ function formatMovementQuantity(movement: OpsStockMovementSummary) {
     Math.abs(movement.quantity),
     movement.stock_item?.unit,
   )}`;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not moved";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function statusClass(status: OpsGrnStatus) {
-  if (status === "posted") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  return "border-red-200 bg-red-50 text-red-700";
 }
 
 function movementClass(type: OpsStockMovementType) {
@@ -205,7 +180,7 @@ function movementClass(type: OpsStockMovementType) {
     return "border-sky-200 bg-sky-50 text-sky-700";
   }
 
-  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55";
+  return "border-border bg-muted/40 text-muted-foreground";
 }
 
 function InventoryFlowStep({
@@ -220,21 +195,21 @@ function InventoryFlowStep({
   value: string;
 }) {
   return (
-    <div className="rounded-lg border border-primary-dark/10 bg-primary-dark/[0.02] p-4">
+    <div className="rounded-lg border border-border bg-muted/40 p-4">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-white text-primary-blue shadow-sm shadow-primary-dark/5">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-card text-primary-blue shadow-sm shadow-foreground/5">
           <Icon className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             {label}
           </p>
-          <p className="mt-1 truncate font-heading text-xl font-bold text-primary-dark">
+          <p className="mt-1 truncate font-heading text-xl font-bold text-foreground">
             {value}
           </p>
         </div>
       </div>
-      <p className="mt-3 text-sm leading-6 text-primary-dark/60">{description}</p>
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -249,10 +224,10 @@ function GoodsReceivedItems({ grn }: { grn: OpsGoodsReceivedNoteSummary }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border border-primary-dark/10">
-      <table className="min-w-full divide-y divide-primary-dark/10 text-sm">
+    <div className="overflow-x-auto rounded-md border border-border">
+      <table className="min-w-full divide-y divide-border text-sm">
         <caption className="sr-only">Goods received lines for {grn.grn_number}</caption>
-        <thead className="bg-primary-dark/[0.03] text-left text-xs uppercase tracking-[0.12em] text-primary-dark/52">
+        <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.12em] text-muted-foreground">
           <tr>
             <th className="px-3 py-3" scope="col">
               Item
@@ -268,22 +243,22 @@ function GoodsReceivedItems({ grn }: { grn: OpsGoodsReceivedNoteSummary }) {
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-primary-dark/10">
+        <tbody className="divide-y divide-border">
           {grn.items.map((item) => (
             <tr key={item.id}>
               <td className="px-3 py-3 align-top">
-                <p className="font-bold text-primary-dark">{item.item_name}</p>
-                <p className="mt-1 text-xs text-primary-dark/45">
+                <p className="font-bold text-foreground">{item.item_name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
                   Stock item: {item.stock_item?.item_code ?? "Not linked"}
                 </p>
               </td>
-              <td className="px-3 py-3 align-top font-semibold text-primary-dark/70">
+              <td className="px-3 py-3 align-top font-semibold text-foreground/70">
                 {formatQuantity(item.quantity_received, item.unit)}
               </td>
-              <td className="px-3 py-3 align-top font-semibold text-primary-dark/70">
+              <td className="px-3 py-3 align-top font-semibold text-foreground/70">
                 {formatQuantity(item.quantity_rejected, item.unit)}
               </td>
-              <td className="px-3 py-3 align-top font-bold text-primary-dark">
+              <td className="px-3 py-3 align-top font-bold text-foreground">
                 {formatZmw(item.quantity_received * item.unit_cost)}
               </td>
             </tr>
@@ -297,21 +272,21 @@ function GoodsReceivedItems({ grn }: { grn: OpsGoodsReceivedNoteSummary }) {
 function StockLevels({ levels }: { levels: OpsStockLevelSummary[] }) {
   if (levels.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
         No positive stock balances yet. Post the first GRN to populate this view.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+    <ul className="divide-y divide-border rounded-md border border-border">
       {levels.map((level) => (
         <li className="grid gap-2 px-3 py-3 min-[640px]:grid-cols-[1fr_auto]" key={level.id}>
           <div className="min-w-0">
-            <p className="font-bold text-primary-dark">
+            <p className="font-bold text-foreground">
               {level.stock_item?.item_name ?? "Stock item unavailable"}
             </p>
-            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               {level.stock_item?.item_code ?? "No code"} /{" "}
               {level.location
                 ? `${level.location.location_code} - ${level.location.name}`
@@ -319,10 +294,10 @@ function StockLevels({ levels }: { levels: OpsStockLevelSummary[] }) {
             </p>
           </div>
           <div className="text-left min-[640px]:text-right">
-            <p className="font-heading text-xl font-bold text-primary-dark">
+            <p className="font-heading text-xl font-bold text-foreground">
               {formatQuantity(level.quantity_on_hand, level.stock_item?.unit)}
             </p>
-            <p className="mt-1 text-xs text-primary-dark/45">
+            <p className="mt-1 text-xs text-muted-foreground">
               Last movement {formatDateTime(level.last_movement_at)}
             </p>
           </div>
@@ -335,19 +310,19 @@ function StockLevels({ levels }: { levels: OpsStockLevelSummary[] }) {
 function StockMovements({ movements }: { movements: OpsStockMovementSummary[] }) {
   if (movements.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
         No stock movement history yet.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+    <ul className="divide-y divide-border rounded-md border border-border">
       {movements.map((movement) => (
         <li className="grid gap-2 px-3 py-3 min-[640px]:grid-cols-[1fr_auto]" key={movement.id}>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-bold text-primary-dark">
+              <p className="font-bold text-foreground">
                 {movement.stock_item?.item_name ?? "Stock item unavailable"}
               </p>
               <span
@@ -358,7 +333,7 @@ function StockMovements({ movements }: { movements: OpsStockMovementSummary[] })
                 {formatLabel(movement.movement_type)}
               </span>
             </div>
-            <p className="mt-1 text-xs text-primary-dark/50">
+            <p className="mt-1 text-xs text-muted-foreground">
               {movement.location
                 ? `${movement.location.location_code} - ${movement.location.name}`
                 : "Location unavailable"}{" "}
@@ -366,10 +341,10 @@ function StockMovements({ movements }: { movements: OpsStockMovementSummary[] })
             </p>
           </div>
           <div className="text-left min-[640px]:text-right">
-            <p className="font-bold text-primary-dark">
+            <p className="font-bold text-foreground">
               {formatMovementQuantity(movement)}
             </p>
-            <p className="mt-1 text-xs text-primary-dark/45">
+            <p className="mt-1 text-xs text-muted-foreground">
               {formatDateTime(movement.movement_at)}
             </p>
           </div>
@@ -416,7 +391,7 @@ function StockControlForms({
 
   return (
     <details
-      className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+      className="scroll-mt-24 rounded-lg border border-border bg-card"
       id="stock-control-panel"
       open={openByDefault}
     >
@@ -427,17 +402,17 @@ function StockControlForms({
           <ArrowRightLeft className="size-5" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="font-heading text-lg font-bold text-primary-dark">Stock control</h2>
-          <p className="text-sm text-primary-dark/60">
+          <h2 className="font-heading text-lg font-bold text-foreground">Stock control</h2>
+          <p className="text-sm text-muted-foreground">
             Issue, transfer, or correct existing stock balances.
           </p>
         </div>
-        <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
           Open
         </span>
       </summary>
 
-      <div className="border-t border-primary-dark/10 p-5">
+      <div className="border-t border-border p-5">
         {levels.length === 0 ? (
           <p className="rounded-md border border-orange-200 bg-orange-50 px-3 py-3 text-sm text-orange-800">
             Post a GRN before stock can be issued, transferred, or adjusted.
@@ -445,12 +420,12 @@ function StockControlForms({
         ) : (
           <div className="grid gap-3">
           {canIssue ? (
-            <details className="rounded-md border border-primary-dark/10">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+            <details className="rounded-md border border-border">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
                 <PackageMinus className="size-4" aria-hidden="true" />
                 Issue stock
               </summary>
-              <form action={issueStockAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+              <form action={issueStockAction} className="grid gap-3 border-t border-border p-3">
                 <label className={OPS_LABEL_CLASS}>
                   Stock balance
                   <select className={OPS_INPUT_CLASS} defaultValue="" name="stock_level_id" required>
@@ -491,12 +466,12 @@ function StockControlForms({
           ) : null}
 
           {canTransfer ? (
-            <details className="rounded-md border border-primary-dark/10">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+            <details className="rounded-md border border-border">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
                 <ArrowRightLeft className="size-4" aria-hidden="true" />
                 Transfer stock
               </summary>
-              <form action={transferStockAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+              <form action={transferStockAction} className="grid gap-3 border-t border-border p-3">
                 <label className={OPS_LABEL_CLASS}>
                   Source balance
                   <select className={OPS_INPUT_CLASS} defaultValue="" name="stock_level_id" required>
@@ -551,12 +526,12 @@ function StockControlForms({
           ) : null}
 
           {canAdjust ? (
-            <details className="rounded-md border border-primary-dark/10">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+            <details className="rounded-md border border-border">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
                 <ClipboardPenLine className="size-4" aria-hidden="true" />
                 Adjust count
               </summary>
-              <form action={adjustStockCountAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+              <form action={adjustStockCountAction} className="grid gap-3 border-t border-border p-3">
                 <label className={OPS_LABEL_CLASS}>
                   Stock balance
                   <select className={OPS_INPUT_CLASS} defaultValue="" name="stock_level_id" required>
@@ -698,16 +673,16 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
 
   return (
     <div className="w-full max-w-none space-y-5">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm shadow-primary-dark/5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 shadow-sm shadow-foreground/5 md:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Procurement and stores
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Stores and inventory
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               Receive issued purchase orders, control stock master data, and keep every balance
               traceable through auditable movements.
             </p>
@@ -797,11 +772,11 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
       </div>
 
       {stockValueByCategory.length > 0 ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
-          <h2 className="font-heading text-xl font-bold text-primary-dark">
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-heading text-xl font-bold text-foreground">
             Stock value by category
           </h2>
-          <p className="mt-1 text-sm text-primary-dark/60">
+          <p className="mt-1 text-sm text-muted-foreground">
             On-hand quantity valued at each item&apos;s last unit cost. Items without a
             recorded cost are excluded.
           </p>
@@ -871,7 +846,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
 
       {canReceiveGoods ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="grn-receive-panel"
           open={openReceivePanel}
         >
@@ -882,24 +857,24 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
               <ClipboardCheck className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Record goods received
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Post receipts only against issued or partially received purchase orders.
               </span>
             </span>
-            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
-          <div className="border-t border-primary-dark/10 p-5">
+          <div className="border-t border-border p-5">
             {receivableItems.length === 0 ? (
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 No issued purchase order lines are available for receiving yet.
               </div>
             ) : locationOptions.length === 0 || stockItemOptions.length === 0 ? (
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one active stock location and stock item before posting a GRN.
               </div>
             ) : (
@@ -1001,13 +976,13 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
 
       <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
         <div className="space-y-6">
-          <section className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white" id="grn-register">
-            <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+          <section className="scroll-mt-24 rounded-lg border border-border bg-card" id="grn-register">
+            <div className="flex items-center justify-between gap-3 border-b border-border p-5">
               <div>
-                <h2 className="font-heading text-xl font-bold text-primary-dark">
+                <h2 className="font-heading text-xl font-bold text-foreground">
                   Goods received register
                 </h2>
-                <p className="mt-1 text-sm text-primary-dark/60">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {grnPage.pagination.total} matching GRN records.
                 </p>
               </div>
@@ -1029,30 +1004,28 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
             />
 
             {grnPage.items.length > 0 ? (
-              <div className="divide-y divide-primary-dark/10">
+              <div className="divide-y divide-border">
                 {grnPage.items.map((grn) => (
                   <article className="p-5" key={grn.id}>
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-heading text-lg font-bold text-primary-dark">
+                          <h3 className="font-heading text-lg font-bold text-foreground">
                             {grn.grn_number}
                           </h3>
                           <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                              grn.status,
-                            )}`}
+                            className={opsStatusBadgeClass(grn.status)}
                           >
                             {formatLabel(grn.status)}
                           </span>
                         </div>
-                        <p className="mt-2 font-bold text-primary-dark">
+                        <p className="mt-2 font-bold text-foreground">
                           {grn.purchase_order?.po_number ?? "PO unavailable"} /{" "}
                           {grn.supplier
                             ? `${grn.supplier.supplier_code} - ${grn.supplier.legal_name}`
                             : "Supplier unavailable"}
                         </p>
-                        <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
                           {grn.site ? `${grn.site.code} - ${grn.site.name}` : "Site unavailable"}{" "}
                           /{" "}
                           {grn.location
@@ -1060,11 +1033,11 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
                             : "Location unavailable"}
                         </p>
                       </div>
-                      <div className="rounded-md border border-primary-dark/10 px-4 py-3 lg:min-w-48 lg:text-right">
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <div className="rounded-md border border-border px-4 py-3 lg:min-w-48 lg:text-right">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           Received value
                         </p>
-                        <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+                        <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                           {formatZmw(grn.total_received_amount)}
                         </p>
                         {canRaiseDeliveryException && grn.status === "posted" ? (
@@ -1094,32 +1067,32 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
                     </div>
 
                     <dl className="mt-4 grid gap-3 md:grid-cols-3">
-                      <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <div className="rounded-md border border-border px-3 py-2">
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           Delivery reference
                         </dt>
-                        <dd className="mt-1 font-bold text-primary-dark">
+                        <dd className="mt-1 font-bold text-foreground">
                           {grn.delivery_reference || "Not recorded"}
                         </dd>
                       </div>
-                      <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <div className="rounded-md border border-border px-3 py-2">
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           Received date
                         </dt>
-                        <dd className="mt-1 font-bold text-primary-dark">
+                        <dd className="mt-1 font-bold text-foreground">
                           {formatDate(grn.received_at)}
                         </dd>
                       </div>
-                      <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <div className="rounded-md border border-border px-3 py-2">
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           Lines
                         </dt>
-                        <dd className="mt-1 font-bold text-primary-dark">{grn.items.length}</dd>
+                        <dd className="mt-1 font-bold text-foreground">{grn.items.length}</dd>
                       </div>
                     </dl>
 
                     {grn.notes ? (
-                      <p className="mt-4 rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                      <p className="mt-4 rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                         {grn.notes}
                       </p>
                     ) : null}
@@ -1140,10 +1113,10 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
               <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
                 <Boxes className="size-10 text-primary-blue" aria-hidden="true" />
                 <div>
-                  <p className="font-heading text-xl font-bold text-primary-dark">
+                  <p className="font-heading text-xl font-bold text-foreground">
                     {hasActiveListFilter ? "No matching GRNs" : "No GRNs posted yet"}
                   </p>
-                  <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+                  <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                     {hasActiveListFilter
                       ? "Adjust the search or status filter to widen the goods received register."
                       : "Issue a purchase order from Request for Quotations and Purchase Orders, then receive it here."}
@@ -1171,7 +1144,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
         <aside className="space-y-6">
           {canManageMasterData ? (
             <details
-              className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+              className="scroll-mt-24 rounded-lg border border-border bg-card"
               id="location-create-panel"
               open={openLocationPanel}
             >
@@ -1182,18 +1155,18 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
                   <MapPin className="size-5" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-heading text-lg font-bold text-primary-dark">
+                  <span className="block font-heading text-lg font-bold text-foreground">
                     Add location
                   </span>
-                  <span className="mt-1 block text-sm text-primary-dark/60">
+                  <span className="mt-1 block text-sm text-muted-foreground">
                     Central, site, yard, or vehicle store.
                   </span>
                 </span>
-                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                   Open
                 </span>
               </summary>
-              <form action={createInventoryLocationAction} className="grid gap-3 border-t border-primary-dark/10 p-5">
+              <form action={createInventoryLocationAction} className="grid gap-3 border-t border-border p-5">
                 <label className={OPS_LABEL_CLASS}>
                   Name
                   <input className={OPS_INPUT_CLASS} name="name" required />
@@ -1237,7 +1210,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
 
           {canManageMasterData ? (
             <details
-              className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+              className="scroll-mt-24 rounded-lg border border-border bg-card"
               id="stock-item-create-panel"
               open={openStockItemPanel}
             >
@@ -1248,18 +1221,18 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
                   <PackagePlus className="size-5" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-heading text-lg font-bold text-primary-dark">
+                  <span className="block font-heading text-lg font-bold text-foreground">
                     Add stock item
                   </span>
-                  <span className="mt-1 block text-sm text-primary-dark/60">
+                  <span className="mt-1 block text-sm text-muted-foreground">
                     Reusable item master for GRNs.
                   </span>
                 </span>
-                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+                <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                   Open
                 </span>
               </summary>
-              <form action={createStockItemAction} className="grid gap-3 border-t border-primary-dark/10 p-5">
+              <form action={createStockItemAction} className="grid gap-3 border-t border-border p-5">
                 <label className={OPS_LABEL_CLASS}>
                   Item name
                   <input className={OPS_INPUT_CLASS} name="item_name" required />

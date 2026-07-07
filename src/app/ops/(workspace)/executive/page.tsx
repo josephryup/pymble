@@ -35,6 +35,7 @@ import {
   OPS_FOCUS_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
+  OPS_NOTICE_WARNING_CLASS,
 } from "@/lib/ops/ui";
 
 function formatPercent(value: number | null) {
@@ -84,11 +85,11 @@ function MetricRow({
 }) {
   return (
     <Link
-      className={`flex min-h-12 items-center justify-between gap-3 rounded-md border border-primary-dark/10 px-3 py-2 text-sm font-semibold text-primary-dark/68 transition hover:border-primary-blue hover:text-primary-blue ${OPS_FOCUS_CLASS}`}
+      className={`flex min-h-12 items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm font-semibold text-foreground/68 transition hover:border-primary-blue hover:text-primary-blue ${OPS_FOCUS_CLASS}`}
       href={href}
     >
       <span>{label}</span>
-      <span className="font-heading text-base font-bold text-primary-dark">{value}</span>
+      <span className="font-heading text-base font-bold text-foreground">{value}</span>
     </Link>
   );
 }
@@ -96,13 +97,13 @@ function MetricRow({
 function ProjectSnapshotCard({ project }: { project: OpsExecutiveProjectSnapshot }) {
   return (
     <Link
-      className={`block rounded-lg border bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-sm ${OPS_FOCUS_CLASS}`}
+      className={`block rounded-lg border bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-sm ${OPS_FOCUS_CLASS}`}
       href={`/ops/sites/${project.siteId}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-primary-dark">{project.siteName}</p>
-          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/42">
+          <p className="truncate text-sm font-bold text-foreground">{project.siteName}</p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             {project.siteCode}
           </p>
         </div>
@@ -116,22 +117,22 @@ function ProjectSnapshotCard({ project }: { project: OpsExecutiveProjectSnapshot
       </div>
       <div className="mt-4 grid gap-2 text-sm">
         <div className="flex justify-between gap-3">
-          <span className="text-primary-dark/55">Forecast margin</span>
-          <span className="font-bold text-primary-dark">{formatZmw(project.forecastMargin)}</span>
+          <span className="text-muted-foreground">Forecast margin</span>
+          <span className="font-bold text-foreground">{formatZmw(project.forecastMargin)}</span>
         </div>
         <div className="flex justify-between gap-3">
-          <span className="text-primary-dark/55">Margin percent</span>
-          <span className="font-bold text-primary-dark">
+          <span className="text-muted-foreground">Margin percent</span>
+          <span className="font-bold text-foreground">
             {formatPercent(project.forecastMarginPercent)}
           </span>
         </div>
         <div className="flex justify-between gap-3">
-          <span className="text-primary-dark/55">Cost exposure</span>
-          <span className="font-bold text-primary-dark">{formatZmw(project.costExposure)}</span>
+          <span className="text-muted-foreground">Cost exposure</span>
+          <span className="font-bold text-foreground">{formatZmw(project.costExposure)}</span>
         </div>
         <div className="flex justify-between gap-3">
-          <span className="text-primary-dark/55">Over budget</span>
-          <span className="font-bold text-primary-dark">{formatZmw(project.overBudgetAmount)}</span>
+          <span className="text-muted-foreground">Over budget</span>
+          <span className="font-bold text-foreground">{formatZmw(project.overBudgetAmount)}</span>
         </div>
       </div>
     </Link>
@@ -232,10 +233,10 @@ export default async function OpsExecutivePage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             {OPS_BRAND.companyName}
           </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark md:text-4xl">
+          <h1 className="mt-2 font-heading text-3xl font-bold text-foreground md:text-4xl">
             Executive dashboard
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/62 md:text-base">
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground md:text-base">
             Leadership view of approvals, cashflow, project margin, HSE pressure, procurement
             bottlenecks, fleet readiness, and people controls.
           </p>
@@ -253,7 +254,7 @@ export default async function OpsExecutivePage() {
       </section>
 
       {unavailableSources.length > 0 ? (
-        <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">
+        <div className={OPS_NOTICE_WARNING_CLASS}>
           {unavailableSources.length} dashboard source
           {unavailableSources.length === 1 ? "" : "s"} unavailable while the system settles.
         </div>
@@ -333,7 +334,7 @@ export default async function OpsExecutivePage() {
 
             {reportDigest.pendingReview.length > 0 ? (
               <div className="grid gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/50">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   Awaiting your review
                 </p>
                 {reportDigest.pendingReview.map((pending) => (
@@ -360,14 +361,14 @@ export default async function OpsExecutivePage() {
               <div className="grid gap-2 md:grid-cols-2">
                 {reportDigest.summaries.map((summary) => (
                   <Link
-                    className={`rounded-lg border border-primary-dark/10 bg-primary-dark/[0.02] p-3 transition hover:border-primary-blue/50 ${OPS_FOCUS_CLASS}`}
+                    className={`rounded-lg border border-border bg-muted/40 p-3 transition hover:border-primary-blue/50 ${OPS_FOCUS_CLASS}`}
                     href={`/ops/department-reports/${summary.id}`}
                     key={summary.id}
                   >
                     <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                       {OPS_DEPARTMENT_LABELS[summary.department]}
                     </p>
-                    <p className="mt-1 line-clamp-3 text-sm leading-5 text-primary-dark/75">
+                    <p className="mt-1 line-clamp-3 text-sm leading-5 text-foreground/75">
                       {summary.excerpt}
                     </p>
                   </Link>
@@ -555,7 +556,7 @@ export default async function OpsExecutivePage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] p-5 text-sm font-semibold text-primary-dark/60">
+          <div className="rounded-md border border-border bg-muted/40 p-5 text-sm font-semibold text-muted-foreground">
             Project margin and budget snapshots will appear as commercial and finance records grow.
           </div>
         )}
@@ -641,11 +642,11 @@ export default async function OpsExecutivePage() {
       <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
         <OpsDashboardPanel eyebrow="HSE" title="Safety leadership">
           <div className="grid gap-3">
-            <div className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] p-4">
+            <div className="rounded-md border border-border bg-muted/40 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-bold text-primary-dark">{report.hse.headline}</p>
-                  <p className="mt-1 text-sm text-primary-dark/58">
+                  <p className="font-bold text-foreground">{report.hse.headline}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Generated {new Date(report.hse.generatedAt).toLocaleString("en-ZM")}
                   </p>
                 </div>
@@ -717,7 +718,7 @@ export default async function OpsExecutivePage() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Reports and controls
             </p>
-            <h2 className="mt-1 font-heading text-xl font-bold text-primary-dark">
+            <h2 className="mt-1 font-heading text-xl font-bold text-foreground">
               Executive shortcuts
             </h2>
           </div>

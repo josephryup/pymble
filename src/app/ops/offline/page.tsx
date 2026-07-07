@@ -25,12 +25,12 @@ export default function OpsOfflinePage() {
         <CloudOff aria-hidden="true" className="size-8" />
       </span>
       <div className="max-w-md space-y-2">
-        <h1 className="font-heading text-2xl font-bold text-primary-dark">You&rsquo;re offline</h1>
-        <p className="text-sm leading-6 text-primary-dark/65">
+        <h1 className="font-heading text-2xl font-bold text-foreground">You&rsquo;re offline</h1>
+        <p className="text-sm leading-6 text-muted-foreground">
           {OPS_BRAND.shortName} can&rsquo;t reach the server right now. Pages you&rsquo;ve already
           opened may still work from your device&rsquo;s cache.
         </p>
-        <p className="text-sm leading-6 text-primary-dark/65">
+        <p className="text-sm leading-6 text-muted-foreground">
           Attendance, daily site reports, and site photos you submit while offline are saved on
           this device and will sync automatically once you&rsquo;re back online.
         </p>

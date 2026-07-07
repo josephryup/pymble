@@ -74,6 +74,8 @@ import {
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 
 type PageProps = {
@@ -208,19 +210,6 @@ function buildBoqLineRfqHref(
   return `/ops/rfq-po?${params.toString()}#rfq-create-panel`;
 }
 
-function boqStatusClass(status: OpsBoqDocument["status"]) {
-  if (status === "issued") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-  if (status === "priced") {
-    return "border-primary-blue/30 bg-primary-blue/10 text-primary-blue";
-  }
-  if (status === "pricing_pending") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-  return "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/60";
-}
-
 function boqStatusLabel(status: OpsBoqDocument["status"]) {
   if (status === "pricing_pending") {
     return "pricing pending";
@@ -230,11 +219,11 @@ function boqStatusLabel(status: OpsBoqDocument["status"]) {
 
 function BoqValueMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-3">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-3">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-heading text-xl font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-heading text-xl font-bold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -251,19 +240,19 @@ function BoqFlowStep({
   value: string;
 }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 p-3">
+    <div className="rounded-md border border-border p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             {label}
           </p>
-          <p className="mt-1 font-heading text-xl font-bold text-primary-dark">{value}</p>
+          <p className="mt-1 font-heading text-xl font-bold text-foreground">{value}</p>
         </div>
         <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-blue/10 text-primary-blue">
           <Icon className="size-4" aria-hidden="true" />
         </span>
       </div>
-      <p className="mt-3 text-sm leading-6 text-primary-dark/60">{description}</p>
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -291,7 +280,7 @@ function BoqPricingWorkflowPanel({
         className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary-blue/25 bg-primary-blue/5 p-4"
       >
         <input name="boq_id" type="hidden" value={document.id} />
-        <p className="text-sm leading-6 text-primary-dark/70">
+        <p className="text-sm leading-6 text-foreground/70">
           Once quantities, classification, and dates are set, submit this schedule to Procurement
           for pricing. Procurement must price every line — including transport — before it can be
           issued.
@@ -310,7 +299,7 @@ function BoqPricingWorkflowPanel({
     return (
       <div className="mt-5 rounded-md border border-orange-200 bg-orange-50/50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm leading-6 text-primary-dark/70">
+          <p className="text-sm leading-6 text-foreground/70">
             {document.status === "pricing_pending"
               ? "Awaiting Procurement pricing (unit rate + transport estimate per line)."
               : "Priced by Procurement. Ready to issue — issuing generates the project budget."}
@@ -333,22 +322,22 @@ function BoqPricingWorkflowPanel({
           >
             <input name="boq_id" type="hidden" value={document.id} />
             {document.items.length === 0 ? (
-              <p className="text-sm text-primary-dark/60">No line items to price yet.</p>
+              <p className="text-sm text-muted-foreground">No line items to price yet.</p>
             ) : (
               document.items.map((item) => (
                 <div
-                  className="grid gap-2 rounded-md border border-primary-dark/10 bg-white p-3 min-[560px]:grid-cols-[minmax(0,1fr)_9rem_9rem]"
+                  className="grid gap-2 rounded-md border border-border bg-card p-3 min-[560px]:grid-cols-[minmax(0,1fr)_9rem_9rem]"
                   key={item.id}
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-primary-dark">
+                    <p className="truncate text-sm font-semibold text-foreground">
                       {item.description}
                     </p>
-                    <p className="text-xs text-primary-dark/50">
+                    <p className="text-xs text-muted-foreground">
                       {formatNumber(item.quantity)} {item.unit} · {item.category}
                     </p>
                   </div>
-                  <label className="text-xs font-bold text-primary-dark/60">
+                  <label className="text-xs font-bold text-muted-foreground">
                     Unit rate
                     <input
                       className={`${OPS_INPUT_CLASS} mt-1`}
@@ -359,7 +348,7 @@ function BoqPricingWorkflowPanel({
                       type="number"
                     />
                   </label>
-                  <label className="text-xs font-bold text-primary-dark/60">
+                  <label className="text-xs font-bold text-muted-foreground">
                     Transport
                     <input
                       className={`${OPS_INPUT_CLASS} mt-1`}
@@ -607,7 +596,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
 
       {canManage ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="boq-create-panel"
           open={openCreatePanel}
         >
@@ -618,27 +607,27 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
               <Plus className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create Bill of Quantities
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Create the site-linked Bill of Quantities header before adding measured line items in the register.
               </span>
             </span>
-            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           {siteOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one site before creating a Bill of Quantities.
               </div>
             </div>
           ) : (
             <form
               action={createBoqDocumentAction}
-              className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
@@ -662,7 +651,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                 <input className={OPS_INPUT_CLASS} defaultValue="1" min="1" name="version" type="number" />
               </label>
               <div className="flex items-end min-[520px]:col-span-2 lg:col-span-2">
-                <p className="text-xs leading-5 text-primary-dark/50">
+                <p className="text-xs leading-5 text-muted-foreground">
                   Always starts as <span className="font-semibold">draft</span>. Add line items,
                   then submit to Procurement for pricing.
                 </p>
@@ -682,10 +671,10 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="grid scroll-mt-24 gap-5" id="boq-register">
-        <div className="rounded-lg border border-primary-dark/10 bg-white">
-          <div className="border-b border-primary-dark/10 p-5">
-            <h2 className="font-heading text-xl font-bold text-primary-dark">BOQ documents</h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+        <div className="rounded-lg border border-border bg-card">
+          <div className="border-b border-border p-5">
+            <h2 className="font-heading text-xl font-bold text-foreground">BOQ documents</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Search and filter document headers before opening their line items.
             </p>
           </div>
@@ -709,59 +698,57 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           boqDocuments.map((document) => {
             const canEditDoc = canEditBoq(auth.profile.role, document);
             return (
-            <div className="rounded-lg border border-primary-dark/10 bg-white" key={document.id}>
-              <div className="border-b border-primary-dark/10 p-5">
+            <div className="rounded-lg border border-border bg-card" key={document.id}>
+              <div className="border-b border-border p-5">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-blue">
                       {document.site?.code ?? "Site code unavailable"} - v{document.version}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <h2 className="font-heading text-xl font-bold text-primary-dark">
+                      <h2 className="font-heading text-xl font-bold text-foreground">
                         {document.title}
                       </h2>
                       <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${boqStatusClass(
-                          document.status,
-                        )}`}
+                        className={opsStatusBadgeClass(document.status)}
                       >
                         {boqStatusLabel(document.status)}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-primary-dark/60">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {document.site?.name ?? "Site record unavailable"}
                     </p>
                   </div>
                   <div className="grid gap-3 min-[520px]:grid-cols-4 lg:min-w-[28rem]">
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Budgeted
                       </p>
-                      <p className="mt-1 font-bold text-primary-dark">
+                      <p className="mt-1 font-bold text-foreground">
                         {formatZmw(document.budgeted_total)}
                       </p>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Actual
                       </p>
-                      <p className="mt-1 font-bold text-primary-dark">
+                      <p className="mt-1 font-bold text-foreground">
                         {formatZmw(document.actual_total)}
                       </p>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Transport
                       </p>
-                      <p className="mt-1 font-bold text-primary-dark">
+                      <p className="mt-1 font-bold text-foreground">
                         {formatZmw(document.transport_total)}
                       </p>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Lines
                       </p>
-                      <p className="mt-1 font-bold text-primary-dark">
+                      <p className="mt-1 font-bold text-foreground">
                         {document.items.length.toLocaleString("en-ZM")}
                       </p>
                     </div>
@@ -809,21 +796,21 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
 
                 {canEditDoc ? (
                   <>
-                  <details className="mt-5 rounded-md border border-primary-dark/10">
+                  <details className="mt-5 rounded-md border border-border">
                     <summary
-                      className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+                      className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
                     >
                       <span className="inline-flex items-center gap-2">
                         <Plus className="size-4" aria-hidden="true" />
                         Add measured line item
                       </span>
-                      <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+                      <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                         Open
                       </span>
                     </summary>
                     <form
                       action={createBoqLineItemAction}
-                      className="grid gap-3 border-t border-primary-dark/10 p-4 md:grid-cols-3 lg:grid-cols-6"
+                      className="grid gap-3 border-t border-border p-4 md:grid-cols-3 lg:grid-cols-6"
                     >
                       <input name="boq_id" type="hidden" value={document.id} />
                       <label className={`${OPS_LABEL_CLASS} md:col-span-3 lg:col-span-2`}>
@@ -917,30 +904,30 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     </form>
                   </details>
 
-                  <details className="mt-3 rounded-md border border-primary-dark/10">
+                  <details className="mt-3 rounded-md border border-border">
                     <summary
-                      className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+                      className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
                     >
                       <span className="inline-flex items-center gap-2">
                         <Upload className="size-4" aria-hidden="true" />
                         Import line items from CSV
                       </span>
-                      <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+                      <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                         Open
                       </span>
                     </summary>
                     <form
                       action={importBoqLineItemsCsvAction}
-                      className="grid gap-3 border-t border-primary-dark/10 p-4"
+                      className="grid gap-3 border-t border-border p-4"
                     >
                       <input name="boq_id" type="hidden" value={document.id} />
-                      <p className="text-sm leading-6 text-primary-dark/60">
+                      <p className="text-sm leading-6 text-muted-foreground">
                         Upload a CSV, XLSX, or PDF with columns{" "}
-                        <span className="font-semibold text-primary-dark">
+                        <span className="font-semibold text-foreground">
                           description, unit, quantity, unit price
                         </span>{" "}
                         (optional:{" "}
-                        <span className="font-semibold text-primary-dark">supplier name</span>). For XLSX
+                        <span className="font-semibold text-foreground">supplier name</span>). For XLSX
                         form-style sheets (Item No, Quantity, Unit of Measure, Description, Unit Price, Total,
                         Supplier Name), the importer skips title rows and picks up the header automatically.
                       </p>
@@ -964,21 +951,21 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     </form>
                   </details>
 
-                  <details className="mt-3 rounded-md border border-primary-dark/10">
+                  <details className="mt-3 rounded-md border border-border">
                     <summary
-                      className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+                      className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
                     >
                       <span className="inline-flex items-center gap-2">
                         <Pencil className="size-4" aria-hidden="true" />
                         Edit Bill of Quantities details
                       </span>
-                      <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+                      <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                         Open
                       </span>
                     </summary>
                     <form
                       action={updateBoqDocumentAction}
-                      className="grid gap-3 border-t border-primary-dark/10 p-4 md:grid-cols-4"
+                      className="grid gap-3 border-t border-border p-4 md:grid-cols-4"
                     >
                       <input name="boq_id" type="hidden" value={document.id} />
                       <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
@@ -1024,7 +1011,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                         Leadership can restore it later.
                       </p>
                       <button
-                        className="inline-flex items-center gap-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-bold text-red-700 transition hover:bg-red-100"
+                        className="inline-flex items-center gap-2 rounded-md border border-red-300 bg-card px-3 py-1.5 text-sm font-bold text-red-700 transition hover:bg-red-100"
                         type="submit"
                       >
                         <Archive className="size-4" aria-hidden="true" />
@@ -1042,10 +1029,10 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                       {document.items.map((item) => (
                         <OpsMobileRecordCard key={item.id}>
                           <div>
-                            <p className="font-heading text-lg font-bold text-primary-dark">
+                            <p className="font-heading text-lg font-bold text-foreground">
                               {item.description}
                             </p>
-                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                               {item.unit}
                             </p>
                           </div>
@@ -1091,11 +1078,11 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     className={`hidden md:block ${OPS_TABLE_SCROLL_CLASS}`}
                     tabIndex={0}
                   >
-                  <table className="min-w-full divide-y divide-primary-dark/10 text-sm">
+                  <table className="min-w-full divide-y divide-border text-sm">
                     <caption className="sr-only">
                       BOQ line items for {document.title}, including quantity, rate, actuals, and total.
                     </caption>
-                    <thead className="bg-primary-dark/[0.03] text-left text-xs uppercase tracking-[0.12em] text-primary-dark/52">
+                    <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.12em] text-muted-foreground">
                       <tr>
                         <th className="px-5 py-3" scope="col">
                           Description
@@ -1134,58 +1121,58 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                         ) : null}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-primary-dark/10">
+                    <tbody className="divide-y divide-border">
                       {document.items.map((item) => (
                         <tr key={item.id}>
-                          <td className="px-5 py-4 font-semibold text-primary-dark">
+                          <td className="px-5 py-4 font-semibold text-foreground">
                             {item.description}
                           </td>
-                          <td className="px-5 py-4 text-primary-dark/70">{item.unit}</td>
-                          <td className="px-5 py-4 text-primary-dark/70">
+                          <td className="px-5 py-4 text-foreground/70">{item.unit}</td>
+                          <td className="px-5 py-4 text-foreground/70">
                             {formatNumber(item.quantity)}
                           </td>
-                          <td className="px-5 py-4 text-primary-dark/70">
+                          <td className="px-5 py-4 text-foreground/70">
                             {formatZmw(item.unit_rate)}
                           </td>
-                          <td className="px-5 py-4 text-primary-dark/70">
+                          <td className="px-5 py-4 text-foreground/70">
                             {formatNumber(item.actual_quantity)}
                           </td>
-                          <td className="px-5 py-4 font-semibold text-primary-dark">
+                          <td className="px-5 py-4 font-semibold text-foreground">
                             {formatZmw(item.budgeted_total)}
                           </td>
-                          <td className="px-5 py-4 text-primary-dark/70">
-                            <span className="inline-flex rounded-full border border-primary-dark/15 bg-primary-dark/[0.04] px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-primary-dark/60">
+                          <td className="px-5 py-4 text-foreground/70">
+                            <span className="inline-flex rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                               {item.category}
                             </span>
                           </td>
-                          <td className="px-5 py-4 text-primary-dark/70">
+                          <td className="px-5 py-4 text-foreground/70">
                             {deriveOpsBoqLineDates(item).effectiveNeededBy ?? (
-                              <span className="text-primary-dark/40">—</span>
+                              <span className="text-muted-foreground">—</span>
                             )}
                             {item.task ? (
-                              <span className="ml-1 text-xs text-primary-dark/45">
+                              <span className="ml-1 text-xs text-muted-foreground">
                                 (from {item.task.title})
                               </span>
                             ) : null}
                           </td>
-                          <td className="px-5 py-4 text-primary-dark/70">
+                          <td className="px-5 py-4 text-foreground/70">
                             {formatZmw(item.estimated_transport_cost)}
                           </td>
-                          <td className="px-5 py-4 text-primary-dark/70">
+                          <td className="px-5 py-4 text-foreground/70">
                             {item.supplier ? (
                               <span title={item.supplier.legal_name}>
                                 {item.supplier.supplier_code}
                               </span>
                             ) : item.supplier_name_freeform ? (
                               <span
-                                className="text-primary-dark/70"
+                                className="text-foreground/70"
                                 title="Not in supplier master list yet"
                               >
                                 {item.supplier_name_freeform}
-                                <span className="ml-1 text-[10px] text-primary-dark/40">*</span>
+                                <span className="ml-1 text-[10px] text-muted-foreground">*</span>
                               </span>
                             ) : (
-                              <span className="text-primary-dark/40">—</span>
+                              <span className="text-muted-foreground">—</span>
                             )}
                           </td>
                           {canManage ? (
@@ -1201,39 +1188,39 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                                 {canEditDoc ? (
                                   <>
                                     <details className="inline-block">
-                                      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-primary-dark/70 hover:text-primary-dark [&::-webkit-details-marker]:hidden">
+                                      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-foreground/70 hover:text-foreground [&::-webkit-details-marker]:hidden">
                                         <Pencil className="size-3.5" aria-hidden="true" />
                                         Edit
                                       </summary>
                                       <form
                                         action={updateBoqLineItemAction}
-                                        className="mt-2 grid gap-2 rounded-md border border-primary-dark/10 bg-white p-3 shadow-sm"
+                                        className="mt-2 grid gap-2 rounded-md border border-border bg-card p-3 shadow-sm"
                                       >
                                         <input name="line_item_id" type="hidden" value={item.id} />
-                                        <label className="text-xs font-bold text-primary-dark/60">
+                                        <label className="text-xs font-bold text-muted-foreground">
                                           Description
                                           <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.description} name="description" required />
                                         </label>
                                         <div className="grid grid-cols-3 gap-2">
-                                          <label className="text-xs font-bold text-primary-dark/60">
+                                          <label className="text-xs font-bold text-muted-foreground">
                                             Unit
                                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.unit} name="unit" required />
                                           </label>
-                                          <label className="text-xs font-bold text-primary-dark/60">
+                                          <label className="text-xs font-bold text-muted-foreground">
                                             Qty
                                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={String(item.quantity)} min="0" name="quantity" required step="0.01" type="number" />
                                           </label>
-                                          <label className="text-xs font-bold text-primary-dark/60">
+                                          <label className="text-xs font-bold text-muted-foreground">
                                             Rate
                                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={String(item.unit_rate)} min="0" name="unit_rate" required step="0.01" type="number" />
                                           </label>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                          <label className="text-xs font-bold text-primary-dark/60">
+                                          <label className="text-xs font-bold text-muted-foreground">
                                             Actual qty
                                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={String(item.actual_quantity)} min="0" name="actual_quantity" step="0.01" type="number" />
                                           </label>
-                                          <label className="text-xs font-bold text-primary-dark/60">
+                                          <label className="text-xs font-bold text-muted-foreground">
                                             Supplier
                                             <select className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.supplier_id ?? ""} name="supplier_id">
                                               <option value="">None</option>
@@ -1246,16 +1233,16 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                                           </label>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                          <label className="text-xs font-bold text-primary-dark/60">
+                                          <label className="text-xs font-bold text-muted-foreground">
                                             Classification
                                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.category} list="boq-category-suggestions" name="category" />
                                           </label>
-                                          <label className="text-xs font-bold text-primary-dark/60">
+                                          <label className="text-xs font-bold text-muted-foreground">
                                             Needed by
                                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.needed_by ?? ""} name="needed_by" type="date" />
                                           </label>
                                         </div>
-                                        <label className="text-xs font-bold text-primary-dark/60">
+                                        <label className="text-xs font-bold text-muted-foreground">
                                           Linked schedule task
                                           <select className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.project_task_id ?? ""} name="project_task_id">
                                             <option value="">No linked task</option>
@@ -1293,7 +1280,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                   </div>
                 </>
               ) : (
-                <div className="flex min-h-32 items-center justify-center p-8 text-center text-sm text-primary-dark/60">
+                <div className="flex min-h-32 items-center justify-center p-8 text-center text-sm text-muted-foreground">
                   No line items added to this Bill of Quantities yet.
                 </div>
               )}
@@ -1306,13 +1293,13 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
             );
           })
         ) : (
-          <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-primary-dark/10 bg-white p-8 text-center">
+          <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-border bg-card p-8 text-center">
             <FileSpreadsheet className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 {hasActiveListFilter ? "No matching Bill of Quantities documents" : "No Bill of Quantities documents yet"}
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 {hasActiveListFilter
                   ? "Adjust the search or status filter to widen the Bill of Quantities document list."
                   : "Create a site first, then start your first Bill of Quantities document."}

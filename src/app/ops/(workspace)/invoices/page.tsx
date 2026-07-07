@@ -55,7 +55,10 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { todayInLusaka, formatOpsDate as formatDate } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -72,15 +75,6 @@ function invoiceStatusFromParam(value: string | undefined) {
   return INVOICE_STATUS_OPTIONS.some((option) => option.value === value)
     ? (value as OpsInvoice["status"] | "")
     : "";
-}
-
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
 }
 
 function invoiceNotice(params: OpsSearchParams) {
@@ -121,30 +115,11 @@ function invoiceNotice(params: OpsSearchParams) {
   return null;
 }
 
-function statusClass(status: OpsInvoice["status"]) {
-  if (status === "paid") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "sent") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
 function formatStatusLabel(status: OpsInvoice["status"]) {
   return status
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
 }
 
 type InvoiceValueMetricProps = {
@@ -154,11 +129,11 @@ type InvoiceValueMetricProps = {
 
 function InvoiceValueMetric({ label, value }: InvoiceValueMetricProps) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-heading text-lg font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-heading text-lg font-bold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -308,11 +283,11 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
               { label: "Paid", value: invoiceStatusCounts.paid },
             ].map((item) => (
               <div
-                className="flex items-center justify-between gap-3 rounded-md border border-primary-dark/10 px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
                 key={item.label}
               >
-                <span className="text-sm font-bold text-primary-dark">{item.label}</span>
-                <span className="font-heading text-lg font-bold text-primary-dark">
+                <span className="text-sm font-bold text-foreground">{item.label}</span>
+                <span className="font-heading text-lg font-bold text-foreground">
                   {item.value.toLocaleString("en-ZM")}
                 </span>
               </div>
@@ -323,20 +298,20 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
 
       {canManage ? (
         <details
-          className="rounded-lg border border-primary-dark/10 bg-white"
+          className="rounded-lg border border-border bg-card"
           id="invoice-create-panel"
           open={openCreatePanel}
         >
-          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-primary-dark/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
             <span className="flex min-w-0 items-center gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
                 <Plus className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0">
-                <span className="block font-heading text-lg font-bold text-primary-dark">
+                <span className="block font-heading text-lg font-bold text-foreground">
                   Create invoice
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Value Added Tax invoice intake for site work, BOQ-linked billing, and client TPIN records.
                 </span>
               </span>
@@ -344,15 +319,15 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
             <Plus className="size-5 shrink-0 text-primary-blue" aria-hidden="true" />
           </summary>
           {siteOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one site before creating invoices.
               </div>
             </div>
           ) : (
             <form
               action={createInvoiceAction}
-              className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
@@ -439,8 +414,8 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
         title="Register"
       >
         <div className="-mx-5 -mb-5">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
-            <p className="text-sm text-primary-dark/60">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
+            <p className="text-sm text-muted-foreground">
               {invoicePage.pagination.total} matching invoice records.
             </p>
           </div>
@@ -459,29 +434,27 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
             resultLabel="invoices"
           />
           {invoices.length > 0 ? (
-            <div className="divide-y divide-primary-dark/10">
+            <div className="divide-y divide-border">
               {invoices.map((invoice) => (
                 <article className="p-5" key={invoice.id}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {invoice.invoice_number}
                         </h3>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            invoice.status,
-                          )}`}
+                          className={opsStatusBadgeClass(invoice.status)}
                         >
                           {formatStatusLabel(invoice.status)}
                         </span>
                       </div>
-                      <p className="mt-2 font-bold text-primary-dark">{invoice.client_name}</p>
-                      <p className="mt-1 text-sm text-primary-dark/60">
+                      <p className="mt-2 font-bold text-foreground">{invoice.client_name}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {invoice.site?.code ?? "Site code unavailable"} -{" "}
                         {formatDate(invoice.issued_at)}
                       </p>
-                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         {invoice.boq?.title ?? "Invoice without BOQ link"}{" "}
                         {invoice.tpin ? `- TPIN ${invoice.tpin}` : ""}
                       </p>
@@ -527,10 +500,10 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                           </summary>
                           <form
                             action={voidInvoiceAction}
-                            className="mt-2 grid gap-2 rounded-md border border-red-200 bg-white p-3 shadow-sm"
+                            className="mt-2 grid gap-2 rounded-md border border-red-200 bg-card p-3 shadow-sm"
                           >
                             <input name="id" type="hidden" value={invoice.id} />
-                            <label className="text-xs font-bold text-primary-dark/60">
+                            <label className="text-xs font-bold text-muted-foreground">
                               Reason
                               <input
                                 className={`${OPS_INPUT_CLASS} mt-1`}
@@ -548,7 +521,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                         <form action={archiveInvoiceAction}>
                           <input name="id" type="hidden" value={invoice.id} />
                           <button
-                            className="rounded-md border border-primary-dark/15 bg-white px-3 py-1.5 text-xs font-bold text-primary-dark/70 hover:bg-primary-dark/5"
+                            className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-bold text-foreground/70 hover:bg-muted/40"
                             type="submit"
                           >
                             Archive
@@ -559,14 +532,14 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                   </div>
 
                   {canEditInvoice(auth.profile.role, invoice) ? (
-                    <details className="mt-3 rounded-md border border-primary-dark/10">
-                      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                    <details className="mt-3 rounded-md border border-border">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
                         <span>Edit invoice</span>
-                        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+                        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
                       </summary>
                       <form
                         action={updateInvoiceAction}
-                        className="grid gap-3 border-t border-primary-dark/10 p-3 md:grid-cols-3"
+                        className="grid gap-3 border-t border-border p-3 md:grid-cols-3"
                       >
                         <input name="id" type="hidden" value={invoice.id} />
                         <label className={OPS_LABEL_CLASS}>

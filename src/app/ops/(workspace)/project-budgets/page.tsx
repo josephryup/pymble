@@ -54,8 +54,11 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 import type { OpsProjectBudgetStatus } from "@/lib/ops/types";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -103,26 +106,6 @@ function projectBudgetNotice(params: OpsSearchParams) {
     : null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
 function formatMoney(value: number, currencyCode = "ZMW") {
   return new Intl.NumberFormat("en-ZM", {
     currency: currencyCode,
@@ -138,54 +121,34 @@ function formatPercent(value: number) {
   }).format(value / 100);
 }
 
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function statusClass(status: OpsProjectBudgetStatus) {
-  if (status === "active") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "locked") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "archived") {
-    return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
 function BudgetMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-bold text-foreground">{value}</dd>
     </div>
   );
 }
 
 function AddBudgetLineForm({ budget }: { budget: OpsProjectBudgetSummary }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
+    <details className="rounded-md border border-border">
       <summary
-        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
       >
         <span className="inline-flex items-center gap-2">
           <Plus className="size-4" aria-hidden="true" />
           Add budget line
         </span>
-        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
           Open
         </span>
       </summary>
       <form
         action={addProjectBudgetLineAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
       >
         <input name="budget_id" type="hidden" value={budget.id} />
         <label className={OPS_LABEL_CLASS}>
@@ -274,10 +237,10 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             Finance and cost control
           </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+          <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
             Project budgets
           </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+          <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
             Site budget headers, cost lines, contingency, committed costs, posted costs, and
             remaining balances.
           </p>
@@ -390,15 +353,15 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           />
         </dl>
 
-        <div className="mt-4 rounded-md border border-primary-dark/10">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 px-3 py-2">
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+        <div className="mt-4 rounded-md border border-border">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Highest exposure
             </p>
             <Gauge className="size-4 text-primary-blue" aria-hidden="true" />
           </div>
           {varianceDashboard.rows.length > 0 ? (
-            <ul className="divide-y divide-primary-dark/10">
+            <ul className="divide-y divide-border">
               {varianceDashboard.rows.map((row) => {
                 const progress = Math.max(0, Math.min(row.variance_percent, 100));
 
@@ -407,7 +370,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                     <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-bold text-primary-dark">{row.budget_number}</p>
+                          <p className="font-bold text-foreground">{row.budget_number}</p>
                           {row.over_budget_amount > 0 ? (
                             <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-red-700">
                               <AlertTriangle className="size-3.5" aria-hidden="true" />
@@ -415,20 +378,20 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                             </span>
                           ) : null}
                         </div>
-                        <p className="mt-1 truncate text-sm text-primary-dark/62">
+                        <p className="mt-1 truncate text-sm text-muted-foreground">
                           {row.title} / {row.site ? `${row.site.code} - ${row.site.name}` : "Site unavailable"}
                         </p>
                       </div>
                       <div className="shrink-0 text-left lg:text-right">
-                        <p className="text-sm font-bold text-primary-dark">
+                        <p className="text-sm font-bold text-foreground">
                           {formatMoney(row.exposure_amount, row.currency_code)}
                         </p>
-                        <p className="text-xs font-semibold text-primary-dark/55">
+                        <p className="text-xs font-semibold text-muted-foreground">
                           {formatPercent(row.variance_percent)} used
                         </p>
                       </div>
                     </div>
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-primary-dark/[0.06]">
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted/40">
                       <div
                         aria-hidden="true"
                         className={`h-full rounded-full ${
@@ -438,21 +401,21 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                       />
                     </div>
                     <dl className="mt-3 grid gap-2 text-xs min-[520px]:grid-cols-3">
-                      <div className="flex justify-between gap-2 rounded-md bg-primary-dark/[0.03] px-2 py-1.5">
-                        <dt className="text-primary-dark/55">Posted</dt>
-                        <dd className="font-bold text-primary-dark">
+                      <div className="flex justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+                        <dt className="text-muted-foreground">Posted</dt>
+                        <dd className="font-bold text-foreground">
                           {formatMoney(row.posted_amount, row.currency_code)}
                         </dd>
                       </div>
-                      <div className="flex justify-between gap-2 rounded-md bg-primary-dark/[0.03] px-2 py-1.5">
-                        <dt className="text-primary-dark/55">Committed</dt>
-                        <dd className="font-bold text-primary-dark">
+                      <div className="flex justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+                        <dt className="text-muted-foreground">Committed</dt>
+                        <dd className="font-bold text-foreground">
                           {formatMoney(row.committed_amount, row.currency_code)}
                         </dd>
                       </div>
-                      <div className="flex justify-between gap-2 rounded-md bg-primary-dark/[0.03] px-2 py-1.5">
-                        <dt className="text-primary-dark/55">Remaining</dt>
-                        <dd className="font-bold text-primary-dark">
+                      <div className="flex justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+                        <dt className="text-muted-foreground">Remaining</dt>
+                        <dd className="font-bold text-foreground">
                           {formatMoney(row.remaining_amount, row.currency_code)}
                         </dd>
                       </div>
@@ -462,7 +425,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
               })}
             </ul>
           ) : (
-            <p className="px-3 py-6 text-center text-sm text-primary-dark/60">
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
               Activate a budget and add cost lines to see variance.
             </p>
           )}
@@ -471,7 +434,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
 
       {canCreate ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="project-budget-create-panel"
           open={openCreatePanel}
         >
@@ -482,27 +445,27 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
               <Landmark className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create project budget
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Start with a budget header, then add cost lines before activation.
               </span>
             </span>
-            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           {siteOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one active site before creating project budgets.
               </div>
             </div>
           ) : (
             <form
               action={createProjectBudgetAction}
-              className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
@@ -560,18 +523,18 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
       ) : null}
 
       <section
-        className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+        className="scroll-mt-24 rounded-lg border border-border bg-card"
         id="project-budget-register"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Budget register
             </p>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Project budget records
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               {budgetPage.pagination.total} matching budgets filtered by status and search.
             </p>
           </div>
@@ -593,7 +556,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
         />
 
         {budgetPage.items.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {budgetPage.items.map((budget) => {
               const canAddLine = canEditOpsProjectBudgetLine(auth.profile.role, budget);
               const canActivate = canActivateOpsProjectBudget(auth.profile.role, budget);
@@ -605,13 +568,11 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {budget.budget_number}
                         </h3>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            budget.status,
-                          )}`}
+                          className={opsStatusBadgeClass(budget.status)}
                         >
                           {formatLabel(budget.status)}
                         </span>
@@ -622,8 +583,8 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-2 font-bold text-primary-dark">{budget.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-2 font-bold text-foreground">{budget.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
                         {budget.site
                           ? `${budget.site.code} - ${budget.site.name}`
                           : "Site unavailable"}{" "}
@@ -694,7 +655,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                   </dl>
 
                   {budget.description ? (
-                    <p className="mt-4 rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                    <p className="mt-4 rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                       {budget.description}
                     </p>
                   ) : null}
@@ -702,13 +663,13 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                   <div className="mt-4 grid gap-3">
                     {canAddLine ? <AddBudgetLineForm budget={budget} /> : null}
                     {budget.lines.length > 0 ? (
-                      <div className="overflow-x-auto rounded-md border border-primary-dark/10">
+                      <div className="overflow-x-auto rounded-md border border-border">
                         <table className="min-w-[720px] w-full text-left text-sm">
                           <caption className="sr-only">
                             Project budget lines with cost code, description, budgeted, committed,
                             and posted amounts.
                           </caption>
-                          <thead className="bg-primary-dark/[0.03] text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+                          <thead className="bg-muted/40 text-xs uppercase tracking-[0.12em] text-muted-foreground">
                             <tr>
                               <th className="px-3 py-3" scope="col">Line</th>
                               <th className="px-3 py-3" scope="col">Cost code</th>
@@ -719,13 +680,13 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                               <th className="px-3 py-3" scope="col">Posted</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-primary-dark/10">
+                          <tbody className="divide-y divide-border">
                             {budget.lines.map((line) => (
                               <tr key={line.id}>
-                                <td className="px-3 py-3 font-bold text-primary-dark">
+                                <td className="px-3 py-3 font-bold text-foreground">
                                   {line.line_number}
                                 </td>
-                                <td className="px-3 py-3 text-primary-dark/65">
+                                <td className="px-3 py-3 text-muted-foreground">
                                   {line.cost_code || "No code"}
                                 </td>
                                 <td className="px-3 py-3">
@@ -735,7 +696,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                                         ? "border-primary-blue/25 bg-primary-blue/10 text-primary-blue"
                                         : line.category === "unplanned"
                                           ? "border-orange-200 bg-orange-50 text-orange-700"
-                                          : "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/60"
+                                          : "border-border bg-muted/40 text-muted-foreground"
                                     }`}
                                   >
                                     {line.category === "transport" ? (
@@ -744,16 +705,16 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                                     {line.category}
                                   </span>
                                 </td>
-                                <td className="px-3 py-3 text-primary-dark/70">
+                                <td className="px-3 py-3 text-foreground/70">
                                   {line.description}
                                 </td>
-                                <td className="px-3 py-3 font-semibold text-primary-dark">
+                                <td className="px-3 py-3 font-semibold text-foreground">
                                   {formatMoney(line.budgeted_amount, budget.currency_code)}
                                 </td>
-                                <td className="px-3 py-3 text-primary-dark/65">
+                                <td className="px-3 py-3 text-muted-foreground">
                                   {formatMoney(line.committed_amount, budget.currency_code)}
                                 </td>
-                                <td className="px-3 py-3 text-primary-dark/65">
+                                <td className="px-3 py-3 text-muted-foreground">
                                   {formatMoney(line.posted_amount, budget.currency_code)}
                                 </td>
                               </tr>
@@ -762,7 +723,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                         </table>
                       </div>
                     ) : (
-                      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+                      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
                         No budget lines added yet.
                       </p>
                     )}
@@ -781,10 +742,10 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
             <Landmark className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 {hasActiveListFilter ? "No matching budgets" : "No project budgets yet"}
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 {hasActiveListFilter
                   ? "Adjust the search or status filter to widen the budget register."
                   : "Create the first project budget, then add budget lines before activation."}

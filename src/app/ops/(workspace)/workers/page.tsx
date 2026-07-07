@@ -47,33 +47,33 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Pymble Workers
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Crew register
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               Worker profiles, daily rates, mobile money details, and current site assignment.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Active workers
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {workers.length}
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Daily exposure
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {formatZmw(dailyExposure)}
               </p>
             </div>
@@ -95,14 +95,14 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
       ) : null}
 
       {canManage ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
               <Plus className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">Add worker</h2>
-              <p className="text-sm text-primary-dark/60">
+              <h2 className="font-heading text-xl font-bold text-foreground">Add worker</h2>
+              <p className="text-sm text-muted-foreground">
                 Create payroll-ready crew records for Pymble.
               </p>
             </div>
@@ -180,14 +180,14 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
           </form>
         </section>
       ) : (
-        <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 text-sm text-primary-dark/65">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           Your role has read-only access to the crew register.
         </div>
       )}
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white">
-        <div className="border-b border-primary-dark/10 p-5">
-          <h2 className="font-heading text-xl font-bold text-primary-dark">Current workers</h2>
+      <section className="rounded-lg border border-border bg-card">
+        <div className="border-b border-border p-5">
+          <h2 className="font-heading text-xl font-bold text-foreground">Current workers</h2>
         </div>
         {workers.length > 0 ? (
           <>
@@ -195,10 +195,10 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
               {workers.map((worker) => (
                 <OpsMobileRecordCard key={worker.id}>
                   <div>
-                    <p className="font-heading text-lg font-bold text-primary-dark">
+                    <p className="font-heading text-lg font-bold text-foreground">
                       {worker.full_name}
                     </p>
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       {worker.worker_code} - {worker.trade}
                     </p>
                   </div>
@@ -220,11 +220,11 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
               className={`hidden md:block ${OPS_TABLE_SCROLL_CLASS}`}
               tabIndex={0}
             >
-            <table className="min-w-full divide-y divide-primary-dark/10 text-sm">
+            <table className="min-w-full divide-y divide-border text-sm">
               <caption className="sr-only">
                 Current Pymble workers with contact, site assignment, daily rate, and worker type.
               </caption>
-              <thead className="bg-primary-dark/[0.03] text-left text-xs uppercase tracking-[0.12em] text-primary-dark/52">
+              <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.12em] text-muted-foreground">
                 <tr>
                   <th className="px-5 py-3" scope="col">
                     Worker
@@ -248,7 +248,7 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                   ) : null}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-primary-dark/10">
+              <tbody className="divide-y divide-border">
                 {workers.map((worker) => (
                   <React.Fragment key={worker.id}>
                   <tr>
@@ -258,32 +258,32 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                           <Users className="size-4" aria-hidden="true" />
                         </div>
                         <div>
-                          <p className="font-bold text-primary-dark">{worker.full_name}</p>
-                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                          <p className="font-bold text-foreground">{worker.full_name}</p>
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             {worker.worker_code} - {worker.trade}
                           </p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-primary-dark/70">
+                    <td className="px-5 py-4 text-foreground/70">
                       <span className="inline-flex items-center gap-2">
                         <Phone className="size-4 text-primary-blue" aria-hidden="true" />
                         {worker.phone}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-primary-dark/70">
+                    <td className="px-5 py-4 text-foreground/70">
                       {worker.site
                         ? `${worker.site.code} - ${worker.site.name}`
                         : "Site assignment not set"}
                     </td>
-                    <td className="px-5 py-4 font-semibold text-primary-dark">
+                    <td className="px-5 py-4 font-semibold text-foreground">
                       <span className="inline-flex items-center gap-2">
                         <BadgeDollarSign className="size-4 text-primary-blue" aria-hidden="true" />
                         {formatZmw(worker.daily_rate)}
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <span className="inline-flex rounded-full border border-primary-dark/10 bg-primary-dark/[0.03] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/70">
+                      <span className="inline-flex rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-foreground/70">
                         {worker.worker_type}
                       </span>
                     </td>
@@ -306,13 +306,13 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                   {canManage ? (
                     <tr>
                       <td className="px-5 pb-4 pt-0" colSpan={6}>
-                        <details className="rounded-md border border-primary-dark/10">
-                          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-primary-dark/65">
+                        <details className="rounded-md border border-border">
+                          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-muted-foreground">
                             Edit worker details
                           </summary>
                           <form
                             action={updateWorkerAction}
-                            className="grid gap-3 border-t border-primary-dark/10 p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
+                            className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
                           >
                             <input name="id" type="hidden" value={worker.id} />
                             <label className={OPS_LABEL_CLASS}>
@@ -429,10 +429,10 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
             <Users className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 No workers registered yet
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 Add your first worker above. Worker records are used in attendance and payroll.
               </p>
             </div>

@@ -300,3 +300,67 @@ Recommended fix:
 - High-traffic routes use the same header, KPI, panel, table, notice, and action patterns.
 - No route shows setup requirements or generic placeholder content.
 - Browser checks pass on desktop and mobile with no runtime errors.
+
+## 2026-07-06 - Measured Consistency Findings (post analytics pass)
+
+Quantified with grep across `src/app/ops` + `src/components/ops` after the
+dashboard-analytics overhaul (see `pymble-ops-dashboard-analytics-audit.md`).
+
+| # | Finding | Scale | Impact |
+|---|---------|-------|--------|
+| 1 | Dual color system: legacy `text-primary-dark` / `bg-white` / `border-primary-dark/10` vs shadcn tokens | 73 files legacy vs 44 tokenised | `bg-white` panels break dark mode (token components ship `dark:` variants); subtle grey/border drift in light mode |
+| 2 | Hand-rolled notice/error banners | ~50 page-level banners (~40 files) | Padding/radius drift; some error banners missing `role="alert"` |
+| 3 | Per-page status-badge class functions | 62 local functions | Same status can render different colors on different pages; no single place to add dark-mode variants |
+| 4 | Scattered formatting | 98 `toLocaleString("en-ZM")`, 90 `Intl.DateTimeFormat` call sites; `formatZmw`/`compactZmw`/percent in 3 files | Money renders as "K 1.2m" on one page, "ZMW 1,200,000" on another; in-render formatter construction |
+| 5 | Panel radius drift | 49 `rounded-2xl` outliers vs house `rounded-lg` (panels) / `rounded-md` (tiles) | Project-schedule + a few forms read as a different product |
+
+Healthy already: `OpsPageHeader` on 48/48 pages; `OpsEmptyState` on 33 pages
+(~10 dashed hand-rolls left); table constants (`OPS_TABLE_*`) widely used.
+
+### Tracked fixes (in recommended order)
+
+- [x] **Notices** (done 2026-07-06): `OPS_NOTICE_SUCCESS/ERROR/WARNING/INFO_CLASS`
+      in `lib/ops/ui.ts`, with the dark-mode variants the hand-rolls lacked;
+      30 files migrated by exact-string script. All error banners verified to
+      carry `role="alert"`. A handful of `mt-*`-prefixed variants remain —
+      migrate opportunistically.
+- [x] **Status badges** (completed 2026-07-06): central `OPS_STATUS_TONES`
+      registry + `opsStatusBadgeClass(status)` in `lib/ops/ui.ts` (5 tones with
+      dark variants; chip size standardised to px-2.5/py-1/text-[11px]).
+      ALL local `statusClass`/`severityClass`/`presenceClass` functions are now
+      migrated (61 of the original 62; the survivor is approvals'
+      `priorityClass`, which colors table text, not a badge). The registry holds
+      ~90 status words; local `StatusBadge`/`StatusPill` wrappers are
+      registry-backed with an optional `tone` prop for derived states
+      (expiry-aware helpers in employees/profile return tones, never classes).
+      Intentional unifications: equipment "approved" sky→emerald, "allocated"
+      emerald→sky, completed-training orange→emerald (was showing the good
+      state as amber), chip size standardised to px-2.5/py-1/text-[11px].
+      New status words go in the registry — never fork colors locally.
+- [x] **Formatting** (done 2026-07-06): `lib/ops/format.ts` with singleton
+      Lusaka-pinned formatters (`formatOpsDate`, `formatOpsDateTime`,
+      `todayInLusaka`, `formatOpsLabel`, `formatCount`; `formatZmw` re-exported).
+      31 files migrated by script — ~80 duplicated local definitions removed;
+      `Intl.DateTimeFormat` construction in pages dropped 90 → 9 (the 9 that
+      remain are specialised: time-only input extraction, weekday labels).
+      **Bug fixed in passing**: most `formatDateTime` copies omitted the
+      `Africa/Lusaka` pin, so those pages rendered timestamps in server time
+      (UTC on Vercel, 2 h off); all now pinned. Custom fallback wording
+      ("Not scheduled", "Not moved", "—") preserved via local wrapper consts.
+      New code imports from `@/lib/ops/format` — never construct an Intl
+      formatter in a render.
+- [x] **Color tokens** (done 2026-07-06): scripted migration across 78 files,
+      ~2,480 class occurrences. Mappings: `bg-white`→`bg-card`;
+      `text-primary-dark`→`text-foreground`; `text-primary-dark/≤65`→
+      `text-muted-foreground`; `/68–80`→`text-foreground/NN`;
+      `border|divide-primary-dark/*`→`border|divide-border`;
+      `bg-primary-dark/[0.0x]|/≤9`→`bg-muted/40`; `/10+`→`bg-muted`;
+      `shadow-primary-dark/*`→`shadow-foreground/*`. Kept deliberately: 14
+      solid `bg-primary-dark` brand icon squares (white-on-dark), 2
+      `bg-white/20` translucent overlays, `text-primary-blue` brand accents.
+      Verified via tsc/eslint/tests; **routes still need a visual pass in both
+      themes when a dev server is available** — the migration was mechanical.
+- [x] **Radius** (done 2026-07-06): all 48 `rounded-2xl` outliers in ops pages
+      swept to `rounded-lg`. The one in `OpsNotificationDockClient` was kept —
+      a floating dock is an elevated overlay where the larger radius reads as
+      intentional.

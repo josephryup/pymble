@@ -81,7 +81,7 @@ export default async function OpsActivityLogPage({ searchParams }: PageProps) {
         description="Every recorded action across the workspace — who did what, when, and in which module."
       />
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white">
+      <section className="rounded-lg border border-border bg-card">
         <OpsListControls
           action="/ops/activity"
           filters={filters}
@@ -91,7 +91,7 @@ export default async function OpsActivityLogPage({ searchParams }: PageProps) {
         />
 
         {result.items.length > 0 ? (
-          <ul className="divide-y divide-primary-dark/10">
+          <ul className="divide-y divide-border">
             {result.items.map((entry) => (
               <li className="flex items-start gap-3 p-4" key={entry.id}>
                 <span
@@ -101,24 +101,24 @@ export default async function OpsActivityLogPage({ searchParams }: PageProps) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="font-semibold text-primary-dark">{entry.message}</p>
+                    <p className="font-semibold text-foreground">{entry.message}</p>
                     {entry.module_key ? (
-                      <span className="inline-flex shrink-0 rounded-full border border-primary-dark/10 bg-primary-dark/[0.03] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-primary-dark/60">
+                      <span className="inline-flex shrink-0 rounded-full border border-border bg-muted/40 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
                         {moduleLabel(entry.module_key)}
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-primary-dark/50">
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5">
                       <Clock3 className="size-3.5" aria-hidden="true" />
                       {formatWhen(entry.created_at)}
                     </span>
                     <span aria-hidden="true">·</span>
-                    <span className="inline-flex items-center gap-1.5 font-semibold text-primary-dark/70">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-foreground/70">
                       <UserCircle2 className="size-3.5" aria-hidden="true" />
                       {entry.actor_name ?? "Automated task"}
                       {entry.actor_role ? (
-                        <span className="font-medium text-primary-dark/45">
+                        <span className="font-medium text-muted-foreground">
                           · {formatOpsRole(entry.actor_role)}
                         </span>
                       ) : null}
@@ -137,7 +137,7 @@ export default async function OpsActivityLogPage({ searchParams }: PageProps) {
           />
         )}
 
-        <div className="border-t border-primary-dark/10 p-4">
+        <div className="border-t border-border p-4">
           <OpsPaginationControls
             basePath="/ops/activity"
             filters={filters}

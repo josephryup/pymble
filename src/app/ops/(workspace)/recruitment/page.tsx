@@ -38,7 +38,9 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { formatOpsLabel as formatLabel } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -62,26 +64,6 @@ const APPLICATION_STATUSES: OpsJobApplicationStatus[] = [
   "rejected",
   "withdrawn",
 ];
-
-function applicationStatusClass(status: OpsJobApplicationStatus) {
-  if (status === "hired") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "rejected" || status === "withdrawn") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "new") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
 
 function recruitmentNotice(params: OpsSearchParams) {
   const error = firstParam(params.error);
@@ -184,8 +166,8 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             Admin and HR
           </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">Recruitment</h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+          <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">Recruitment</h1>
+          <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
             Publish job openings to the Pymble website, then review and progress the candidate
             applications that come in.
           </p>
@@ -240,7 +222,7 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
       </section>
 
       {canManage ? (
-        <details className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white" id="create-posting">
+        <details className="scroll-mt-24 rounded-lg border border-border bg-card" id="create-posting">
           <summary
             className={`flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
           >
@@ -248,20 +230,20 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
               <Plus className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create job posting
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Publish immediately or save as a draft to publish later.
               </span>
             </span>
-            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           <form
             action={createJobPostingAction}
-            className="grid gap-4 border-t border-primary-dark/10 p-5 sm:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 border-t border-border p-5 sm:grid-cols-2 lg:grid-cols-6"
           >
             <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-3`}>
               Job title
@@ -311,7 +293,7 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
             </label>
             <label className="flex items-center gap-2 self-end sm:col-span-2 lg:col-span-2">
               <input className="size-4" defaultChecked name="publish" type="checkbox" value="on" />
-              <span className="text-sm font-semibold text-primary-dark">Publish to website now</span>
+              <span className="text-sm font-semibold text-foreground">Publish to website now</span>
             </label>
             <div className="flex items-end sm:col-span-2 lg:col-span-2 lg:justify-end">
               <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full lg:w-auto`} type="submit">
@@ -324,42 +306,42 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="scroll-mt-24 space-y-3" id="postings">
-        <h2 className="font-heading text-xl font-bold text-primary-dark">Job postings</h2>
+        <h2 className="font-heading text-xl font-bold text-foreground">Job postings</h2>
         {postings.length > 0 ? (
           <div className="grid gap-3">
             {postings.map((posting) => (
               <article
-                className="rounded-lg border border-primary-dark/10 bg-white p-5"
+                className="rounded-lg border border-border bg-card p-5"
                 key={posting.id}
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-heading text-lg font-bold text-primary-dark">
+                      <h3 className="font-heading text-lg font-bold text-foreground">
                         {posting.title}
                       </h3>
                       <span
                         className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${
                           posting.is_published
                             ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/55"
+                            : "border-border bg-muted/40 text-muted-foreground"
                         }`}
                       >
                         {posting.is_published ? "Published" : "Draft"}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-primary-dark/60">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {posting.posting_number} ·{" "}
                       {EMPLOYMENT_TYPE_LABELS[posting.employment_type] ?? posting.employment_type}
                       {posting.department ? ` · ${posting.department}` : ""}
                       {posting.location ? ` · ${posting.location}` : ""}
                     </p>
                     {posting.summary ? (
-                      <p className="mt-2 text-sm leading-6 text-primary-dark/70">{posting.summary}</p>
+                      <p className="mt-2 text-sm leading-6 text-foreground/70">{posting.summary}</p>
                     ) : null}
                   </div>
                   <div className="flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-                    <span className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary-dark/10 px-3 py-1.5 text-sm font-semibold text-primary-dark">
+                    <span className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-foreground">
                       <Inbox className="size-4 text-primary-blue" aria-hidden="true" />
                       {applicationCountByPosting[posting.id] ?? 0} application(s)
                     </span>
@@ -388,9 +370,9 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
             ))}
           </div>
         ) : (
-          <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-primary-dark/10 bg-white p-8 text-center">
+          <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-card p-8 text-center">
             <Briefcase className="size-8 text-primary-blue" aria-hidden="true" />
-            <p className="text-sm text-primary-dark/60">
+            <p className="text-sm text-muted-foreground">
               No job postings yet. Create one to start receiving applications.
             </p>
           </div>
@@ -398,7 +380,7 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
       </section>
 
       <section className="scroll-mt-24 space-y-3" id="applications">
-        <h2 className="font-heading text-xl font-bold text-primary-dark">Applications</h2>
+        <h2 className="font-heading text-xl font-bold text-foreground">Applications</h2>
         {applications.length > 0 ? (
           <div className="grid gap-3">
             {applications.map((application) => (
@@ -412,9 +394,9 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
             ))}
           </div>
         ) : (
-          <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-primary-dark/10 bg-white p-8 text-center">
+          <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-card p-8 text-center">
             <Inbox className="size-8 text-primary-blue" aria-hidden="true" />
-            <p className="text-sm text-primary-dark/60">
+            <p className="text-sm text-muted-foreground">
               No applications yet. They will appear here as candidates apply on the careers page.
             </p>
           </div>
@@ -436,17 +418,15 @@ function ApplicationCard({
   offerUrl: string | null;
 }) {
   return (
-    <article className="rounded-lg border border-primary-dark/10 bg-white p-5">
+    <article className="rounded-lg border border-border bg-card p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-heading text-lg font-bold text-primary-dark">
+            <h3 className="font-heading text-lg font-bold text-foreground">
               {application.full_name}
             </h3>
             <span
-              className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${applicationStatusClass(
-                application.status,
-              )}`}
+              className={opsStatusBadgeClass(application.status)}
             >
               {formatLabel(application.status)}
             </span>
@@ -456,13 +436,13 @@ function ApplicationCard({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 break-words text-sm text-primary-dark/60">
+          <p className="mt-1 break-words text-sm text-muted-foreground">
             {application.application_number} · applied for{" "}
-            <span className="font-semibold text-primary-dark/80">
+            <span className="font-semibold text-foreground/80">
               {application.posting?.title ?? "General application"}
             </span>
           </p>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-primary-dark/70">
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-foreground/70">
             <a className="hover:text-primary-blue hover:underline" href={`mailto:${application.email}`}>
               {application.email}
             </a>
@@ -480,7 +460,7 @@ function ApplicationCard({
             ) : null}
           </div>
           {application.cover_letter ? (
-            <p className="mt-3 whitespace-pre-line rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-2 text-sm leading-6 text-primary-dark/75">
+            <p className="mt-3 whitespace-pre-line rounded-md border border-border bg-muted/40 px-3 py-2 text-sm leading-6 text-foreground/75">
               {application.cover_letter}
             </p>
           ) : null}
@@ -497,7 +477,7 @@ function ApplicationCard({
               Download CV
             </a>
           ) : (
-            <span className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary-dark/10 px-3 py-1.5 text-xs font-semibold text-primary-dark/45">
+            <span className="inline-flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground">
               <FileText className="size-3.5" aria-hidden="true" />
               No CV attached
             </span>
@@ -517,7 +497,7 @@ function ApplicationCard({
       </div>
 
       {application.interview_notes ? (
-        <p className="mt-3 whitespace-pre-line rounded-md border border-primary-blue/15 bg-primary-blue/[0.04] px-3 py-2 text-sm leading-6 text-primary-dark/80">
+        <p className="mt-3 whitespace-pre-line rounded-md border border-primary-blue/15 bg-primary-blue/[0.04] px-3 py-2 text-sm leading-6 text-foreground/80">
           <span className="block text-[10px] font-bold uppercase tracking-[0.1em] text-primary-blue">
             Interview notes
           </span>
@@ -528,7 +508,7 @@ function ApplicationCard({
       {canReview ? (
         <form
           action={updateJobApplicationStatusAction}
-          className="mt-4 grid gap-3 border-t border-primary-dark/10 pt-4 sm:grid-cols-[minmax(0,12rem)_1fr_auto] sm:items-end"
+          className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-[minmax(0,12rem)_1fr_auto] sm:items-end"
         >
           <input name="application_id" type="hidden" value={application.id} />
           <label className={OPS_LABEL_CLASS}>
@@ -552,16 +532,16 @@ function ApplicationCard({
       ) : null}
 
       {canReview ? (
-        <details className="mt-3 rounded-md border border-primary-dark/10">
+        <details className="mt-3 rounded-md border border-border">
           <summary
-            className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+            className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
           >
             <span>Record interview score</span>
-            <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+            <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
           </summary>
           <form
             action={recordInterviewAction}
-            className="grid gap-3 border-t border-primary-dark/10 p-4 sm:grid-cols-[8rem_1fr_auto] sm:items-end"
+            className="grid gap-3 border-t border-border p-4 sm:grid-cols-[8rem_1fr_auto] sm:items-end"
           >
             <input name="application_id" type="hidden" value={application.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -596,18 +576,18 @@ function ApplicationCard({
       ) : null}
 
       {canReview ? (
-        <details className="mt-3 rounded-md border border-primary-dark/10">
+        <details className="mt-3 rounded-md border border-border">
           <summary
-            className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+            className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
           >
             <span>
               {application.offer_letter_r2_key ? "Regenerate offer letter" : "Generate offer letter"}
             </span>
-            <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">Open</span>
+            <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
           </summary>
           <form
             action={generateOfferLetterAction}
-            className="grid gap-3 border-t border-primary-dark/10 p-4 sm:grid-cols-2"
+            className="grid gap-3 border-t border-border p-4 sm:grid-cols-2"
           >
             <input name="application_id" type="hidden" value={application.id} />
             <label className={OPS_LABEL_CLASS}>

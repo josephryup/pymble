@@ -117,14 +117,16 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
+  type OpsStatusTone,
 } from "@/lib/ops/ui";
 import type {
   OpsEmployeeContractStatus,
   OpsEmployeeDocumentStatus,
-  OpsEmployeeOnboardingStatus,
   OpsEmployeeStatus,
   OpsEmploymentType,
-  OpsLeaveRequestStatus,
   OpsLeaveType,
   OpsPayFrequency,
   OpsPerformanceAppraisalStatus,
@@ -133,6 +135,7 @@ import type {
   OpsSafetyTrainingStatus,
   OpsUserRole,
 } from "@/lib/ops/types";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -263,136 +266,29 @@ function hrNotice(params: OpsSearchParams) {
     : null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  // Accept either a date-only column ("YYYY-MM-DD") or a full timestamptz; for
-  // the latter the leading YYYY-MM-DD slice is what we want to display.
-  const datePart = value.length >= 10 ? value.slice(0, 10) : value;
-  const parsed = new Date(`${datePart}T00:00:00+02:00`);
-  if (Number.isNaN(parsed.getTime())) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(parsed);
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function employeeStatusClass(status: OpsEmployeeStatus) {
-  if (status === "active" || status === "probation") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "on_leave") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "suspended" || status === "exited") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
-}
-
-function leaveStatusClass(status: OpsLeaveRequestStatus) {
-  if (status === "approved" || status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (status === "rejected" || status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
-}
-
-function recruitmentStatusClass(status: OpsRecruitmentRequisitionStatus) {
-  if (status === "filled" || status === "open" || status === "approved") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted" || status === "interviewing" || status === "offered") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
-}
-
-function onboardingStatusClass(status: OpsEmployeeOnboardingStatus) {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "waived") {
-    return "border-blue-200 bg-blue-50 text-blue-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "in_progress") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
-}
-
-function trainingStatusClass(status: OpsSafetyTrainingStatus, expiryDate: string | null) {
+function trainingStatusTone(status: OpsSafetyTrainingStatus, expiryDate: string | null): OpsStatusTone {
   const today = new Date().toISOString().slice(0, 10);
-
   if (status === "expired" || (expiryDate && expiryDate < today)) {
-    return "border-red-200 bg-red-50 text-red-700";
+    return "negative";
   }
-
   if (status === "completed") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
+    return "positive";
   }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
+  return "neutral";
 }
 
-function employeeDocumentStatusClass(status: OpsEmployeeDocumentStatus, expiryDate: string | null) {
+function employeeDocumentStatusTone(status: OpsEmployeeDocumentStatus, expiryDate: string | null): OpsStatusTone {
   const today = new Date().toISOString().slice(0, 10);
-
-  if (status === "accepted" && (!expiryDate || expiryDate >= today)) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
   if (status === "rejected" || status === "expired" || (expiryDate && expiryDate < today)) {
-    return "border-red-200 bg-red-50 text-red-700";
+    return "negative";
   }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
+  if (status === "accepted") {
+    return "positive";
+  }
+  if (status === "submitted") {
+    return "attention";
+  }
+  return "neutral";
 }
 
 function formatNumber(value: number) {
@@ -427,21 +323,19 @@ function requiredDocumentCoverage(
   };
 }
 
-function StatusPill({ className, value }: { className: string; value: string }) {
+function StatusPill({ value, tone }: { value: string; tone?: OpsStatusTone }) {
   return (
-    <span className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${className}`}>
-      {formatLabel(value)}
-    </span>
+    <span className={`w-fit ${opsStatusBadgeClass(value, tone)}`}>{formatLabel(value)}</span>
   );
 }
 
 function HrMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-bold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -455,7 +349,7 @@ function hrActionClass(tone: OpsHrDashboardAction["tone"]) {
     return "border-orange-200 bg-orange-50 text-orange-700";
   }
 
-  return "border-primary-dark/10 bg-white text-primary-dark/68";
+  return "border-border bg-card text-foreground/68";
 }
 
 function HrDashboardActionQueue({ actions }: { actions: OpsHrDashboardAction[] }) {
@@ -473,7 +367,7 @@ function HrDashboardActionQueue({ actions }: { actions: OpsHrDashboardAction[] }
             >
               <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1">
-                <span className="block text-primary-dark">{action.label}</span>
+                <span className="block text-foreground">{action.label}</span>
                 <span className="mt-0.5 block text-xs font-bold uppercase tracking-[0.08em] opacity-70">
                   {action.detail}
                 </span>
@@ -484,7 +378,7 @@ function HrDashboardActionQueue({ actions }: { actions: OpsHrDashboardAction[] }
           ))}
         </div>
       ) : (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-semibold text-emerald-800">
+        <div className={OPS_NOTICE_SUCCESS_CLASS}>
           HR queue clear.
         </div>
       )}
@@ -520,15 +414,15 @@ function HrDocumentCoveragePanel({ report }: { report: OpsHrDocumentCoverageRepo
       </div>
       <div className="mt-4 grid gap-2">
         {report.categoryRows.slice(0, 5).map((row) => (
-          <div className="rounded-md border border-primary-dark/10 px-4 py-3" key={row.categoryId}>
+          <div className="rounded-md border border-border px-4 py-3" key={row.categoryId}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-bold text-primary-dark">{row.categoryName}</p>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-primary-dark/45">
+                <p className="font-bold text-foreground">{row.categoryName}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                   {row.required ? "Required" : "Optional"} / {row.categoryCode}
                 </p>
               </div>
-              <span className="font-heading text-xl font-bold text-primary-dark">
+              <span className="font-heading text-xl font-bold text-foreground">
                 {row.covered}/{row.totalEmployees}
               </span>
             </div>
@@ -536,9 +430,9 @@ function HrDocumentCoveragePanel({ report }: { report: OpsHrDocumentCoverageRepo
         ))}
       </div>
       {report.departmentRows.length > 0 ? (
-        <div className="mt-4 rounded-md border border-primary-dark/10 px-4 py-3 text-sm text-primary-dark/68">
+        <div className="mt-4 rounded-md border border-border px-4 py-3 text-sm text-foreground/68">
           Highest gap:{" "}
-          <span className="font-bold text-primary-dark">
+          <span className="font-bold text-foreground">
             {report.departmentRows[0]?.department}
           </span>{" "}
           with {report.departmentRows[0]?.missingRequiredSlots ?? 0} missing required file slots.
@@ -571,11 +465,11 @@ function EmployeeDocumentReviewControls({
         </form>
       ) : null}
       {canReview ? (
-        <details className="w-full rounded-md border border-primary-dark/10 sm:w-auto sm:min-w-72">
-          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-primary-dark [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+        <details className="w-full rounded-md border border-border sm:w-auto sm:min-w-72">
+          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-foreground [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
             Reject document
           </summary>
-          <form action={rejectEmployeeDocumentAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+          <form action={rejectEmployeeDocumentAction} className="grid gap-3 border-t border-border p-3">
             <input name="employee_document_id" type="hidden" value={document.id} />
             <input name="return_to" type="hidden" value={returnTo} />
             <label className={OPS_LABEL_CLASS}>
@@ -606,14 +500,6 @@ function EmployeeDocumentReviewControls({
   );
 }
 
-function contractStatusClass(status: OpsEmployeeContractStatus) {
-  if (status === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "draft") return "border-sky-200 bg-sky-50 text-sky-700";
-  if (status === "terminated" || status === "cancelled")
-    return "border-red-200 bg-red-50 text-red-700";
-  return "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65";
-}
-
 function EmployeeContractsPanel({
   contracts,
   canManage,
@@ -623,7 +509,7 @@ function EmployeeContractsPanel({
 }) {
   if (contracts.length === 0) {
     return (
-      <div className="mt-4 rounded-md border border-primary-dark/10 px-4 py-3 text-sm text-primary-dark/60">
+      <div className="mt-4 rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
         No employment contracts recorded yet.
       </div>
     );
@@ -632,18 +518,18 @@ function EmployeeContractsPanel({
   return (
     <div className="mt-4 grid gap-3 md:grid-cols-2">
       {contracts.map((contract) => (
-        <article className="rounded-md border border-primary-dark/10 p-4" key={contract.id}>
+        <article className="rounded-md border border-border p-4" key={contract.id}>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                 {contract.contract_number}
               </p>
-              <h4 className="mt-1 font-bold text-primary-dark">
+              <h4 className="mt-1 font-bold text-foreground">
                 {contract.title || formatLabel(contract.contract_type)}
               </h4>
             </div>
             <span
-              className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${contractStatusClass(contract.status)}`}
+              className={`w-fit ${opsStatusBadgeClass(contract.status)}`}
             >
               {formatLabel(contract.status)}
             </span>
@@ -677,17 +563,17 @@ function EmployeeContractsPanel({
               {contract.termination_reason}
             </p>
           ) : contract.notes ? (
-            <p className="mt-3 text-sm leading-6 text-primary-dark/65">{contract.notes}</p>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">{contract.notes}</p>
           ) : null}
           {canManage && contract.status !== "cancelled" ? (
-            <details className="mt-3 rounded-md border border-primary-dark/10">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+            <details className="mt-3 rounded-md border border-border">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
                 <Pencil className="size-4" aria-hidden="true" />
                 Edit pay structure
               </summary>
               <form
                 action={updateEmployeeContractAction}
-                className="grid gap-3 border-t border-primary-dark/10 p-3 sm:grid-cols-2"
+                className="grid gap-3 border-t border-border p-3 sm:grid-cols-2"
               >
                 <input name="contract_id" type="hidden" value={contract.id} />
                 <input name="employee_id" type="hidden" value={contract.employee_id} />
@@ -862,7 +748,7 @@ function EmployeeDocumentsPanel({
 }) {
   if (documents.length === 0) {
     return (
-      <div className="mt-4 rounded-md border border-primary-dark/10 px-4 py-3 text-sm text-primary-dark/60">
+      <div className="mt-4 rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
         No HR documents linked yet.
       </div>
     );
@@ -878,17 +764,17 @@ function EmployeeDocumentsPanel({
           null;
 
         return (
-          <article className="rounded-md border border-primary-dark/10 p-4" key={document.id}>
+          <article className="rounded-md border border-border p-4" key={document.id}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                   {category?.category_code ?? "hr"}
                 </p>
-                <h4 className="mt-1 font-bold text-primary-dark">
+                <h4 className="mt-1 font-bold text-foreground">
                   {document.document?.title ?? category?.name ?? "Employee document"}
                 </h4>
               </div>
-              <span className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${employeeDocumentStatusClass(document.status, document.expiry_date)}`}>
+              <span className={`w-fit ${opsStatusBadgeClass(document.status, employeeDocumentStatusTone(document.status, document.expiry_date))}`}>
                 {document.expiry_date && document.expiry_date < new Date().toISOString().slice(0, 10)
                   ? "Expired"
                   : formatLabel(document.status)}
@@ -965,11 +851,11 @@ function LeaveControls({
         </form>
       ) : null}
       {canReject ? (
-        <details className="rounded-md border border-primary-dark/10 md:col-span-2">
-          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-primary-dark [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+        <details className="rounded-md border border-border md:col-span-2">
+          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-foreground [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
             Reject request
           </summary>
-          <form action={rejectLeaveRequestAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+          <form action={rejectLeaveRequestAction} className="grid gap-3 border-t border-border p-3">
             <input name="leave_request_id" type="hidden" value={leaveRequest.id} />
             <label className={OPS_LABEL_CLASS}>
               Rejection reason
@@ -1016,11 +902,11 @@ function OnboardingControls({
         </form>
       ) : null}
       {canCompleteOpsEmployeeOnboardingItem(role, item) ? (
-        <details className="w-full rounded-md border border-primary-dark/10">
-          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-primary-dark [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+        <details className="w-full rounded-md border border-border">
+          <summary className={`cursor-pointer list-none px-3 py-3 text-sm font-bold text-foreground [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
             Complete item
           </summary>
-          <form action={completeEmployeeOnboardingItemAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+          <form action={completeEmployeeOnboardingItemAction} className="grid gap-3 border-t border-border p-3">
             <input name="onboarding_item_id" type="hidden" value={item.id} />
             <label className={OPS_LABEL_CLASS}>
               Completion notes
@@ -1161,10 +1047,10 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             Admin and HR
           </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+          <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
             Employees, leave, and HR controls
           </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+          <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
             Maintain employee records, recruitment, contracts, appraisals, leave balances, and HR documents.
           </p>
         </div>
@@ -1290,7 +1176,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
       {canCreateEmployee ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="employee-create-panel"
           open={openEmployeePanel}
         >
@@ -1299,18 +1185,18 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               <UserCheck className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create employee record
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Capture job, department, site, contact, emergency contact, and optional staff-user link.
               </span>
             </span>
-            <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
-          <form action={createEmployeeAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createEmployeeAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Full name
               <input className={OPS_INPUT_CLASS} name="full_name" required />
@@ -1409,7 +1295,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
       {canCreateLeave ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="leave-create-panel"
           open={openLeavePanel}
         >
@@ -1418,25 +1304,25 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               <CalendarCheck className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create leave request
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Record dates, leave type, requested days, reason, and handover notes.
               </span>
             </span>
-            <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           {employeeOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Create an active employee record before adding leave requests.
               </div>
             </div>
           ) : (
-            <form action={createLeaveRequestAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+            <form action={createLeaveRequestAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Employee
                 <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -1492,7 +1378,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
       <section className="grid gap-4 xl:grid-cols-2">
         {canCreateRecruitment ? (
           <details
-            className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+            className="scroll-mt-24 rounded-lg border border-border bg-card"
             id="recruitment-create-panel"
             open={openRecruitmentPanel}
           >
@@ -1501,18 +1387,18 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 <FolderKanban className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-heading text-xl font-bold text-primary-dark">
+                <span className="block font-heading text-xl font-bold text-foreground">
                   Recruitment requisition
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Request headcount by site, department, priority, and target start date.
                 </span>
               </span>
-              <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+              <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Open
               </span>
             </summary>
-            <form action={createRecruitmentRequisitionAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2">
+            <form action={createRecruitmentRequisitionAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
               <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2`}>
                 Job title
                 <input className={OPS_INPUT_CLASS} name="job_title" required />
@@ -1589,7 +1475,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
         {canCreateContract ? (
           <details
-            className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+            className="scroll-mt-24 rounded-lg border border-border bg-card"
             id="contract-create-panel"
             open={openContractPanel}
           >
@@ -1598,25 +1484,25 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 <FileText className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-heading text-xl font-bold text-primary-dark">
+                <span className="block font-heading text-xl font-bold text-foreground">
                   Employee contract
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Register contract type, dates, pay basis, salary, and signing status.
                 </span>
               </span>
-              <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+              <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Open
               </span>
             </summary>
             {employeeOptions.length === 0 ? (
-              <div className="border-t border-primary-dark/10 p-5">
-                <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+              <div className="border-t border-border p-5">
+                <div className={OPS_NOTICE_WARNING_CLASS}>
                   Create an active employee record before adding contracts.
                 </div>
               </div>
             ) : (
-              <form action={createEmployeeContractAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2">
+              <form action={createEmployeeContractAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
                 <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2`}>
                   Employee
                   <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -1731,7 +1617,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
         {canCreateAppraisal ? (
           <details
-            className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+            className="scroll-mt-24 rounded-lg border border-border bg-card"
             id="appraisal-create-panel"
             open={openAppraisalPanel}
           >
@@ -1740,25 +1626,25 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 <Star className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-heading text-xl font-bold text-primary-dark">
+                <span className="block font-heading text-xl font-bold text-foreground">
                   Performance appraisal
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Plan appraisal cycles with reviewer, period, status, and goals.
                 </span>
               </span>
-              <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+              <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Open
               </span>
             </summary>
             {employeeOptions.length === 0 ? (
-              <div className="border-t border-primary-dark/10 p-5">
-                <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+              <div className="border-t border-border p-5">
+                <div className={OPS_NOTICE_WARNING_CLASS}>
                   Create an active employee record before adding appraisals.
                 </div>
               </div>
             ) : (
-              <form action={createPerformanceAppraisalAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2">
+              <form action={createPerformanceAppraisalAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
                 <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2`}>
                   Employee
                   <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -1818,7 +1704,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
         {canManageLeaveBalance ? (
           <details
-            className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+            className="scroll-mt-24 rounded-lg border border-border bg-card"
             id="leave-balance-panel"
             open={openBalancePanel}
           >
@@ -1827,25 +1713,25 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 <Wallet className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-heading text-xl font-bold text-primary-dark">
+                <span className="block font-heading text-xl font-bold text-foreground">
                   Leave balance
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Set annual, sick, unpaid, or other leave balances per employee and year.
                 </span>
               </span>
-              <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+              <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Open
               </span>
             </summary>
             {employeeOptions.length === 0 ? (
-              <div className="border-t border-primary-dark/10 p-5">
-                <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+              <div className="border-t border-border p-5">
+                <div className={OPS_NOTICE_WARNING_CLASS}>
                   Create an active employee record before setting balances.
                 </div>
               </div>
             ) : (
-              <form action={upsertLeaveBalanceAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2">
+              <form action={upsertLeaveBalanceAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
                 <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2`}>
                   Employee
                   <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -1901,7 +1787,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
         {canManageHrCategory ? (
           <details
-            className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+            className="scroll-mt-24 rounded-lg border border-border bg-card"
             id="hr-document-category-panel"
             open={openCategoryPanel}
           >
@@ -1910,18 +1796,18 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 <NotebookTabs className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-heading text-xl font-bold text-primary-dark">
+                <span className="block font-heading text-xl font-bold text-foreground">
                   HR document category
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Standardize employee document categories and retention expectations.
                 </span>
               </span>
-              <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+              <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Open
               </span>
             </summary>
-            <form action={createHrDocumentCategoryAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2">
+            <form action={createHrDocumentCategoryAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
               <label className={OPS_LABEL_CLASS}>
                 Code
                 <input className={OPS_INPUT_CLASS} name="category_code" placeholder="training" required />
@@ -1934,7 +1820,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 Retention years
                 <input className={OPS_INPUT_CLASS} min="0" name="retention_years" type="number" />
               </label>
-              <label className="flex min-h-11 items-center gap-3 rounded-md border border-primary-dark/10 px-3 py-2 text-sm font-semibold text-primary-dark">
+              <label className="flex min-h-11 items-center gap-3 rounded-md border border-border px-3 py-2 text-sm font-semibold text-foreground">
                 <input className="size-4" name="is_required" type="checkbox" />
                 Required category
               </label>
@@ -1951,7 +1837,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
         {canManageHrCategory ? (
           <details
-            className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+            className="scroll-mt-24 rounded-lg border border-border bg-card"
             id="employee-document-panel"
             open={openDocumentPanel}
           >
@@ -1960,27 +1846,27 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 <Upload className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block font-heading text-xl font-bold text-primary-dark">
+                <span className="block font-heading text-xl font-bold text-foreground">
                   Upload employee document
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Link private HR evidence to an employee, category, file version, and review status.
                 </span>
               </span>
-              <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+              <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Open
               </span>
             </summary>
             {employeeOptions.length === 0 || hrDocumentCategories.length === 0 ? (
-              <div className="border-t border-primary-dark/10 p-5">
-                <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+              <div className="border-t border-border p-5">
+                <div className={OPS_NOTICE_WARNING_CLASS}>
                   Create an active employee and HR document category before uploading employee files.
                 </div>
               </div>
             ) : (
               <form
                 action={uploadEmployeeDocumentAction}
-                className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
               >
                 <input name="return_to" type="hidden" value="/ops/employees#employee-register" />
                 <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -2037,7 +1923,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
       {canCreateOnboarding ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="onboarding-create-panel"
           open={openOnboardingPanel}
         >
@@ -2046,25 +1932,25 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               <ListChecks className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Onboarding checklist item
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Assign induction, document, PPE, training, or policy acknowledgement tasks to an employee.
               </span>
             </span>
-            <span className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           {employeeOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Create an active employee record before adding onboarding checklist items.
               </div>
             </div>
           ) : (
-            <form action={createEmployeeOnboardingItemAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+            <form action={createEmployeeOnboardingItemAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Employee
                 <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -2114,13 +2000,13 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
         </details>
       ) : null}
 
-      <section className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white" id="training-renewals">
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+      <section className="scroll-mt-24 rounded-lg border border-border bg-card" id="training-renewals">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Training renewal watch
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               HSE training records due within 45 days or already expired.
             </p>
           </div>
@@ -2134,22 +2020,22 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 (training.expiry_date !== null && training.expiry_date < today);
 
               return (
-                <article className="rounded-md border border-primary-dark/10 p-4" key={training.id}>
+                <article className="rounded-md border border-border p-4" key={training.id}>
                   <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {training.training_number}
                       </p>
-                      <h3 className="mt-1 font-bold text-primary-dark">
+                      <h3 className="mt-1 font-bold text-foreground">
                         {training.training_title || formatLabel(training.training_type)}
                       </h3>
-                      <p className="mt-1 text-sm text-primary-dark/60">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {training.employee
                           ? `${training.employee.employee_number} - ${training.employee.full_name}`
                           : training.trainee_name || "No trainee recorded"}
                       </p>
                     </div>
-                    <span className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${trainingStatusClass(training.status, training.expiry_date)}`}>
+                    <span className={`w-fit ${opsStatusBadgeClass(training.status, trainingStatusTone(training.status, training.expiry_date))}`}>
                       {isExpired ? "Expired" : "Due soon"}
                     </span>
                   </div>
@@ -2186,7 +2072,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               );
             })
           ) : (
-            <div className="rounded-md border border-primary-dark/10 p-5 text-sm text-primary-dark/60 lg:col-span-2">
+            <div className="rounded-md border border-border p-5 text-sm text-muted-foreground lg:col-span-2">
               No training renewal alerts at the moment.
             </div>
           )}
@@ -2194,13 +2080,13 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-primary-dark/10 bg-white">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Recruitment pipeline
               </h2>
-              <p className="mt-1 text-sm text-primary-dark/60">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Recent requisitions and hiring status.
               </p>
             </div>
@@ -2209,18 +2095,18 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           <div className="grid gap-3 p-5">
             {recruitmentRequisitions.length > 0 ? (
               recruitmentRequisitions.map((requisition) => (
-                <article className="rounded-md border border-primary-dark/10 p-4" key={requisition.id}>
+                <article className="rounded-md border border-border p-4" key={requisition.id}>
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {requisition.requisition_number}
                       </p>
-                      <h3 className="mt-1 font-bold text-primary-dark">{requisition.job_title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/60">
+                      <h3 className="mt-1 font-bold text-foreground">{requisition.job_title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {requisition.department || "No department"} / {requisition.site ? `${requisition.site.code} - ${requisition.site.name}` : "No site"}
                       </p>
                     </div>
-                    <StatusPill className={recruitmentStatusClass(requisition.status)} value={requisition.status} />
+                    <StatusPill value={requisition.status} />
                   </div>
                   <dl className="mt-4 grid gap-3 sm:grid-cols-3">
                     <HrMetric label="Positions" value={String(requisition.positions_count)} />
@@ -2228,7 +2114,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                     <HrMetric label="Target" value={formatDate(requisition.target_start_date)} />
                   </dl>
                   {requisition.justification ? (
-                    <p className="mt-3 text-sm leading-6 text-primary-dark/65">
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
                       {requisition.justification}
                     </p>
                   ) : null}
@@ -2241,20 +2127,20 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="rounded-md border border-primary-dark/10 p-5 text-sm text-primary-dark/60">
+              <div className="rounded-md border border-border p-5 text-sm text-muted-foreground">
                 No recruitment requisitions yet.
               </div>
             )}
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 HR document categories
               </h2>
-              <p className="mt-1 text-sm text-primary-dark/60">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Required and optional HR file categories for employee evidence.
               </p>
             </div>
@@ -2263,32 +2149,32 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           <div className="grid gap-3 p-5">
             {hrDocumentCategories.length > 0 ? (
               hrDocumentCategories.map((category) => (
-                <article className="rounded-md border border-primary-dark/10 p-4" key={category.id}>
+                <article className="rounded-md border border-border p-4" key={category.id}>
                   <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {category.category_code}
                       </p>
-                      <h3 className="mt-1 font-bold text-primary-dark">{category.name}</h3>
+                      <h3 className="mt-1 font-bold text-foreground">{category.name}</h3>
                     </div>
                     <span className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${
                       category.is_required
                         ? "border-orange-200 bg-orange-50 text-orange-700"
-                        : "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55"
+                        : "border-border bg-muted/40 text-muted-foreground"
                     }`}>
                       {category.is_required ? "Required" : "Optional"}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-primary-dark/62">
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
                     {category.description || "No description recorded."}
                   </p>
-                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     Retention: {category.retention_years === null ? "Not set" : `${category.retention_years} years`}
                   </p>
                 </article>
               ))
             ) : (
-              <div className="rounded-md border border-primary-dark/10 p-5 text-sm text-primary-dark/60">
+              <div className="rounded-md border border-border p-5 text-sm text-muted-foreground">
                 No HR document categories yet.
               </div>
             )}
@@ -2296,16 +2182,16 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <section className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white" id="employee-register">
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+      <section className="scroll-mt-24 rounded-lg border border-border bg-card" id="employee-register">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               HR register
             </p>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Employee records
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               {employeePage.pagination.total} matching employee records.
             </p>
           </div>
@@ -2327,21 +2213,21 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
         />
 
         {employeePage.items.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {employeePage.items.map((employee: OpsEmployeeSummary) => (
               <article className="p-5" key={employee.id}>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-heading text-lg font-bold text-primary-dark">
+                      <h3 className="font-heading text-lg font-bold text-foreground">
                         {employee.employee_number}
                       </h3>
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${employeeStatusClass(employee.status)}`}>
+                      <span className={opsStatusBadgeClass(employee.status)}>
                         {formatLabel(employee.status)}
                       </span>
                     </div>
-                    <p className="mt-2 font-bold text-primary-dark">{employee.full_name}</p>
-                    <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                    <p className="mt-2 font-bold text-foreground">{employee.full_name}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
                       {employee.job_title || "No job title"} / {employee.department || "No department"}
                     </p>
                   </div>
@@ -2387,14 +2273,14 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 </dl>
 
                 {canUpdateStatus ? (
-                  <details className="mt-3 rounded-md border border-primary-dark/10">
-                    <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                  <details className="mt-3 rounded-md border border-border">
+                    <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
                       <Pencil className="size-4" aria-hidden="true" />
                       Edit employee details
                     </summary>
                     <form
                       action={updateEmployeeAction}
-                      className="grid gap-3 border-t border-primary-dark/10 p-3 sm:grid-cols-2 lg:grid-cols-3"
+                      className="grid gap-3 border-t border-border p-3 sm:grid-cols-2 lg:grid-cols-3"
                     >
                       <input name="employee_id" type="hidden" value={employee.id} />
                       <input name="status" type="hidden" value={employee.status} />
@@ -2560,7 +2446,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
                 {canViewContracts ? (
                   <div className="mt-4">
-                    <h3 className="font-heading text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/55">
+                    <h3 className="font-heading text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
                       Employment contracts
                     </h3>
                     <EmployeeContractsPanel
@@ -2581,17 +2467,17 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 {employee.onboarding_items.length > 0 ? (
                   <div className="mt-4 space-y-3">
                     {employee.onboarding_items.map((item) => (
-                      <div className="rounded-md border border-primary-dark/10 p-4" key={item.id}>
+                      <div className="rounded-md border border-border p-4" key={item.id}>
                         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                           <div className="min-w-0">
-                            <p className="font-bold text-primary-dark">
+                            <p className="font-bold text-foreground">
                               {item.item_number} - {item.title}
                             </p>
-                            <p className="mt-1 text-sm text-primary-dark/60">
+                            <p className="mt-1 text-sm text-muted-foreground">
                               {formatLabel(item.category)} / Due {formatDate(item.due_date)}
                             </p>
                           </div>
-                          <span className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${onboardingStatusClass(item.status)}`}>
+                          <span className={`w-fit ${opsStatusBadgeClass(item.status)}`}>
                             {formatLabel(item.status)}
                           </span>
                         </div>
@@ -2609,7 +2495,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                           />
                         </dl>
                         {item.description ? (
-                          <p className="mt-3 text-sm leading-6 text-primary-dark/65">
+                          <p className="mt-3 text-sm leading-6 text-muted-foreground">
                             {item.description}
                           </p>
                         ) : null}
@@ -2638,13 +2524,13 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                       };
 
                       return (
-                        <div className="rounded-md border border-primary-dark/10 p-4" key={leaveRequest.id}>
+                        <div className="rounded-md border border-border p-4" key={leaveRequest.id}>
                           <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                             <div>
-                              <p className="font-bold text-primary-dark">
+                              <p className="font-bold text-foreground">
                                 {leaveRequest.leave_number} - {formatLabel(leaveRequest.leave_type)}
                               </p>
-                              <p className="mt-1 text-sm text-primary-dark/60">
+                              <p className="mt-1 text-sm text-muted-foreground">
                                 {formatDate(leaveRequest.start_date)} to {formatDate(leaveRequest.end_date)} /{" "}
                                 {leaveRequest.days_requested.toLocaleString("en-ZM", {
                                   maximumFractionDigits: 1,
@@ -2652,12 +2538,12 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                                 days
                               </p>
                             </div>
-                            <span className={`w-fit rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${leaveStatusClass(leaveRequest.status)}`}>
+                            <span className={`w-fit ${opsStatusBadgeClass(leaveRequest.status)}`}>
                               {formatLabel(leaveRequest.status)}
                             </span>
                           </div>
                           {leaveRequest.reason ? (
-                            <p className="mt-3 text-sm leading-6 text-primary-dark/65">
+                            <p className="mt-3 text-sm leading-6 text-muted-foreground">
                               {leaveRequest.reason}
                             </p>
                           ) : null}
@@ -2689,10 +2575,10 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
             <Users className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 {hasActiveListFilter ? "No matching employees" : "No employees yet"}
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 {hasActiveListFilter
                   ? "Adjust the search or status filter to widen the register."
                   : "Create the first HR employee record to begin the HR foundation."}

@@ -24,7 +24,7 @@ export default async function OpsGlossaryPage() {
 
   return (
     <div className="space-y-6">
-      <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <header className="rounded-lg border border-slate-200 bg-card p-6 shadow-sm">
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-amber-100 p-2 text-amber-700">
             <BookOpen className="h-5 w-5" aria-hidden />
@@ -51,7 +51,7 @@ export default async function OpsGlossaryPage() {
         return (
           <section
             key={category}
-            className="rounded-2xl border border-slate-200 bg-white shadow-sm"
+            className="rounded-lg border border-slate-200 bg-card shadow-sm"
           >
             <div className="border-b border-slate-100 px-6 py-4">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">

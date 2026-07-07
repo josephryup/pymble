@@ -90,23 +90,23 @@ export default async function OpsItTicketDetailPage({ params }: PageProps) {
           {IT_TICKET_PRIORITY_LABELS[ticket.priority]} priority
         </span>
         {ticket.site ? (
-          <span className="inline-flex rounded-full border border-primary-dark/15 bg-primary-dark/[0.04] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/65">
+          <span className="inline-flex rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
             {ticket.site.code}
           </span>
         ) : null}
-        <span className="text-xs text-primary-dark/55">
+        <span className="text-xs text-muted-foreground">
           {ticket.assignee ? `Assigned to ${ticket.assignee.full_name}` : "Unassigned"}
         </span>
       </div>
 
       {ticket.description ? (
-        <div className="rounded-2xl border border-primary-dark/10 bg-white p-4 text-sm text-primary-dark/80">
+        <div className="rounded-lg border border-border bg-card p-4 text-sm text-foreground/80">
           {ticket.description}
         </div>
       ) : null}
 
       {isManager ? (
-        <div className="grid gap-4 rounded-2xl border border-primary-dark/10 bg-white p-4 lg:grid-cols-2">
+        <div className="grid gap-4 rounded-lg border border-border bg-card p-4 lg:grid-cols-2">
           <form action={updateItTicketStatusAction} className="space-y-2">
             <input name="ticket_id" type="hidden" value={ticket.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -140,9 +140,9 @@ export default async function OpsItTicketDetailPage({ params }: PageProps) {
       ) : null}
 
       <section className="space-y-3">
-        <h2 className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-primary-dark/55">Conversation</h2>
+        <h2 className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">Conversation</h2>
         {comments.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-primary-dark/15 bg-white p-4 text-sm text-primary-dark/55">
+          <p className="rounded-lg border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
             No replies yet.
           </p>
         ) : (
@@ -150,13 +150,13 @@ export default async function OpsItTicketDetailPage({ params }: PageProps) {
             {comments.map((comment) => (
               <li
                 key={comment.id}
-                className={`rounded-2xl border p-4 text-sm ${
+                className={`rounded-lg border p-4 text-sm ${
                   comment.is_internal
                     ? "border-amber-200 bg-amber-50 text-amber-900"
-                    : "border-primary-dark/10 bg-white text-primary-dark/80"
+                    : "border-border bg-card text-foreground/80"
                 }`}
               >
-                <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-primary-dark/55">
+                <p className="mb-1 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                   {comment.author ? comment.author.full_name : "Unknown"}
                   <span>· {comment.created_at.slice(0, 16).replace("T", " ")}</span>
                   {comment.is_internal ? (
@@ -171,14 +171,14 @@ export default async function OpsItTicketDetailPage({ params }: PageProps) {
           </ul>
         )}
 
-        <form action={addItTicketCommentAction} className="space-y-2 rounded-2xl border border-primary-dark/10 bg-white p-4">
+        <form action={addItTicketCommentAction} className="space-y-2 rounded-lg border border-border bg-card p-4">
           <input name="ticket_id" type="hidden" value={ticket.id} />
           <label className={OPS_LABEL_CLASS}>
             Add a reply
             <textarea className={`${OPS_INPUT_CLASS} min-h-24`} maxLength={2000} name="body" required />
           </label>
           {isManager ? (
-            <label className="flex items-center gap-2 text-sm text-primary-dark/70">
+            <label className="flex items-center gap-2 text-sm text-foreground/70">
               <input name="is_internal" type="checkbox" value="true" />
               Internal note (not visible to the requester)
             </label>

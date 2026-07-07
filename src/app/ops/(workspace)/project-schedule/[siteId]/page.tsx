@@ -54,7 +54,10 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_ERROR_CLASS,
 } from "@/lib/ops/ui";
+import { formatOpsDate as formatDate } from "@/lib/ops/format";
 
 export const dynamic = "force-dynamic";
 
@@ -69,14 +72,7 @@ function statusBadgeClass(status: OpsProjectTaskStatus, overdue: boolean) {
   if (status === "blocked") return "border-red-200 bg-red-50 text-red-700";
   if (overdue) return "border-orange-200 bg-orange-50 text-orange-700";
   if (status === "in_progress") return "border-sky-200 bg-sky-50 text-sky-700";
-  return "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/70";
-}
-
-function formatDate(dateString: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${dateString}T00:00:00+02:00`));
+  return "border-border bg-muted/40 text-foreground/70";
 }
 
 export default async function OpsProjectScheduleSitePage({ params, searchParams }: PageProps) {
@@ -148,41 +144,41 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
 
       {errorMessage ? (
         <div
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+          className={OPS_NOTICE_ERROR_CLASS}
           role="alert"
         >
           {errorMessage}
         </div>
       ) : null}
       {notice ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+        <div className={OPS_NOTICE_SUCCESS_CLASS}>
           {notice.message}
         </div>
       ) : null}
 
       <section className="grid gap-3 md:grid-cols-5">
-        <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+        <div className="rounded-md border border-border bg-card px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Site progress
           </p>
-          <p className="mt-1 font-heading text-3xl font-bold text-primary-dark">
+          <p className="mt-1 font-heading text-3xl font-bold text-foreground">
             {rollup.averageCompletion}%
           </p>
-          <div className="mt-2 h-2 rounded-full bg-primary-dark/10">
+          <div className="mt-2 h-2 rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary-blue"
               style={{ width: `${rollup.averageCompletion}%` }}
             />
           </div>
         </div>
-        <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+        <div className="rounded-md border border-border bg-card px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Tasks
           </p>
-          <p className="mt-1 font-heading text-3xl font-bold text-primary-dark">
+          <p className="mt-1 font-heading text-3xl font-bold text-foreground">
             {rollup.totalTasks}
           </p>
-          <p className="mt-1 text-xs text-primary-dark/55">
+          <p className="mt-1 text-xs text-muted-foreground">
             {rollup.completedTasks} completed
           </p>
         </div>
@@ -217,13 +213,13 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
       </section>
 
       {plannedCurve.points.length > 0 ? (
-        <section className="rounded-2xl border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Planned progress curve
               </h2>
-              <p className="mt-1 max-w-3xl text-sm text-primary-dark/60">
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Cumulative planned completion across the programme, assuming each task
                 progresses linearly through its planned window (equal task weights).
               </p>
@@ -257,14 +253,14 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
       ) : null}
 
       {canCreate ? (
-        <details className="rounded-2xl border border-primary-dark/10 bg-white">
-          <summary className="flex cursor-pointer items-center gap-2 px-5 py-4 text-sm font-semibold text-primary-dark">
+        <details className="rounded-lg border border-border bg-card">
+          <summary className="flex cursor-pointer items-center gap-2 px-5 py-4 text-sm font-semibold text-foreground">
             <Plus className="size-4" aria-hidden="true" />
             Add a project task
           </summary>
           <form
             action={createProjectTaskAction}
-            className="grid gap-3 border-t border-primary-dark/10 p-5 md:grid-cols-6"
+            className="grid gap-3 border-t border-border p-5 md:grid-cols-6"
           >
             <input name="site_id" type="hidden" value={site.id} />
             <label className={`${OPS_LABEL_CLASS} md:col-span-3`}>
@@ -356,12 +352,12 @@ function ProjectTaskCard({
   return (
     <li
       id={`task-${task.id}`}
-      className="rounded-2xl border border-primary-dark/10 bg-white p-5 shadow-sm"
+      className="rounded-lg border border-border bg-card p-5 shadow-sm"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-heading text-lg font-bold text-primary-dark">{task.title}</h3>
+            <h3 className="font-heading text-lg font-bold text-foreground">{task.title}</h3>
             <span
               className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusBadgeClass(task.status, task.is_overdue)}`}
             >
@@ -375,20 +371,20 @@ function ProjectTaskCard({
             ) : null}
           </div>
           {task.description ? (
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/65">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
               {task.description}
             </p>
           ) : null}
-          <p className="mt-2 text-xs text-primary-dark/55">
+          <p className="mt-2 text-xs text-muted-foreground">
             {formatDate(task.planned_start_date)} → {formatDate(task.planned_end_date)}
             {task.assignee ? ` · Assigned to ${task.assignee.full_name}` : " · Unassigned"}
           </p>
         </div>
         <div className="w-full sm:w-44">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             {task.completion_percent}% complete
           </p>
-          <div className="mt-1 h-2 rounded-full bg-primary-dark/10">
+          <div className="mt-1 h-2 rounded-full bg-muted">
             <div
               className={`h-full rounded-full ${task.status === "completed" ? "bg-emerald-500" : "bg-primary-blue"}`}
               style={{ width: `${task.completion_percent}%` }}
@@ -404,17 +400,17 @@ function ProjectTaskCard({
             {linkedBoqLines.length} material schedule line{linkedBoqLines.length === 1 ? "" : "s"} linked to
             this task
           </summary>
-          <ul className="grid gap-1.5 border-t border-primary-blue/15 p-3 text-xs text-primary-dark/70">
+          <ul className="grid gap-1.5 border-t border-primary-blue/15 p-3 text-xs text-foreground/70">
             {linkedBoqLines.map((line) => {
               const { triggerBy } = deriveOpsBoqLineDates(line);
               return (
                 <li key={line.id} className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    <span className="font-semibold text-primary-dark">{line.description}</span>{" "}
+                    <span className="font-semibold text-foreground">{line.description}</span>{" "}
                     ({line.quantity} {line.unit}, {line.category})
                   </span>
                   {triggerBy ? (
-                    <span className="text-primary-dark/50">Trigger by {triggerBy}</span>
+                    <span className="text-muted-foreground">Trigger by {triggerBy}</span>
                   ) : null}
                 </li>
               );
@@ -424,13 +420,13 @@ function ProjectTaskCard({
       ) : null}
 
       {canProgress ? (
-        <details className="mt-3 rounded-md border border-primary-dark/10">
-          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-primary-dark/70">
+        <details className="mt-3 rounded-md border border-border">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-foreground/70">
             Update progress
           </summary>
           <form
             action={updateProjectTaskProgressAction}
-            className="grid gap-2 border-t border-primary-dark/10 p-3 sm:grid-cols-4"
+            className="grid gap-2 border-t border-border p-3 sm:grid-cols-4"
           >
             <input name="id" type="hidden" value={task.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -470,13 +466,13 @@ function ProjectTaskCard({
       ) : null}
 
       {canEdit ? (
-        <details className="mt-2 rounded-md border border-primary-dark/10">
-          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-primary-dark/70">
+        <details className="mt-2 rounded-md border border-border">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-foreground/70">
             <Pencil className="mr-1 inline size-3.5" aria-hidden="true" /> Edit task details
           </summary>
           <form
             action={updateProjectTaskAction}
-            className="grid gap-2 border-t border-primary-dark/10 p-3 sm:grid-cols-6"
+            className="grid gap-2 border-t border-border p-3 sm:grid-cols-6"
           >
             <input name="id" type="hidden" value={task.id} />
             <label className={`${OPS_LABEL_CLASS} sm:col-span-3`}>

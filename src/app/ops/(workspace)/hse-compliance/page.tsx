@@ -129,15 +129,9 @@ import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { formatOpsUserName } from "@/lib/ops/roles";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import type {
-  OpsHseComplianceAuditStatus,
-  OpsHseInspectionFindingStatus,
-  OpsHseInspectionStatus,
   OpsHseInspectionType,
-  OpsHseRiskAssessmentStatus,
   OpsPpeIssueStatus,
   OpsPpeItemType,
-  OpsSafetyTrainingStatus,
-  OpsToolboxTalkStatus,
   OpsUserRole,
 } from "@/lib/ops/types";
 import {
@@ -151,7 +145,11 @@ import {
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
+  OPS_STATUS_TONES,
+  opsStatusBadgeClass,
+  type OpsStatusTone,
 } from "@/lib/ops/ui";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -260,164 +258,9 @@ function hseComplianceNotice(params: OpsSearchParams) {
     : null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value.slice(0, 10)}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function ppeStatusClass(status: OpsPpeIssueStatus) {
-  if (status === "returned") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "damaged" || status === "lost" || status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function talkStatusClass(status: OpsToolboxTalkStatus) {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function inspectionStatusClass(status: OpsHseInspectionStatus) {
-  if (status === "closed" || status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "action_required") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function findingStatusClass(status: OpsHseInspectionFindingStatus) {
-  if (status === "verified") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "corrected") {
-    return "border-blue-200 bg-blue-50 text-blue-700";
-  }
-
-  if (status === "in_progress") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function trainingStatusClass(status: OpsSafetyTrainingStatus) {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled" || status === "expired") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function riskAssessmentStatusClass(status: OpsHseRiskAssessmentStatus) {
-  if (status === "approved") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "archived") {
-    return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function complianceAuditStatusClass(status: OpsHseComplianceAuditStatus) {
-  if (status === "closed" || status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "action_required") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function severityClass(value: string) {
-  if (value === "critical" || value === "high") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (value === "medium") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
-}
-
 function riskHeatmapCellClass(cell: OpsHseRiskHeatmapCell) {
   if (cell.count === 0) {
-    return "border-primary-dark/10 bg-primary-dark/[0.015] text-primary-dark/34";
+    return "border-border bg-muted/40 text-muted-foreground";
   }
 
   if (cell.residualRisk === "critical") {
@@ -462,21 +305,17 @@ function auditEscalationBucketClass(bucket: OpsHseAuditEscalationBucket) {
   return "border-sky-200 bg-sky-50 text-sky-700";
 }
 
-function StatusBadge({ className, value }: { className: string; value: string }) {
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${className}`}>
-      {formatLabel(value)}
-    </span>
-  );
+function StatusBadge({ value, tone }: { value: string; tone?: OpsStatusTone }) {
+  return <span className={opsStatusBadgeClass(value, tone)}>{formatLabel(value)}</span>;
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary-dark/40">
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-sm font-semibold text-primary-dark">{value}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -510,8 +349,8 @@ function PpeActions({ issue, role }: { issue: OpsPpeIssueSummary; role: OpsUserR
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canReturnOpsPpeIssue(role, issue) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Return PPE
           </summary>
           <form action={returnPpeIssueAction} className="mt-3 grid gap-3">
@@ -588,8 +427,8 @@ function ToolboxTalkActions({ role, talk }: { role: OpsUserRole; talk: OpsToolbo
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsToolboxTalk(role, talk) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Complete talk
           </summary>
           <form action={completeToolboxTalkAction} className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -636,8 +475,8 @@ function InspectionActions({ inspection, role }: { inspection: OpsHseInspectionS
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsHseInspection(role, inspection) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Complete inspection
           </summary>
           <form action={completeHseInspectionAction} className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -725,8 +564,8 @@ function InspectionFindingActions({
         </InlineActionForm>
       ) : null}
       {canCorrectOpsHseInspectionFinding(role, finding) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Correct finding
           </summary>
           <form action={correctHseInspectionFindingAction} className="mt-3 grid gap-3">
@@ -777,8 +616,8 @@ function SafetyTrainingActions({
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsSafetyTraining(role, record) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Complete training
           </summary>
           <form action={completeSafetyTrainingRecordAction} className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -886,8 +725,8 @@ function ComplianceAuditActions({
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsHseComplianceAudit(role, audit) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Complete audit
           </summary>
           <form action={completeHseComplianceAuditAction} className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -1135,11 +974,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         />
       </section>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-primary-dark">Incident ageing watch</h2>
-            <p className="mt-1 text-sm text-primary-dark/56">
+            <h2 className="text-lg font-bold text-foreground">Incident ageing watch</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Oldest open incident records from the incident register.
             </p>
           </div>
@@ -1150,14 +989,14 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {ageingAlerts.length > 0 ? (
             ageingAlerts.map((alert) => (
-              <article className="rounded-md border border-primary-dark/10 p-3" key={alert.id}>
+              <article className="rounded-md border border-border p-3" key={alert.id}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                       {alert.incident_number}
                     </p>
-                    <h3 className="mt-1 font-bold text-primary-dark">{alert.title}</h3>
-                    <p className="mt-1 text-sm text-primary-dark/58">
+                    <h3 className="mt-1 font-bold text-foreground">{alert.title}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {alert.site ? `${alert.site.code} - ${alert.site.name}` : "No site"} / {formatLabel(alert.status)}
                     </p>
                   </div>
@@ -1168,7 +1007,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
               </article>
             ))
           ) : (
-            <div className="rounded-md border border-primary-dark/10 p-4 text-sm font-semibold text-primary-dark/58 lg:col-span-2">
+            <div className="rounded-md border border-border p-4 text-sm font-semibold text-muted-foreground lg:col-span-2">
               No open incident ageing alerts.
             </div>
           )}
@@ -1176,18 +1015,18 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <div className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Risk heatmap</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Risk heatmap</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Active assessments by initial and residual risk.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                <p className="text-lg font-bold text-primary-dark">{riskHeatmap.totalActive}</p>
-                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-primary-dark/44">Active</p>
+              <div className="rounded-md border border-border px-3 py-2">
+                <p className="text-lg font-bold text-foreground">{riskHeatmap.totalActive}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">Active</p>
               </div>
               <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2">
                 <p className="text-lg font-bold text-orange-800">{riskHeatmap.highResidualCount}</p>
@@ -1207,14 +1046,14 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
               <thead>
                 <tr>
                   <th
-                    className="w-28 px-2 py-2 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/40"
+                    className="w-28 px-2 py-2 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground"
                     scope="col"
                   >
                     Initial
                   </th>
                   {OPS_HSE_RISK_LEVELS.map((level) => (
                     <th
-                      className="px-2 py-2 text-center text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/40"
+                      className="px-2 py-2 text-center text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground"
                       key={level}
                       scope="col"
                     >
@@ -1227,7 +1066,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                 {riskHeatmap.matrix.map((row) => (
                   <tr key={row[0].initialRisk}>
                     <th
-                      className="px-2 py-2 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/54"
+                      className="px-2 py-2 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground"
                       scope="row"
                     >
                       {formatLabel(row[0].initialRisk)}
@@ -1254,10 +1093,10 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
           <div>
-            <h2 className="text-lg font-bold text-primary-dark">Audit escalation watch</h2>
-            <p className="mt-1 text-sm text-primary-dark/56">
+            <h2 className="text-lg font-bold text-foreground">Audit escalation watch</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Planned audits, overdue schedules, open actions, and non-conformance follow-up.
             </p>
           </div>
@@ -1274,29 +1113,29 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           <div className="mt-4 grid gap-3">
             {auditEscalations.items.length > 0 ? (
               auditEscalations.items.slice(0, 6).map(({ audit, bucket }) => (
-                <article className="rounded-md border border-primary-dark/10 p-3" key={`${bucket}-${audit.id}`}>
+                <article className="rounded-md border border-border p-3" key={`${bucket}-${audit.id}`}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {audit.audit_number}
                       </p>
-                      <h3 className="mt-1 font-bold text-primary-dark">{audit.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 font-bold text-foreground">{audit.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {audit.site ? `${audit.site.code} - ${audit.site.name}` : "No site"} /{" "}
                         {formatDate(audit.scheduled_date)}
                       </p>
                     </div>
-                    <StatusBadge className={auditEscalationBucketClass(bucket)} value={auditEscalationBucketLabel(bucket)} />
+                    <StatusBadge value={auditEscalationBucketLabel(bucket)} />
                   </div>
                   {audit.action_required ? (
-                    <p className="mt-3 text-sm leading-6 text-primary-dark/62">
+                    <p className="mt-3 text-sm leading-6 text-muted-foreground">
                       {audit.action_required}
                     </p>
                   ) : null}
                 </article>
               ))
             ) : (
-              <div className="rounded-md border border-primary-dark/10 p-4 text-sm font-semibold text-primary-dark/58">
+              <div className="rounded-md border border-border p-4 text-sm font-semibold text-muted-foreground">
                 No audit escalations in the current register.
               </div>
             )}
@@ -1308,11 +1147,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         <section className="grid gap-4 xl:grid-cols-3">
           {canCreatePpeItem ? (
             <details
-              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
               id="ppe-item-create-panel"
               open={openCreate === "ppe-item"}
             >
-              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 PPE stock item
               </summary>
               <form action={createPpeItemAction} className="mt-4 grid gap-3">
@@ -1361,11 +1200,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
 
           {canCreatePpe ? (
             <details
-              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
               id="ppe-create-panel"
               open={openCreate === "ppe"}
             >
-              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Issue PPE
               </summary>
               <form action={createPpeIssueAction} className="mt-4 grid gap-3">
@@ -1447,11 +1286,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
 
           {canCreateTalk ? (
             <details
-              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
               id="toolbox-create-panel"
               open={openCreate === "toolbox"}
             >
-              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Toolbox talk
               </summary>
               <form action={createToolboxTalkAction} className="mt-4 grid gap-3">
@@ -1502,11 +1341,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
 
           {canCreateInspection ? (
             <details
-              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
               id="inspection-create-panel"
               open={openCreate === "inspection"}
             >
-              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 HSE inspection
               </summary>
               <form action={createHseInspectionAction} className="mt-4 grid gap-3">
@@ -1563,11 +1402,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
 
           {canCreateRisk ? (
             <details
-              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
               id="risk-create-panel"
               open={openCreate === "risk"}
             >
-              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Risk assessment
               </summary>
               <form action={createHseRiskAssessmentAction} className="mt-4 grid gap-3">
@@ -1654,11 +1493,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
 
           {canCreateAudit ? (
             <details
-              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
               id="audit-create-panel"
               open={openCreate === "audit"}
             >
-              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Compliance audit
               </summary>
               <form action={createHseComplianceAuditAction} className="mt-4 grid gap-3">
@@ -1709,11 +1548,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
 
           {canCreateTraining ? (
             <details
-              className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+              className="rounded-lg border border-border bg-card p-5 shadow-sm"
               id="training-create-panel"
               open={openCreate === "training"}
             >
-              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+              <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 Safety training
               </summary>
               <form action={createSafetyTrainingRecordAction} className="mt-4 grid gap-3">
@@ -1779,11 +1618,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
       ) : null}
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="risk-assessment-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="risk-assessment-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Risk assessments</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Risk assessments</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Activity hazards, controls, residual risk, and review dates.
               </p>
             </div>
@@ -1792,19 +1631,19 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           <div className="grid gap-3 p-5">
             {riskAssessments.length > 0 ? (
               riskAssessments.map((assessment: OpsHseRiskAssessmentSummary) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={assessment.id}>
+                <article className="rounded-lg border border-border p-4" key={assessment.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {assessment.assessment_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{assessment.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{assessment.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {assessment.site ? `${assessment.site.code} - ${assessment.site.name}` : "No site"} /{" "}
                         {assessment.activity || "No activity"}
                       </p>
                     </div>
-                    <StatusBadge className={riskAssessmentStatusClass(assessment.status)} value={assessment.status} />
+                    <StatusBadge value={assessment.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-4">
                     <DetailItem label="Assessed" value={formatDate(assessment.assessment_date)} />
@@ -1813,12 +1652,12 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     <DetailItem label="Owner" value={assessment.responsible_user?.full_name ?? "Unassigned"} />
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <StatusBadge className={severityClass(assessment.initial_risk)} value={`initial ${assessment.initial_risk}`} />
-                    <StatusBadge className={severityClass(assessment.residual_risk)} value={`residual ${assessment.residual_risk}`} />
-                    <StatusBadge className="border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/58" value={assessment.hazard_category} />
+                    <StatusBadge tone={OPS_STATUS_TONES[assessment.initial_risk]} value={`initial ${assessment.initial_risk}`} />
+                    <StatusBadge tone={OPS_STATUS_TONES[assessment.residual_risk]} value={`residual ${assessment.residual_risk}`} />
+                    <StatusBadge value={assessment.hazard_category} />
                   </div>
                   {assessment.control_measures ? (
-                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">
                       {assessment.control_measures}
                     </p>
                   ) : null}
@@ -1827,7 +1666,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     assessment={assessment}
                     role={auth.profile.role}
                   />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreateRisk}
                       sourceId={assessment.id}
@@ -1838,9 +1677,9 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
               ))
             ) : (
               <div className="p-6 text-center">
-                <ShieldPlus className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No risk assessments yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <ShieldPlus className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No risk assessments yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Create risk assessments for high-risk site activities and keep review dates visible.
                 </p>
               </div>
@@ -1848,11 +1687,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="audit-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="audit-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Compliance audits</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Compliance audits</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Audit schedules, completion scores, non-conformances, and action requirements.
               </p>
             </div>
@@ -1861,19 +1700,19 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           <div className="grid gap-3 p-5">
             {complianceAudits.length > 0 ? (
               complianceAudits.map((audit: OpsHseComplianceAuditSummary) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={audit.id}>
+                <article className="rounded-lg border border-border p-4" key={audit.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {audit.audit_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{audit.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{audit.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {audit.site ? `${audit.site.code} - ${audit.site.name}` : "No site"} /{" "}
                         {formatLabel(audit.audit_type)}
                       </p>
                     </div>
-                    <StatusBadge className={complianceAuditStatusClass(audit.status)} value={audit.status} />
+                    <StatusBadge value={audit.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-4">
                     <DetailItem label="Scheduled" value={formatDate(audit.scheduled_date)} />
@@ -1887,12 +1726,12 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     <DetailItem label="Next audit" value={formatDate(audit.next_audit_date)} />
                   </div>
                   {audit.summary || audit.action_required ? (
-                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">
                       {[audit.summary, audit.action_required].filter(Boolean).join(" ")}
                     </p>
                   ) : null}
                   <ComplianceAuditActions audit={audit} role={auth.profile.role} today={today} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreateAudit}
                       sourceId={audit.id}
@@ -1903,9 +1742,9 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
               ))
             ) : (
               <div className="p-6 text-center">
-                <ClipboardList className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No compliance audits yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <ClipboardList className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No compliance audits yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Schedule site and internal compliance audits, then track findings and action closure.
                 </p>
               </div>
@@ -1914,15 +1753,15 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="ppe-stock">
-        <div className="flex flex-col gap-3 border-b border-primary-dark/10 p-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="rounded-lg border border-border bg-card shadow-sm" id="ppe-stock">
+        <div className="flex flex-col gap-3 border-b border-border p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-primary-dark">PPE stock master</h2>
-            <p className="mt-1 text-sm text-primary-dark/56">
+            <h2 className="text-lg font-bold text-foreground">PPE stock master</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Active PPE stock, issue availability, and reorder risk.
             </p>
           </div>
-          <StatusBadge className="border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58" value={`${ppeItems.length} items`} />
+          <StatusBadge value={`${ppeItems.length} items`} />
         </div>
         <div className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
           {ppeItems.length > 0 ? (
@@ -1931,23 +1770,19 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
               const canAdjust = canAdjustOpsPpeItem(auth.profile.role, item);
 
               return (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={item.id}>
+                <article className="rounded-lg border border-border p-4" key={item.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {item.item_code}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{item.item_name}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{item.item_name}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {formatLabel(item.ppe_type)} / {item.storage_location || "No storage location"}
                       </p>
                     </div>
                     <StatusBadge
-                      className={
-                        isLow
-                          ? "border-orange-200 bg-orange-50 text-orange-700"
-                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      }
+                      tone={isLow ? "attention" : "positive"}
                       value={isLow ? "low stock" : "in stock"}
                     />
                   </div>
@@ -1957,11 +1792,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     <DetailItem label="Active" value={item.is_active ? "Yes" : "No"} />
                   </div>
                   {item.description ? (
-                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">{item.description}</p>
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">{item.description}</p>
                   ) : null}
                   {canAdjust ? (
-                    <details className="mt-4 rounded-md border border-primary-dark/10 p-3">
-                      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+                    <details className="mt-4 rounded-md border border-border p-3">
+                      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
                         Adjust stock
                       </summary>
                       <form action={adjustPpeItemStockAction} className="mt-3 grid gap-3">
@@ -1976,7 +1811,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                       </form>
                     </details>
                   ) : null}
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel canManage={canAdjust} sourceId={item.id} sourceTable="ppe_items" />
                   </div>
                 </article>
@@ -1984,9 +1819,9 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
             })
           ) : (
             <div className="p-8 text-center md:col-span-2 xl:col-span-3">
-              <Boxes className="mx-auto size-10 text-primary-dark/24" aria-hidden="true" />
-              <h3 className="mt-3 text-lg font-bold text-primary-dark">No PPE stock items yet</h3>
-              <p className="mt-2 text-sm text-primary-dark/56">
+              <Boxes className="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
+              <h3 className="mt-3 text-lg font-bold text-foreground">No PPE stock items yet</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
                 Add stock items before issuing controlled PPE from inventory.
               </p>
             </div>
@@ -1994,15 +1829,15 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="ppe-register">
-        <div className="flex flex-col gap-3 border-b border-primary-dark/10 p-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="rounded-lg border border-border bg-card shadow-sm" id="ppe-register">
+        <div className="flex flex-col gap-3 border-b border-border p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-primary-dark">PPE issue register</h2>
-            <p className="mt-1 text-sm text-primary-dark/56">
+            <h2 className="text-lg font-bold text-foreground">PPE issue register</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Track PPE issue, return, damage, loss, and replacement exposure.
             </p>
           </div>
-          <StatusBadge className="border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58" value={`${ppeIssues.pagination.total} records`} />
+          <StatusBadge value={`${ppeIssues.pagination.total} records`} />
         </div>
         <OpsListControls
           action="/ops/hse-compliance"
@@ -2012,7 +1847,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           resultLabel="PPE issues"
         />
         <div className={OPS_TABLE_SCROLL_CLASS} tabIndex={0}>
-          <div className="min-w-[900px] divide-y divide-primary-dark/10">
+          <div className="min-w-[900px] divide-y divide-border">
             {ppeIssues.items.length > 0 ? (
               ppeIssues.items.map((issue) => (
                 <article className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]" key={issue.id}>
@@ -2022,12 +1857,12 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                         <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                           {issue.issue_number}
                         </p>
-                        <h3 className="mt-1 text-lg font-bold text-primary-dark">{issue.issued_to_name}</h3>
-                        <p className="mt-1 text-sm text-primary-dark/58">
+                        <h3 className="mt-1 text-lg font-bold text-foreground">{issue.issued_to_name}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
                           {issue.site ? `${issue.site.code} - ${issue.site.name}` : "No site"} / {formatLabel(issue.ppe_type)}
                         </p>
                       </div>
-                      <StatusBadge className={ppeStatusClass(issue.status)} value={issue.status} />
+                      <StatusBadge value={issue.status} />
                     </div>
                     <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                       <DetailItem label="Issue date" value={formatDate(issue.issue_date)} />
@@ -2055,24 +1890,24 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                       />
                     </div>
                     {issue.notes || issue.return_condition_notes ? (
-                      <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-4 text-sm leading-6 text-muted-foreground">
                         {[issue.notes, issue.return_condition_notes].filter(Boolean).join(" ")}
                       </p>
                     ) : null}
                     <PpeActions issue={issue} role={auth.profile.role} />
                   </div>
-                  <div className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel canManage={canManagePpe} sourceId={issue.id} sourceTable="ppe_issues" />
                   </div>
                 </article>
               ))
             ) : (
               <div className="p-8 text-center">
-                <HardHat className="mx-auto size-10 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 text-lg font-bold text-primary-dark">
+                <HardHat className="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 text-lg font-bold text-foreground">
                   {hasActiveListFilter ? "No matching PPE issues" : "No PPE issues yet"}
                 </h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <p className="mt-2 text-sm text-muted-foreground">
                   {hasActiveListFilter
                     ? "Adjust the search or status filter to widen the PPE register."
                     : "Issue PPE when safety equipment is handed out to staff, workers, or visitors."}
@@ -2091,11 +1926,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="toolbox-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="toolbox-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Toolbox talks</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Toolbox talks</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Planned and completed safety briefings by site.
               </p>
             </div>
@@ -2104,18 +1939,18 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           <div className="grid gap-3 p-5">
             {toolboxTalks.length > 0 ? (
               toolboxTalks.map((talk) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={talk.id}>
+                <article className="rounded-lg border border-border p-4" key={talk.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {talk.talk_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{talk.topic}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{talk.topic}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {talk.site ? `${talk.site.code} - ${talk.site.name}` : "No site"}
                       </p>
                     </div>
-                    <StatusBadge className={talkStatusClass(talk.status)} value={talk.status} />
+                    <StatusBadge value={talk.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-3">
                     <DetailItem label="Date" value={formatDate(talk.talk_date)} />
@@ -2123,33 +1958,29 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     <DetailItem label="Facilitator" value={talk.facilitator?.full_name ?? "Unassigned"} />
                   </div>
                   {talk.summary || talk.actions_required ? (
-                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">
                       {[talk.summary, talk.actions_required].filter(Boolean).join(" ")}
                     </p>
                   ) : null}
                   {talk.attendees.length > 0 ? (
-                    <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
-                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/44">
+                    <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                         Attendance
                       </p>
                       <div className="mt-3 grid gap-2">
                         {talk.attendees.map((attendee) => (
                           <div
-                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary-dark/10 bg-white px-3 py-2"
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2"
                             key={attendee.id}
                           >
                             <div>
-                              <p className="text-sm font-bold text-primary-dark">{attendee.attendee_name}</p>
-                              <p className="text-xs text-primary-dark/54">
+                              <p className="text-sm font-bold text-foreground">{attendee.attendee_name}</p>
+                              <p className="text-xs text-muted-foreground">
                                 {attendee.role_title || attendee.employee?.job_title || "Role not set"} / {attendee.company}
                               </p>
                             </div>
                             <StatusBadge
-                              className={
-                                attendee.attended
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border-red-200 bg-red-50 text-red-700"
-                              }
+                              tone={attendee.attended ? "positive" : "negative"}
                               value={attendee.attended ? "attended" : "absent"}
                             />
                           </div>
@@ -2158,8 +1989,8 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     </div>
                   ) : null}
                   {canAddOpsToolboxTalkAttendee(auth.profile.role, talk) ? (
-                    <details className="mt-4 rounded-md border border-primary-dark/10 p-3">
-                      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+                    <details className="mt-4 rounded-md border border-border p-3">
+                      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
                         Add attendee
                       </summary>
                       <form action={createToolboxTalkAttendeeAction} className="mt-3 grid gap-3">
@@ -2198,16 +2029,16 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     </details>
                   ) : null}
                   <ToolboxTalkActions role={auth.profile.role} talk={talk} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel canManage={canManageTalk} sourceId={talk.id} sourceTable="toolbox_talks" />
                   </div>
                 </article>
               ))
             ) : (
               <div className="p-6 text-center">
-                <ClipboardList className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No toolbox talks yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <ClipboardList className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No toolbox talks yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Create planned talks for site safety briefings and complete them after attendance is confirmed.
                 </p>
               </div>
@@ -2215,11 +2046,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="inspection-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="inspection-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">HSE inspections</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">HSE inspections</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Site inspections with scoring, findings, and required actions.
               </p>
             </div>
@@ -2228,19 +2059,19 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           <div className="grid gap-3 p-5">
             {inspections.length > 0 ? (
               inspections.map((inspection) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={inspection.id}>
+                <article className="rounded-lg border border-border p-4" key={inspection.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {inspection.inspection_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{inspection.title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{inspection.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {inspection.site ? `${inspection.site.code} - ${inspection.site.name}` : "No site"} /{" "}
                         {formatLabel(inspection.inspection_type)}
                       </p>
                     </div>
-                    <StatusBadge className={inspectionStatusClass(inspection.status)} value={inspection.status} />
+                    <StatusBadge value={inspection.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-4">
                     <DetailItem label="Scheduled" value={formatDate(inspection.scheduled_date)} />
@@ -2252,29 +2083,29 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     <DetailItem label="Actions" value={String(inspection.action_count)} />
                   </div>
                   {inspection.summary || inspection.corrective_actions_required ? (
-                    <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">
                       {[inspection.summary, inspection.corrective_actions_required].filter(Boolean).join(" ")}
                     </p>
                   ) : null}
                   {inspection.findings.length > 0 ? (
-                    <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
-                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/44">
+                    <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                         Findings
                       </p>
                       <div className="mt-3 grid gap-3">
                         {inspection.findings.map((finding) => (
-                          <article className="rounded-md border border-primary-dark/10 bg-white p-3" key={finding.id}>
+                          <article className="rounded-md border border-border bg-card p-3" key={finding.id}>
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
                                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                                   {finding.finding_number}
                                 </p>
-                                <h4 className="mt-1 text-sm font-bold text-primary-dark">{finding.title}</h4>
-                                <p className="mt-1 text-xs text-primary-dark/54">
+                                <h4 className="mt-1 text-sm font-bold text-foreground">{finding.title}</h4>
+                                <p className="mt-1 text-xs text-muted-foreground">
                                   {formatLabel(finding.finding_type)} / {formatLabel(finding.severity)}
                                 </p>
                               </div>
-                              <StatusBadge className={findingStatusClass(finding.status)} value={finding.status} />
+                              <StatusBadge value={finding.status} />
                             </div>
                             <div className="mt-3 grid gap-3 sm:grid-cols-3">
                               <DetailItem label="Due" value={formatDate(finding.due_date)} />
@@ -2282,12 +2113,12 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                               <DetailItem label="Verified" value={formatDateTime(finding.verified_at)} />
                             </div>
                             {finding.description || finding.completion_notes ? (
-                              <p className="mt-3 text-sm leading-6 text-primary-dark/62">
+                              <p className="mt-3 text-sm leading-6 text-muted-foreground">
                                 {[finding.description, finding.completion_notes].filter(Boolean).join(" ")}
                               </p>
                             ) : null}
                             <InspectionFindingActions finding={finding} role={auth.profile.role} />
-                            <div className="mt-3 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                            <div className="mt-3 rounded-md border border-border bg-muted/40 p-3">
                               <OpsRecordActivityPanel
                                 canManage={canManageInspection}
                                 sourceId={finding.id}
@@ -2300,8 +2131,8 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     </div>
                   ) : null}
                   {canCreateOpsHseInspectionFinding(auth.profile.role, inspection) ? (
-                    <details className="mt-4 rounded-md border border-primary-dark/10 p-3">
-                      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+                    <details className="mt-4 rounded-md border border-border p-3">
+                      <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
                         Add finding
                       </summary>
                       <form action={createHseInspectionFindingAction} className="mt-3 grid gap-3">
@@ -2352,16 +2183,16 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                     </details>
                   ) : null}
                   <InspectionActions inspection={inspection} role={auth.profile.role} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel canManage={canManageInspection} sourceId={inspection.id} sourceTable="hse_inspections" />
                   </div>
                 </article>
               ))
             ) : (
               <div className="p-6 text-center">
-                <ShieldPlus className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No inspections yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <ShieldPlus className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No inspections yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Schedule site inspections, complete scoring, and mark action requirements when needed.
                 </p>
               </div>
@@ -2370,11 +2201,11 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="training-panel">
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+      <section className="rounded-lg border border-border bg-card shadow-sm" id="training-panel">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <h2 className="text-lg font-bold text-primary-dark">Safety training</h2>
-            <p className="mt-1 text-sm text-primary-dark/56">
+            <h2 className="text-lg font-bold text-foreground">Safety training</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Planned training, completed certificates, and expiry watch.
             </p>
           </div>
@@ -2383,18 +2214,18 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         <div className="grid gap-3 p-5 md:grid-cols-2">
           {trainingRecords.length > 0 ? (
             trainingRecords.map((record: OpsSafetyTrainingRecordSummary) => (
-              <article className="rounded-lg border border-primary-dark/10 p-4" key={record.id}>
+              <article className="rounded-lg border border-border p-4" key={record.id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                       {record.training_number}
                     </p>
-                    <h3 className="mt-1 text-base font-bold text-primary-dark">{record.training_title}</h3>
-                    <p className="mt-1 text-sm text-primary-dark/58">
+                    <h3 className="mt-1 text-base font-bold text-foreground">{record.training_title}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {record.trainee_name} / {record.site ? `${record.site.code} - ${record.site.name}` : "No site"}
                     </p>
                   </div>
-                  <StatusBadge className={trainingStatusClass(record.status)} value={record.status} />
+                  <StatusBadge value={record.status} />
                 </div>
                 <div className="mt-4 grid gap-4 sm:grid-cols-4">
                   <DetailItem label="Type" value={formatLabel(record.training_type)} />
@@ -2408,10 +2239,10 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                   <DetailItem label="Completed by" value={record.completed_by_user?.full_name ?? "Not completed"} />
                 </div>
                 {record.notes ? (
-                  <p className="mt-4 text-sm leading-6 text-primary-dark/62">{record.notes}</p>
+                  <p className="mt-4 text-sm leading-6 text-muted-foreground">{record.notes}</p>
                 ) : null}
                 <SafetyTrainingActions record={record} role={auth.profile.role} today={today} />
-                <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                   <OpsRecordActivityPanel
                     canManage={canManageInspection}
                     sourceId={record.id}
@@ -2422,9 +2253,9 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
             ))
           ) : (
             <div className="p-8 text-center md:col-span-2">
-              <GraduationCap className="mx-auto size-10 text-primary-dark/24" aria-hidden="true" />
-              <h3 className="mt-3 text-lg font-bold text-primary-dark">No safety training records yet</h3>
-              <p className="mt-2 text-sm text-primary-dark/56">
+              <GraduationCap className="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
+              <h3 className="mt-3 text-lg font-bold text-foreground">No safety training records yet</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
                 Create planned training for site inductions, HSE refreshers, and certification renewals.
               </p>
             </div>

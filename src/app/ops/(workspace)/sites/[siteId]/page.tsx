@@ -37,13 +37,13 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 function StatRow({ href, label, value, tone }: { href: string; label: string; value: string; tone?: "warn" | "good" }) {
   return (
     <Link
-      className={`flex min-h-11 items-center justify-between gap-3 rounded-md border border-primary-dark/10 px-3 py-2 text-sm font-semibold text-primary-dark/68 transition hover:border-primary-blue hover:text-primary-blue ${OPS_FOCUS_CLASS}`}
+      className={`flex min-h-11 items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm font-semibold text-foreground/68 transition hover:border-primary-blue hover:text-primary-blue ${OPS_FOCUS_CLASS}`}
       href={href}
     >
       <span>{label}</span>
       <span
         className={`font-heading text-base font-bold ${
-          tone === "warn" ? "text-red-700" : tone === "good" ? "text-emerald-700" : "text-primary-dark"
+          tone === "warn" ? "text-red-700" : tone === "good" ? "text-emerald-700" : "text-foreground"
         }`}
       >
         {value}
@@ -56,10 +56,10 @@ function BudgetBar({ label, amount, share, colorClass }: { label: string; amount
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-sm">
-        <span className="font-semibold text-primary-dark/65">{label}</span>
-        <span className="font-bold tabular-nums text-primary-dark">{amount}</span>
+        <span className="font-semibold text-muted-foreground">{label}</span>
+        <span className="font-bold tabular-nums text-foreground">{amount}</span>
       </div>
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-primary-dark/8">
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted/40">
         <div
           className={`h-full rounded-full ${colorClass}`}
           style={{ width: `${Math.min(100, Math.max(share > 0 ? 2 : 0, share))}%` }}
@@ -116,23 +116,23 @@ export default async function OpsSite360Page({ params }: PageProps) {
         }
       />
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-4 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="rounded-full border border-primary-blue/30 bg-primary-blue/5 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-blue">
               {site.status}
             </span>
             {site.stage ? (
-              <span className="rounded-full border border-primary-dark/15 bg-primary-dark/[0.04] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/65">
+              <span className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                 {site.stage.replace(/_/g, " ")}
               </span>
             ) : null}
           </div>
-          <p className="text-sm font-semibold text-primary-dark/60">
-            Overall progress <span className="font-heading text-lg font-bold text-primary-dark">{progress}%</span>
+          <p className="text-sm font-semibold text-muted-foreground">
+            Overall progress <span className="font-heading text-lg font-bold text-foreground">{progress}%</span>
           </p>
         </div>
-        <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-primary-dark/8">
+        <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-muted/40">
           <div className="h-full rounded-full bg-primary-blue" style={{ width: `${progress}%` }} />
         </div>
       </section>
@@ -209,7 +209,7 @@ export default async function OpsSite360Page({ params }: PageProps) {
               />
             </div>
           ) : (
-            <p className="rounded-md border border-dashed border-primary-dark/15 p-5 text-center text-sm text-primary-dark/55">
+            <p className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
               No active budget for this site yet.
             </p>
           )}

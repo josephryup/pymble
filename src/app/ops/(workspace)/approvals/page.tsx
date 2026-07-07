@@ -58,8 +58,12 @@ import {
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_ERROR_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 import type { OpsApprovalStatus, OpsPriority } from "@/lib/ops/types";
+import { formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -85,32 +89,16 @@ function approvalStatusFromParam(value: string | undefined) {
     : "";
 }
 
-function statusClass(status: OpsApprovalStatus) {
-  if (status === "approved" || status === "closed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "rejected" || status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted" || status === "in_review") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
 function priorityClass(priority: OpsPriority) {
   if (priority === "urgent" || priority === "high") {
     return "text-red-700";
   }
 
   if (priority === "low") {
-    return "text-primary-dark/45";
+    return "text-muted-foreground";
   }
 
-  return "text-primary-dark/70";
+  return "text-foreground/70";
 }
 
 function formatStatus(status: string) {
@@ -119,17 +107,6 @@ function formatStatus(status: string) {
 
 function formatModule(moduleKey: string) {
   return moduleKey.replace(/_/g, " ");
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 function approvalAmount(amount: number | null, currencyCode: string) {
@@ -146,7 +123,7 @@ function approvalAmount(amount: number | null, currencyCode: string) {
 
 function ApprovalProgress({ insight }: { insight: OpsApprovalViewerInsight | undefined }) {
   if (!insight || insight.totalSteps === 0) {
-    return <span className="text-xs text-primary-dark/45">—</span>;
+    return <span className="text-xs text-muted-foreground">—</span>;
   }
 
   const currentStep = Math.min(insight.decidedSteps + 1, insight.totalSteps);
@@ -156,13 +133,13 @@ function ApprovalProgress({ insight }: { insight: OpsApprovalViewerInsight | und
         {Array.from({ length: insight.totalSteps }, (_, index) => (
           <span
             className={`h-1.5 flex-1 rounded-full ${
-              index < insight.decidedSteps ? "bg-emerald-500" : "bg-primary-dark/12"
+              index < insight.decidedSteps ? "bg-emerald-500" : "bg-muted"
             }`}
             key={index}
           />
         ))}
       </div>
-      <p className="mt-1.5 text-xs font-semibold text-primary-dark/60">
+      <p className="mt-1.5 text-xs font-semibold text-muted-foreground">
         {insight.waitingOn ? (
           <>
             Step {currentStep}/{insight.totalSteps} ·{" "}
@@ -179,7 +156,7 @@ function ApprovalProgress({ insight }: { insight: OpsApprovalViewerInsight | und
       {insight.waitingOn ? (
         <p
           className={`mt-0.5 text-[11px] font-bold ${
-            insight.isOverdue ? "text-red-600" : "text-primary-dark/45"
+            insight.isOverdue ? "text-red-600" : "text-muted-foreground"
           }`}
         >
           {insight.ageDays}d in queue{insight.isOverdue ? " — overdue" : ""}
@@ -201,21 +178,21 @@ function ApprovalFlowStep({
   value: string;
 }) {
   return (
-    <div className="rounded-lg border border-primary-dark/10 bg-primary-dark/[0.02] p-4">
+    <div className="rounded-lg border border-border bg-muted/40 p-4">
       <div className="flex items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-white text-primary-blue shadow-sm shadow-primary-dark/5">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-card text-primary-blue shadow-sm shadow-foreground/5">
           <Icon className="size-5" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             {label}
           </p>
-          <p className="mt-1 truncate font-heading text-xl font-bold text-primary-dark">
+          <p className="mt-1 truncate font-heading text-xl font-bold text-foreground">
             {value}
           </p>
         </div>
       </div>
-      <p className="mt-3 text-sm leading-6 text-primary-dark/60">{description}</p>
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -314,16 +291,16 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
   return (
     <div className="w-full max-w-none space-y-5">
       <OpsRealtimeRefresh tables={["approval_requests", "approval_steps"]} />
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm shadow-primary-dark/5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 shadow-sm shadow-foreground/5 md:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Shared workflow
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Approval inbox
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               One review queue for material requests, documents, purchase orders, GRNs, finance
               reviews, and other controlled operational decisions.
             </p>
@@ -353,7 +330,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
 
       {error ? (
         <div
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+          className={OPS_NOTICE_ERROR_CLASS}
           role="alert"
         >
           {error}
@@ -362,7 +339,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
 
       {notificationUpdated ? (
         <div
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
+          className={OPS_NOTICE_SUCCESS_CLASS}
           role="status"
         >
           Notification marked as read.
@@ -420,11 +397,11 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
       </div>
 
       {weeklyThroughput.length > 0 ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
-          <h2 className="font-heading text-xl font-bold text-primary-dark">
+        <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <h2 className="font-heading text-xl font-bold text-foreground">
             Approvals throughput — last 8 weeks
           </h2>
-          <p className="mt-1 text-sm text-primary-dark/60">
+          <p className="mt-1 text-sm text-muted-foreground">
             Requests submitted per week against decisions made. A widening gap means the
             queue is growing.
           </p>
@@ -450,40 +427,40 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
 
       {personal && personal.myTurn.length > 0 ? (
         <section
-          className="scroll-mt-24 rounded-lg border border-orange-200 bg-white shadow-sm"
+          className="scroll-mt-24 rounded-lg border border-orange-200 bg-card shadow-sm"
           id="your-decision-queue"
         >
           <div className="flex items-center justify-between gap-3 border-b border-orange-200/70 bg-orange-50/60 p-5">
             <div>
-              <h2 className="flex items-center gap-2 font-heading text-xl font-bold text-primary-dark">
+              <h2 className="flex items-center gap-2 font-heading text-xl font-bold text-foreground">
                 <UserCheck className="size-5 text-orange-600" aria-hidden="true" />
                 Your decision needed
               </h2>
-              <p className="mt-1 text-sm text-primary-dark/60">
+              <p className="mt-1 text-sm text-muted-foreground">
                 The chain has reached you on {personal.myTurn.length} request
                 {personal.myTurn.length === 1 ? "" : "s"} — approve or reject right here, oldest
                 first. Rejections need a short reason.
               </p>
             </div>
           </div>
-          <ul className="divide-y divide-primary-dark/10">
+          <ul className="divide-y divide-border">
             {personal.myTurn.slice(0, 6).map(({ insight, request }) => (
               <li className="p-5" key={request.id}>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <Link
-                      className="font-heading text-base font-bold text-primary-dark hover:text-primary-blue"
+                      className="font-heading text-base font-bold text-foreground hover:text-primary-blue"
                       href={`/ops/approvals/${request.id}`}
                     >
                       {request.title}
                     </Link>
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                       {formatModule(request.module_key)} ·{" "}
                       {formatOpsUserName(request.requester?.full_name, request.requester?.id)} ·{" "}
                       {approvalAmount(request.amount, request.currency_code)}
                     </p>
                     <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
-                      <span className="font-semibold text-primary-dark/60">
+                      <span className="font-semibold text-muted-foreground">
                         Step {Math.min(insight.decidedSteps + 1, insight.totalSteps)} of{" "}
                         {insight.totalSteps}
                       </span>
@@ -491,7 +468,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                         className={`inline-flex rounded-full border px-2 py-0.5 font-bold ${
                           insight.isOverdue
                             ? "border-red-200 bg-red-50 text-red-700"
-                            : "border-primary-dark/15 bg-primary-dark/[0.03] text-primary-dark/60"
+                            : "border-border bg-muted/40 text-muted-foreground"
                         }`}
                       >
                         waiting {insight.ageDays}d{insight.isOverdue ? " — overdue" : ""}
@@ -539,7 +516,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
             ))}
           </ul>
           {personal.myTurn.length > 6 ? (
-            <p className="border-t border-primary-dark/10 px-5 py-3 text-sm font-semibold text-primary-dark/60">
+            <p className="border-t border-border px-5 py-3 text-sm font-semibold text-muted-foreground">
               {personal.myTurn.length - 6} more in the register below.
             </p>
           ) : null}
@@ -590,10 +567,10 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
           />
         </div>
         {latestRequest ? (
-          <p className="mt-4 rounded-md border border-primary-dark/10 bg-white px-4 py-3 text-sm leading-6 text-primary-dark/62">
+          <p className="mt-4 rounded-md border border-border bg-card px-4 py-3 text-sm leading-6 text-muted-foreground">
             Latest visible request:{" "}
             <Link
-              className="font-bold text-primary-dark transition hover:text-primary-blue"
+              className="font-bold text-foreground transition hover:text-primary-blue"
               href={`/ops/approvals/${latestRequest.id}`}
             >
               {latestRequest.title}
@@ -604,13 +581,13 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
       </OpsDashboardPanel>
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <div className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white" id="approval-register">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="scroll-mt-24 rounded-lg border border-border bg-card" id="approval-register">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Approval requests
               </h2>
-              <p className="mt-1 text-sm text-primary-dark/60">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {activeDepartment.description}
               </p>
             </div>
@@ -620,7 +597,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
           {visibleDepartments.length > 1 ? (
             <div
               aria-label="Approval department tabs"
-              className="flex flex-wrap gap-1 border-b border-primary-dark/10 px-3 py-2"
+              className="flex flex-wrap gap-1 border-b border-border px-3 py-2"
               role="tablist"
             >
               {visibleDepartments.map((dept) => {
@@ -636,7 +613,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                     className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold transition ${
                       isActive
                         ? "bg-primary-blue text-white"
-                        : "text-primary-dark/70 hover:bg-primary-blue/10 hover:text-primary-blue"
+                        : "text-foreground/70 hover:bg-primary-blue/10 hover:text-primary-blue"
                     }`}
                     href={href}
                     key={dept.key}
@@ -682,12 +659,12 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                     <OpsMobileRecordCard key={request.id}>
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-heading text-lg font-bold text-primary-dark">
+                          <p className="font-heading text-lg font-bold text-foreground">
                             <Link className="hover:text-primary-blue" href={`/ops/approvals/${request.id}`}>
                               {request.title}
                             </Link>
                           </p>
-                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             {formatModule(request.module_key)}
                           </p>
                           {insight?.isMyTurn ? (
@@ -697,9 +674,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                           ) : null}
                         </div>
                         <span
-                          className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            request.status,
-                          )}`}
+                          className={`shrink-0 ${opsStatusBadgeClass(request.status)}`}
                         >
                           {formatStatus(request.status)}
                         </span>
@@ -728,11 +703,11 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                 className={`hidden md:block ${OPS_TABLE_SCROLL_CLASS}`}
                 tabIndex={0}
               >
-                <table className="min-w-full divide-y divide-primary-dark/10 text-sm">
+                <table className="min-w-full divide-y divide-border text-sm">
                   <caption className="sr-only">
                     Approval requests with status, requester, priority, due date, and amount.
                   </caption>
-                  <thead className="bg-primary-dark/[0.03] text-left text-xs uppercase tracking-[0.12em] text-primary-dark/52">
+                  <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.12em] text-muted-foreground">
                     <tr>
                       <th className="px-5 py-3" scope="col">
                         Request
@@ -754,7 +729,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-primary-dark/10">
+                  <tbody className="divide-y divide-border">
                     {requests.map((request) => {
                       const insight = insightByRequest.get(request.id);
                       return (
@@ -772,12 +747,12 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                               ) : null}
                               <div className="min-w-0">
                                 <Link
-                                  className="font-bold text-primary-dark hover:text-primary-blue"
+                                  className="font-bold text-foreground hover:text-primary-blue"
                                   href={`/ops/approvals/${request.id}`}
                                 >
                                   {request.title}
                                 </Link>
-                                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                   {formatModule(request.module_key)}
                                   {insight?.isMine ? " · raised by you" : ""}
                                 </p>
@@ -787,10 +762,10 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                           <td className="px-5 py-4">
                             <ApprovalProgress insight={insight} />
                           </td>
-                          <td className="px-5 py-4 text-primary-dark/70">
+                          <td className="px-5 py-4 text-foreground/70">
                             {formatOpsUserName(request.requester?.full_name, request.requester?.id)}
                             {request.requester ? (
-                              <span className="mt-1 block text-xs text-primary-dark/45">
+                              <span className="mt-1 block text-xs text-muted-foreground">
                                 {formatOpsRole(request.requester.role)}
                               </span>
                             ) : null}
@@ -798,14 +773,12 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                           <td className={`px-5 py-4 font-semibold ${priorityClass(request.priority)}`}>
                             {request.priority}
                           </td>
-                          <td className="px-5 py-4 font-semibold text-primary-dark">
+                          <td className="px-5 py-4 font-semibold text-foreground">
                             {approvalAmount(request.amount, request.currency_code)}
                           </td>
                           <td className="px-5 py-4">
                             <span
-                              className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                                request.status,
-                              )}`}
+                              className={opsStatusBadgeClass(request.status)}
                             >
                               {formatStatus(request.status)}
                             </span>
@@ -858,12 +831,12 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
           />
         </div>
 
-        <aside className="rounded-lg border border-primary-dark/10 bg-white">
-          <div className="border-b border-primary-dark/10 p-5">
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+        <aside className="rounded-lg border border-border bg-card">
+          <div className="border-b border-border p-5">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Notifications
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               Workflow alerts that need your attention.
             </p>
             <Link
@@ -874,7 +847,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
             </Link>
           </div>
           {notifications.length > 0 ? (
-            <div className="divide-y divide-primary-dark/10">
+            <div className="divide-y divide-border">
               {notifications.map((notification) => (
                 <article className="p-5" key={notification.id}>
                   <div className="flex items-start gap-3">
@@ -882,13 +855,13 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
                       <Bell className="size-4" aria-hidden="true" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-bold text-primary-dark">{notification.title}</p>
+                      <p className="font-bold text-foreground">{notification.title}</p>
                       {notification.body ? (
-                        <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
                           {notification.body}
                         </p>
                       ) : null}
-                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         {formatModule(notification.module_key)} /{" "}
                         {formatDateTime(notification.created_at)}
                       </p>
@@ -918,8 +891,8 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
             <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-6 text-center">
               <CheckCircle2 className="size-9 text-emerald-600" aria-hidden="true" />
               <div>
-                <p className="font-heading text-lg font-bold text-primary-dark">No unread alerts</p>
-                <p className="mt-2 text-sm leading-6 text-primary-dark/60">
+                <p className="font-heading text-lg font-bold text-foreground">No unread alerts</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   New approval and workflow alerts will appear here.
                 </p>
               </div>

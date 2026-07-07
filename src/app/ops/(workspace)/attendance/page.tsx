@@ -43,6 +43,7 @@ import type { OpsAttendancePresence } from "@/lib/ops/types";
 import {
   firstParam,
   formatZmw,
+  opsStatusBadgeClass,
   noticeFromParams,
   OPS_INPUT_CLASS,
   OPS_LABEL_CLASS,
@@ -51,40 +52,13 @@ import {
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
 } from "@/lib/ops/ui";
+import { todayInLusaka, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
 };
-
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(value));
-}
-
-function presenceClass(presence: OpsAttendanceRecord["presence"]) {
-  if (presence === "present") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (presence === "late") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-red-200 bg-red-50 text-red-700";
-}
 
 function attendanceNotice(params: OpsSearchParams) {
   const baseNotice = noticeFromParams(
@@ -177,14 +151,14 @@ function AttendanceEditPanel({
   workerOptions: AttendanceWorkerOption[];
 }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-semibold text-primary-dark/65">
+    <details className="rounded-md border border-border">
+      <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground">
         <Pencil className="size-3.5" aria-hidden="true" />
         Edit / correct fields
       </summary>
       <form
         action={updateAttendanceAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-4 md:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-3 border-t border-border p-4 md:grid-cols-2 lg:grid-cols-4"
       >
         <input name="id" type="hidden" value={record.id} />
         {/* Preserve stored coordinates so an edit does not wipe them. */}
@@ -340,41 +314,41 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Pymble Attendance
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Daily timesheets
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               Manual attendance capture for site teams, with approval tracking for payroll.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Records
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {records.length}
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Pending
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {pendingCount}
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Earned
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {formatZmw(earnedTotal)}
               </p>
             </div>
@@ -421,11 +395,11 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
         />
       </section>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
-        <h2 className="font-heading text-xl font-bold text-primary-dark">
+      <section className="rounded-lg border border-border bg-card p-5">
+        <h2 className="font-heading text-xl font-bold text-foreground">
           Daily headcount — last {dailySummary.windowDays} days
         </h2>
-        <p className="mt-1 text-sm text-primary-dark/60">
+        <p className="mt-1 text-sm text-muted-foreground">
           Present, late and absent records per work day across all sites.
         </p>
         <div className="mt-4">
@@ -461,22 +435,22 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
       ) : null}
 
       {canRecord ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
               <Plus className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">
+              <h2 className="font-heading text-xl font-bold text-foreground">
                 Add attendance
               </h2>
-              <p className="text-sm text-primary-dark/60">
+              <p className="text-sm text-muted-foreground">
                 Amount earned is calculated from the worker daily rate.
               </p>
             </div>
           </div>
           {workerOptions.length === 0 || siteOptions.length === 0 ? (
-            <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className={OPS_NOTICE_WARNING_CLASS}>
               Add at least one site and one worker before recording attendance.
             </div>
           ) : (
@@ -582,19 +556,19 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
           )}
         </section>
       ) : (
-        <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 text-sm text-primary-dark/65">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           Your role does not have attendance recording permissions. Contact your manager to request
           access.
         </div>
       )}
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white">
-        <div className="border-b border-primary-dark/10 p-5">
-          <h2 className="font-heading text-xl font-bold text-primary-dark">Recent attendance</h2>
+      <section className="rounded-lg border border-border bg-card">
+        <div className="border-b border-border p-5">
+          <h2 className="font-heading text-xl font-bold text-foreground">Recent attendance</h2>
         </div>
         <form
           action="/ops/attendance"
-          className="grid gap-3 border-b border-primary-dark/10 bg-primary-dark/[0.02] p-5 md:grid-cols-2 lg:grid-cols-6"
+          className="grid gap-3 border-b border-border bg-muted/40 p-5 md:grid-cols-2 lg:grid-cols-6"
           method="get"
         >
           <label className={OPS_LABEL_CLASS}>
@@ -687,15 +661,15 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                 <OpsMobileRecordCard key={record.id}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-heading text-lg font-bold text-primary-dark">
+                      <p className="font-heading text-lg font-bold text-foreground">
                         {record.worker?.full_name ?? "Worker record unavailable"}
                       </p>
-                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         {record.worker?.worker_code ?? "Worker code unavailable"}
                       </p>
                     </div>
                     <span
-                      className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${presenceClass(record.presence)}`}
+                      className={`shrink-0 ${opsStatusBadgeClass(record.presence)}`}
                     >
                       {record.presence}
                     </span>
@@ -758,7 +732,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                         </form>
                       </div>
                     ) : (
-                      <span className="text-primary-dark/50">Pending</span>
+                      <span className="text-muted-foreground">Pending</span>
                     )}
                   </OpsMobileRecordRow>
                   {canRecord && !record.approved_at ? (
@@ -776,11 +750,11 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
               className={`hidden md:block ${OPS_TABLE_SCROLL_CLASS}`}
               tabIndex={0}
             >
-            <table className="min-w-full divide-y divide-primary-dark/10 text-sm">
+            <table className="min-w-full divide-y divide-border text-sm">
               <caption className="sr-only">
                 Recent attendance records with worker, site, time, earned amount, status, and approval.
               </caption>
-              <thead className="bg-primary-dark/[0.03] text-left text-xs uppercase tracking-[0.12em] text-primary-dark/52">
+              <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.12em] text-muted-foreground">
                 <tr>
                   <th className="px-5 py-3" scope="col">
                     Worker
@@ -811,7 +785,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-primary-dark/10">
+              <tbody className="divide-y divide-border">
                 {records.map((record) => (
                   <React.Fragment key={record.id}>
                   <tr>
@@ -821,42 +795,42 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                           <ClipboardCheck className="size-4" aria-hidden="true" />
                         </div>
                         <div>
-                          <p className="font-bold text-primary-dark">
+                          <p className="font-bold text-foreground">
                             {record.worker?.full_name ?? "Worker record unavailable"}
                           </p>
-                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                             {record.worker?.worker_code ?? "Worker code unavailable"}
                           </p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-primary-dark/70">
+                    <td className="px-5 py-4 text-foreground/70">
                       {record.site?.code
                         ? `${record.site.code} - ${record.site.name}`
                         : "Site record unavailable"}
                     </td>
-                    <td className="px-5 py-4 text-primary-dark/70">
+                    <td className="px-5 py-4 text-foreground/70">
                       <span className="inline-flex items-center gap-2">
                         <Clock className="size-4 text-primary-blue" aria-hidden="true" />
                         {formatDateTime(record.clock_in_at)}
                       </span>
                     </td>
-                    <td className="px-5 py-4 font-semibold text-primary-dark">
+                    <td className="px-5 py-4 font-semibold text-foreground">
                       {record.hours_worked.toLocaleString("en-ZM", {
                         maximumFractionDigits: 2,
                       })}
                     </td>
-                    <td className="px-5 py-4 text-primary-dark/70">
+                    <td className="px-5 py-4 text-foreground/70">
                       {record.overtime_hours > 0
                         ? `${record.overtime_hours.toLocaleString("en-ZM", {
                             maximumFractionDigits: 2,
                           })}h`
                         : "—"}
                     </td>
-                    <td className="px-5 py-4 text-primary-dark/70">
+                    <td className="px-5 py-4 text-foreground/70">
                       {record.overtime_amount > 0 ? formatZmw(record.overtime_amount) : "—"}
                     </td>
-                    <td className="px-5 py-4 font-semibold text-primary-dark">
+                    <td className="px-5 py-4 font-semibold text-foreground">
                       <span className="inline-flex items-center gap-2">
                         <BadgeDollarSign className="size-4 text-primary-blue" aria-hidden="true" />
                         {formatZmw(record.amount_earned)}
@@ -864,7 +838,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                     </td>
                     <td className="px-5 py-4">
                       <span
-                        className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${presenceClass(record.presence)}`}
+                        className={opsStatusBadgeClass(record.presence)}
                       >
                         {record.presence}
                       </span>
@@ -898,7 +872,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                           </form>
                         </div>
                       ) : (
-                        <span className="text-primary-dark/50">Pending</span>
+                        <span className="text-muted-foreground">Pending</span>
                       )}
                     </td>
                   </tr>
@@ -923,10 +897,10 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
             <CalendarDays className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 {hasActiveFilter ? "No matching attendance records" : "No attendance records yet"}
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 {hasActiveFilter
                   ? "Adjust or clear the filters above to widen the attendance list."
                   : "Attendance records will appear here after the first timesheet is captured."}

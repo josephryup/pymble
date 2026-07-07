@@ -39,10 +39,10 @@ export default async function OpsHomePage() {
                 <Bell className="size-5" aria-hidden="true" />
               </span>
               <div className="min-w-0">
-                <p className="font-heading text-base font-bold text-primary-dark">
+                <p className="font-heading text-base font-bold text-foreground">
                   {unreadAlerts.length} alert{unreadAlerts.length === 1 ? "" : "s"} need your attention
                 </p>
-                <p className="mt-0.5 truncate text-sm text-primary-dark/65">
+                <p className="mt-0.5 truncate text-sm text-muted-foreground">
                   {unreadAlerts.map((alert) => alert.title).join(" · ")}
                 </p>
               </div>

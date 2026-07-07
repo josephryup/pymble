@@ -15,7 +15,7 @@ import type {
   OpsOverviewSite,
   OpsOverviewWorker,
 } from "@/lib/ops/overview";
-import { formatZmw, OPS_INPUT_CLASS, OPS_SECONDARY_BUTTON_CLASS } from "@/lib/ops/ui";
+import { formatZmw, OPS_INPUT_CLASS, OPS_SECONDARY_BUTTON_CLASS, OPS_STATUS_TONES, opsStatusBadgeClass } from "@/lib/ops/ui";
 
 const OpsSiteMap = dynamic<OpsSiteMapProps>(
   () =>
@@ -56,18 +56,6 @@ type OpsOverviewMapPanelProps = {
   sites: OpsOverviewSite[];
   workers: OpsOverviewWorker[];
 };
-
-function statusClass(status: OpsOverviewSite["status"]) {
-  if (status === "active") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "mobilizing") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
 
 function DetailStat({
   icon: Icon,
@@ -231,9 +219,7 @@ export function OpsOverviewMapPanel({
                   </CardDescription>
                 </div>
                 <Badge
-                  className={`h-auto w-fit border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                    selectedSite.status,
-                  )}`}
+                  className={`h-auto w-fit ${opsStatusBadgeClass(selectedSite.status, OPS_STATUS_TONES[selectedSite.status] ?? "attention")}`}
                   variant="outline"
                 >
                   {selectedSite.status}

@@ -118,10 +118,10 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
       />
 
       <form
-        className="rounded-2xl border border-primary-dark/10 bg-white p-5 shadow-sm"
+        className="rounded-lg border border-border bg-card p-5 shadow-sm"
         method="get"
       >
-        <h2 className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-primary-dark/55">
+        <h2 className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           Report setup
         </h2>
         <div className="mt-3 grid gap-4 md:grid-cols-2">
@@ -179,20 +179,20 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
       </form>
 
       {scope === "compiled" ? (
-        <section className="rounded-2xl border border-primary-dark/10 bg-white p-5 shadow-sm">
-          <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-primary-dark/55">
+        <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
             <Inbox className="size-4" aria-hidden="true" />
             Team reports received for this window ({receivedReports.length})
           </h2>
           {receivedReports.length === 0 ? (
-            <p className="mt-2 text-sm text-primary-dark/60">
+            <p className="mt-2 text-sm text-muted-foreground">
               No individual reports submitted for this period yet. You can still compile —
               chase the team or note the gap in your executive summary.
             </p>
           ) : (
             <ul className="mt-3 space-y-2">
               {receivedReports.map((received) => (
-                <li key={received.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-2">
+                <li key={received.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
                   <div className="min-w-0">
                     <Link
                       className="text-sm font-semibold text-primary-blue hover:underline"
@@ -200,7 +200,7 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
                     >
                       {received.title}
                     </Link>
-                    <p className="text-xs text-primary-dark/55">
+                    <p className="text-xs text-muted-foreground">
                       {received.submitter?.full_name ?? "Unknown"} · {received.status.replace("_", " ")}
                     </p>
                   </div>
@@ -213,7 +213,7 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
 
       <form
         action={createDepartmentReportAction}
-        className="space-y-4 rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm"
+        className="space-y-4 rounded-lg border border-border bg-card p-6 shadow-sm"
       >
         <input name="department" type="hidden" value={department} />
         <input name="scope" type="hidden" value={scope} />
@@ -221,7 +221,7 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
         <input name="period_start_date" type="hidden" value={periodStart} />
         <input name="period_end_date" type="hidden" value={periodEnd} />
 
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {deptLabel} · {scope === "individual" ? "individual" : "department"} ·{" "}
           {period.replace("_", " ")} · {periodStart} → {periodEnd}
         </p>
@@ -239,10 +239,10 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
 
         {scope === "compiled" ? (
           <fieldset>
-            <legend className="flex items-center gap-2 text-sm font-bold text-primary-dark">
+            <legend className="flex items-center gap-2 text-sm font-bold text-foreground">
               <Sparkles className="size-4 text-primary-blue" aria-hidden="true" />
               Key figures
-              <span className="text-xs font-medium text-primary-dark/50">
+              <span className="text-xs font-medium text-muted-foreground">
                 (suggested from system records — check and adjust before submitting)
               </span>
             </legend>
@@ -260,7 +260,7 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
                       step="any"
                       type="number"
                     />
-                    <span className="mt-1 block text-xs font-normal normal-case text-primary-dark/50">
+                    <span className="mt-1 block text-xs font-normal normal-case text-muted-foreground">
                       {suggested !== undefined
                         ? "Suggested from system records for this period."
                         : (metric.hint ?? "Fill in manually.")}
@@ -273,7 +273,7 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
         ) : null}
 
         <fieldset className="space-y-4">
-          <legend className="text-sm font-bold text-primary-dark">Report sections</legend>
+          <legend className="text-sm font-bold text-foreground">Report sections</legend>
           {sections.map((section) => (
             <label className={OPS_LABEL_CLASS} key={section.key}>
               {section.label}
@@ -289,8 +289,8 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
         </fieldset>
 
         {scope === "compiled" ? (
-          <details className="rounded-lg border border-primary-dark/10 bg-primary-dark/[0.02] px-4 py-3">
-            <summary className="cursor-pointer text-sm font-semibold text-primary-dark/70">
+          <details className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold text-foreground/70">
               Extra metrics (advanced, JSON)
             </summary>
             <textarea

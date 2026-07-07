@@ -33,7 +33,7 @@ import {
 import { fetchPaginatedOpsDocumentLibrary, type OpsDocumentLibraryItem } from "@/lib/ops/documents";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
-import type { OpsApprovalStatus, OpsDocumentStatus, OpsDocumentVisibility } from "@/lib/ops/types";
+import type { OpsApprovalStatus, OpsDocumentVisibility } from "@/lib/ops/types";
 import {
   OPS_DANGER_BUTTON_CLASS,
   OPS_FOCUS_CLASS,
@@ -43,7 +43,11 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_ERROR_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { formatOpsLabel as formatLabel, formatOpsDate as formatDate } from "@/lib/ops/format";
 
 const FILE_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp";
 
@@ -81,12 +85,6 @@ function documentVisibilityFromParam(value: string | undefined) {
     : undefined;
 }
 
-function statusClass(status: OpsDocumentStatus) {
-  if (status === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "superseded") return "border-orange-200 bg-orange-50 text-orange-700";
-  return "border-primary-dark/15 bg-primary-dark/[0.03] text-primary-dark/55";
-}
-
 function visibilityClass(visibility: OpsDocumentVisibility) {
   switch (visibility) {
     case "public":
@@ -106,19 +104,11 @@ function approvalClass(status: OpsApprovalStatus | null) {
   if (status === "approved") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "rejected" || status === "cancelled") return "border-red-200 bg-red-50 text-red-700";
   if (status === "submitted" || status === "in_review") return "border-sky-200 bg-sky-50 text-sky-700";
-  return "border-primary-dark/15 bg-white text-primary-dark/55";
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
+  return "border-border bg-card text-muted-foreground";
 }
 
 function formatApprovalStatus(status: OpsApprovalStatus | null) {
   return status ? formatLabel(status) : "Not requested";
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", { dateStyle: "medium" }).format(new Date(value));
 }
 
 function formatBytes(bytes: number) {
@@ -178,34 +168,34 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Controlled Records
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Document library
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               Group related files under one title, control who can see each group, and keep a full
               audit trail. Downloads run through authenticated app routes only.
             </p>
           </div>
           <div className="grid gap-3 min-[420px]:grid-cols-2">
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Document groups
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {documentPage.pagination.total}
               </p>
             </div>
-            <div className="rounded-md border border-primary-dark/10 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <div className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Attachments shown
               </p>
-              <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+              <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                 {totalAttachments}
               </p>
             </div>
@@ -214,25 +204,25 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
       </section>
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+        <div className={OPS_NOTICE_ERROR_CLASS} role="alert">
           {error}
         </div>
       ) : null}
       {notice ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700" role="status">
+        <div className={OPS_NOTICE_SUCCESS_CLASS} role="status">
           {notice}
         </div>
       ) : null}
 
       {canUpload ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
               <Upload className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-heading text-xl font-bold text-primary-dark">New document group</h2>
-              <p className="text-sm text-primary-dark/60">
+              <h2 className="font-heading text-xl font-bold text-foreground">New document group</h2>
+              <p className="text-sm text-muted-foreground">
                 One title, one visibility level, and one or more files. Add or remove files later.
               </p>
             </div>
@@ -281,16 +271,16 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
           </form>
         </section>
       ) : (
-        <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 text-sm text-primary-dark/65">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           Your role has read-only access to the document library.
         </div>
       )}
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white">
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+      <section className="rounded-lg border border-border bg-card">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">Documents</h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <h2 className="font-heading text-xl font-bold text-foreground">Documents</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Each group shows every file it holds and who can see it.
             </p>
           </div>
@@ -327,7 +317,7 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
         />
 
         {documents.length > 0 ? (
-          <ul className="divide-y divide-primary-dark/10">
+          <ul className="divide-y divide-border">
             {documents.map((document) => {
               const canEdit = canMutateOpsDocument(auth.profile.id, auth.profile.role, document) &&
                 (canUpload || isOpsDocumentSuperAdmin(auth.profile.role));
@@ -345,14 +335,14 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
                         <FileText className="size-5" aria-hidden="true" />
                       </div>
                       <div className="min-w-0">
-                        <p className="font-heading text-lg font-bold text-primary-dark">{document.title}</p>
-                        <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        <p className="font-heading text-lg font-bold text-foreground">{document.title}</p>
+                        <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           {formatLabel(document.category)} · {attachments.length} file
                           {attachments.length === 1 ? "" : "s"} ·{" "}
                           {document.uploader?.full_name ?? "Unknown"} · {formatDate(document.created_at)}
                         </p>
                         {document.description ? (
-                          <p className="mt-1 max-w-2xl text-sm leading-6 text-primary-dark/60">
+                          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                             {document.description}
                           </p>
                         ) : null}
@@ -363,7 +353,7 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
                         <Lock className="size-3" aria-hidden="true" />
                         {OPS_DOCUMENT_VISIBILITY_SHORT[document.visibility]}
                       </span>
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(document.status)}`}>
+                      <span className={opsStatusBadgeClass(document.status)}>
                         {document.status}
                       </span>
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${approvalClass(document.approval_status)}`}>
@@ -376,15 +366,15 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
                     {attachments.map((attachment) => (
                       <li
                         key={attachment.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-2.5"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2.5"
                       >
                         <div className="flex min-w-0 items-center gap-2">
-                          <FileText className="size-4 shrink-0 text-primary-dark/45" aria-hidden="true" />
+                          <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                           <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-primary-dark">
+                            <span className="block truncate text-sm font-semibold text-foreground">
                               {attachment.file_name}
                             </span>
-                            <span className="block text-xs text-primary-dark/45">
+                            <span className="block text-xs text-muted-foreground">
                               {formatBytes(attachment.file_size_bytes)}
                             </span>
                           </span>
@@ -431,12 +421,12 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
                       </form>
                     ) : null}
                     {canEdit && !isApprovalOpen ? (
-                      <details className="group rounded-md border border-primary-dark/10">
-                        <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+                      <details className="group rounded-md border border-border">
+                        <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
                           <Plus className="size-4" aria-hidden="true" />
                           Add files
                         </summary>
-                        <form action={addOpsDocumentAttachmentAction} className="grid gap-2 border-t border-primary-dark/10 p-3">
+                        <form action={addOpsDocumentAttachmentAction} className="grid gap-2 border-t border-border p-3">
                           <input name="document_id" type="hidden" value={document.document_id} />
                           <input accept={FILE_ACCEPT} className={OPS_INPUT_CLASS} multiple name="documents" required type="file" />
                           <OpsConfirmSubmitButton className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} confirmText="Confirm upload">
@@ -464,10 +454,10 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
           <div className="flex min-h-72 flex-col items-center justify-center gap-3 p-8 text-center">
             <Shield className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 {hasActiveListFilter ? "No matching documents" : "No documents uploaded yet"}
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 {hasActiveListFilter
                   ? "Adjust the search, category, or visibility filter to widen the list."
                   : "Create a document group above — give it a title, choose who can see it, and attach one or more files."}

@@ -75,11 +75,11 @@ export default async function OpsItCredentialsPage({ searchParams }: PageProps) 
       </section>
 
       {canManage ? (
-        <details className="rounded-lg border border-primary-dark/10 bg-white" id="credential-create">
-          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-primary-dark [&::-webkit-details-marker]:hidden">
+        <details className="rounded-lg border border-border bg-card" id="credential-create">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <KeySquare className="size-5 text-primary-blue" aria-hidden="true" /> Record credential
           </summary>
-          <form action={createItCredentialAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItCredentialAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Name<input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Domain registrar admin" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>System<input className={OPS_INPUT_CLASS} name="system_name" placeholder="e.g. Cloudflare" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Account identifier<input className={OPS_INPUT_CLASS} name="account_identifier" placeholder="username / email (not the password)" /></label>
@@ -99,12 +99,12 @@ export default async function OpsItCredentialsPage({ searchParams }: PageProps) 
           {credentials.map((credential) => {
             const overdue = credential.rotation_due_date !== null && credential.rotation_due_date <= today;
             return (
-              <li key={credential.id} className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm">
+              <li key={credential.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">{credential.system_name || "—"}{credential.owner ? ` · ${credential.owner.full_name}` : ""}</p>
-                    <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">{credential.name}</h2>
-                    <p className="mt-1 text-xs text-primary-dark/55">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{credential.system_name || "—"}{credential.owner ? ` · ${credential.owner.full_name}` : ""}</p>
+                    <h2 className="mt-1 font-heading text-lg font-bold text-foreground">{credential.name}</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {credential.account_identifier || "—"}
                       {credential.vault_location ? ` · ${credential.vault_location}` : ""}
                       {credential.last_rotated_at ? ` · Rotated ${credential.last_rotated_at}` : ""}
@@ -116,7 +116,7 @@ export default async function OpsItCredentialsPage({ searchParams }: PageProps) 
                   ) : null}
                 </div>
                 {canManage ? (
-                  <div className="mt-3 flex flex-wrap gap-2 border-t border-primary-dark/10 pt-3">
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
                     <form action={markItCredentialRotatedAction}>
                       <input name="credential_id" type="hidden" value={credential.id} />
                       <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit"><RotateCw className="size-4" aria-hidden="true" />Mark rotated</button>

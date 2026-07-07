@@ -25,23 +25,23 @@ export default async function OpsLoginPage({ searchParams }: PageProps) {
     : null;
 
   return (
-    <main className="ops-ui min-h-dvh bg-[#f6f7fb] px-5 py-10 text-primary-dark">
+    <main className="ops-ui min-h-dvh bg-[#f6f7fb] px-5 py-10 text-foreground">
       <div className="mx-auto flex min-h-[calc(100dvh-5rem)] max-w-md items-center">
         <section
           aria-labelledby="ops-login-title"
-          className="w-full rounded-lg border border-primary-dark/10 bg-white p-6 shadow-sm"
+          className="w-full rounded-lg border border-border bg-card p-6 shadow-sm"
         >
           <OpsBrandMark priority className="h-16 w-16 rounded-md" sizes="64px" />
           <p className="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             Pymble Operations
           </p>
           <h1
-            className="mt-2 font-heading text-3xl font-bold tracking-tight text-primary-dark"
+            className="mt-2 font-heading text-3xl font-bold tracking-tight text-foreground"
             id="ops-login-title"
           >
             {OPS_BRAND.name}
           </h1>
-          <p className="mt-3 text-sm leading-6 text-primary-dark/65">
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
             Sign in with your Pymble staff credentials. Access is by invitation only.
           </p>
 

@@ -34,7 +34,9 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { formatOpsLabel as formatLabel } from "@/lib/ops/format";
 
 export const dynamic = "force-dynamic";
 
@@ -52,16 +54,6 @@ function statusFromParam(value: string | undefined) {
   return CUSTOMER_STATUS_OPTIONS.some((status) => status.value === value)
     ? (value as OpsCustomerStatus | "")
     : "";
-}
-
-function statusClass(status: OpsCustomerStatus) {
-  return status === "active"
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55";
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
 }
 
 function customerNotice(params: OpsSearchParams) {
@@ -166,19 +158,19 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
 
       {canCreate ? (
         <details
-          className="rounded-lg border border-primary-dark/10 bg-white"
+          className="rounded-lg border border-border bg-card"
           id="customer-create-panel"
         >
-          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-primary-dark/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
             <span className="flex min-w-0 items-center gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
                 <Users className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0">
-                <span className="block font-heading text-lg font-bold text-primary-dark">
+                <span className="block font-heading text-lg font-bold text-foreground">
                   Add customer
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Expand to register a new billable client for invoicing.
                 </span>
               </span>
@@ -187,7 +179,7 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
           </summary>
           <form
             action={createCustomerAction}
-            className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
           >
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Legal name
@@ -241,8 +233,8 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
         title="Register"
       >
         <div className="-mx-5 -mb-5">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
-            <p className="text-sm text-primary-dark/60">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
+            <p className="text-sm text-muted-foreground">
               {customerPage.pagination.total} matching customer records.
             </p>
           </div>
@@ -262,7 +254,7 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
           />
 
           {customers.length > 0 ? (
-            <div className="divide-y divide-primary-dark/10">
+            <div className="divide-y divide-border">
               {customers.map((customer) => {
                 const canMutate = canArchiveOpsCustomer(auth.profile.role, customer);
                 const canReactivate = canReactivateOpsCustomer(auth.profile.role, customer);
@@ -272,24 +264,22 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-heading text-lg font-bold text-primary-dark">
+                          <h3 className="font-heading text-lg font-bold text-foreground">
                             {customer.customer_code}
                           </h3>
                           <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                              customer.status,
-                            )}`}
+                            className={opsStatusBadgeClass(customer.status)}
                           >
                             {formatLabel(customer.status)}
                           </span>
                         </div>
-                        <p className="mt-2 font-bold text-primary-dark">{customer.legal_name}</p>
+                        <p className="mt-2 font-bold text-foreground">{customer.legal_name}</p>
                         {customer.trading_name ? (
-                          <p className="mt-1 text-sm text-primary-dark/60">
+                          <p className="mt-1 text-sm text-muted-foreground">
                             Trading as {customer.trading_name}
                           </p>
                         ) : null}
-                        <p className="mt-2 text-sm leading-6 text-primary-dark/62">
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
                           {[customer.address_line, customer.city, customer.country]
                             .filter(Boolean)
                             .join(", ") || "Address not recorded"}
@@ -325,34 +315,34 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
                     </div>
 
                     <dl className="mt-4 grid gap-3 min-[520px]:grid-cols-2 lg:grid-cols-3">
-                      <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <div className="rounded-md border border-border px-3 py-2">
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           TPIN
                         </dt>
-                        <dd className="mt-1 font-bold text-primary-dark">
+                        <dd className="mt-1 font-bold text-foreground">
                           {customer.tpin || "Not recorded"}
                         </dd>
                       </div>
-                      <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <div className="rounded-md border border-border px-3 py-2">
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           Email
                         </dt>
-                        <dd className="mt-1 truncate font-bold text-primary-dark">
+                        <dd className="mt-1 truncate font-bold text-foreground">
                           {customer.email || "Not recorded"}
                         </dd>
                       </div>
-                      <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <div className="rounded-md border border-border px-3 py-2">
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           Phone
                         </dt>
-                        <dd className="mt-1 font-bold text-primary-dark">
+                        <dd className="mt-1 font-bold text-foreground">
                           {customer.phone || "Not recorded"}
                         </dd>
                       </div>
                     </dl>
 
                     {customer.notes ? (
-                      <p className="mt-4 rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                      <p className="mt-4 rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                         {customer.notes}
                       </p>
                     ) : null}

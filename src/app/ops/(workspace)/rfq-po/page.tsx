@@ -60,7 +60,6 @@ import {
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import { fetchActiveSupplierOptions } from "@/lib/ops/suppliers";
 import type {
-  OpsPurchaseOrderStatus,
   OpsRfqStatus,
   OpsUserRole,
 } from "@/lib/ops/types";
@@ -74,7 +73,10 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -143,64 +145,6 @@ function rfqPoNotice(params: OpsSearchParams) {
     : null;
 }
 
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function statusClass(status: OpsRfqStatus) {
-  if (status === "awarded" || status === "closed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "issued" || status === "quoted") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function poStatusClass(status: OpsPurchaseOrderStatus) {
-  if (status === "approved" || status === "issued" || status === "closed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "approval_pending" || status === "partially_received") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "rejected") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 type RfqValueMetricProps = {
   label: string;
   value: string;
@@ -208,11 +152,11 @@ type RfqValueMetricProps = {
 
 function RfqValueMetric({ label, value }: RfqValueMetricProps) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-heading text-lg font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-heading text-lg font-bold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -241,14 +185,14 @@ function EditRfqItemForm({
   supplierOptions: RfqSupplierOption[];
 }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-semibold text-primary-dark/65">
+    <details className="rounded-md border border-border">
+      <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground">
         <Pencil className="size-3.5" aria-hidden="true" />
         Edit line
       </summary>
       <form
         action={updateRfqItemAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
       >
         <input name="rfq_item_id" type="hidden" value={item.id} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -363,10 +307,10 @@ function RfqItems({
   }
 
   return (
-    <div className="overflow-x-auto rounded-md border border-primary-dark/10">
-      <table className="min-w-full divide-y divide-primary-dark/10 text-sm">
+    <div className="overflow-x-auto rounded-md border border-border">
+      <table className="min-w-full divide-y divide-border text-sm">
         <caption className="sr-only">Line items for {rfq.rfq_number}</caption>
-        <thead className="bg-primary-dark/[0.03] text-left text-xs uppercase tracking-[0.12em] text-primary-dark/52">
+        <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.12em] text-muted-foreground">
           <tr>
             <th className="px-3 py-3" scope="col">
               Item
@@ -385,40 +329,40 @@ function RfqItems({
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-primary-dark/10">
+        <tbody className="divide-y divide-border">
           {rfq.items.map((item) => (
             <Fragment key={item.id}>
               <tr>
                 <td className="px-3 py-3 align-top">
-                  <p className="font-bold text-primary-dark">{item.item_name}</p>
+                  <p className="font-bold text-foreground">{item.item_name}</p>
                   {item.specification ? (
-                    <p className="mt-1 max-w-lg text-xs leading-5 text-primary-dark/55">
+                    <p className="mt-1 max-w-lg text-xs leading-5 text-muted-foreground">
                       {item.specification}
                     </p>
                   ) : null}
                 </td>
-                <td className="px-3 py-3 align-top font-semibold text-primary-dark/70">
+                <td className="px-3 py-3 align-top font-semibold text-foreground/70">
                   {item.quantity.toLocaleString("en-ZM")} {item.unit}
                 </td>
-                <td className="px-3 py-3 align-top text-primary-dark/70">
+                <td className="px-3 py-3 align-top text-foreground/70">
                   {itemSupplierLabel(item, supplierOptions)}
                 </td>
                 <td className="px-3 py-3 align-top">
-                  <p className="font-bold text-primary-dark">{formatZmw(item.estimated_total)}</p>
-                  <p className="mt-1 text-xs text-primary-dark/45">
+                  <p className="font-bold text-foreground">{formatZmw(item.estimated_total)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {formatZmw(item.estimated_unit_cost)} per {item.unit}
                   </p>
                 </td>
                 <td className="px-3 py-3 align-top">
                   {item.actual_unit_cost > 0 ? (
                     <>
-                      <p className="font-bold text-primary-dark">{formatZmw(item.actual_total)}</p>
-                      <p className="mt-1 text-xs text-primary-dark/45">
+                      <p className="font-bold text-foreground">{formatZmw(item.actual_total)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {formatZmw(item.actual_unit_cost)} per {item.unit}
                       </p>
                     </>
                   ) : (
-                    <span className="text-xs text-primary-dark/45">Not priced</span>
+                    <span className="text-xs text-muted-foreground">Not priced</span>
                   )}
                 </td>
               </tr>
@@ -439,14 +383,14 @@ function RfqItems({
 
 function EditRfqForm({ rfq }: { rfq: OpsRfqSummary }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+    <details className="rounded-md border border-border">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
         <Pencil className="size-4" aria-hidden="true" />
         Edit RFQ details
       </summary>
       <form
         action={updateRfqAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-3 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 lg:grid-cols-6"
       >
         <input name="rfq_id" type="hidden" value={rfq.id} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
@@ -489,14 +433,14 @@ function AddRfqItemForm({
   supplierOptions: RfqSupplierOption[];
 }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+    <details className="rounded-md border border-border">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
         <PackagePlus className="size-4" aria-hidden="true" />
         Add item
       </summary>
       <form
         action={addRfqItemAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
       >
         <input name="rfq_id" type="hidden" value={rfqId} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -559,14 +503,14 @@ function AddRfqItemForm({
 
 function ImportRfqItemsForm({ rfqId }: { rfqId: string }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+    <details className="rounded-md border border-border">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
         <FilePlus2 className="size-4" aria-hidden="true" />
         Import items (CSV / Excel / PDF)
       </summary>
-      <form action={importRfqItemsAction} className="grid gap-3 border-t border-primary-dark/10 p-3">
+      <form action={importRfqItemsAction} className="grid gap-3 border-t border-border p-3">
         <input name="rfq_id" type="hidden" value={rfqId} />
-        <p className="text-xs leading-5 text-primary-dark/55">
+        <p className="text-xs leading-5 text-muted-foreground">
           Upload a supplier price list or requisition. Recognised columns: item / description,
           unit, quantity, estimate, actual price, and supplier (code or name — unmatched names are
           kept as a typed supplier). The first row must be the header.
@@ -646,13 +590,13 @@ function PurchaseOrderActions({
         ) : null}
       </div>
       {canEdit ? (
-        <details className="rounded-md border border-primary-dark/10">
-          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-primary-dark/65">
+        <details className="rounded-md border border-border">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-muted-foreground">
             Edit purchase order
           </summary>
           <form
             action={updatePurchaseOrderAction}
-            className="space-y-3 border-t border-primary-dark/10 p-3"
+            className="space-y-3 border-t border-border p-3"
           >
             <input name="purchase_order_id" type="hidden" value={purchaseOrder.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -847,11 +791,11 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               { label: "Draft POs", value: stats.draftPurchaseOrders },
             ].map((item) => (
               <div
-                className="flex items-center justify-between gap-3 rounded-md border border-primary-dark/10 px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2"
                 key={item.label}
               >
-                <span className="text-sm font-bold text-primary-dark">{item.label}</span>
-                <span className="font-heading text-lg font-bold text-primary-dark">
+                <span className="text-sm font-bold text-foreground">{item.label}</span>
+                <span className="font-heading text-lg font-bold text-foreground">
                   {item.value.toLocaleString("en-ZM")}
                 </span>
               </div>
@@ -867,10 +811,10 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
               <FilePlus2 className="size-5" aria-hidden="true" />
             </span>
             <div>
-              <h2 className="font-heading text-lg font-bold text-primary-dark">
+              <h2 className="font-heading text-lg font-bold text-foreground">
                 Procure an approved material request
               </h2>
-              <p className="mt-1 text-sm text-primary-dark/60">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Pick a finance-approved request — its site, every line item, and its
                 prices are pulled in automatically. Then nominate a supplier per line
                 and convert it into purchase orders. The request closes on conversion.
@@ -910,20 +854,20 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
 
       {canCreate ? (
         <details
-          className="rounded-lg border border-primary-dark/10 bg-white"
+          className="rounded-lg border border-border bg-card"
           id="rfq-create-panel"
           open={openCreatePanel}
         >
-          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-primary-dark/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
             <span className="flex min-w-0 items-center gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
                 <FilePlus2 className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0">
-                <span className="block font-heading text-lg font-bold text-primary-dark">
+                <span className="block font-heading text-lg font-bold text-foreground">
                   Create requisition
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Site, approved request link, deadline, and one or more line items with a supplier each.
                 </span>
               </span>
@@ -931,15 +875,15 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
             <Plus className="size-5 shrink-0 text-primary-blue" aria-hidden="true" />
           </summary>
           {siteOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one active site before creating RFQs.
               </div>
             </div>
           ) : (
             <form
               action={createRfqAction}
-              className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
               <OpsScopeSitePicker
                 defaultSiteId={
@@ -972,7 +916,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                 <input className={OPS_INPUT_CLASS} name="description" />
               </label>
               <div className="lg:col-span-6">
-                <p className="mb-2 text-sm font-semibold text-primary-dark">Line items</p>
+                <p className="mb-2 text-sm font-semibold text-foreground">Line items</p>
                 <OpsLineItemsEditor
                   firstItemDefaults={{
                     estimated_unit_cost: prefillUnitCost || undefined,
@@ -1002,8 +946,8 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
         title="RFQ register"
       >
         <div className="-mx-5 -mb-5">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
-            <p className="text-sm text-primary-dark/60">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
+            <p className="text-sm text-muted-foreground">
               {rfqPage.pagination.total} matching RFQ records.
             </p>
           </div>
@@ -1033,7 +977,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
         />
 
         {rfqs.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {rfqs.map((rfq) => {
               const canAddItem = canAddOpsRfqItem(auth.profile.role, rfq);
               const canCancel = canCancelOpsRfq(auth.profile.role, rfq);
@@ -1049,19 +993,17 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {rfq.rfq_number}
                         </h3>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            rfq.status,
-                          )}`}
+                          className={opsStatusBadgeClass(rfq.status)}
                         >
                           {formatLabel(rfq.status)}
                         </span>
                       </div>
-                      <p className="mt-2 font-bold text-primary-dark">{rfq.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-2 font-bold text-foreground">{rfq.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
                         {rfq.scope === "general"
                           ? "General / Office"
                           : rfq.site
@@ -1070,13 +1012,13 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                         / due {formatDate(rfq.due_date)}
                       </p>
                       {rfq.material_request ? (
-                        <p className="mt-1 text-sm text-primary-dark/55">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           Material request: {rfq.material_request.request_number} -{" "}
                           {rfq.material_request.title}
                         </p>
                       ) : null}
                       {rfq.description ? (
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/60">
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                           {rfq.description}
                         </p>
                       ) : null}
@@ -1123,41 +1065,41 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                   </div>
 
                   <dl className="mt-4 grid gap-3 md:grid-cols-5">
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Items
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">{rfq.items.length}</dd>
+                      <dd className="mt-1 font-bold text-foreground">{rfq.items.length}</dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Estimate
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {formatZmw(rfq.estimated_total)}
                       </dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Suppliers set
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {nominatedSuppliers} / {rfq.items.length}
                       </dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Actual total
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {rfqActualTotal > 0 ? formatZmw(rfqActualTotal) : "Not priced"}
                       </dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Created
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {formatDateTime(rfq.created_at)}
                       </dd>
                     </div>
@@ -1182,36 +1124,34 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                     <section className="mt-5">
                       <div className="mb-3 flex items-center gap-2">
                         <ClipboardList className="size-4 text-primary-blue" aria-hidden="true" />
-                        <h4 className="font-heading text-base font-bold text-primary-dark">
+                        <h4 className="font-heading text-base font-bold text-foreground">
                           Purchase orders
                         </h4>
                       </div>
                       <ul className="grid gap-3 md:grid-cols-2">
                         {rfq.purchase_orders.map((po) => (
-                          <li className="rounded-md border border-primary-dark/10 p-3" key={po.id}>
+                          <li className="rounded-md border border-border p-3" key={po.id}>
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-bold text-primary-dark">{po.po_number}</p>
+                              <p className="font-bold text-foreground">{po.po_number}</p>
                               <span
-                                className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${poStatusClass(
-                                  po.status,
-                                )}`}
+                                className={opsStatusBadgeClass(po.status)}
                               >
                                 {formatLabel(po.status)}
                               </span>
                             </div>
-                            <p className="mt-2 text-sm leading-6 text-primary-dark/65">
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
                               {po.title}
                             </p>
-                            <p className="mt-2 font-heading text-xl font-bold text-primary-dark">
+                            <p className="mt-2 font-heading text-xl font-bold text-foreground">
                               {formatZmw(po.total_amount)}
                             </p>
                             {po.approved_at ? (
-                              <p className="mt-1 text-xs text-primary-dark/45">
+                              <p className="mt-1 text-xs text-muted-foreground">
                                 Approved {formatDateTime(po.approved_at)}
                               </p>
                             ) : null}
                             {po.issued_at ? (
-                              <p className="mt-1 text-xs text-primary-dark/45">
+                              <p className="mt-1 text-xs text-muted-foreground">
                                 Issued {formatDateTime(po.issued_at)}
                               </p>
                             ) : null}
@@ -1246,10 +1186,10 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
             <ShoppingCart className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 {hasActiveListFilter ? "No matching RFQs" : "No RFQs yet"}
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 {hasActiveListFilter
                   ? "Adjust the search or status filter to widen the requisition register."
                   : "Create the first RFQ after the supplier register has active suppliers."}

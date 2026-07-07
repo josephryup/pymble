@@ -52,11 +52,14 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 import type {
   OpsDailySiteReportEntryType,
   OpsDailySiteReportStatus,
 } from "@/lib/ops/types";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -128,53 +131,10 @@ function dailyReportNotice(params: OpsSearchParams) {
   return null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 function formatNumber(value: number) {
   return value.toLocaleString("en-ZM", {
     maximumFractionDigits: 2,
   });
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function statusClass(status: OpsDailySiteReportStatus) {
-  if (status === "closed" || status === "reviewed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "submitted") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
 }
 
 function entryTypeClass(entryType: OpsDailySiteReportEntryType) {
@@ -186,16 +146,16 @@ function entryTypeClass(entryType: OpsDailySiteReportEntryType) {
     return "border-violet-200 bg-violet-50 text-violet-700";
   }
 
-  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/60";
+  return "border-border bg-muted/40 text-muted-foreground";
 }
 
 function ReportMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-bold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -203,7 +163,7 @@ function ReportMetric({ label, value }: { label: string; value: string }) {
 function EntryList({ entries }: { entries: OpsDailySiteReportEntry[] }) {
   if (entries.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
         No structured entries added yet.
       </p>
     );
@@ -212,7 +172,7 @@ function EntryList({ entries }: { entries: OpsDailySiteReportEntry[] }) {
   return (
     <div className="grid gap-3">
       {entries.map((entry) => (
-        <div className="rounded-md border border-primary-dark/10 p-3" key={entry.id}>
+        <div className="rounded-md border border-border p-3" key={entry.id}>
           <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
             <div>
               <span
@@ -222,19 +182,19 @@ function EntryList({ entries }: { entries: OpsDailySiteReportEntry[] }) {
               >
                 {formatLabel(entry.entry_type)}
               </span>
-              <p className="mt-2 font-bold text-primary-dark">{entry.title}</p>
+              <p className="mt-2 font-bold text-foreground">{entry.title}</p>
             </div>
             <div className="grid gap-2 text-sm min-[520px]:grid-cols-2">
-              <span className="font-semibold text-primary-dark/65">
+              <span className="font-semibold text-muted-foreground">
                 Qty {formatNumber(entry.quantity)} {entry.unit}
               </span>
-              <span className="font-semibold text-primary-dark/65">
+              <span className="font-semibold text-muted-foreground">
                 Hours {formatNumber(entry.hours)}
               </span>
             </div>
           </div>
           {entry.notes ? (
-            <p className="mt-2 text-sm leading-6 text-primary-dark/60">{entry.notes}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{entry.notes}</p>
           ) : null}
         </div>
       ))}
@@ -244,21 +204,21 @@ function EntryList({ entries }: { entries: OpsDailySiteReportEntry[] }) {
 
 function AddEntryForm({ reportId }: { reportId: string }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
+    <details className="rounded-md border border-border">
       <summary
-        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
       >
         <span className="inline-flex items-center gap-2">
           <Plus className="size-4" aria-hidden="true" />
           Add report entry
         </span>
-        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
           Open
         </span>
       </summary>
       <form
         action={addDailySiteReportEntryAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
       >
         <input name="report_id" type="hidden" value={reportId} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -445,11 +405,11 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
         </OpsDashboardPanel>
 
         <OpsDashboardPanel eyebrow="Progress signal" title="Average visible progress">
-          <div className="rounded-md border border-primary-dark/10 p-4">
-            <p className="font-heading text-3xl font-bold text-primary-dark">
+          <div className="rounded-md border border-border p-4">
+            <p className="font-heading text-3xl font-bold text-foreground">
               {formatNumber(averageProgress)}%
             </p>
-            <p className="mt-2 text-sm leading-6 text-primary-dark/60">
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Average of progress percentages in the current filtered report list.
             </p>
           </div>
@@ -458,7 +418,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
 
       {canCreate ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="daily-report-create-panel"
           open={openCreatePanel}
         >
@@ -469,27 +429,27 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
               <HardHat className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create daily site report
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Capture the day summary, counts, risks, and operational notes before adding line entries.
               </span>
             </span>
-            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           {siteOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one active site before creating daily site reports.
               </div>
             </div>
           ) : (
             <OpsOfflineForm
               action={createDailySiteReportAction}
-              className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
               kind="daily_site_report.create"
               replayEndpoint="/api/ops/offline/daily-site-reports"
               summary="Daily site report"
@@ -596,18 +556,18 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
       ) : null}
 
       <section
-        className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+        className="scroll-mt-24 rounded-lg border border-border bg-card"
         id="daily-report-register"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Report register
             </p>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Daily field records
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               {reportPage.pagination.total} matching reports filtered by status and search.
             </p>
           </div>
@@ -629,7 +589,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
         />
 
         {reports.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {reports.map((report) => {
               const canEdit = canEditOpsDailySiteReport(auth.profile.id, auth.profile.role, report);
               const canSubmit = canSubmitOpsDailySiteReport(
@@ -645,30 +605,28 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {report.report_number}
                         </h3>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            report.status,
-                          )}`}
+                          className={opsStatusBadgeClass(report.status)}
                         >
                           {formatLabel(report.status)}
                         </span>
                       </div>
-                      <p className="mt-2 font-bold text-primary-dark">
+                      <p className="mt-2 font-bold text-foreground">
                         {report.site
                           ? `${report.site.code} - ${report.site.name}`
                           : "Site unavailable"}
                       </p>
-                      <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
                         {formatDate(report.report_date)} / prepared by{" "}
                         {formatOpsUserName(
                           report.prepared_by_user?.full_name,
                           report.prepared_by_user?.id,
                         )}
                       </p>
-                      <p className="mt-2 max-w-4xl text-sm leading-6 text-primary-dark/60">
+                      <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">
                         {report.progress_summary}
                       </p>
                     </div>
@@ -741,11 +699,11 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
                       ["Commercial notes", report.commercial_notes || "No commercial notes"],
                       ["Reviewed", formatDateTime(report.reviewed_at)],
                     ].map(([label, value]) => (
-                      <div className="rounded-md border border-primary-dark/10 px-3 py-2" key={label}>
-                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <div className="rounded-md border border-border px-3 py-2" key={label}>
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           {label}
                         </p>
-                        <p className="mt-1 text-sm leading-6 text-primary-dark/65">{value}</p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">{value}</p>
                       </div>
                     ))}
                   </div>

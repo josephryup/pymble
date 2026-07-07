@@ -22,6 +22,9 @@ import {
   OPS_TR_CLASS,
   type OpsSearchParams,
 } from "@/lib/ops/ui";
+import { formatOpsDate } from "@/lib/ops/format";
+
+const formatDate = (value: string | null | undefined) => formatOpsDate(value, "—");
 
 export const dynamic = "force-dynamic";
 
@@ -35,16 +38,6 @@ const SOURCE_OPTIONS = [
   { value: "payment_requests", label: "Payment requests" },
   { value: "payroll_runs", label: "Payroll" },
 ];
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "—";
-  }
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value.slice(0, 10)}T00:00:00+02:00`));
-}
 
 function formatEvent(value: string | null) {
   return value ? value.replace(/_/g, " ") : "manual";

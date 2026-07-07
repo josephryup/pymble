@@ -18,6 +18,7 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_ERROR_CLASS,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
@@ -62,11 +63,11 @@ export default async function OpsItPolicyDetailPage({ params, searchParams }: Pa
       />
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">{error}</div>
+        <div className={OPS_NOTICE_ERROR_CLASS} role="alert">{error}</div>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${policy.status === "published" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : policy.status === "draft" ? "border-sky-200 bg-sky-50 text-sky-700" : "border-primary-dark/15 bg-primary-dark/[0.04] text-primary-dark/65"}`}>
+        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${policy.status === "published" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : policy.status === "draft" ? "border-sky-200 bg-sky-50 text-sky-700" : "border-border bg-muted/40 text-muted-foreground"}`}>
           {policy.status}
         </span>
         {policy.acknowledged_by_me ? (
@@ -76,7 +77,7 @@ export default async function OpsItPolicyDetailPage({ params, searchParams }: Pa
         ) : null}
       </div>
 
-      <article className="whitespace-pre-wrap rounded-2xl border border-primary-dark/10 bg-white p-5 text-sm text-primary-dark/80">
+      <article className="whitespace-pre-wrap rounded-lg border border-border bg-card p-5 text-sm text-foreground/80">
         {policy.body || "No policy text yet."}
       </article>
 

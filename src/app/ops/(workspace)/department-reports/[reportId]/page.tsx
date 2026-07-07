@@ -39,6 +39,8 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_ERROR_CLASS,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
@@ -179,48 +181,48 @@ export default async function OpsDepartmentReportDetailPage({
 
       {errorMessage ? (
         <div
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+          className={OPS_NOTICE_ERROR_CLASS}
           role="alert"
         >
           {errorMessage}
         </div>
       ) : null}
       {updated ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+        <div className={OPS_NOTICE_SUCCESS_CLASS}>
           Report {updated.replace("_", " ")}.
         </div>
       ) : null}
 
       {hasSections ? (
-        <section className="space-y-4 rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
+        <section className="space-y-4 rounded-lg border border-border bg-card p-6 shadow-sm">
           {sectionEntries
             .filter((entry) => entry.value.trim() !== "")
             .map((entry) => (
               <div key={entry.key}>
-                <h2 className="font-heading text-base font-bold text-primary-dark">
+                <h2 className="font-heading text-base font-bold text-foreground">
                   {entry.label}
                 </h2>
-                <pre className="mt-1 whitespace-pre-wrap font-sans text-sm leading-6 text-primary-dark/80">
+                <pre className="mt-1 whitespace-pre-wrap font-sans text-sm leading-6 text-foreground/80">
                   {entry.value}
                 </pre>
               </div>
             ))}
         </section>
       ) : (
-        <section className="rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
-          <h2 className="font-heading text-lg font-bold text-primary-dark">Narrative</h2>
-          <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-primary-dark/80">
+        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+          <h2 className="font-heading text-lg font-bold text-foreground">Narrative</h2>
+          <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-foreground/80">
             {report.narrative || "(no narrative provided)"}
           </pre>
         </section>
       )}
 
       {Object.keys(report.metrics).length > 0 ? (
-        <section className="rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
+        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-heading text-lg font-bold text-primary-dark">Key figures</h2>
+            <h2 className="font-heading text-lg font-bold text-foreground">Key figures</h2>
             {previousReport ? (
-              <p className="text-xs text-primary-dark/50">
+              <p className="text-xs text-muted-foreground">
                 Compared with{" "}
                 <Link
                   className="font-semibold text-primary-blue hover:underline"
@@ -245,20 +247,20 @@ export default async function OpsDepartmentReportDetailPage({
                 (templateField?.downIsGood ? change.delta < 0 : change.delta > 0);
               return (
                 <div
-                  className="rounded-xl border border-primary-dark/10 bg-primary-dark/[0.02] p-3"
+                  className="rounded-xl border border-border bg-muted/40 p-3"
                   key={key}
                 >
-                  <dt className="text-xs font-semibold uppercase tracking-[0.1em] text-primary-dark/50">
+                  <dt className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                     {templateField?.label ?? prettifyMetricKey(key)}
                   </dt>
-                  <dd className="mt-1 font-heading text-xl font-bold text-primary-dark">
+                  <dd className="mt-1 font-heading text-xl font-bold text-foreground">
                     {formatMetricValue(value)}
                   </dd>
                   {change ? (
                     <p
                       className={`mt-1 text-xs font-semibold ${
                         change.delta === 0
-                          ? "text-primary-dark/50"
+                          ? "text-muted-foreground"
                           : improving
                             ? "text-emerald-700"
                             : "text-red-700"
@@ -278,17 +280,17 @@ export default async function OpsDepartmentReportDetailPage({
       ) : null}
 
       {report.reviewer ? (
-        <section className="rounded-2xl border border-primary-dark/10 bg-white p-6 shadow-sm">
-          <h2 className="font-heading text-lg font-bold text-primary-dark">
+        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+          <h2 className="font-heading text-lg font-bold text-foreground">
             Leadership review
           </h2>
-          <p className="mt-2 text-sm text-primary-dark/70">
+          <p className="mt-2 text-sm text-foreground/70">
             {report.reviewer.full_name} marked the report{" "}
             <strong>{report.status.replace("_", " ")}</strong> on{" "}
             {report.reviewed_at?.slice(0, 10)}.
           </p>
           {report.review_notes ? (
-            <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-primary-dark/75">
+            <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-foreground/75">
               {report.review_notes}
             </pre>
           ) : null}
@@ -298,10 +300,10 @@ export default async function OpsDepartmentReportDetailPage({
       {canSubmit ? (
         <form
           action={submitDepartmentReportAction}
-          className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm"
+          className="rounded-lg border border-border bg-card p-4 shadow-sm"
         >
           <input name="id" type="hidden" value={report.id} />
-          <p className="text-sm text-primary-dark/70">
+          <p className="text-sm text-foreground/70">
             Submit this report so the Managing Director and General Manager can review it.
           </p>
           <button className={`${OPS_PRIMARY_BUTTON_CLASS} mt-3`} type="submit">
@@ -314,10 +316,10 @@ export default async function OpsDepartmentReportDetailPage({
       {canReview ? (
         <form
           action={reviewDepartmentReportAction}
-          className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm"
+          className="rounded-lg border border-border bg-card p-4 shadow-sm"
         >
           <input name="id" type="hidden" value={report.id} />
-          <h2 className="font-heading text-base font-bold text-primary-dark">
+          <h2 className="font-heading text-base font-bold text-foreground">
             Leadership decision
           </h2>
           <label className={`${OPS_LABEL_CLASS} mt-3 block`}>
@@ -353,13 +355,13 @@ export default async function OpsDepartmentReportDetailPage({
       ) : null}
 
       {canEdit ? (
-        <details className="rounded-2xl border border-primary-dark/10 bg-white">
-          <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-primary-dark">
+        <details className="rounded-lg border border-border bg-card">
+          <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-foreground">
             Edit this report
           </summary>
           <form
             action={updateDepartmentReportAction}
-            className="space-y-4 border-t border-primary-dark/10 p-5"
+            className="space-y-4 border-t border-border p-5"
           >
             <input name="id" type="hidden" value={report.id} />
             <input name="department" type="hidden" value={report.department} />
@@ -420,7 +422,7 @@ export default async function OpsDepartmentReportDetailPage({
               </label>
             ) : null}
             <fieldset className="space-y-4">
-              <legend className="text-sm font-bold text-primary-dark">Report sections</legend>
+              <legend className="text-sm font-bold text-foreground">Report sections</legend>
               {reportSectionsFor(report.department, report.scope).map((section) => (
                 <label className={OPS_LABEL_CLASS} key={section.key}>
                   {section.label}
@@ -438,7 +440,7 @@ export default async function OpsDepartmentReportDetailPage({
             {report.scope === "compiled" ? (
               <>
                 <fieldset>
-                  <legend className="text-sm font-bold text-primary-dark">Key figures</legend>
+                  <legend className="text-sm font-bold text-foreground">Key figures</legend>
                   <div className="mt-3 grid gap-4 md:grid-cols-2">
                     {OPS_DEPARTMENT_REPORT_TEMPLATES[report.department].metrics.map((metric) => {
                       const current = report.metrics[metric.key];
@@ -492,10 +494,10 @@ export default async function OpsDepartmentReportDetailPage({
       {canEdit && canArchive ? (
         <form
           action={archiveDepartmentReportAction}
-          className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm"
+          className="rounded-lg border border-border bg-card p-4 shadow-sm"
         >
           <input name="id" type="hidden" value={report.id} />
-          <p className="text-sm text-primary-dark/70">
+          <p className="text-sm text-foreground/70">
             Archiving removes this report from the active list. It stays available to leadership
             in the archive.
           </p>

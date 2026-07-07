@@ -23,8 +23,12 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_SUCCESS_CLASS,
+  OPS_NOTICE_ERROR_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 import type { OpsNotificationStatus } from "@/lib/ops/types";
+import { formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -55,31 +59,12 @@ function parseNotificationStatus(value: string | undefined): OpsNotificationStat
     : "unread";
 }
 
-function statusClass(status: OpsNotificationStatus) {
-  if (status === "archived") {
-    return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/58";
-  }
-
-  if (status === "read") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
 function formatModule(moduleKey: string) {
   return moduleKey.replace(/_/g, " ");
 }
 
 function formatStatus(status: string) {
   return status.replace(/_/g, " ");
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 function safeActionHref(value: string | null) {
@@ -117,16 +102,16 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
   return (
     <div className="w-full max-w-none space-y-6">
       <OpsRealtimeRefresh tables={["notifications"]} />
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 md:p-7">
+      <section className="rounded-lg border border-border bg-card p-5 md:p-7">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
               Workflow Alerts
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Notifications
             </h1>
-            <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+            <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
               Review workflow alerts assigned to you, open the related record, and keep old alerts
               archived without losing the history.
             </p>
@@ -136,16 +121,16 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
               const Icon = option.icon;
               return (
                 <div
-                  className="rounded-md border border-primary-dark/10 px-4 py-3"
+                  className="rounded-md border border-border px-4 py-3"
                   key={option.status}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                       {option.label}
                     </p>
                     <Icon className="size-4 text-primary-blue" aria-hidden={true} />
                   </div>
-                  <p className="mt-1 font-heading text-2xl font-bold text-primary-dark">
+                  <p className="mt-1 font-heading text-2xl font-bold text-foreground">
                     {counts[option.status]}
                   </p>
                 </div>
@@ -157,7 +142,7 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
 
       {error ? (
         <div
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+          className={OPS_NOTICE_ERROR_CLASS}
           role="alert"
         >
           {error}
@@ -166,20 +151,20 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
 
       {successMessage ? (
         <div
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
+          className={OPS_NOTICE_SUCCESS_CLASS}
           role="status"
         >
           {successMessage}
         </div>
       ) : null}
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white">
-        <div className="flex flex-col gap-4 border-b border-primary-dark/10 p-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="rounded-lg border border-border bg-card">
+        <div className="flex flex-col gap-4 border-b border-border p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               {STATUS_OPTIONS.find((option) => option.status === status)?.label} alerts
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               Notifications are stored per staff account and remain traceable after they are read.
             </p>
           </div>
@@ -202,7 +187,7 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
                   className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-bold transition ${
                     isActive
                       ? "border-primary-blue bg-primary-blue text-white"
-                      : "border-primary-dark/10 text-primary-dark hover:border-primary-blue hover:text-primary-blue"
+                      : "border-border text-foreground hover:border-primary-blue hover:text-primary-blue"
                   } ${OPS_FOCUS_CLASS}`}
                   href={`/ops/notifications?status=${option.status}`}
                   key={option.status}
@@ -212,8 +197,8 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
                   <span
                     className={`inline-flex min-w-6 justify-center rounded-full px-2 py-0.5 text-[11px] font-black ${
                       isActive
-                        ? "bg-white text-primary-blue"
-                        : "bg-primary-dark/[0.06] text-primary-dark"
+                        ? "bg-card text-primary-blue"
+                        : "bg-muted/40 text-foreground"
                     }`}
                   >
                     {counts[option.status]}
@@ -225,7 +210,7 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
         </div>
 
         {notifications.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {notifications.map((notification) => {
               const actionHref = safeActionHref(notification.action_href);
               return (
@@ -237,23 +222,21 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
                       </div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-heading text-lg font-bold text-primary-dark">
+                          <h3 className="font-heading text-lg font-bold text-foreground">
                             {notification.title}
                           </h3>
                           <span
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                              notification.status,
-                            )}`}
+                            className={opsStatusBadgeClass(notification.status)}
                           >
                             {formatStatus(notification.status)}
                           </span>
                         </div>
                         {notification.body ? (
-                          <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/64">
+                          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                             {notification.body}
                           </p>
                         ) : null}
-                        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                           {formatModule(notification.module_key)} /{" "}
                           {formatDateTime(notification.created_at)}
                         </p>
@@ -313,10 +296,10 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
           <div className="flex min-h-72 flex-col items-center justify-center gap-3 p-8 text-center">
             <CheckCircle2 className="size-10 text-emerald-600" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 No {status} notifications
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 Workflow alerts from approvals, documents, and future ERP modules will appear here
                 when they are assigned to you.
               </p>

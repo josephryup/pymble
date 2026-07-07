@@ -94,8 +94,6 @@ import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import type {
-  OpsAccommodationBookingStatus,
-  OpsLabourAllocationStatus,
   OpsPriority,
   OpsTransportRequestStatus,
   OpsTransportRequestType,
@@ -112,7 +110,12 @@ import {
   OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   type OpsSearchParams,
+  opsStatusBadgeClass,
+  type OpsStatusTone,
 } from "@/lib/ops/ui";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime } from "@/lib/ops/format";
+
+const formatDateTime = (value: string | null | undefined) => formatOpsDateTime(value, "Not scheduled");
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -208,48 +211,12 @@ function fleetLogisticsNotice(params: OpsSearchParams) {
     : null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value.slice(0, 10)}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not scheduled";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(value));
-}
-
 function formatDateTimeInputValue(value: string | null, fallbackDate: string) {
   if (value) {
     return value.slice(0, 16);
   }
 
   return `${fallbackDate.slice(0, 10)}T08:00`;
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
 }
 
 function formatSignedPercent(value: number | null) {
@@ -292,75 +259,17 @@ function formatOperatorLabel(request: OpsTransportRequestSummary) {
   return "Unassigned";
 }
 
-function transportStatusClass(status: OpsTransportRequestStatus) {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled" || status === "rejected") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "approved" || status === "scheduled") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function accommodationStatusClass(status: OpsAccommodationBookingStatus) {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "confirmed" || status === "checked_in") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function labourStatusClass(status: OpsLabourAllocationStatus) {
-  if (status === "completed") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "active") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function StatusBadge({
-  className,
-  value,
-}: {
-  className: string;
-  value: string;
-}) {
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${className}`}>
-      {formatLabel(value)}
-    </span>
-  );
+function StatusBadge({ value, tone }: { value: string; tone?: OpsStatusTone }) {
+  return <span className={opsStatusBadgeClass(value, tone)}>{formatLabel(value)}</span>;
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-primary-dark/40">
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 text-sm font-semibold text-primary-dark">{value}</p>
+      <p className="mt-1 text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -375,38 +284,6 @@ function planningBucketLabel(bucket: OpsFleetPlanningBucket) {
   };
 
   return labels[bucket];
-}
-
-function planningBucketClass(bucket: OpsFleetPlanningBucket) {
-  if (bucket === "overdue") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (bucket === "due_today" || bucket === "next_7_days") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (bucket === "scheduled") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58";
-}
-
-function operatorExpiryClass(bucket: OpsFleetOperatorDocumentRow["bucket"]) {
-  if (bucket === "expired") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (bucket === "due_soon") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (bucket === "valid") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58";
 }
 
 function operatorExpiryLabel(row: OpsFleetOperatorDocumentRow) {
@@ -442,20 +319,20 @@ function FleetProfitabilityRowList({
 }) {
   if (rows.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
         {emptyLabel}
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+    <ul className="divide-y divide-border rounded-md border border-border">
       {rows.map((row) => (
         <li className="px-3 py-3" key={row.id}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-bold text-primary-dark">{row.name}</p>
-              <p className="mt-1 text-xs text-primary-dark/50">{row.reference}</p>
+              <p className="font-bold text-foreground">{row.name}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{row.reference}</p>
             </div>
             <div className="text-left min-[640px]:text-right">
               <p
@@ -465,7 +342,7 @@ function FleetProfitabilityRowList({
               >
                 {formatSignedZmw(row.contribution_amount)}
               </p>
-              <p className="mt-1 text-xs text-primary-dark/45">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {formatSignedPercent(row.contribution_percent)}
               </p>
             </div>
@@ -504,21 +381,17 @@ function FleetDispatchCalendarPanel({
                 className={`rounded-md border px-3 py-3 ${
                   day.transports > 0
                     ? "border-primary-blue/20 bg-primary-blue/[0.04]"
-                    : "border-primary-dark/10 bg-primary-dark/[0.015]"
+                    : "border-border bg-muted/40"
                 }`}
                 key={day.date}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-bold text-primary-dark">{day.label}</p>
-                    <p className="mt-1 text-xs text-primary-dark/45">{formatDate(day.date)}</p>
+                    <p className="font-bold text-foreground">{day.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{formatDate(day.date)}</p>
                   </div>
                   <StatusBadge
-                    className={
-                      day.unassigned_transports > 0
-                        ? "border-orange-200 bg-orange-50 text-orange-700"
-                        : "border-primary-dark/10 bg-white text-primary-dark/58"
-                    }
+                    tone={day.unassigned_transports > 0 ? "attention" : "neutral"}
                     value={`${day.transports} trips`}
                   />
                 </div>
@@ -532,9 +405,9 @@ function FleetDispatchCalendarPanel({
             ))}
           </div>
         ) : (
-          <div className="rounded-md border border-primary-dark/10 px-3 py-4 text-center">
-            <CalendarDays className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-            <p className="mt-2 text-sm font-semibold text-primary-dark/60">
+          <div className="rounded-md border border-border px-3 py-4 text-center">
+            <CalendarDays className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+            <p className="mt-2 text-sm font-semibold text-muted-foreground">
               No approved or scheduled transport in the next 14 days.
             </p>
           </div>
@@ -560,14 +433,14 @@ function FleetUsageVariancePanel({
 
       <div className="mt-4">
         {report.variance.rows.length > 0 ? (
-          <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+          <ul className="divide-y divide-border rounded-md border border-border">
             {report.variance.rows.map((row) => (
               <li className="px-3 py-3" key={row.request_number}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-bold text-primary-dark">{row.request_number}</p>
-                    <p className="mt-1 text-sm font-semibold text-primary-dark">{row.title}</p>
-                    <p className="mt-1 text-xs text-primary-dark/50">
+                    <p className="font-bold text-foreground">{row.request_number}</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{row.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {row.route} / {formatDate(row.scheduled_date)}
                     </p>
                   </div>
@@ -579,7 +452,7 @@ function FleetUsageVariancePanel({
                     >
                       {formatSignedZmw(row.variance_amount)}
                     </p>
-                    <p className="mt-1 text-xs text-primary-dark/45">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {formatSignedPercent(row.variance_percent)}
                     </p>
                   </div>
@@ -588,9 +461,9 @@ function FleetUsageVariancePanel({
             ))}
           </ul>
         ) : (
-          <div className="rounded-md border border-primary-dark/10 px-3 py-4 text-center">
-            <Gauge className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-            <p className="mt-2 text-sm font-semibold text-primary-dark/60">
+          <div className="rounded-md border border-border px-3 py-4 text-center">
+            <Gauge className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+            <p className="mt-2 text-sm font-semibold text-muted-foreground">
               No completed transport costs are available for variance reporting.
             </p>
           </div>
@@ -615,30 +488,27 @@ function FleetTripPlanningPanel({
 
       <div className="mt-4">
         {dashboard.tripRows.length === 0 ? (
-          <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+          <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
             No submitted, approved, or scheduled transport requests need planning.
           </p>
         ) : (
-          <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+          <ul className="divide-y divide-border rounded-md border border-border">
             {dashboard.tripRows.map((trip) => (
               <li className="px-3 py-3" key={trip.request_number}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-bold text-primary-dark">{trip.request_number}</p>
-                      <StatusBadge
-                        className={planningBucketClass(trip.bucket)}
-                        value={planningBucketLabel(trip.bucket)}
-                      />
+                      <p className="font-bold text-foreground">{trip.request_number}</p>
+                      <StatusBadge value={planningBucketLabel(trip.bucket)} />
                     </div>
-                    <p className="mt-1 text-sm font-semibold text-primary-dark">{trip.title}</p>
-                    <p className="mt-1 text-xs text-primary-dark/50">
+                    <p className="mt-1 text-sm font-semibold text-foreground">{trip.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {trip.site_code} - {trip.site_name} / {formatLabel(trip.request_type)}
                     </p>
                   </div>
                   <div className="text-left min-[640px]:text-right">
-                    <p className="font-bold text-primary-dark">{formatDate(trip.requested_for)}</p>
-                    <p className="mt-1 text-xs text-primary-dark/45">
+                    <p className="font-bold text-foreground">{formatDate(trip.requested_for)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {trip.origin || "Origin"}{" -> "}{trip.destination || "Destination"}
                     </p>
                   </div>
@@ -673,23 +543,23 @@ function FleetMobilizationPanel({
 
       <div className="mt-4">
         {dashboard.mobilizationRows.length === 0 ? (
-          <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+          <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
             No active movement, accommodation, or labour demand is currently grouped by site.
           </p>
         ) : (
-          <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+          <ul className="divide-y divide-border rounded-md border border-border">
             {dashboard.mobilizationRows.map((site) => (
               <li className="px-3 py-3" key={site.site_id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-bold text-primary-dark">
+                    <p className="font-bold text-foreground">
                       {site.site_code} - {site.site_name}
                     </p>
-                    <p className="mt-1 text-xs text-primary-dark/50">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       Next movement {formatDate(site.next_mobilization_date)}
                     </p>
                   </div>
-                  <p className="font-bold text-primary-dark">{formatZmw(site.estimated_cost)}</p>
+                  <p className="font-bold text-foreground">{formatZmw(site.estimated_cost)}</p>
                 </div>
                 <dl className="mt-3 grid gap-3 sm:grid-cols-4">
                   <DetailItem label="Transport" value={String(site.open_transports)} />
@@ -730,23 +600,20 @@ function FleetOperatorCompliancePanel({
 
       <div className="mt-4">
         {report.rows.length > 0 ? (
-          <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+          <ul className="divide-y divide-border rounded-md border border-border">
             {report.rows.map((row) => (
               <li className="px-3 py-3" key={row.id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-bold text-primary-dark">
+                    <p className="font-bold text-foreground">
                       {row.operator_reference} - {row.operator_name}
                     </p>
-                    <p className="mt-1 text-sm font-semibold text-primary-dark">{row.title}</p>
-                    <p className="mt-1 text-xs text-primary-dark/50">
+                    <p className="mt-1 text-sm font-semibold text-foreground">{row.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {formatLabel(row.document_type)} / {row.reference_number || "No reference"}
                     </p>
                   </div>
-                  <StatusBadge
-                    className={operatorExpiryClass(row.bucket)}
-                    value={operatorExpiryLabel(row)}
-                  />
+                  <StatusBadge value={operatorExpiryLabel(row)} />
                 </div>
                 <dl className="mt-3 grid gap-3 sm:grid-cols-3">
                   <DetailItem label="Issued" value={formatDate(row.issued_at)} />
@@ -760,9 +627,9 @@ function FleetOperatorCompliancePanel({
             ))}
           </ul>
         ) : (
-          <div className="rounded-md border border-primary-dark/10 px-3 py-4 text-center">
-            <ShieldCheck className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-            <p className="mt-2 text-sm font-semibold text-primary-dark/60">
+          <div className="rounded-md border border-border px-3 py-4 text-center">
+            <ShieldCheck className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+            <p className="mt-2 text-sm font-semibold text-muted-foreground">
               No driver or operator compliance documents have been recorded.
             </p>
           </div>
@@ -799,7 +666,7 @@ function FleetProfitabilityPanel({
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Site pressure
           </p>
           <FleetProfitabilityRowList
@@ -808,7 +675,7 @@ function FleetProfitabilityPanel({
           />
         </div>
         <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Equipment pressure
           </p>
           <FleetProfitabilityRowList
@@ -818,7 +685,7 @@ function FleetProfitabilityPanel({
         </div>
       </div>
 
-      <p className="mt-3 text-xs font-semibold text-primary-dark/45">
+      <p className="mt-3 text-xs font-semibold text-muted-foreground">
         Based on {report.sourceCount.toLocaleString("en-ZM")} completed transport, equipment,
         fuel, and maintenance records.
       </p>
@@ -890,8 +757,8 @@ function TransportActions({
         </InlineActionForm>
       ) : null}
       {canScheduleOpsTransportRequest(role, request) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Schedule dispatch
           </summary>
           <form action={scheduleTransportRequestAction} className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -975,8 +842,8 @@ function TransportActions({
         </details>
       ) : null}
       {canCompleteOpsTransportRequest(role, request) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Complete transport
           </summary>
           <form action={completeTransportRequestAction} className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1064,8 +931,8 @@ function AccommodationActions({
         </InlineActionForm>
       ) : null}
       {canCompleteOpsAccommodationBooking(role, booking) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Complete stay
           </summary>
           <form action={completeAccommodationBookingAction} className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1126,8 +993,8 @@ function LabourActions({
         </InlineActionForm>
       ) : null}
       {canCompleteOpsLabourAllocation(role, allocation) ? (
-        <details className="w-full rounded-md border border-primary-dark/10 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-primary-dark/60">
+        <details className="w-full rounded-md border border-border p-3">
+          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
             Complete labour
           </summary>
           <form action={completeLabourAllocationAction} className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1225,16 +1092,16 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
 
   return (
     <div className="grid gap-6">
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-blue">
               Operations and Fleet
             </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
               Fleet and Logistics
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/62">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
               Coordinate transport requests, staff accommodation, and labour allocation from one
               operational register.
             </p>
@@ -1328,11 +1195,11 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
       </section>
 
       {weeklyActivity.some((point) => point.raised > 0 || point.completed > 0) ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
-          <h2 className="font-heading text-xl font-bold text-primary-dark">
+        <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <h2 className="font-heading text-xl font-bold text-foreground">
             Transport activity — last 8 weeks
           </h2>
-          <p className="mt-1 text-sm text-primary-dark/60">
+          <p className="mt-1 text-sm text-muted-foreground">
             Requests raised per week against trips completed.
           </p>
           <div className="mt-4">
@@ -1365,11 +1232,11 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
       <section className="grid gap-4 lg:grid-cols-4">
         {canCreateTransport ? (
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="transport-create-panel"
             open={openTransportPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create transport request
             </summary>
             {sites.length === 0 ? (
@@ -1459,11 +1326,11 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
 
         {canCreateAccommodation ? (
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="accommodation-create-panel"
             open={openAccommodationPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create accommodation booking
             </summary>
             {sites.length === 0 ? (
@@ -1549,11 +1416,11 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
 
         {canCreateLabour ? (
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="labour-create-panel"
             open={openLabourPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Create labour allocation
             </summary>
             {sites.length === 0 ? (
@@ -1639,11 +1506,11 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
 
         {canManageOperatorDocuments ? (
           <details
-            className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm"
+            className="rounded-lg border border-border bg-card p-5 shadow-sm"
             id="operator-document-create-panel"
             open={openOperatorDocumentPanel}
           >
-            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-primary-dark/58">
+            <summary className="cursor-pointer text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Record driver document
             </summary>
             {employeeOptions.length === 0 && workerOptions.length === 0 ? (
@@ -1721,15 +1588,15 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
         ) : null}
       </section>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="transport-register">
-        <div className="flex flex-col gap-3 border-b border-primary-dark/10 p-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="rounded-lg border border-border bg-card shadow-sm" id="transport-register">
+        <div className="flex flex-col gap-3 border-b border-border p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-bold text-primary-dark">Transport register</h2>
-            <p className="mt-1 text-sm text-primary-dark/56">
+            <h2 className="text-lg font-bold text-foreground">Transport register</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Requests move from draft through approval, scheduling, and completion.
             </p>
           </div>
-          <StatusBadge className="border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/58" value={`${transportRequests.pagination.total} records`} />
+          <StatusBadge value={`${transportRequests.pagination.total} records`} />
         </div>
         <OpsListControls
           action="/ops/fleet-logistics"
@@ -1746,7 +1613,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           resultLabel="transport requests"
         />
         <div className={OPS_TABLE_SCROLL_CLASS} tabIndex={0}>
-          <div className="min-w-[960px] divide-y divide-primary-dark/10">
+          <div className="min-w-[960px] divide-y divide-border">
             {transportRequests.items.length > 0 ? (
               transportRequests.items.map((request) => (
                 <article className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,0.8fr)]" key={request.id}>
@@ -1756,12 +1623,12 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
                         <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                           {request.request_number}
                         </p>
-                        <h3 className="mt-1 text-lg font-bold text-primary-dark">{request.title}</h3>
-                        <p className="mt-1 text-sm text-primary-dark/58">
+                        <h3 className="mt-1 text-lg font-bold text-foreground">{request.title}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
                           {request.site ? `${request.site.code} - ${request.site.name}` : "No site"}
                         </p>
                       </div>
-                      <StatusBadge className={transportStatusClass(request.status)} value={request.status} />
+                      <StatusBadge value={request.status} />
                     </div>
                     <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                       <DetailItem label="Type" value={formatLabel(request.request_type)} />
@@ -1779,14 +1646,14 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
                       />
                     </div>
                     {request.description || request.material_description || request.vehicle_requirement ? (
-                      <p className="mt-4 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-4 text-sm leading-6 text-muted-foreground">
                         {[request.description, request.material_description, request.vehicle_requirement]
                           .filter(Boolean)
                           .join(" ")}
                       </p>
                     ) : null}
                     {request.dispatch_notes ? (
-                      <p className="mt-3 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] px-3 py-2 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm leading-6 text-muted-foreground">
                         {request.dispatch_notes}
                       </p>
                     ) : null}
@@ -1801,7 +1668,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
                       />
                     </div>
                   </div>
-                  <div className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreateTransport}
                       sourceId={request.id}
@@ -1812,11 +1679,11 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
               ))
             ) : (
               <div className="p-8 text-center">
-                <Route className="mx-auto size-10 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 text-lg font-bold text-primary-dark">
+                <Route className="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 text-lg font-bold text-foreground">
                   {hasActiveListFilter ? "No matching transport requests" : "No transport requests yet"}
                 </h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <p className="mt-2 text-sm text-muted-foreground">
                   {hasActiveListFilter
                     ? "Adjust the search or status filter to widen the transport register."
                     : "Create the first request when a site needs vehicle, material, staff, or equipment movement."}
@@ -1842,11 +1709,11 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="accommodation-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="accommodation-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Accommodation logistics</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Accommodation logistics</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Staff and worker stay coordination with cost visibility.
               </p>
             </div>
@@ -1855,18 +1722,18 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           <div className="grid gap-3 p-5">
             {accommodationBookings.length > 0 ? (
               accommodationBookings.map((booking) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={booking.id}>
+                <article className="rounded-lg border border-border p-4" key={booking.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {booking.booking_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{booking.location_name}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{booking.location_name}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {booking.employee?.full_name ?? booking.worker?.full_name ?? `${booking.occupant_count} occupants`}
                       </p>
                     </div>
-                    <StatusBadge className={accommodationStatusClass(booking.status)} value={booking.status} />
+                    <StatusBadge value={booking.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-3">
                     <DetailItem label="Site" value={booking.site?.code ?? "No site"} />
@@ -1874,7 +1741,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
                     <DetailItem label="Estimate" value={formatZmw(booking.estimated_cost)} />
                   </div>
                   <AccommodationActions actorId={auth.profile.id} booking={booking} role={auth.profile.role} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreateAccommodation}
                       sourceId={booking.id}
@@ -1885,9 +1752,9 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
               ))
             ) : (
               <div className="p-6 text-center">
-                <BedDouble className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No accommodation bookings yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <BedDouble className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No accommodation bookings yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Create accommodation when staff or site labour need coordinated stays.
                 </p>
               </div>
@@ -1895,11 +1762,11 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary-dark/10 bg-white shadow-sm" id="labour-panel">
-          <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm" id="labour-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
             <div>
-              <h2 className="text-lg font-bold text-primary-dark">Labour allocation</h2>
-              <p className="mt-1 text-sm text-primary-dark/56">
+              <h2 className="text-lg font-bold text-foreground">Labour allocation</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Assign employees or workers to project sites and track labour cost exposure.
               </p>
             </div>
@@ -1908,18 +1775,18 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           <div className="grid gap-3 p-5">
             {labourAllocations.length > 0 ? (
               labourAllocations.map((allocation) => (
-                <article className="rounded-lg border border-primary-dark/10 p-4" key={allocation.id}>
+                <article className="rounded-lg border border-border p-4" key={allocation.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
                         {allocation.allocation_number}
                       </p>
-                      <h3 className="mt-1 text-base font-bold text-primary-dark">{allocation.role_title}</h3>
-                      <p className="mt-1 text-sm text-primary-dark/58">
+                      <h3 className="mt-1 text-base font-bold text-foreground">{allocation.role_title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {allocation.employee?.full_name ?? allocation.worker?.full_name ?? allocation.trade}
                       </p>
                     </div>
-                    <StatusBadge className={labourStatusClass(allocation.status)} value={allocation.status} />
+                    <StatusBadge value={allocation.status} />
                   </div>
                   <div className="mt-4 grid gap-4 sm:grid-cols-3">
                     <DetailItem label="Site" value={allocation.site?.code ?? "No site"} />
@@ -1932,7 +1799,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
                     <DetailItem label="Daily rate" value={formatZmw(allocation.daily_rate)} />
                   </div>
                   <LabourActions actorId={auth.profile.id} allocation={allocation} role={auth.profile.role} />
-                  <div className="mt-4 rounded-md border border-primary-dark/10 bg-primary-dark/[0.015] p-3">
+                  <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
                     <OpsRecordActivityPanel
                       canManage={canCreateLabour}
                       sourceId={allocation.id}
@@ -1943,9 +1810,9 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
               ))
             ) : (
               <div className="p-6 text-center">
-                <Users className="mx-auto size-9 text-primary-dark/24" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-primary-dark">No labour allocations yet</h3>
-                <p className="mt-2 text-sm text-primary-dark/56">
+                <Users className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
+                <h3 className="mt-3 font-bold text-foreground">No labour allocations yet</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Create allocations when people are assigned to a site or work package.
                 </p>
               </div>
@@ -1954,14 +1821,14 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      <section className="rounded-lg border border-primary-dark/10 bg-white p-5 shadow-sm">
+      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="grid gap-4 md:grid-cols-4">
           <DetailItem label="Request" value="Draft -> submitted -> approved" />
           <DetailItem label="Schedule" value="Approved transport is scheduled" />
           <DetailItem label="Stay" value="Requested -> confirmed -> checked in" />
           <DetailItem label="Cost" value="Committed first, posted at completion" />
         </div>
-        <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-primary-dark/52">
+        <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
           <Clock className="size-4" aria-hidden="true" />
           <span>Completion actions post actual cost to project budgets when a cost value exists.</span>
         </div>

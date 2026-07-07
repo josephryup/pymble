@@ -31,16 +31,16 @@ export default function OpsRootError({
       <div className="max-w-md space-y-4">
         <h1
           id="ops-root-error-title"
-          className="font-heading text-2xl font-bold text-primary-dark"
+          className="font-heading text-2xl font-bold text-foreground"
         >
           We could not load this page
         </h1>
-        <p className="text-sm leading-6 text-primary-dark/65">
+        <p className="text-sm leading-6 text-muted-foreground">
           The error has been logged. Try again — if it keeps happening, contact the Pymble admin
           team and share the reference below.
         </p>
         {error.digest ? (
-          <p className="rounded-md border border-primary-dark/10 bg-primary-dark/[0.02] px-3 py-2 font-mono text-xs text-primary-dark/65">
+          <p className="rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground">
             Reference: {error.digest}
           </p>
         ) : null}

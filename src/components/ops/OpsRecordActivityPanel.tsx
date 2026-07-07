@@ -26,6 +26,7 @@ import {
 } from "@/lib/ops/ui";
 import type { OpsRecordComment } from "@/lib/ops/comments";
 import type { OpsDocumentVersionSummary, OpsLinkedDocument } from "@/lib/ops/documents";
+import { formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type OpsRecordActivityPanelProps = {
   canManage: boolean;
@@ -48,13 +49,6 @@ function formatBytes(bytes: number) {
   }
 
   return `${bytes} B`;
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 function currentVersion(document: OpsLinkedDocument): OpsDocumentVersionSummary | undefined {

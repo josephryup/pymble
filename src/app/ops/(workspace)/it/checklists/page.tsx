@@ -61,11 +61,11 @@ export default async function OpsItChecklistsPage({ searchParams }: PageProps) {
       </section>
 
       {canManage ? (
-        <details className="rounded-lg border border-primary-dark/10 bg-white" id="checklist-create">
-          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-primary-dark [&::-webkit-details-marker]:hidden">
+        <details className="rounded-lg border border-border bg-card" id="checklist-create">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <ListChecks className="size-5 text-primary-blue" aria-hidden="true" /> New checklist
           </summary>
-          <form action={createItChecklistRunAction} className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItChecklistRunAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Employee name<input className={OPS_INPUT_CLASS} name="employee_name" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Type<select className={OPS_INPUT_CLASS} defaultValue="onboarding" name="kind"><option value="onboarding">Onboarding (joining)</option><option value="offboarding">Offboarding (leaving)</option></select></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>Notes<input className={OPS_INPUT_CLASS} name="notes" /></label>
@@ -79,14 +79,14 @@ export default async function OpsItChecklistsPage({ searchParams }: PageProps) {
       ) : (
         <ul className="space-y-3">
           {runs.map((run) => (
-            <li key={run.id} className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm">
+            <li key={run.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">{run.kind === "onboarding" ? "Onboarding" : "Offboarding"}</p>
-                  <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{run.kind === "onboarding" ? "Onboarding" : "Offboarding"}</p>
+                  <h2 className="mt-1 font-heading text-lg font-bold text-foreground">
                     <Link className="hover:underline" href={`/ops/it/checklists/${run.id}`}>{run.employee_name}</Link>
                   </h2>
-                  <p className="mt-1 text-xs text-primary-dark/55">{run.done_count}/{run.item_count} steps done · started {run.created_at.slice(0, 10)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{run.done_count}/{run.item_count} steps done · started {run.created_at.slice(0, 10)}</p>
                 </div>
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${run.status === "completed" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-sky-200 bg-sky-50 text-sky-700"}`}>
                   {run.status === "completed" ? "Completed" : "In progress"}

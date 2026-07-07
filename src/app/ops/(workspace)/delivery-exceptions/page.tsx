@@ -60,12 +60,15 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 import type {
   OpsDeliveryExceptionSeverity,
   OpsDeliveryExceptionStatus,
   OpsDeliveryExceptionType,
 } from "@/lib/ops/types";
+import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -145,73 +148,6 @@ function deliveryExceptionNotice(params: OpsSearchParams) {
     : null;
 }
 
-function todayInLusaka() {
-  return new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Africa/Lusaka",
-    year: "numeric",
-  }).format(new Date());
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function statusClass(status: OpsDeliveryExceptionStatus) {
-  if (status === "closed" || status === "resolved") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "investigating") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function severityClass(severity: OpsDeliveryExceptionSeverity) {
-  if (severity === "critical") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (severity === "high") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (severity === "medium") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
-}
-
 function ageingClass(bucket: OpsDeliveryExceptionAgeingBucket) {
   if (bucket === "overdue" || bucket === "stale_no_due") {
     return "border-red-200 bg-red-50 text-red-700";
@@ -246,30 +182,30 @@ function formatDueSignal(daysUntilDue: number | null) {
 
 function ExceptionMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-bold text-foreground">{value}</dd>
     </div>
   );
 }
 
 function ResolveExceptionForm({ exception }: { exception: OpsDeliveryExceptionSummary }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
+    <details className="rounded-md border border-border">
       <summary
-        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
       >
         <span className="inline-flex items-center gap-2">
           <CheckCircle2 className="size-4" aria-hidden="true" />
           Resolve exception
         </span>
-        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
           Open
         </span>
       </summary>
-      <form action={resolveDeliveryExceptionAction} className="grid gap-3 border-t border-primary-dark/10 p-4">
+      <form action={resolveDeliveryExceptionAction} className="grid gap-3 border-t border-border p-4">
         <input name="exception_id" type="hidden" value={exception.id} />
         <label className={OPS_LABEL_CLASS}>
           Resolution summary
@@ -373,10 +309,10 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             Procurement and stores control
           </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-primary-dark">
+          <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
             Delivery exceptions
           </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-primary-dark/68">
+          <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
             Late deliveries, shortages, damage, rejections, missing documents, supplier follow-up,
             and resolution evidence.
           </p>
@@ -492,32 +428,30 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
                 value={String(followUpDashboard.staleNoDueActionable)}
               />
             </dl>
-            <div className="rounded-md border border-primary-dark/10">
-              <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 px-3 py-2">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <div className="rounded-md border border-border">
+              <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                   Attention queue
                 </p>
                 <CalendarClock className="size-4 text-orange-600" aria-hidden="true" />
               </div>
               {followUpDashboard.ageingAlerts.length > 0 ? (
-                <ul className="divide-y divide-primary-dark/10">
+                <ul className="divide-y divide-border">
                   {followUpDashboard.ageingAlerts.map((alert) => (
                     <li className="px-3 py-3" key={alert.id}>
                       <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-sm font-bold text-primary-dark">
+                            <p className="truncate text-sm font-bold text-foreground">
                               {alert.exception_number} - {alert.title}
                             </p>
                             <span
-                              className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.1em] ${severityClass(
-                                alert.severity,
-                              )}`}
+                              className={opsStatusBadgeClass(alert.severity)}
                             >
                               {formatLabel(alert.severity)}
                             </span>
                           </div>
-                          <p className="mt-1 text-xs leading-5 text-primary-dark/58">
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
                             {alert.supplier
                               ? `${alert.supplier.supplier_code} / ${alert.supplier.legal_name}`
                               : "Supplier unavailable"}
@@ -527,7 +461,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
                           <p className="text-xs font-bold text-orange-700">
                             {formatDueSignal(alert.days_until_due)}
                           </p>
-                          <p className="mt-1 text-xs font-semibold text-primary-dark/55">
+                          <p className="mt-1 text-xs font-semibold text-muted-foreground">
                             {formatAgeDays(alert.age_days)}
                           </p>
                         </div>
@@ -536,7 +470,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
                   ))}
                 </ul>
               ) : (
-                <p className="px-3 py-6 text-center text-sm text-primary-dark/60">
+                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                   No overdue, due-soon, stale, or high-risk exceptions.
                 </p>
               )}
@@ -555,39 +489,39 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
           }
         >
           {followUpDashboard.supplierFollowUps.length > 0 ? (
-            <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+            <ul className="divide-y divide-border rounded-md border border-border">
               {followUpDashboard.supplierFollowUps.map((followUp) => (
                 <li className="px-3 py-3" key={followUp.supplier.id}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-primary-dark">
+                      <p className="truncate text-sm font-bold text-foreground">
                         {followUp.supplier.supplier_code} - {followUp.supplier.legal_name}
                       </p>
-                      <p className="mt-1 text-xs leading-5 text-primary-dark/58">
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
                         Latest: {followUp.latest_exception.exception_number} /{" "}
                         {followUp.latest_exception.title}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-full border border-primary-dark/10 bg-primary-dark/[0.03] px-2.5 py-1 text-xs font-bold text-primary-dark">
+                    <span className="shrink-0 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-bold text-foreground">
                       {followUp.total_actionable}
                     </span>
                   </div>
                   <dl className="mt-3 grid gap-2 text-xs min-[520px]:grid-cols-2">
-                    <div className="flex justify-between gap-2 rounded-md bg-primary-dark/[0.03] px-2 py-1.5">
-                      <dt className="text-primary-dark/55">Overdue</dt>
-                      <dd className="font-bold text-primary-dark">{followUp.overdue_count}</dd>
+                    <div className="flex justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+                      <dt className="text-muted-foreground">Overdue</dt>
+                      <dd className="font-bold text-foreground">{followUp.overdue_count}</dd>
                     </div>
-                    <div className="flex justify-between gap-2 rounded-md bg-primary-dark/[0.03] px-2 py-1.5">
-                      <dt className="text-primary-dark/55">High risk</dt>
-                      <dd className="font-bold text-primary-dark">{followUp.high_risk_count}</dd>
+                    <div className="flex justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+                      <dt className="text-muted-foreground">High risk</dt>
+                      <dd className="font-bold text-foreground">{followUp.high_risk_count}</dd>
                     </div>
-                    <div className="flex justify-between gap-2 rounded-md bg-primary-dark/[0.03] px-2 py-1.5">
-                      <dt className="text-primary-dark/55">Due soon</dt>
-                      <dd className="font-bold text-primary-dark">{followUp.due_soon_count}</dd>
+                    <div className="flex justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+                      <dt className="text-muted-foreground">Due soon</dt>
+                      <dd className="font-bold text-foreground">{followUp.due_soon_count}</dd>
                     </div>
-                    <div className="flex justify-between gap-2 rounded-md bg-primary-dark/[0.03] px-2 py-1.5">
-                      <dt className="text-primary-dark/55">Oldest</dt>
-                      <dd className="font-bold text-primary-dark">
+                    <div className="flex justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+                      <dt className="text-muted-foreground">Oldest</dt>
+                      <dd className="font-bold text-foreground">
                         {formatAgeDays(followUp.oldest_age_days)}
                       </dd>
                     </div>
@@ -596,9 +530,9 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
               ))}
             </ul>
           ) : (
-            <div className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-md border border-primary-dark/10 px-4 py-6 text-center">
+            <div className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-md border border-border px-4 py-6 text-center">
               <UserRound className="size-8 text-primary-blue" aria-hidden="true" />
-              <p className="max-w-sm text-sm leading-6 text-primary-dark/60">
+              <p className="max-w-sm text-sm leading-6 text-muted-foreground">
                 No supplier has open delivery exceptions requiring follow-up.
               </p>
             </div>
@@ -607,13 +541,13 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
       </section>
 
       {canCreate && shortcutGrns.length > 0 ? (
-        <section className="rounded-lg border border-primary-dark/10 bg-white p-5">
+        <section className="rounded-lg border border-border bg-card p-5">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 GRN shortcuts
               </p>
-              <h2 className="mt-1 font-heading text-xl font-bold text-primary-dark">
+              <h2 className="mt-1 font-heading text-xl font-bold text-foreground">
                 Raise from posted receipts
               </h2>
             </div>
@@ -631,16 +565,16 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
                   className={`rounded-md border p-4 ${
                     isSelected
                       ? "border-primary-blue bg-primary-blue/[0.04]"
-                      : "border-primary-dark/10 bg-primary-dark/[0.02]"
+                      : "border-border bg-muted/40"
                   }`}
                   key={grn.id}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-heading text-lg font-bold text-primary-dark">
+                      <p className="truncate font-heading text-lg font-bold text-foreground">
                         {grn.grn_number}
                       </p>
-                      <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
                         {grn.supplier
                           ? `${grn.supplier.supplier_code} - ${grn.supplier.legal_name}`
                           : "Supplier unavailable"}
@@ -652,18 +586,18 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
                   </div>
                   <dl className="mt-3 grid gap-2 text-sm min-[520px]:grid-cols-2 lg:grid-cols-1">
                     <div>
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Site
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {grn.site ? `${grn.site.code} - ${grn.site.name}` : "Site unavailable"}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Received
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {formatDate(grn.received_at)}
                       </dd>
                     </div>
@@ -684,7 +618,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
 
       {canCreate ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="delivery-exception-create-panel"
           open={openCreatePanel}
         >
@@ -695,31 +629,31 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
               <Truck className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create delivery exception
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Capture the supplier, site, delivery reference, severity, and immediate issue.
               </span>
             </span>
-            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           {siteOptions.length === 0 || supplierOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one active site and active supplier before creating delivery exceptions.
               </div>
             </div>
           ) : (
             <form
               action={createDeliveryExceptionAction}
-              className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
               {selectedGrn ? (
-                <div className="rounded-md border border-primary-blue/20 bg-primary-blue/[0.04] px-4 py-3 text-sm leading-6 text-primary-dark/70 min-[520px]:col-span-2 lg:col-span-6">
-                  <span className="font-bold text-primary-dark">{selectedGrn.grn_number}</span>{" "}
+                <div className="rounded-md border border-primary-blue/20 bg-primary-blue/[0.04] px-4 py-3 text-sm leading-6 text-foreground/70 min-[520px]:col-span-2 lg:col-span-6">
+                  <span className="font-bold text-foreground">{selectedGrn.grn_number}</span>{" "}
                   selected from Goods Received. Supplier, site, and delivery reference are prefilled
                   for this exception.
                 </div>
@@ -836,18 +770,18 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
       ) : null}
 
       <section
-        className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+        className="scroll-mt-24 rounded-lg border border-border bg-card"
         id="delivery-exception-register"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Exception register
             </p>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Delivery exception records
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               {exceptionPage.pagination.total} matching records filtered by status, severity, and search.
             </p>
           </div>
@@ -875,7 +809,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
         />
 
         {exceptionPage.items.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {exceptionPage.items.map((exception) => {
               const canStart = canStartOpsDeliveryException(auth.profile.role, exception);
               const canResolve = canResolveOpsDeliveryException(auth.profile.role, exception);
@@ -887,26 +821,22 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {exception.exception_number}
                         </h3>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            exception.status,
-                          )}`}
+                          className={opsStatusBadgeClass(exception.status)}
                         >
                           {formatLabel(exception.status)}
                         </span>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${severityClass(
-                            exception.severity,
-                          )}`}
+                          className={opsStatusBadgeClass(exception.severity)}
                         >
                           {formatLabel(exception.severity)}
                         </span>
                       </div>
-                      <p className="mt-2 font-bold text-primary-dark">{exception.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-2 font-bold text-foreground">{exception.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
                         {exception.supplier
                           ? `${exception.supplier.supplier_code} - ${exception.supplier.legal_name}`
                           : "Supplier unavailable"}{" "}
@@ -989,7 +919,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
                   </dl>
 
                   {exception.description ? (
-                    <p className="mt-4 rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                    <p className="mt-4 rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                       {exception.description}
                     </p>
                   ) : null}
@@ -1019,10 +949,10 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
           <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
             <Truck className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
-              <p className="font-heading text-xl font-bold text-primary-dark">
+              <p className="font-heading text-xl font-bold text-foreground">
                 {hasActiveListFilter ? "No matching delivery exceptions" : "No delivery exceptions yet"}
               </p>
-              <p className="mt-2 max-w-lg text-sm leading-6 text-primary-dark/60">
+              <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 {hasActiveListFilter
                   ? "Adjust the search, status, or severity filter to widen the register."
                   : "Create the first exception when a delivery issue needs follow-up."}

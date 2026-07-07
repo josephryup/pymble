@@ -28,21 +28,21 @@ export default async function OpsItHandbookPage() {
       />
 
       <section className="space-y-3">
-        <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-primary-dark/55">
+        <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           <ScrollText className="size-4" aria-hidden="true" /> Policies
         </h2>
         {policies.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-primary-dark/15 bg-white p-4 text-sm text-primary-dark/55">
+          <p className="rounded-xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
             No published IT policies yet.
           </p>
         ) : (
           <ul className="space-y-3">
             {policies.map((policy) => (
-              <li key={policy.id} className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm">
+              <li key={policy.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">{IT_POLICY_CATEGORY_LABELS[policy.category]} · v{policy.version}</p>
-                    <h3 className="mt-1 font-heading text-lg font-bold text-primary-dark">{policy.title}</h3>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{IT_POLICY_CATEGORY_LABELS[policy.category]} · v{policy.version}</p>
+                    <h3 className="mt-1 font-heading text-lg font-bold text-foreground">{policy.title}</h3>
                   </div>
                   {policy.acknowledged_by_me ? (
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
@@ -53,7 +53,7 @@ export default async function OpsItHandbookPage() {
                 {policy.body ? (
                   <details className="mt-2">
                     <summary className="cursor-pointer text-xs font-semibold text-primary-blue [&::-webkit-details-marker]:hidden">Read policy</summary>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-primary-dark/80">{policy.body}</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/80">{policy.body}</p>
                   </details>
                 ) : null}
                 {!policy.acknowledged_by_me ? (
@@ -72,7 +72,7 @@ export default async function OpsItHandbookPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-primary-dark/55">
+        <h2 className="flex items-center gap-2 font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">
           <BookOpen className="size-4" aria-hidden="true" /> How-to guides
         </h2>
         {articles.length === 0 ? (
@@ -80,13 +80,13 @@ export default async function OpsItHandbookPage() {
         ) : (
           <ul className="space-y-2">
             {articles.map((article) => (
-              <li key={article.id} className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm">
+              <li key={article.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
                 <details>
-                  <summary className="cursor-pointer font-heading text-base font-bold text-primary-dark [&::-webkit-details-marker]:hidden">
+                  <summary className="cursor-pointer font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
                     {article.title}
-                    <span className="ml-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">{article.category.replace(/_/g, " ")}</span>
+                    <span className="ml-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{article.category.replace(/_/g, " ")}</span>
                   </summary>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-primary-dark/80">{article.body || "No content yet."}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-foreground/80">{article.body || "No content yet."}</p>
                 </details>
               </li>
             ))}

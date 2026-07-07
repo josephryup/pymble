@@ -83,9 +83,12 @@ import {
   OPS_THEAD_CLASS,
   OPS_TR_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 import { OpsTableShell } from "@/components/ops/OpsTableShell";
 import type { OpsPaymentRequestStatus, OpsPaymentRequestType } from "@/lib/ops/types";
+import { formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -154,58 +157,12 @@ function paymentRequestNotice(params: OpsSearchParams) {
     : null;
 }
 
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 function formatMoney(value: number, currencyCode = "ZMW") {
   return new Intl.NumberFormat("en-ZM", {
     currency: currencyCode,
     maximumFractionDigits: 0,
     style: "currency",
   }).format(value);
-}
-
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function statusClass(status: OpsPaymentRequestStatus) {
-  if (status === "paid") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "approved" || status === "finance_review") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "rejected" || status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "submitted") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.04] text-primary-dark/55";
 }
 
 function ageingClass(bucket: OpsFinanceAgeingBucket) {
@@ -238,30 +195,30 @@ function formatAgeingDelta(daysUntilDue: number | null) {
 
 function PaymentMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-2">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-bold text-foreground">{value}</dd>
     </div>
   );
 }
 
 function MarkPaidForm({ paymentRequest }: { paymentRequest: OpsPaymentRequestSummary }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
+    <details className="rounded-md border border-border">
       <summary
-        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+        className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
       >
         <span className="inline-flex items-center gap-2">
           <CreditCard className="size-4" aria-hidden="true" />
           Mark paid
         </span>
-        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
           Open
         </span>
       </summary>
-      <form action={markPaymentRequestPaidAction} className="grid gap-3 border-t border-primary-dark/10 p-4">
+      <form action={markPaymentRequestPaidAction} className="grid gap-3 border-t border-border p-4">
         <input name="payment_request_id" type="hidden" value={paymentRequest.id} />
         <label className={OPS_LABEL_CLASS}>
           Payment reference
@@ -471,30 +428,30 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                 value={formatMoney(ageingDashboard.overdueAmount)}
               />
             </dl>
-            <div className="rounded-md border border-primary-dark/10">
-              <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 px-3 py-2">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <div className="rounded-md border border-border">
+              <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
                   Attention queue
                 </p>
                 <AlertTriangle className="size-4 text-orange-600" aria-hidden="true" />
               </div>
               {ageingDashboard.attentionItems.length > 0 ? (
-                <ul className="divide-y divide-primary-dark/10">
+                <ul className="divide-y divide-border">
                   {ageingDashboard.attentionItems.map((item) => (
                     <li className="px-3 py-3" key={item.id}>
                       <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-primary-dark">
+                          <p className="truncate text-sm font-bold text-foreground">
                             {item.request_number} - {item.title}
                           </p>
-                          <p className="mt-1 text-xs leading-5 text-primary-dark/58">
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
                             {item.supplier
                               ? `${item.supplier.supplier_code} / ${item.supplier.legal_name}`
                               : "No supplier linked"}
                           </p>
                         </div>
                         <div className="shrink-0 text-left min-[520px]:text-right">
-                          <p className="text-sm font-bold text-primary-dark">
+                          <p className="text-sm font-bold text-foreground">
                             {formatMoney(item.amount)}
                           </p>
                           <p className="text-xs font-semibold text-orange-700">
@@ -506,7 +463,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                   ))}
                 </ul>
               ) : (
-                <p className="px-3 py-6 text-center text-sm text-primary-dark/60">
+                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                   No due-soon or overdue payment requests.
                 </p>
               )}
@@ -541,27 +498,27 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
               value={formatMoney(cashflowDashboard.paidThisMonth)}
             />
           </dl>
-          <div className="mt-4 rounded-md border border-primary-dark/10 px-3 py-3">
-            <div className="flex items-center gap-2 text-sm font-bold text-primary-dark">
+          <div className="mt-4 rounded-md border border-border px-3 py-3">
+            <div className="flex items-center gap-2 text-sm font-bold text-foreground">
               <TrendingUp className="size-4 text-primary-blue" aria-hidden="true" />
               Receivables mix
             </div>
             <dl className="mt-3 grid gap-2 text-sm">
               <div className="flex justify-between gap-3">
-                <dt className="text-primary-dark/58">Draft invoices</dt>
-                <dd className="font-bold text-primary-dark">
+                <dt className="text-muted-foreground">Draft invoices</dt>
+                <dd className="font-bold text-foreground">
                   {formatMoney(cashflowDashboard.draftReceivables)}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-primary-dark/58">Sent invoices</dt>
-                <dd className="font-bold text-primary-dark">
+                <dt className="text-muted-foreground">Sent invoices</dt>
+                <dd className="font-bold text-foreground">
                   {formatMoney(cashflowDashboard.sentReceivables)}
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-primary-dark/58">Approved payables</dt>
-                <dd className="font-bold text-primary-dark">
+                <dt className="text-muted-foreground">Approved payables</dt>
+                <dd className="font-bold text-foreground">
                   {formatMoney(cashflowDashboard.approvedPayables)}
                 </dd>
               </div>
@@ -572,7 +529,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
 
       {canCreate ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="payment-request-create-panel"
           open={openCreatePanel}
         >
@@ -583,27 +540,27 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
               <Receipt className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create payment request
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Link a supplier bill or expense to a site, optional PO, and optional budget line.
               </span>
             </span>
-            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           {siteOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one active site before creating payment requests.
               </div>
             </div>
           ) : (
             <form
               action={createPaymentRequestAction}
-              className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Purchase order
@@ -702,18 +659,18 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
       ) : null}
 
       <section
-        className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+        className="scroll-mt-24 rounded-lg border border-border bg-card"
         id="payment-request-register"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Payment register
             </p>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Supplier bills and expenses
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               {paymentRequestPage.pagination.total} matching requests filtered by status and search.
             </p>
           </div>
@@ -735,7 +692,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
         />
 
         {paymentRequestPage.items.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {paymentRequestPage.items.map((paymentRequest) => {
               const canSubmit = canSubmitOpsPaymentRequest(
                 auth.profile.id,
@@ -759,22 +716,20 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {paymentRequest.request_number}
                         </h3>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            paymentRequest.status,
-                          )}`}
+                          className={opsStatusBadgeClass(paymentRequest.status)}
                         >
                           {formatLabel(paymentRequest.status)}
                         </span>
-                        <span className="inline-flex rounded-full border border-primary-dark/10 bg-primary-dark/[0.03] px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/55">
+                        <span className="inline-flex rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                           {formatLabel(paymentRequest.payment_type)}
                         </span>
                       </div>
-                      <p className="mt-2 font-bold text-primary-dark">{paymentRequest.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-2 font-bold text-foreground">{paymentRequest.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
                         {paymentRequest.site
                           ? `${paymentRequest.site.code} - ${paymentRequest.site.name}`
                           : "Site unavailable"}{" "}
@@ -887,7 +842,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                   </dl>
 
                   {paymentRequest.description ? (
-                    <p className="mt-4 rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                    <p className="mt-4 rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                       {paymentRequest.description}
                     </p>
                   ) : null}

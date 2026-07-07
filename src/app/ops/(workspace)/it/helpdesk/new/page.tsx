@@ -14,6 +14,7 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_ERROR_CLASS,
 } from "@/lib/ops/ui";
 
 export const dynamic = "force-dynamic";
@@ -51,12 +52,12 @@ export default async function OpsItRaiseTicketPage({ searchParams }: PageProps) 
       />
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+        <div className={OPS_NOTICE_ERROR_CLASS} role="alert">
           {error}
         </div>
       ) : null}
 
-      <form action={raiseItTicketAction} className="grid gap-4 rounded-2xl border border-primary-dark/10 bg-white p-5">
+      <form action={raiseItTicketAction} className="grid gap-4 rounded-lg border border-border bg-card p-5">
         <label className={OPS_LABEL_CLASS}>
           What is the problem?
           <input className={OPS_INPUT_CLASS} maxLength={160} name="title" placeholder="e.g. My laptop won't connect to Wi-Fi" required />

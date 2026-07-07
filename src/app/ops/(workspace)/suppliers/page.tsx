@@ -60,7 +60,9 @@ import {
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { formatOpsLabel as formatLabel, formatOpsDate as formatDate } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -203,22 +205,6 @@ function supplierNotice(params: OpsSearchParams) {
   return null;
 }
 
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function statusClass(status: OpsSupplierStatus) {
-  if (status === "active") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "on_hold") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55";
-}
-
 function performanceClass(rating: number) {
   if (rating >= 4) {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -231,13 +217,6 @@ function performanceClass(rating: number) {
   return "border-orange-200 bg-orange-50 text-orange-700";
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
 function primaryContact(supplier: OpsSupplierSummary) {
   return supplier.contacts.find((contact) => contact.is_primary) ?? supplier.contacts[0] ?? null;
 }
@@ -245,19 +224,19 @@ function primaryContact(supplier: OpsSupplierSummary) {
 function SupplierContactList({ supplier }: { supplier: OpsSupplierSummary }) {
   if (supplier.contacts.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
         No contacts recorded.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+    <ul className="divide-y divide-border rounded-md border border-border">
       {supplier.contacts.map((contact) => (
         <li className="grid gap-2 px-3 py-3 min-[640px]:grid-cols-[1fr_auto]" key={contact.id}>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-bold text-primary-dark">{contact.full_name}</p>
+              <p className="font-bold text-foreground">{contact.full_name}</p>
               {contact.is_primary ? (
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-700">
                   Primary
@@ -265,12 +244,12 @@ function SupplierContactList({ supplier }: { supplier: OpsSupplierSummary }) {
               ) : null}
             </div>
             {contact.role_title ? (
-              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-primary-dark/45">
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                 {contact.role_title}
               </p>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-2 text-sm text-primary-dark/65 min-[640px]:justify-end">
+          <div className="flex flex-wrap gap-2 text-sm text-muted-foreground min-[640px]:justify-end">
             {contact.email ? (
               <a className="inline-flex items-center gap-1 hover:text-primary-blue" href={`mailto:${contact.email}`}>
                 <Mail className="size-4" aria-hidden="true" />
@@ -297,20 +276,20 @@ function SupplierPerformanceList({
 }) {
   if (events.length === 0) {
     return (
-      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm text-primary-dark/60">
+      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
         No performance events logged yet.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-primary-dark/10 rounded-md border border-primary-dark/10">
+    <ul className="divide-y divide-border rounded-md border border-border">
       {events.slice(0, 5).map((event) => (
         <li className="grid gap-2 px-3 py-3" key={event.id}>
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="font-bold text-primary-dark">{event.title}</p>
+                <p className="font-bold text-foreground">{event.title}</p>
                 <span
                   className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${performanceClass(
                     event.rating,
@@ -319,21 +298,21 @@ function SupplierPerformanceList({
                   {event.rating}/5
                 </span>
               </div>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-primary-dark/45">
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                 {formatLabel(event.event_type)}
                 {event.site ? ` / ${event.site.code}` : ""}
               </p>
             </div>
-            <p className="inline-flex items-center gap-1 text-xs font-semibold text-primary-dark/52">
+            <p className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
               <CalendarDays className="size-3.5" aria-hidden="true" />
               {formatDate(event.event_date)}
             </p>
           </div>
           {event.description ? (
-            <p className="text-sm leading-6 text-primary-dark/65">{event.description}</p>
+            <p className="text-sm leading-6 text-muted-foreground">{event.description}</p>
           ) : null}
           {event.author ? (
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-primary-dark/40">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               Logged by {event.author.full_name}
             </p>
           ) : null}
@@ -351,14 +330,14 @@ function AddSupplierPerformanceEventForm({
   supplierId: string;
 }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+    <details className="rounded-md border border-border">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
         <Star className="size-4" aria-hidden="true" />
         Log performance
       </summary>
       <form
         action={addSupplierPerformanceEventAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-3"
+        className="grid gap-3 border-t border-border p-3"
       >
         <input name="supplier_id" type="hidden" value={supplierId} />
         <label className={OPS_LABEL_CLASS}>
@@ -423,14 +402,14 @@ function AddSupplierPerformanceEventForm({
 
 function AddSupplierContactForm({ supplierId }: { supplierId: string }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+    <details className="rounded-md border border-border">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
         <UserPlus className="size-4" aria-hidden="true" />
         Add contact
       </summary>
       <form
         action={addSupplierContactAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
       >
         <input name="supplier_id" type="hidden" value={supplierId} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -449,7 +428,7 @@ function AddSupplierContactForm({ supplierId }: { supplierId: string }) {
           Phone
           <input className={OPS_INPUT_CLASS} name="phone" />
         </label>
-        <label className="flex min-h-11 items-center gap-2 rounded-md border border-primary-dark/10 px-3 py-2 text-sm font-bold text-primary-dark lg:col-span-2">
+        <label className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-bold text-foreground lg:col-span-2">
           <input className="size-4 accent-primary-blue" name="is_primary" type="checkbox" />
           Set primary contact
         </label>
@@ -560,19 +539,19 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
 
       {canCreate ? (
         <details
-          className="rounded-lg border border-primary-dark/10 bg-white"
+          className="rounded-lg border border-border bg-card"
           id="supplier-create-panel"
         >
-          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-primary-dark/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
             <span className="flex min-w-0 items-center gap-3">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
                 <Building2 className="size-5" aria-hidden="true" />
               </span>
               <span className="min-w-0">
-                <span className="block font-heading text-lg font-bold text-primary-dark">
+                <span className="block font-heading text-lg font-bold text-foreground">
                   Add supplier
                 </span>
-                <span className="mt-1 block text-sm text-primary-dark/60">
+                <span className="mt-1 block text-sm text-muted-foreground">
                   Expand when a new approved supplier must be added to procurement master data.
                 </span>
               </span>
@@ -581,7 +560,7 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
           </summary>
           <form
             action={createSupplierAction}
-            className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
           >
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Legal name
@@ -680,9 +659,9 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
         title="Register"
       >
         <div className="-mx-5 -mb-5">
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               {supplierPage.pagination.total} matching supplier records.
             </p>
           </div>
@@ -709,7 +688,7 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
         />
 
         {suppliers.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {suppliers.map((supplier) => {
               const contact = primaryContact(supplier);
               const canMutate = canManage && supplier.status !== "archived";
@@ -722,17 +701,15 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {supplier.supplier_code}
                         </h3>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            supplier.status,
-                          )}`}
+                          className={opsStatusBadgeClass(supplier.status)}
                         >
                           {formatLabel(supplier.status)}
                         </span>
-                        <span className="inline-flex rounded-full border border-primary-dark/10 bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-primary-dark/55">
+                        <span className="inline-flex rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                           {formatLabel(supplier.category)}
                         </span>
                         <span
@@ -743,15 +720,15 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
                           {kindLabel(supplier.kind)}
                         </span>
                       </div>
-                      <p className="mt-2 font-bold text-primary-dark">
+                      <p className="mt-2 font-bold text-foreground">
                         {supplier.legal_name}
                       </p>
                       {supplier.trading_name ? (
-                        <p className="mt-1 text-sm text-primary-dark/60">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           Trading as {supplier.trading_name}
                         </p>
                       ) : null}
-                      <p className="mt-2 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
                         {[supplier.address_line, supplier.city, supplier.country]
                           .filter(Boolean)
                           .join(", ") || "Address not recorded"}
@@ -802,43 +779,43 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
                   </div>
 
                   <dl className="mt-4 grid gap-3 min-[520px]:grid-cols-2 lg:grid-cols-5">
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         TPIN
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {supplier.tpin || "Not recorded"}
                       </dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Main email
                       </dt>
-                      <dd className="mt-1 truncate font-bold text-primary-dark">
+                      <dd className="mt-1 truncate font-bold text-foreground">
                         {supplier.email || "Not recorded"}
                       </dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Main phone
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {supplier.phone || "Not recorded"}
                       </dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Master rating
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {supplier.rating ? `${supplier.rating}/5` : "Not rated"}
                       </dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Recent performance
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {supplier.performance_event_average
                           ? `${supplier.performance_event_average}/5`
                           : "No events"}
@@ -848,18 +825,18 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
 
                   <div className="mt-4 grid gap-4">
                     {supplier.notes ? (
-                      <p className="rounded-md border border-primary-dark/10 px-3 py-3 text-sm leading-6 text-primary-dark/65">
+                      <p className="rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                         {supplier.notes}
                       </p>
                     ) : null}
                     <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
                       <div className="min-w-0">
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="font-heading text-base font-bold text-primary-dark">
+                          <h4 className="font-heading text-base font-bold text-foreground">
                             Contacts
                           </h4>
                           {contact ? (
-                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                               Primary: {contact.full_name}
                             </p>
                           ) : null}
@@ -871,11 +848,11 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
                     <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
                       <div className="min-w-0">
                         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="font-heading text-base font-bold text-primary-dark">
+                          <h4 className="font-heading text-base font-bold text-foreground">
                             Performance
                           </h4>
                           {supplier.performance_events.length > 0 ? (
-                            <p className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                            <p className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                               <Star className="size-3.5" aria-hidden="true" />
                               {supplier.performance_events.length} recent event
                               {supplier.performance_events.length === 1 ? "" : "s"}

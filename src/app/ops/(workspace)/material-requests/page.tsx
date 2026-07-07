@@ -88,9 +88,12 @@ import {
   OPS_THEAD_CLASS,
   OPS_TR_CLASS,
   type OpsSearchParams,
+  OPS_NOTICE_WARNING_CLASS,
+  opsStatusBadgeClass,
 } from "@/lib/ops/ui";
 import { OpsTableShell } from "@/components/ops/OpsTableShell";
 import type { OpsMaterialRequestStatus, OpsPriority } from "@/lib/ops/types";
+import { formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
@@ -212,79 +215,17 @@ function materialRequestNotice(params: OpsSearchParams) {
   return null;
 }
 
-function formatLabel(value: string) {
-  return value.replace(/_/g, " ");
-}
-
-function statusClass(status: OpsMaterialRequestStatus) {
-  if (status === "approved" || status === "closed" || status === "delivered") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "submitted" || status === "in_review" || status === "ordered") {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (status === "pricing_pending") {
-    return "border-violet-200 bg-violet-50 text-violet-700";
-  }
-
-  if (status === "priced") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-
-  if (status === "rejected" || status === "cancelled") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  return "border-orange-200 bg-orange-50 text-orange-700";
-}
-
-function priorityClass(priority: OpsPriority) {
-  if (priority === "urgent") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (priority === "high") {
-    return "border-orange-200 bg-orange-50 text-orange-700";
-  }
-
-  if (priority === "low") {
-    return "border-primary-dark/10 bg-primary-dark/[0.03] text-primary-dark/55";
-  }
-
-  return "border-sky-200 bg-sky-50 text-sky-700";
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Not set";
-  }
-
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeZone: "Africa/Lusaka",
-  }).format(new Date(`${value}T00:00:00+02:00`));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-ZM", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 function hasOpenApproval(request: OpsMaterialRequestSummary) {
   return request.approval_status === "submitted" || request.approval_status === "in_review";
 }
 
 function MaterialRequestValueMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 px-3 py-3">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+    <div className="rounded-md border border-border px-3 py-3">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 font-heading text-xl font-bold text-primary-dark">{value}</dd>
+      <dd className="mt-1 font-heading text-xl font-bold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -301,19 +242,19 @@ function MaterialRequestFlowStep({
   value: string;
 }) {
   return (
-    <div className="rounded-md border border-primary-dark/10 p-3">
+    <div className="rounded-md border border-border p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             {label}
           </p>
-          <p className="mt-1 font-heading text-xl font-bold text-primary-dark">{value}</p>
+          <p className="mt-1 font-heading text-xl font-bold text-foreground">{value}</p>
         </div>
         <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary-blue/10 text-primary-blue">
           <Icon className="size-4" aria-hidden="true" />
         </span>
       </div>
-      <p className="mt-3 text-sm leading-6 text-primary-dark/60">{description}</p>
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -395,38 +336,38 @@ function MaterialRequestItems({
                 <td className={`${OPS_TD_CLASS} align-top`}>
                   <div className="flex flex-wrap gap-2">
                     <details className="inline-block">
-                      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-primary-dark/70 hover:text-primary-dark [&::-webkit-details-marker]:hidden">
+                      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-foreground/70 hover:text-foreground [&::-webkit-details-marker]:hidden">
                         <Pencil className="size-3.5" aria-hidden="true" />
                         Edit
                       </summary>
                       <form
                         action={updateMaterialRequestItemAction}
-                        className="mt-2 grid gap-2 rounded-md border border-primary-dark/10 bg-white p-3 shadow-sm"
+                        className="mt-2 grid gap-2 rounded-md border border-border bg-card p-3 shadow-sm"
                       >
                         <input name="item_id" type="hidden" value={item.id} />
-                        <label className="text-xs font-bold text-primary-dark/60">
+                        <label className="text-xs font-bold text-muted-foreground">
                           Item
                           <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.item_name} name="item_name" required />
                         </label>
                         <div className="grid grid-cols-3 gap-2">
-                          <label className="text-xs font-bold text-primary-dark/60">
+                          <label className="text-xs font-bold text-muted-foreground">
                             Qty
                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={String(item.quantity)} min="0.01" name="quantity" required step="0.01" type="number" />
                           </label>
-                          <label className="text-xs font-bold text-primary-dark/60">
+                          <label className="text-xs font-bold text-muted-foreground">
                             Unit
                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.unit} name="unit" required />
                           </label>
-                          <label className="text-xs font-bold text-primary-dark/60">
+                          <label className="text-xs font-bold text-muted-foreground">
                             Est cost
                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={String(item.estimated_unit_cost)} min="0" name="estimated_unit_cost" step="0.01" type="number" />
                           </label>
                         </div>
-                        <label className="text-xs font-bold text-primary-dark/60">
+                        <label className="text-xs font-bold text-muted-foreground">
                           Specification
                           <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.specification} name="specification" />
                         </label>
-                        <label className="text-xs font-bold text-primary-dark/60">
+                        <label className="text-xs font-bold text-muted-foreground">
                           Notes
                           <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.notes} name="notes" />
                         </label>
@@ -472,14 +413,14 @@ function AddItemForm({
   supplierOptions: Array<{ id: string; label: string }>;
 }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+    <details className="rounded-md border border-border">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
         <PackagePlus className="size-4" aria-hidden="true" />
         Add line item
       </summary>
       <form
         action={addMaterialRequestItemAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
       >
         <input name="request_id" type="hidden" value={requestId} />
         {boqLineOptions.length > 0 ? (
@@ -538,17 +479,17 @@ function AddItemForm({
 
 function ImportMaterialItemsForm({ requestId }: { requestId: string }) {
   return (
-    <details className="rounded-md border border-primary-dark/10">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-dark transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+    <details className="rounded-md border border-border">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
         <FilePlus2 className="size-4" aria-hidden="true" />
         Import items (CSV / Excel / PDF)
       </summary>
       <form
         action={importMaterialRequestItemsAction}
-        className="grid gap-3 border-t border-primary-dark/10 p-3"
+        className="grid gap-3 border-t border-border p-3"
       >
         <input name="request_id" type="hidden" value={requestId} />
-        <p className="text-xs leading-5 text-primary-dark/55">
+        <p className="text-xs leading-5 text-muted-foreground">
           Upload a needs list. Recognised columns: item / description, unit, quantity, estimate,
           and supplier (code or name — unmatched names are kept as a typed supplier). The first
           row must be the header.
@@ -586,7 +527,7 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
           Procurement — attach supplier prices
         </p>
-        <p className="text-sm leading-6 text-primary-dark/70">
+        <p className="text-sm leading-6 text-foreground/70">
           Enter the actual unit price you have agreed with the supplier for each line item.
           When you save, the request moves to <strong>Priced</strong> and Finance is notified
           to approve the cost.
@@ -596,15 +537,15 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
         {request.items.map((item) => (
           <div
             key={item.id}
-            className="grid items-end gap-2 rounded-md border border-primary-dark/10 bg-white p-3 sm:grid-cols-[1fr_auto_auto_auto]"
+            className="grid items-end gap-2 rounded-md border border-border bg-card p-3 sm:grid-cols-[1fr_auto_auto_auto]"
           >
             <div className="min-w-0">
-              <p className="text-sm font-bold text-primary-dark">{item.item_name}</p>
-              <p className="text-xs text-primary-dark/55">
+              <p className="text-sm font-bold text-foreground">{item.item_name}</p>
+              <p className="text-xs text-muted-foreground">
                 {item.quantity} {item.unit} · estimate ZMW {formatZmw(item.estimated_unit_cost)} / unit
               </p>
             </div>
-            <label className="text-xs font-bold text-primary-dark/60">
+            <label className="text-xs font-bold text-muted-foreground">
               Actual unit price (ZMW)
               <input
                 className={`${OPS_INPUT_CLASS} mt-1 w-36 text-right`}
@@ -615,9 +556,9 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
                 type="number"
               />
             </label>
-            <div className="text-xs font-semibold text-primary-dark/55">
+            <div className="text-xs font-semibold text-muted-foreground">
               Line total:
-              <span className="ml-1 text-primary-dark">
+              <span className="ml-1 text-foreground">
                 {formatZmw(item.actual_total)}
               </span>
             </div>
@@ -625,8 +566,8 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
         ))}
       </div>
       <div className="mt-3 flex items-center justify-between gap-3">
-        <p className="text-xs font-bold text-primary-dark/55">
-          Priced total so far: <span className="text-primary-dark">{formatZmw(request.actual_total)}</span>
+        <p className="text-xs font-bold text-muted-foreground">
+          Priced total so far: <span className="text-foreground">{formatZmw(request.actual_total)}</span>
         </p>
         <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
           <Send className="size-4" aria-hidden="true" />
@@ -644,13 +585,13 @@ function FinanceCostDecisionForm({ request }: { request: OpsMaterialRequestSumma
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-700">
           Finance — approve cost
         </p>
-        <p className="text-sm leading-6 text-primary-dark/70">
+        <p className="text-sm leading-6 text-foreground/70">
           Procurement has priced this request at{" "}
           <strong>ZMW {formatZmw(request.actual_total)}</strong>. Approve to release for
           ordering, or reject with a reason so Procurement can renegotiate.
         </p>
         {request.transport_cost > 0 ? (
-          <p className="text-xs leading-5 text-primary-dark/55">
+          <p className="text-xs leading-5 text-muted-foreground">
             Procurement transport (internal): ZMW {formatZmw(request.transport_cost)} — tracked
             separately, not included in the goods cost above.
           </p>
@@ -665,7 +606,7 @@ function FinanceCostDecisionForm({ request }: { request: OpsMaterialRequestSumma
             Approve cost
           </button>
         </form>
-        <details className="rounded-md border border-red-300/40 bg-white">
+        <details className="rounded-md border border-red-300/40 bg-card">
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-3 py-2 text-sm font-bold text-red-700 transition hover:text-red-800 [&::-webkit-details-marker]:hidden">
             <XCircle className="size-4" aria-hidden="true" />
             Reject with reason
@@ -700,18 +641,18 @@ function TransportCostForm({ request }: { request: OpsMaterialRequestSummary }) 
   return (
     <form
       action={setMaterialRequestTransportCostAction}
-      className="rounded-md border border-primary-dark/15 bg-primary-dark/[0.02] p-4"
+      className="rounded-md border border-border bg-muted/40 p-4"
     >
       <input name="request_id" type="hidden" value={request.id} />
       <div className="mb-3 flex items-start gap-2">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary-dark/10 text-primary-dark">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
           <Truck className="size-4" aria-hidden="true" />
         </span>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/55">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
             Procurement transport cost (internal)
           </p>
-          <p className="text-sm leading-6 text-primary-dark/65">
+          <p className="text-sm leading-6 text-muted-foreground">
             Procurement&rsquo;s own cost of moving around to source and collect these materials.
             Recorded for internal tracking only — it is not part of the goods price and never
             appears on the Material Request or Purchase Order PDF.
@@ -719,7 +660,7 @@ function TransportCostForm({ request }: { request: OpsMaterialRequestSummary }) 
         </div>
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-xs font-bold text-primary-dark/60">
+        <label className="text-xs font-bold text-muted-foreground">
           Transport cost (ZMW)
           <input
             className={`${OPS_INPUT_CLASS} mt-1 w-40 text-right`}
@@ -758,7 +699,7 @@ function ConfirmDeliveryForm({ request }: { request: OpsMaterialRequestSummary }
           <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-700">
             Confirm delivery
           </p>
-          <p className="text-sm leading-6 text-primary-dark/70">
+          <p className="text-sm leading-6 text-foreground/70">
             This order has been placed. Confirm when the materials arrived on site. Tick
             &ldquo;received in full&rdquo; to close the request; leave it unticked for a partial or
             with-issues delivery (it stays open until fully received).
@@ -776,9 +717,9 @@ function ConfirmDeliveryForm({ request }: { request: OpsMaterialRequestSummary }
             type="date"
           />
         </label>
-        <label className="flex items-center gap-2 self-end pb-2 text-sm font-semibold text-primary-dark">
+        <label className="flex items-center gap-2 self-end pb-2 text-sm font-semibold text-foreground">
           <input
-            className="size-4 rounded border-primary-dark/30 text-emerald-600 focus:ring-emerald-500"
+            className="size-4 rounded border-border text-emerald-600 focus:ring-emerald-500"
             defaultChecked
             name="received_in_full"
             type="checkbox"
@@ -1039,16 +980,16 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
               value={`${procurementCount} shown`}
             />
           </div>
-          <p className="mt-4 text-sm leading-6 text-primary-dark/60">
+          <p className="mt-4 text-sm leading-6 text-muted-foreground">
             Earliest visible need date:{" "}
-            <span className="font-bold text-primary-dark">{formatDate(earliestNeededBy)}</span>
+            <span className="font-bold text-foreground">{formatDate(earliestNeededBy)}</span>
           </p>
         </OpsDashboardPanel>
       </div>
 
       {canCreate ? (
         <details
-          className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white"
+          className="scroll-mt-24 rounded-lg border border-border bg-card"
           id="material-request-create-panel"
           open={openCreatePanel}
         >
@@ -1059,27 +1000,27 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
               <PackagePlus className="size-5" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block font-heading text-xl font-bold text-primary-dark">
+              <span className="block font-heading text-xl font-bold text-foreground">
                 Create request
               </span>
-              <span className="mt-1 block text-sm text-primary-dark/60">
+              <span className="mt-1 block text-sm text-muted-foreground">
                 Start with site, priority, first item, quantity, and target need date.
               </span>
             </span>
-            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary-dark/45">
+            <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
           {siteOptions.length === 0 ? (
-            <div className="border-t border-primary-dark/10 p-5">
-              <div className="rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+            <div className="border-t border-border p-5">
+              <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one active site before creating material requests.
               </div>
             </div>
           ) : (
             <form
               action={createMaterialRequestAction}
-              className="grid gap-4 border-t border-primary-dark/10 p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
               <OpsScopeSitePicker sites={siteOptions} />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -1105,7 +1046,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                 <input className={OPS_INPUT_CLASS} name="needed_by" type="date" />
               </label>
               <div className="lg:col-span-6">
-                <p className="mb-2 text-sm font-semibold text-primary-dark">Line items</p>
+                <p className="mb-2 text-sm font-semibold text-foreground">Line items</p>
                 <OpsLineItemsEditor suppliers={supplierOptions} />
               </div>
               <div className="flex items-end lg:col-span-6">
@@ -1118,21 +1059,21 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
           )}
         </details>
       ) : (
-        <div className="rounded-md border border-primary-dark/10 bg-white px-4 py-3 text-sm text-primary-dark/65">
+        <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           Your role can review material requests assigned to it, but cannot create new ones.
         </div>
       )}
 
-      <section className="scroll-mt-24 rounded-lg border border-primary-dark/10 bg-white" id="request-register">
-        <div className="flex items-center justify-between gap-3 border-b border-primary-dark/10 p-5">
+      <section className="scroll-mt-24 rounded-lg border border-border bg-card" id="request-register">
+        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Request register
             </p>
-            <h2 className="font-heading text-xl font-bold text-primary-dark">
+            <h2 className="font-heading text-xl font-bold text-foreground">
               Site material requests
             </h2>
-            <p className="mt-1 text-sm text-primary-dark/60">
+            <p className="mt-1 text-sm text-muted-foreground">
               {requestPage.pagination.total} matching material requests filtered by status and
               search.
             </p>
@@ -1165,7 +1106,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
         />
 
         {requests.length > 0 ? (
-          <div className="divide-y divide-primary-dark/10">
+          <div className="divide-y divide-border">
             {requests.map((request) => {
               const canEdit = canEditOpsMaterialRequest(
                 auth.profile.id,
@@ -1215,26 +1156,22 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-heading text-lg font-bold text-primary-dark">
+                        <h3 className="font-heading text-lg font-bold text-foreground">
                           {request.request_number}
                         </h3>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${statusClass(
-                            request.status,
-                          )}`}
+                          className={opsStatusBadgeClass(request.status)}
                         >
                           {formatLabel(request.status)}
                         </span>
                         <span
-                          className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${priorityClass(
-                            request.priority,
-                          )}`}
+                          className={opsStatusBadgeClass(request.priority)}
                         >
                           {request.priority}
                         </span>
                       </div>
-                      <p className="mt-2 font-bold text-primary-dark">{request.title}</p>
-                      <p className="mt-1 text-sm leading-6 text-primary-dark/62">
+                      <p className="mt-2 font-bold text-foreground">{request.title}</p>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
                         {request.scope === "general"
                           ? "General / Office"
                           : request.site
@@ -1243,7 +1180,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                         / needed by {formatDate(request.needed_by)}
                       </p>
                       {request.description ? (
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-primary-dark/60">
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                           {request.description}
                         </p>
                       ) : null}
@@ -1294,33 +1231,33 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                   </div>
 
                   <dl className="mt-4 grid gap-3 md:grid-cols-4">
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Items
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">{request.items.length}</dd>
+                      <dd className="mt-1 font-bold text-foreground">{request.items.length}</dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Estimate
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {formatZmw(request.estimated_total)}
                       </dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Requested by
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {formatOpsUserName(request.requester?.full_name, request.requester?.id)}
                       </dd>
                     </div>
-                    <div className="rounded-md border border-primary-dark/10 px-3 py-2">
-                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-primary-dark/45">
+                    <div className="rounded-md border border-border px-3 py-2">
+                      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                         Created
                       </dt>
-                      <dd className="mt-1 font-bold text-primary-dark">
+                      <dd className="mt-1 font-bold text-foreground">
                         {formatDateTime(request.created_at)}
                       </dd>
                     </div>
@@ -1336,7 +1273,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                         </span>
                       ) : null}
                       {request.transport_budget_line_id && request.transport_cost > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary-dark/15 bg-primary-dark/[0.04] px-3 py-1 text-xs font-semibold text-primary-dark/60">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-semibold text-muted-foreground">
                           <Truck className="size-3" aria-hidden="true" />
                           Transport budget: {formatZmw(request.transport_cost)}
                         </span>
@@ -1377,21 +1314,21 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                   </div>
 
                   {canEdit ? (
-                    <details className="mt-4 rounded-md border border-primary-dark/10">
+                    <details className="mt-4 rounded-md border border-border">
                       <summary
-                        className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-primary-dark transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+                        className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-2.5 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
                       >
                         <span className="inline-flex items-center gap-2">
                           <Pencil className="size-4" aria-hidden="true" />
                           Edit request details
                         </span>
-                        <span className="text-xs uppercase tracking-[0.12em] text-primary-dark/45">
+                        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                           Open
                         </span>
                       </summary>
                       <form
                         action={updateMaterialRequestHeaderAction}
-                        className="grid gap-3 border-t border-primary-dark/10 p-4 md:grid-cols-4"
+                        className="grid gap-3 border-t border-border p-4 md:grid-cols-4"
                       >
                         <input name="request_id" type="hidden" value={request.id} />
                         <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
@@ -1439,7 +1376,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                   ) : null}
 
                   {canCancel || canArchive ? (
-                    <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-primary-dark/10 pt-4">
+                    <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
                       {canCancel ? (
                         <details className="rounded-md border border-red-200 bg-red-50/40">
                           <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-sm font-bold text-red-700 hover:text-red-800 [&::-webkit-details-marker]:hidden">
@@ -1456,7 +1393,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                               <input className={OPS_INPUT_CLASS} name="reason" placeholder="Brief reason shown to the requester" />
                             </label>
                             <button
-                              className="inline-flex items-center justify-center gap-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-bold text-red-700 transition hover:bg-red-100"
+                              className="inline-flex items-center justify-center gap-2 rounded-md border border-red-300 bg-card px-3 py-1.5 text-sm font-bold text-red-700 transition hover:bg-red-100"
                               type="submit"
                             >
                               Confirm cancel
@@ -1468,7 +1405,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                         <form action={archiveMaterialRequestAction}>
                           <input name="request_id" type="hidden" value={request.id} />
                           <button
-                            className="inline-flex items-center gap-2 rounded-md border border-primary-dark/15 bg-white px-3 py-1.5 text-sm font-bold text-primary-dark/70 hover:bg-primary-dark/5"
+                            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-bold text-foreground/70 hover:bg-muted/40"
                             type="submit"
                           >
                             Archive

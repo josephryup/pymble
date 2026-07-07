@@ -55,12 +55,12 @@ export default async function OpsProjectSchedulePage() {
           {sites.map((site) => (
             <li
               key={site.id}
-              className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm"
+              className="rounded-lg border border-border bg-card p-4 shadow-sm"
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 {site.code}
               </p>
-              <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">
+              <h2 className="mt-1 font-heading text-lg font-bold text-foreground">
                 {site.name}
               </h2>
               <div className="mt-3 flex flex-wrap gap-2">

@@ -90,11 +90,11 @@ export default async function OpsItHelpdeskPage({ searchParams }: PageProps) {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
-        <div className="rounded-2xl border border-primary-dark/10 bg-white p-5 shadow-sm">
-          <h2 className="font-heading text-lg font-bold text-primary-dark">
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <h2 className="font-heading text-lg font-bold text-foreground">
             Raised vs resolved — last {analytics.weeks} weeks
           </h2>
-          <p className="mt-1 text-sm text-primary-dark/55">
+          <p className="mt-1 text-sm text-muted-foreground">
             Whether the queue is trending up or being worked down.
           </p>
           <div className="mt-4">
@@ -113,9 +113,9 @@ export default async function OpsItHelpdeskPage({ searchParams }: PageProps) {
             />
           </div>
         </div>
-        <div className="rounded-2xl border border-primary-dark/10 bg-white p-5 shadow-sm">
-          <h2 className="font-heading text-lg font-bold text-primary-dark">Open by priority</h2>
-          <p className="mt-1 text-sm text-primary-dark/55">
+        <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <h2 className="font-heading text-lg font-bold text-foreground">Open by priority</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Everything currently open, on hold or awaiting a user.
           </p>
           <div className="mt-4">
@@ -149,16 +149,16 @@ export default async function OpsItHelpdeskPage({ searchParams }: PageProps) {
       ) : (
         <ul className="space-y-3">
           {tickets.map((ticket) => (
-            <li key={ticket.id} className="rounded-2xl border border-primary-dark/10 bg-white p-4 shadow-sm">
+            <li key={ticket.id} className="rounded-lg border border-border bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary-dark/45">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     {ticket.ticket_ref} · {IT_TICKET_CATEGORY_LABELS[ticket.category]}
                   </p>
-                  <h2 className="mt-1 font-heading text-lg font-bold text-primary-dark">
+                  <h2 className="mt-1 font-heading text-lg font-bold text-foreground">
                     <Link className="hover:underline" href={`/ops/it/helpdesk/${ticket.id}`}>{ticket.title}</Link>
                   </h2>
-                  <p className="mt-1 text-xs text-primary-dark/55">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {ticket.requester ? `Raised by ${ticket.requester.full_name}` : "Raised by unknown"}
                     {ticket.assignee ? ` · Assigned to ${ticket.assignee.full_name}` : " · Unassigned"}
                     {ticket.site ? ` · ${ticket.site.code}` : ""}
