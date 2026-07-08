@@ -91,6 +91,8 @@ const OPS_MATERIAL_REQUEST_ROLES: OpsUserRole[] = [
   // already allows these roles.
   "hse_officer",
   "hse_assistant_officer",
+  // IT raises confidential IT-scoped requests through the same module.
+  "it_manager",
 ];
 
 const OPS_SUPPLIER_ROLES: OpsUserRole[] = [

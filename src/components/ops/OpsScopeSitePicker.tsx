@@ -12,24 +12,38 @@ export type OpsScopeSiteOption = {
 type OpsScopeSitePickerProps = {
   sites: OpsScopeSiteOption[];
   /** Initial scope (server render). */
-  defaultScope?: "site" | "general";
+  defaultScope?: "site" | "general" | "it";
   /** Initial site selection when scope is 'site'. */
   defaultSiteId?: string | null;
+  /**
+   * Which scopes this user may pick. The IT manager gets ["it"] only;
+   * top leadership can additionally raise confidential IT requests.
+   */
+  allowedScopes?: Array<"site" | "general" | "it">;
 };
 
 /**
  * Scope selector shared by the material-request and requisition create forms.
  *
- * Lets the user choose between a project **Site** requisition and a **General**
- * (office / overhead) one. The site dropdown is only shown — and only required —
- * when the scope is "site". Emits `scope` and `site_id` form fields.
+ * Lets the user choose between a project **Site** requisition, a **General**
+ * (office / overhead) one, or a confidential **IT** request (restricted
+ * visibility, extra MD approval). The site dropdown is only shown — and only
+ * required — when the scope is "site". Emits `scope` and `site_id` form fields.
  */
 export function OpsScopeSitePicker({
   sites,
   defaultScope = "site",
   defaultSiteId = null,
+  allowedScopes = ["site", "general"],
 }: OpsScopeSitePickerProps) {
-  const [scope, setScope] = useState<"site" | "general">(defaultScope);
+  const initialScope = allowedScopes.includes(defaultScope) ? defaultScope : allowedScopes[0];
+  const [scope, setScope] = useState<"site" | "general" | "it">(initialScope);
+
+  const SCOPE_LABELS: Record<"site" | "general" | "it", string> = {
+    site: "Project site",
+    general: "General / Office",
+    it: "IT (confidential)",
+  };
 
   return (
     <>
@@ -38,11 +52,14 @@ export function OpsScopeSitePicker({
         <select
           className={OPS_INPUT_CLASS}
           name="scope"
-          onChange={(event) => setScope(event.target.value as "site" | "general")}
+          onChange={(event) => setScope(event.target.value as "site" | "general" | "it")}
           value={scope}
         >
-          <option value="site">Project site</option>
-          <option value="general">General / Office</option>
+          {allowedScopes.map((value) => (
+            <option key={value} value={value}>
+              {SCOPE_LABELS[value]}
+            </option>
+          ))}
         </select>
       </label>
       {scope === "site" ? (

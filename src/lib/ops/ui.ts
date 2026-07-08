@@ -164,6 +164,7 @@ export const OPS_STATUS_TONES: Record<string, OpsStatusTone> = {
   high: "attention",
   in_review: "attention",
   kyc_pending: "attention",
+  md_review: "attention",
   on_leave: "attention",
   pricing_pending: "attention",
   probation: "attention",

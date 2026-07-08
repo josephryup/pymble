@@ -8,11 +8,13 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
   canApproveMaterialRequestCost,
+  canApproveMaterialRequestMdReview,
   canArchiveOpsMaterialRequest,
   canAttachMaterialRequestPricing,
   canCancelOpsMaterialRequest,
   canConfirmMaterialRequestDelivery,
   canCreateOpsMaterialRequest,
+  canCreateOpsMaterialRequestScope,
   canDeleteOpsMaterialRequest,
   canEditOpsMaterialRequest,
   canSetMaterialRequestTransportCost,
@@ -28,7 +30,11 @@ import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { upsertMaterialRequestCostEntries } from "@/lib/ops/project-cost-entries";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
-import type { OpsMaterialRequestStatus, OpsPriority } from "@/lib/ops/types";
+import type {
+  OpsMaterialRequestScope,
+  OpsMaterialRequestStatus,
+  OpsPriority,
+} from "@/lib/ops/types";
 
 const MATERIAL_REQUEST_ROUTE = "/ops/material-requests";
 
@@ -41,7 +47,7 @@ const headerSchema = z
     priority: z.enum(["low", "normal", "high", "urgent"]),
     // 'site' requests target a project site; 'general' requests are office /
     // overhead purchasing with no site.
-    scope: z.enum(["site", "general"]).default("site"),
+    scope: z.enum(["site", "general", "it"]).default("site"),
     site_id: z.string().trim().default(""),
     title: z.string().trim().min(2, "Request title is required.").max(160),
   })
@@ -96,6 +102,7 @@ type MaterialRequestForMutation = {
   priority: OpsPriority;
   request_number: string;
   requested_by: string | null;
+  scope: OpsMaterialRequestScope;
   site_id: string;
   status: OpsMaterialRequestStatus;
   title: string;
@@ -142,7 +149,7 @@ async function fetchMaterialRequestForMutation(requestId: string) {
   const { data, error } = await supabase
     .from("material_requests")
     .select(
-      "id, request_number, site_id, requested_by, title, description, priority, status, needed_by, approval_request_id, budget_line_id, transport_budget_line_id, transport_cost",
+      "id, request_number, scope, site_id, requested_by, title, description, priority, status, needed_by, approval_request_id, budget_line_id, transport_budget_line_id, transport_cost",
     )
     .eq("id", requestId)
     .maybeSingle<MaterialRequestForMutation>();
@@ -226,12 +233,20 @@ export async function createMaterialRequestAction(formData: FormData) {
     materialRequestError(parsed.error.issues[0]?.message ?? "Check the material request.");
   }
 
+  if (!canCreateOpsMaterialRequestScope(profile.role, parsed.data.scope)) {
+    materialRequestError(
+      parsed.data.scope === "it"
+        ? "Only the IT manager (or top leadership) can raise IT requests."
+        : "The IT manager raises IT-scoped requests only.",
+    );
+  }
+
   const lineItems = collectOpsLineItems(formData);
   if (!lineItems.ok) {
     materialRequestError(lineItems.message);
   }
 
-  const siteId = parsed.data.scope === "general" ? null : parsed.data.site_id;
+  const siteId = parsed.data.scope === "site" ? parsed.data.site_id : null;
   const neededBy = normalizeDateInput(parsed.data.needed_by);
   const supabase = getOpsSupabaseServiceClient();
   const { data: request, error: requestError } = await supabase
@@ -980,12 +995,6 @@ const costDecisionSchema = z.object({
 export async function decideMaterialRequestCostAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canApproveMaterialRequestCost(profile.role)) {
-    materialRequestError(
-      "Only Finance and leadership can approve or reject the cost of a priced request.",
-    );
-  }
-
   const idParsed = requestIdSchema.safeParse({ request_id: field(formData, "request_id") });
   if (!idParsed.success) {
     materialRequestError(idParsed.error.issues[0]?.message ?? "Select a material request.");
@@ -1006,9 +1015,23 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
     materialRequestError("Material request was not found.");
   }
 
-  if (request.status !== "priced") {
+  // Two decision stages share this action: Finance acts on `priced`; for
+  // IT-scoped requests the MD then acts on `md_review` (final gate).
+  if (request.status === "priced") {
+    if (!canApproveMaterialRequestCost(profile.role)) {
+      materialRequestError(
+        "Only Finance and leadership can approve or reject the cost of a priced request.",
+      );
+    }
+  } else if (request.status === "md_review") {
+    if (!canApproveMaterialRequestMdReview(profile.role)) {
+      materialRequestError(
+        "Only the Managing Director can decide an IT request awaiting MD approval.",
+      );
+    }
+  } else {
     materialRequestError(
-      "Finance can only act on a request that has been priced by Procurement.",
+      "This request is not awaiting a cost decision (Finance acts on priced requests; the MD acts on IT requests in MD review).",
     );
   }
 
@@ -1021,18 +1044,23 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
   const supabase = getOpsSupabaseServiceClient();
   const nowIso = new Date().toISOString();
   const decisionIsApprove = decisionParsed.data.decision === "approve";
+  // Finance approval of an IT request hands over to the MD instead of closing
+  // the approval chain.
+  const movesToMdReview =
+    decisionIsApprove && request.status === "priced" && request.scope === "it";
+  const isFinalApproval = decisionIsApprove && !movesToMdReview;
 
   const update: {
     status: OpsMaterialRequestStatus;
     approved_at?: string | null;
     rejected_at?: string | null;
   } = {
-    status: decisionIsApprove ? "approved" : "rejected",
+    status: decisionIsApprove ? (movesToMdReview ? "md_review" : "approved") : "rejected",
   };
-  if (decisionIsApprove) {
+  if (isFinalApproval) {
     update.approved_at = nowIso;
     update.rejected_at = null;
-  } else {
+  } else if (!decisionIsApprove) {
     update.rejected_at = nowIso;
   }
 
@@ -1044,11 +1072,12 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
     materialRequestError(stateError.message);
   }
 
-  // Finance approval is the moment the spend counts against the project
+  // Final approval is the moment the spend counts against the project
   // budget (committed), mirroring Payment Requests' approve → committed
-  // transition. Best-effort: a ledger hiccup never blocks the approval.
+  // transition. For IT requests that moment is the MD's approval, not
+  // Finance's. Best-effort: a ledger hiccup never blocks the approval.
   let overBudget = false;
-  if (decisionIsApprove) {
+  if (isFinalApproval) {
     const { data: itemRows } = await supabase
       .from("material_request_items")
       .select("actual_total")
@@ -1099,9 +1128,12 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
     }
   }
 
+  const stageLabel = request.status === "md_review" ? "MD" : "Finance";
   await recordOpsAuditEvent({
     action: decisionIsApprove
-      ? "material_request.cost_approved"
+      ? movesToMdReview
+        ? "material_request.cost_approved_md_pending"
+        : "material_request.cost_approved"
       : "material_request.cost_rejected",
     actorUserId: profile.id,
     entityId: request.id,
@@ -1111,13 +1143,16 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
       decision: decisionParsed.data.decision,
       comment: decisionParsed.data.comment,
       over_budget: overBudget,
+      stage: stageLabel,
     },
     moduleKey: "material_requests",
     sourceId: request.id,
     sourceTable: "material_requests",
     summary: decisionIsApprove
-      ? `Finance approved cost for ${request.request_number}${overBudget ? " (over budget)" : ""}`
-      : `Finance rejected cost for ${request.request_number}: ${decisionParsed.data.comment}`,
+      ? movesToMdReview
+        ? `Finance approved cost for ${request.request_number} — awaiting MD approval`
+        : `${stageLabel} approved cost for ${request.request_number}${overBudget ? " (over budget)" : ""}`
+      : `${stageLabel} rejected cost for ${request.request_number}: ${decisionParsed.data.comment}`,
   }).catch(() => null);
 
   // Notify the requester with the decision and reason.
@@ -1125,54 +1160,81 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
     await queueOpsNotification({
       actionHref: `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
       body: decisionIsApprove
-        ? `${profile.full_name} approved the cost of ${request.request_number}. Procurement can now raise the RFQ / Purchase Order.`
+        ? movesToMdReview
+          ? `${profile.full_name} approved the cost of ${request.request_number}. It now awaits the Managing Director's approval.`
+          : `${profile.full_name} approved the cost of ${request.request_number}. Procurement can now raise the RFQ / Purchase Order.`
         : `${profile.full_name} rejected the cost of ${request.request_number}. Reason: ${decisionParsed.data.comment}`,
-      idempotencyKey: `material-request-cost-decision:${request.id}:${decisionParsed.data.decision}`,
+      idempotencyKey: `material-request-cost-decision:${request.id}:${request.status}:${decisionParsed.data.decision}`,
       moduleKey: "material_requests",
       recipientId: request.requested_by,
       sourceId: request.id,
       sourceTable: "material_requests",
       title: decisionIsApprove
-        ? `Approved: ${request.request_number}`
+        ? movesToMdReview
+          ? `Awaiting MD: ${request.request_number}`
+          : `Approved: ${request.request_number}`
         : `Rejected: ${request.request_number}`,
     }).catch(() => null);
   }
 
-  // Notify procurement so they can raise the RFQ/PO (on approval) or fix prices
-  // and resubmit (on rejection).
-  const procurementRecipients = await fanoutToOpsRoles(
-    ["procurement_manager", "procurement"],
-    { excludeUserIds: [profile.id] },
-  );
-  await Promise.all(
-    procurementRecipients.map((recipient) =>
-      queueOpsNotification({
-        actionHref: decisionIsApprove
-          ? "/ops/rfq-po"
-          : `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
-        body: decisionIsApprove
-          ? `Cost approved for ${request.request_number} by ${profile.full_name}. Raise the RFQ / PO.`
-          : `Finance rejected the cost on ${request.request_number}. Reason: ${decisionParsed.data.comment}`,
-        idempotencyKey: `material-request-cost-procurement:${request.id}:${decisionParsed.data.decision}:${recipient.id}`,
-        moduleKey: "material_requests",
-        recipientId: recipient.id,
-        sourceId: request.id,
-        sourceTable: "material_requests",
-        title: decisionIsApprove
-          ? `Order: ${request.request_number}`
-          : `Re-price: ${request.request_number}`,
-      }).catch(() => null),
-    ),
-  );
+  if (movesToMdReview) {
+    // Hand the IT request to the Managing Director for the final gate.
+    const mdRecipients = await fanoutToOpsRoles(["managing_director"], {
+      excludeUserIds: [profile.id],
+    });
+    await Promise.all(
+      mdRecipients.map((recipient) =>
+        queueOpsNotification({
+          actionHref: `${MATERIAL_REQUEST_ROUTE}?status=md_review#mr-${request.id}`,
+          body: `Finance approved the cost of IT request ${request.request_number} (${request.title}). Your approval is the final gate before Procurement orders.`,
+          idempotencyKey: `material-request-md-review:${request.id}:${recipient.id}`,
+          moduleKey: "material_requests",
+          recipientId: recipient.id,
+          sourceId: request.id,
+          sourceTable: "material_requests",
+          title: `MD approval needed: ${request.request_number}`,
+        }).catch(() => null),
+      ),
+    );
+  } else {
+    // Notify procurement so they can raise the RFQ/PO (on approval) or fix
+    // prices and resubmit (on rejection).
+    const procurementRecipients = await fanoutToOpsRoles(
+      ["procurement_manager", "procurement"],
+      { excludeUserIds: [profile.id] },
+    );
+    await Promise.all(
+      procurementRecipients.map((recipient) =>
+        queueOpsNotification({
+          actionHref: decisionIsApprove
+            ? "/ops/rfq-po"
+            : `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
+          body: decisionIsApprove
+            ? `Cost approved for ${request.request_number} by ${profile.full_name}. Raise the RFQ / PO.`
+            : `${stageLabel} rejected the cost on ${request.request_number}. Reason: ${decisionParsed.data.comment}`,
+          idempotencyKey: `material-request-cost-procurement:${request.id}:${request.status}:${decisionParsed.data.decision}:${recipient.id}`,
+          moduleKey: "material_requests",
+          recipientId: recipient.id,
+          sourceId: request.id,
+          sourceTable: "material_requests",
+          title: decisionIsApprove
+            ? `Order: ${request.request_number}`
+            : `Re-price: ${request.request_number}`,
+        }).catch(() => null),
+      ),
+    );
+  }
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   revalidatePath("/ops/notifications");
   revalidatePath("/ops");
   revalidatePath("/ops/project-budgets");
   const updatedFlag = decisionIsApprove
-    ? overBudget
-      ? "cost_approved_over_budget"
-      : "cost_approved"
+    ? movesToMdReview
+      ? "cost_approved_md_pending"
+      : overBudget
+        ? "cost_approved_over_budget"
+        : "cost_approved"
     : "cost_rejected";
   redirect(`${MATERIAL_REQUEST_ROUTE}?updated=${updatedFlag}#mr-${request.id}`);
 }
@@ -1215,6 +1277,7 @@ export async function setMaterialRequestTransportCostAction(formData: FormData) 
   const transportEditable: OpsMaterialRequestStatus[] = [
     "pricing_pending",
     "priced",
+    "md_review",
     "approved",
     "ordered",
   ];

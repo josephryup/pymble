@@ -208,3 +208,101 @@ describe("material request totals", () => {
     );
   });
 });
+
+describe("IT material request confidentiality and flow", () => {
+  it("limits IT-scope creation to the IT manager and top leadership", async () => {
+    const { canCreateOpsMaterialRequestScope } = await import(
+      "../src/lib/ops/material-request-permissions"
+    );
+    assert.equal(canCreateOpsMaterialRequestScope("it_manager", "it"), true);
+    assert.equal(canCreateOpsMaterialRequestScope("managing_director", "it"), true);
+    assert.equal(canCreateOpsMaterialRequestScope("engineer", "it"), false);
+    assert.equal(canCreateOpsMaterialRequestScope("procurement", "it"), false);
+    // The IT manager only raises IT requests, never site/general ones.
+    assert.equal(canCreateOpsMaterialRequestScope("it_manager", "site"), false);
+    assert.equal(canCreateOpsMaterialRequestScope("it_manager", "general"), false);
+    assert.equal(canCreateOpsMaterialRequestScope("engineer", "site"), true);
+  });
+
+  it("restricts IT request visibility to leadership, procurement, and finance", async () => {
+    const { canViewOpsItMaterialRequests } = await import(
+      "../src/lib/ops/material-request-permissions"
+    );
+    for (const role of [
+      "managing_director",
+      "general_manager",
+      "operations_manager",
+      "projects_manager",
+      "it_manager",
+      "procurement_manager",
+      "procurement",
+      "procurement_assistant",
+      "finance_manager",
+      "accountant",
+    ] as const) {
+      assert.equal(canViewOpsItMaterialRequests(role), true, role);
+    }
+    for (const role of [
+      "engineer",
+      "supervisor",
+      "quantity_surveyor",
+      "manager",
+      "hse_officer",
+      "hr",
+      "engineering_manager",
+    ] as const) {
+      assert.equal(canViewOpsItMaterialRequests(role), false, role);
+    }
+  });
+
+  it("reserves the md_review decision for the Managing Director", async () => {
+    const { canApproveMaterialRequestMdReview } = await import(
+      "../src/lib/ops/material-request-permissions"
+    );
+    assert.equal(canApproveMaterialRequestMdReview("managing_director"), true);
+    assert.equal(canApproveMaterialRequestMdReview("finance_manager"), false);
+    assert.equal(canApproveMaterialRequestMdReview("operations_manager"), false);
+    assert.equal(canApproveMaterialRequestMdReview("it_manager"), false);
+  });
+
+  it("adds the MD gate to the chain only for IT-scoped requests", async () => {
+    const { buildMaterialRequestChainSteps } = await import(
+      "../src/lib/ops/material-requests"
+    );
+    const base = {
+      request_number: "MR-001",
+      created_at: "2026-07-01T08:00:00Z",
+      submitted_at: "2026-07-01T09:00:00Z",
+      approved_at: null,
+      rejected_at: null,
+      ordered_at: null,
+      closed_at: null,
+      priced_at: "2026-07-02T09:00:00Z",
+      delivered_at: null,
+    };
+
+    const itChain = buildMaterialRequestChainSteps({
+      ...base,
+      scope: "it",
+      status: "md_review",
+    });
+    const mdStep = itChain.find((step) => step.key === "md_approved");
+    assert.ok(mdStep, "IT chain includes the MD gate");
+    assert.equal(mdStep?.state, "current");
+    assert.equal(
+      itChain.find((step) => step.key === "finance_approved")?.state,
+      "done",
+    );
+
+    const siteChain = buildMaterialRequestChainSteps({
+      ...base,
+      scope: "site",
+      status: "priced",
+    });
+    assert.equal(
+      siteChain.some((step) => step.key === "md_approved"),
+      false,
+      "site chain has no MD gate",
+    );
+  });
+});

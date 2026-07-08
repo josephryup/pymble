@@ -1,4 +1,9 @@
-import type { OpsMaterialRequestStatus, OpsPriority, OpsUserRole } from "@/lib/ops/types";
+import type {
+  OpsMaterialRequestScope,
+  OpsMaterialRequestStatus,
+  OpsPriority,
+  OpsUserRole,
+} from "@/lib/ops/types";
 
 export type OpsMaterialRequestMutationTarget = {
   requested_by: string | null;
@@ -29,7 +34,55 @@ const MATERIAL_REQUEST_CREATOR_ROLES: OpsUserRole[] = [
   // HSE may need PPE / safety equipment supplied via the same flow.
   "hse_officer",
   "hse_assistant_officer",
+  // IT raises confidential IT-scoped requests (see canCreateOpsMaterialRequestScope).
+  "it_manager",
 ];
+
+/**
+ * Who may see IT-scoped (confidential) material requests at all. The requester
+ * always sees their own; beyond that it is leadership (MD/GM/Operations/
+ * Projects) plus the Procurement and Finance roles the flow passes through.
+ */
+const IT_MATERIAL_REQUEST_VIEWER_ROLES: OpsUserRole[] = [
+  "developer",
+  "owner",
+  "managing_director",
+  "general_manager",
+  "operations_manager",
+  "projects_manager",
+  "it_manager",
+  "procurement_manager",
+  "procurement",
+  "procurement_assistant",
+  "finance_manager",
+  "accountant",
+];
+
+export function canViewOpsItMaterialRequests(role: OpsUserRole) {
+  return IT_MATERIAL_REQUEST_VIEWER_ROLES.includes(role);
+}
+
+/**
+ * Scope-aware creation gate. The IT manager only raises IT-scoped requests;
+ * IT scope is only available to IT and top leadership.
+ */
+export function canCreateOpsMaterialRequestScope(
+  role: OpsUserRole,
+  scope: OpsMaterialRequestScope,
+) {
+  if (scope === "it") {
+    return ["developer", "owner", "managing_director", "it_manager"].includes(role);
+  }
+  if (role === "it_manager") {
+    return false;
+  }
+  return canCreateOpsMaterialRequest(role);
+}
+
+/** Final MD gate on IT-scoped requests (priced -> finance -> md_review -> approved). */
+export function canApproveMaterialRequestMdReview(role: OpsUserRole) {
+  return ["developer", "owner", "managing_director"].includes(role);
+}
 
 const MATERIAL_REQUEST_PRICING_ROLES: OpsUserRole[] = [
   "developer",

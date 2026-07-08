@@ -25,6 +25,7 @@ import { parseCsvRows, readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
 import { collectOpsLineItems } from "@/lib/ops/line-items";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
+  OpsMaterialRequestScope,
   OpsMaterialRequestStatus,
   OpsPurchaseOrderStatus,
   OpsRfqStatus,
@@ -117,6 +118,7 @@ type SiteForMutation = {
 type MaterialRequestForRfq = {
   id: string;
   request_number: string;
+  scope: OpsMaterialRequestScope;
   site_id: string;
   status: OpsMaterialRequestStatus;
   title: string;
@@ -126,7 +128,7 @@ type RfqForMutation = {
   id: string;
   material_request_id: string | null;
   rfq_number: string;
-  scope: "site" | "general";
+  scope: OpsMaterialRequestScope;
   site_id: string | null;
   status: OpsRfqStatus;
   title: string;
@@ -197,7 +199,7 @@ async function fetchMaterialRequestForRfq(materialRequestId: string) {
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("material_requests")
-    .select("id, request_number, site_id, title, status")
+    .select("id, request_number, scope, site_id, title, status")
     .eq("id", materialRequestId)
     .maybeSingle<MaterialRequestForRfq>();
 
@@ -492,7 +494,9 @@ export async function createRfqFromMaterialRequestAction(formData: FormData) {
   }
 
   const siteId = materialRequest.site_id || null;
-  const scope: "site" | "general" = siteId ? "site" : "general";
+  // Carry the request scope through so confidential IT purchases stay marked
+  // as IT on the RFQ/PO side rather than degrading to "general".
+  const scope: OpsMaterialRequestScope = materialRequest.scope ?? (siteId ? "site" : "general");
 
   const { data: rfq, error: rfqInsertError } = await supabase
     .from("rfqs")

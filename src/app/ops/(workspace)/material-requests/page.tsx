@@ -46,12 +46,15 @@ import {
 } from "@/lib/ops/material-request-actions";
 import {
   canApproveMaterialRequestCost,
+  canApproveMaterialRequestMdReview,
   canArchiveOpsMaterialRequest,
   canAttachMaterialRequestPricing,
   canCancelOpsMaterialRequest,
   canConfirmMaterialRequestDelivery,
   canCreateOpsMaterialRequest,
+  canCreateOpsMaterialRequestScope,
   canEditOpsMaterialRequest,
+  canViewOpsItMaterialRequests,
   canManageOpsMaterialRequest,
   canSetMaterialRequestTransportCost,
   canSubmitOpsMaterialRequest,
@@ -107,6 +110,7 @@ const MATERIAL_REQUEST_STATUS_OPTIONS: Array<{
   { label: "Draft", value: "draft" },
   { label: "Submitted", value: "submitted" },
   { label: "In review", value: "in_review" },
+  { label: "MD review (IT)", value: "md_review" },
   { label: "Approved", value: "approved" },
   { label: "Rejected", value: "rejected" },
   { label: "Ordered", value: "ordered" },
@@ -185,6 +189,12 @@ function materialRequestNotice(params: OpsSearchParams) {
   }
   if (u === "cost_approved") {
     return { tone: "success" as const, message: "Cost approved. Procurement can raise the Request for Quotation or Purchase Order." };
+  }
+  if (u === "cost_approved_md_pending") {
+    return {
+      tone: "success" as const,
+      message: "Cost approved. The request now awaits the Managing Director's final approval.",
+    };
   }
   if (u === "cost_approved_over_budget") {
     return {
@@ -579,16 +589,27 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
 }
 
 function FinanceCostDecisionForm({ request }: { request: OpsMaterialRequestSummary }) {
+  const isMdStage = request.status === "md_review";
   return (
     <div className="rounded-md border border-emerald-300/40 bg-emerald-50/40 p-4">
       <div className="mb-3 flex flex-col gap-1">
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-700">
-          Finance — approve cost
+          {isMdStage ? "Managing Director — final approval" : "Finance — approve cost"}
         </p>
         <p className="text-sm leading-6 text-foreground/70">
-          Procurement has priced this request at{" "}
-          <strong>ZMW {formatZmw(request.actual_total)}</strong>. Approve to release for
-          ordering, or reject with a reason so Procurement can renegotiate.
+          {isMdStage ? (
+            <>
+              Finance has approved this IT request at{" "}
+              <strong>ZMW {formatZmw(request.actual_total)}</strong>. Your approval is the
+              final gate before Procurement raises the order.
+            </>
+          ) : (
+            <>
+              Procurement has priced this request at{" "}
+              <strong>ZMW {formatZmw(request.actual_total)}</strong>. Approve to release for
+              ordering, or reject with a reason so Procurement can renegotiate.
+            </>
+          )}
         </p>
         {request.transport_cost > 0 ? (
           <p className="text-xs leading-5 text-muted-foreground">
@@ -775,7 +796,10 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = materialRequestStatusFromParam(firstParam(params.status));
   const scopeParam = firstParam(params.scope);
-  const scope = scopeParam === "site" || scopeParam === "general" ? scopeParam : undefined;
+  const scope =
+    scopeParam === "site" || scopeParam === "general" || scopeParam === "it"
+      ? scopeParam
+      : undefined;
   const [requestPage, siteOptions, supplierOptions, issuedBoqDocuments] = await Promise.all([
     fetchPaginatedOpsMaterialRequests({
       listState,
@@ -1022,7 +1046,16 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
               action={createMaterialRequestAction}
               className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
-              <OpsScopeSitePicker sites={siteOptions} />
+              <OpsScopeSitePicker
+                allowedScopes={
+                  auth.profile.role === "it_manager"
+                    ? ["it"]
+                    : canCreateOpsMaterialRequestScope(auth.profile.role, "it")
+                      ? ["site", "general", "it"]
+                      : ["site", "general"]
+                }
+                sites={siteOptions}
+              />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Request title
                 <input className={OPS_INPUT_CLASS} name="title" required />
@@ -1096,6 +1129,10 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                 { label: "All types", value: "" },
                 { label: "Project site", value: "site" },
                 { label: "General / Office", value: "general" },
+                ...(canViewOpsItMaterialRequests(auth.profile.role) ||
+                auth.profile.role === "it_manager"
+                  ? [{ label: "IT (confidential)", value: "it" }]
+                  : []),
               ],
               value: scope ?? "",
             },
@@ -1124,13 +1161,16 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                 request.items.length > 0;
 
               const showFinanceDecisionForm =
-                request.status === "priced" &&
-                canApproveMaterialRequestCost(auth.profile.role);
+                (request.status === "priced" &&
+                  canApproveMaterialRequestCost(auth.profile.role)) ||
+                (request.status === "md_review" &&
+                  canApproveMaterialRequestMdReview(auth.profile.role));
 
               const showTransportForm =
                 canSetMaterialRequestTransportCost(auth.profile.role) &&
                 (request.status === "pricing_pending" ||
                   request.status === "priced" ||
+                  request.status === "md_review" ||
                   request.status === "approved" ||
                   request.status === "ordered");
 
@@ -1169,14 +1209,21 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                         >
                           {request.priority}
                         </span>
+                        {request.scope === "it" ? (
+                          <span className={opsStatusBadgeClass("it", "info")}>
+                            IT — confidential
+                          </span>
+                        ) : null}
                       </div>
                       <p className="mt-2 font-bold text-foreground">{request.title}</p>
                       <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        {request.scope === "general"
-                          ? "General / Office"
-                          : request.site
-                            ? `${request.site.code} - ${request.site.name}`
-                            : "Site unavailable"}{" "}
+                        {request.scope === "it"
+                          ? "IT department (confidential)"
+                          : request.scope === "general"
+                            ? "General / Office"
+                            : request.site
+                              ? `${request.site.code} - ${request.site.name}`
+                              : "Site unavailable"}{" "}
                         / needed by {formatDate(request.needed_by)}
                       </p>
                       {request.description ? (

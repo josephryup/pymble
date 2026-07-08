@@ -1,4 +1,5 @@
 import { requireOpsUser } from "@/lib/ops/auth";
+import { canViewOpsItMaterialRequests } from "@/lib/ops/material-request-permissions";
 import {
   opsIlikeOrFilter,
   toOpsPaginatedResult,
@@ -8,6 +9,7 @@ import {
 import { canViewOpsRfqPo } from "@/lib/ops/rfq-po-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
+  OpsMaterialRequestScope,
   OpsMaterialRequestStatus,
   OpsPurchaseOrderStatus,
   OpsRfqStatus,
@@ -80,7 +82,7 @@ export type OpsRfqSummary = {
   material_request_id: string | null;
   purchase_orders: OpsPurchaseOrderSummary[];
   rfq_number: string;
-  scope: "site" | "general";
+  scope: OpsMaterialRequestScope;
   site: OpsRfqSiteSummary | null;
   site_id: string | null;
   status: OpsRfqStatus;
@@ -102,7 +104,7 @@ export type FetchOpsRfqsOptions = {
   limit?: number;
   query?: string;
   status?: OpsRfqStatus;
-  scope?: "site" | "general";
+  scope?: OpsMaterialRequestScope;
 };
 
 export type FetchPaginatedOpsRfqsOptions = FetchOpsRfqsOptions & {
@@ -287,6 +289,12 @@ async function fetchOpsRfqItems(options: FetchOpsRfqsOptions = {}, listState?: O
     rfqQuery = rfqQuery.eq("scope", options.scope);
   }
 
+  // Confidential IT purchases stay hidden from RFQ/PO viewers outside the
+  // IT circle (leadership + procurement + finance), mirroring material requests.
+  if (!canViewOpsItMaterialRequests(profile.role)) {
+    rfqQuery = rfqQuery.neq("scope", "it");
+  }
+
   const searchFilter = opsIlikeOrFilter(
     ["rfq_number", "title", "description"],
     options.query ?? "",
@@ -409,12 +417,18 @@ export async function fetchApprovedMaterialRequestOptions(
   }
 
   const supabase = getOpsSupabaseServiceClient();
-  const { data, error } = await supabase
+  let optionsQuery = supabase
     .from("material_requests")
     .select(
       "id, request_number, title, status, site_id, site:sites(id, code, name)",
     )
-    .in("status", ["approved", "ordered", "closed"])
+    .in("status", ["approved", "ordered", "closed"]);
+  // Keep confidential IT requests out of the conversion picker for roles
+  // outside the IT circle.
+  if (!canViewOpsItMaterialRequests(profile.role)) {
+    optionsQuery = optionsQuery.neq("scope", "it");
+  }
+  const { data, error } = await optionsQuery
     .order("created_at", { ascending: false })
     .limit(Math.min(Math.max(limit, 1), 250));
 

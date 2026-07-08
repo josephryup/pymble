@@ -7,10 +7,14 @@ import {
   type OpsPaginatedResult,
 } from "@/lib/ops/listing";
 import { logOpsServerError } from "@/lib/ops/log";
-import { canViewAllOpsMaterialRequests } from "@/lib/ops/material-request-permissions";
+import {
+  canViewAllOpsMaterialRequests,
+  canViewOpsItMaterialRequests,
+} from "@/lib/ops/material-request-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsApprovalStatus,
+  OpsMaterialRequestScope,
   OpsMaterialRequestStatus,
   OpsPriority,
   OpsUserRole,
@@ -73,7 +77,7 @@ export type OpsMaterialRequestSummary = {
   request_number: string;
   requested_by: string | null;
   requester: OpsMaterialRequestUserSummary | null;
-  scope: "site" | "general";
+  scope: OpsMaterialRequestScope;
   site: OpsMaterialRequestSiteSummary | null;
   site_id: string | null;
   status: OpsMaterialRequestStatus;
@@ -89,7 +93,7 @@ export type FetchOpsMaterialRequestsOptions = {
   limit?: number;
   query?: string;
   status?: OpsMaterialRequestStatus;
-  scope?: "site" | "general";
+  scope?: OpsMaterialRequestScope;
 };
 
 export type FetchPaginatedOpsMaterialRequestsOptions = FetchOpsMaterialRequestsOptions & {
@@ -124,6 +128,7 @@ export function buildMaterialRequestChainSteps(
   request: Pick<
     OpsMaterialRequestSummary,
     | "status"
+    | "scope"
     | "request_number"
     | "created_at"
     | "submitted_at"
@@ -136,6 +141,7 @@ export function buildMaterialRequestChainSteps(
   >,
 ): OpsChainStepDescriptor[] {
   const s = request.status;
+  const isItRequest = request.scope === "it";
 
   if (s === "cancelled") {
     return [
@@ -155,6 +161,7 @@ export function buildMaterialRequestChainSteps(
     "in_review",
     "pricing_pending",
     "priced",
+    "md_review",
     "approved",
     "ordered",
     "delivered",
@@ -163,13 +170,15 @@ export function buildMaterialRequestChainSteps(
   const operationsApprovedDone = [
     "pricing_pending",
     "priced",
+    "md_review",
     "approved",
     "ordered",
     "delivered",
     "closed",
   ].includes(s);
-  const pricedDone = ["priced", "approved", "ordered", "delivered", "closed"].includes(s);
-  const financeApprovedDone = ["approved", "ordered", "delivered", "closed"].includes(s);
+  const pricedDone = ["priced", "md_review", "approved", "ordered", "delivered", "closed"].includes(s);
+  const financeApprovedDone = ["md_review", "approved", "ordered", "delivered", "closed"].includes(s);
+  const mdApprovedDone = ["approved", "ordered", "delivered", "closed"].includes(s);
   const orderedDone = ["ordered", "delivered", "closed"].includes(s);
   const deliveredDone = ["delivered", "closed"].includes(s);
   const rejected = s === "rejected";
@@ -233,6 +242,27 @@ export function buildMaterialRequestChainSteps(
           : null,
       href: null,
     },
+    // IT requests carry an extra MD gate after Finance (confidential flow:
+    // submission → Operations → Procurement → Finance → MD).
+    ...(isItRequest
+      ? [
+          {
+            key: "md_approved",
+            label: "MD approved",
+            state: mdApprovedDone
+              ? ("done" as const)
+              : s === "md_review"
+                ? ("current" as const)
+                : ("pending" as const),
+            caption: mdApprovedDone
+              ? chainDate(request.approved_at)
+              : s === "md_review"
+                ? "Awaiting Managing Director"
+                : null,
+            href: null,
+          },
+        ]
+      : []),
     {
       key: "procured",
       label: "Procured (RFQ / Purchase Order)",
@@ -242,7 +272,7 @@ export function buildMaterialRequestChainSteps(
     },
     {
       key: "delivered",
-      label: "Delivered to site",
+      label: isItRequest ? "Delivered" : "Delivered to site",
       state: deliveredDone ? "done" : s === "ordered" ? "current" : "pending",
       caption:
         chainDate(request.delivered_at) ??
@@ -472,6 +502,12 @@ async function fetchOpsMaterialRequestItems(
     requestQuery = requestQuery.eq("requested_by", profile.id);
   }
 
+  // IT-scoped requests are confidential: hidden from everyone except the
+  // requester and the leadership/procurement/finance roles in their flow.
+  if (!canViewOpsItMaterialRequests(profile.role)) {
+    requestQuery = requestQuery.or(`scope.neq.it,requested_by.eq.${profile.id}`);
+  }
+
   const { data, error, count } = await (listState
     ? requestQuery.range(listState.from, listState.to)
     : requestQuery.limit(normalizeLimit(options.limit)));
@@ -529,7 +565,7 @@ export async function fetchPaginatedOpsMaterialRequests(
 export async function fetchOpsMaterialRequestById(
   id: string,
 ): Promise<OpsMaterialRequestSummary | null> {
-  await requireOpsUser();
+  const { profile } = await requireOpsUser();
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("material_requests")
@@ -580,6 +616,17 @@ export async function fetchOpsMaterialRequestById(
   if (!data) return null;
 
   const request = data as unknown as RawMaterialRequest;
+
+  // Confidential IT requests: invisible unless the caller is the requester or
+  // one of the leadership/procurement/finance roles in the IT flow.
+  if (
+    request.scope === "it" &&
+    request.requested_by !== profile.id &&
+    !canViewOpsItMaterialRequests(profile.role)
+  ) {
+    return null;
+  }
+
   const [itemsByRequestId, approvalsByRequestId] = await Promise.all([
     fetchMaterialRequestItems([request.id]),
     fetchMaterialRequestApprovals([request.id]),

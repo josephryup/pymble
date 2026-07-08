@@ -57,12 +57,19 @@ export type OpsDocumentVisibility =
   | "finance"
   | "md_restricted"
   | "private";
+/**
+ * 'site' = project-site requisition (site_id required); 'general' = office
+ * overhead; 'it' = confidential IT purchase — restricted visibility and an
+ * extra MD approval stage (md_review) after Finance.
+ */
+export type OpsMaterialRequestScope = "site" | "general" | "it";
 export type OpsMaterialRequestStatus =
   | "draft"
   | "submitted"
   | "in_review"
   | "pricing_pending"
   | "priced"
+  | "md_review"
   | "approved"
   | "rejected"
   | "cancelled"
