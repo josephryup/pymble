@@ -1,5 +1,6 @@
 import { requireOpsUser } from "@/lib/ops/auth";
 import { logOpsServerError } from "@/lib/ops/log";
+import { canApproveSubcontractorPayment } from "@/lib/ops/subcontractor-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 export type OpsSubcontractorKind = "company" | "general";
@@ -202,6 +203,102 @@ export async function fetchOpsSubcontractorPayments(assignmentIds: string[]) {
     throw error;
   }
   return (data ?? []) as OpsSubcontractorPayment[];
+}
+
+export type OpsPendingSubcontractorPayment = {
+  id: string;
+  subcontractor_id: string;
+  company_name: string;
+  trade_specialty: string;
+  payment_type: OpsSubcontractorPaymentType;
+  amount: number;
+  retention_held: number;
+  reference: string;
+  scheduled_for: string | null;
+  requested_by_name: string | null;
+  site: { code: string; name: string } | null;
+  created_at: string;
+};
+
+type RawPendingPayment = {
+  id: string;
+  payment_type: OpsSubcontractorPaymentType;
+  amount: number | string;
+  retention_held: number | string;
+  reference: string;
+  scheduled_for: string | null;
+  created_at: string;
+  requester: Relation<{ full_name: string }>;
+  assignment: Relation<{
+    subcontractor_id: string;
+    subcontractor: Relation<{ company_name: string; trade_specialty: string }>;
+    site: Relation<{ code: string; name: string }>;
+  }>;
+};
+
+/**
+ * Every pending subcontractor payment across the register, newest first, for
+ * the Finance/oversight queue. This is the visibility that was missing — a
+ * pending payment used to be reachable only by opening the one subcontractor's
+ * page. Gated to the same roles that can decide payments.
+ */
+export async function fetchOpsPendingSubcontractorPayments(): Promise<
+  OpsPendingSubcontractorPayment[]
+> {
+  const { profile } = await requireOpsUser();
+  if (!canApproveSubcontractorPayment(profile.role)) {
+    return [];
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("subcontractor_payments")
+    .select(
+      [
+        "id",
+        "payment_type",
+        "amount",
+        "retention_held",
+        "reference",
+        "scheduled_for",
+        "created_at",
+        "requester:users!subcontractor_payments_requested_by_fkey(full_name)",
+        "assignment:subcontractor_assignments!subcontractor_payments_assignment_id_fkey(subcontractor_id, subcontractor:subcontractors!subcontractor_assignments_subcontractor_id_fkey(company_name, trade_specialty), site:sites!subcontractor_assignments_site_id_fkey(code, name))",
+      ].join(", "),
+    )
+    .eq("status", "pending")
+    .is("archived_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    logOpsServerError(error, {
+      module: "subcontractor_payments",
+      action: "fetchOpsPendingSubcontractorPayments",
+    });
+    throw error;
+  }
+
+  return ((data ?? []) as unknown as RawPendingPayment[]).flatMap((row) => {
+    const assignment = pickRel(row.assignment);
+    if (!assignment) return [];
+    const subcontractor = pickRel(assignment.subcontractor);
+    return [
+      {
+        id: row.id,
+        subcontractor_id: assignment.subcontractor_id,
+        company_name: subcontractor?.company_name ?? "Unknown subcontractor",
+        trade_specialty: subcontractor?.trade_specialty ?? "",
+        payment_type: row.payment_type,
+        amount: Number(row.amount ?? 0),
+        retention_held: Number(row.retention_held ?? 0),
+        reference: row.reference,
+        scheduled_for: row.scheduled_for,
+        requested_by_name: pickRel(row.requester)?.full_name ?? null,
+        site: pickRel(assignment.site),
+        created_at: row.created_at,
+      },
+    ];
+  });
 }
 
 export type OpsSubcontractorFinancials = {

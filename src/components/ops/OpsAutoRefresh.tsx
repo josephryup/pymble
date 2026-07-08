@@ -10,12 +10,6 @@ type OpsAutoRefreshProps = {
    * targeting this user so the badge counts in the shell stay live.
    */
   userId: string;
-  /**
-   * Backstop poll interval in ms. When the tab is visible we still call
-   * router.refresh() at this cadence so a missed realtime event eventually
-   * heals. Defaults to 60s.
-   */
-  fallbackIntervalMs?: number;
 };
 
 /**
@@ -27,12 +21,17 @@ type OpsAutoRefreshProps = {
  *    router.refresh().
  * 2. Window focus / visibilitychange — when the user returns to the tab,
  *    refresh immediately so they see the latest data without manual reload.
- * 3. Backstop interval — every minute while visible, refresh anyway in case a
- *    socket disconnect dropped events.
+ *    This also heals any realtime events that were dropped while the socket
+ *    was disconnected (e.g. the tab was backgrounded).
+ *
+ * Deliberately no polling backstop: a timed router.refresh() re-runs the full
+ * server render of a data-heavy dashboard every interval for every open tab,
+ * which burns serverless CPU continuously even when nothing has changed.
+ * Realtime + focus/visibility refresh keeps the page fresh event-driven only.
  *
  * Mounted once in the workspace layout. No UI; effects only.
  */
-export function OpsAutoRefresh({ userId, fallbackIntervalMs = 60_000 }: OpsAutoRefreshProps) {
+export function OpsAutoRefresh({ userId }: OpsAutoRefreshProps) {
   const router = useRouter();
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,13 +61,9 @@ export function OpsAutoRefresh({ userId, fallbackIntervalMs = 60_000 }: OpsAutoR
       };
       document.addEventListener("visibilitychange", onVisibility);
       window.addEventListener("focus", onVisibility);
-      const fallback = window.setInterval(() => {
-        if (document.visibilityState === "visible") router.refresh();
-      }, fallbackIntervalMs);
       return () => {
         document.removeEventListener("visibilitychange", onVisibility);
         window.removeEventListener("focus", onVisibility);
-        window.clearInterval(fallback);
       };
     }
 
@@ -113,20 +108,13 @@ export function OpsAutoRefresh({ userId, fallbackIntervalMs = 60_000 }: OpsAutoR
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", onVisibility);
 
-    const fallback = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        router.refresh();
-      }
-    }, fallbackIntervalMs);
-
     return () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onVisibility);
-      window.clearInterval(fallback);
       supabase.removeChannel(channel).catch(() => null);
     };
-  }, [router, userId, fallbackIntervalMs]);
+  }, [router, userId]);
 
   return null;
 }

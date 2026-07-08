@@ -7,6 +7,8 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { logOpsServerError } from "@/lib/ops/log";
+import { fanoutToOpsAudiences } from "@/lib/ops/notification-fanout";
+import { queueOpsNotification } from "@/lib/ops/notifications";
 import {
   canAllocateSubcontractor,
   canApproveSubcontractorPayment,
@@ -17,6 +19,30 @@ import {
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 const ROUTE = "/ops/subcontractors";
+
+/**
+ * Finance owns subcontractor payment decisions; leadership keeps oversight.
+ * Mirrors the audience split used across the other approval flows so Finance/MD
+ * actually see a request the moment it is raised (the gap this closes — a
+ * pending payment used to be visible only on the one subcontractor's page).
+ */
+const SUBCONTRACTOR_PAYMENT_FINANCE_ROLES = [
+  "finance_manager",
+  "accountant",
+] as const;
+const SUBCONTRACTOR_PAYMENT_OVERSIGHT_ROLES = [
+  "managing_director",
+  "general_manager",
+  "owner",
+] as const;
+
+function formatPaymentType(type: string) {
+  return type.replace(/_/g, " ");
+}
+
+function formatZmwAmount(amount: number) {
+  return `ZMW ${amount.toLocaleString("en-ZM", { maximumFractionDigits: 2 })}`;
+}
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const optionalUuid = z
   .string()
@@ -304,9 +330,16 @@ export async function requestSubcontractorPaymentAction(formData: FormData) {
   const supabase = getOpsSupabaseServiceClient();
   const { data: assignment } = await supabase
     .from("subcontractor_assignments")
-    .select("subcontractor_id")
+    .select(
+      "subcontractor_id, scope, subcontractor:subcontractors!subcontractor_assignments_subcontractor_id_fkey(company_name, trade_specialty), site:sites!subcontractor_assignments_site_id_fkey(code, name)",
+    )
     .eq("id", parsed.data.assignment_id)
-    .maybeSingle<{ subcontractor_id: string }>();
+    .maybeSingle<{
+      subcontractor_id: string;
+      scope: string | null;
+      subcontractor: { company_name: string; trade_specialty: string } | null;
+      site: { code: string; name: string } | null;
+    }>();
   if (!assignment) subError("Assignment not found.");
 
   const { data, error } = await supabase
@@ -332,8 +365,42 @@ export async function requestSubcontractorPaymentAction(formData: FormData) {
     sourceTable: "subcontractor_payments",
     summary: `Requested ${parsed.data.payment_type} payment`,
   }).catch(() => null);
+
+  // Surface the request to Finance (action-needed) and leadership (oversight).
+  // Without this the pending row was only visible on the subcontractor's own
+  // page — the core bug this closes.
+  const company = assignment.subcontractor?.company_name ?? "a subcontractor";
+  const siteLabel = assignment.site
+    ? ` · ${assignment.site.code} (${assignment.site.name})`
+    : "";
+  const paymentHref = `${ROUTE}/${assignment.subcontractor_id}?updated=payment-requested#payment-${data.id}`;
+  const recipients = await fanoutToOpsAudiences({
+    actionNeeded: [...SUBCONTRACTOR_PAYMENT_FINANCE_ROLES],
+    oversight: [...SUBCONTRACTOR_PAYMENT_OVERSIGHT_ROLES],
+    excludeUserIds: [profile.id],
+  });
+  await Promise.all(
+    recipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: paymentHref,
+        body: `${profile.full_name} requested a ${formatPaymentType(
+          parsed.data.payment_type,
+        )} payment of ${formatZmwAmount(parsed.data.amount)} for ${company}${siteLabel}. Finance approval needed.`,
+        category: "action",
+        idempotencyKey: `subcontractor-payment-requested:${data.id}:${recipient.id}`,
+        moduleKey: "subcontractors",
+        recipientId: recipient.id,
+        sourceId: data.id,
+        sourceTable: "subcontractor_payments",
+        title: `Subcontractor payment: ${company}`,
+      }).catch(() => null),
+    ),
+  );
+
   revalidatePath(`${ROUTE}/${assignment.subcontractor_id}`);
-  redirect(`${ROUTE}/${assignment.subcontractor_id}?updated=payment-requested`);
+  revalidatePath(ROUTE);
+  revalidatePath("/ops/notifications");
+  redirect(`${ROUTE}/${assignment.subcontractor_id}?updated=payment-requested#payment-${data.id}`);
 }
 
 const paymentDecisionSchema = z.object({
@@ -358,15 +425,25 @@ export async function decideSubcontractorPaymentAction(formData: FormData) {
   const supabase = getOpsSupabaseServiceClient();
   const { data: payment } = await supabase
     .from("subcontractor_payments")
-    .select("assignment_id")
+    .select("assignment_id, payment_type, amount, requested_by")
     .eq("id", parsed.data.id)
-    .maybeSingle<{ assignment_id: string }>();
+    .maybeSingle<{
+      assignment_id: string;
+      payment_type: string;
+      amount: number | string;
+      requested_by: string | null;
+    }>();
   if (!payment) subError("Payment not found.");
   const { data: assignment } = await supabase
     .from("subcontractor_assignments")
-    .select("subcontractor_id")
+    .select(
+      "subcontractor_id, subcontractor:subcontractors!subcontractor_assignments_subcontractor_id_fkey(company_name)",
+    )
     .eq("id", payment.assignment_id)
-    .maybeSingle<{ subcontractor_id: string }>();
+    .maybeSingle<{
+      subcontractor_id: string;
+      subcontractor: { company_name: string } | null;
+    }>();
 
   const patch: Record<string, unknown> = {
     status: parsed.data.decision,
@@ -393,6 +470,34 @@ export async function decideSubcontractorPaymentAction(formData: FormData) {
     summary: `Marked payment ${parsed.data.decision}`,
   }).catch(() => null);
 
+  // Close the loop back to whoever raised the request.
+  if (payment.requested_by && payment.requested_by !== profile.id && assignment) {
+    const company = assignment.subcontractor?.company_name ?? "a subcontractor";
+    const amount = formatZmwAmount(Number(payment.amount ?? 0));
+    const type = formatPaymentType(payment.payment_type);
+    const outcome =
+      parsed.data.decision === "rejected"
+        ? "was rejected"
+        : parsed.data.decision === "paid"
+          ? "has been paid"
+          : "was approved";
+    await queueOpsNotification({
+      actionHref: `${ROUTE}/${assignment.subcontractor_id}#payment-${parsed.data.id}`,
+      body: `${profile.full_name}: your ${type} payment of ${amount} for ${company} ${outcome}.${
+        parsed.data.notes ? ` Note: ${parsed.data.notes}` : ""
+      }`,
+      category: "info",
+      idempotencyKey: `subcontractor-payment-decision:${parsed.data.id}:${parsed.data.decision}`,
+      moduleKey: "subcontractors",
+      recipientId: payment.requested_by,
+      sourceId: parsed.data.id,
+      sourceTable: "subcontractor_payments",
+      title: `Payment ${parsed.data.decision}: ${company}`,
+    }).catch(() => null);
+  }
+
+  revalidatePath(ROUTE);
+  revalidatePath("/ops/notifications");
   if (assignment?.subcontractor_id) {
     revalidatePath(`${ROUTE}/${assignment.subcontractor_id}`);
     redirect(
