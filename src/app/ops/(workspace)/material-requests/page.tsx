@@ -830,6 +830,19 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
     requests.flatMap((request) => [request.budget_line_id, request.transport_budget_line_id]),
   );
   const canCreate = canCreateOpsMaterialRequest(auth.profile.role);
+  // Which requisition types this user may raise. Site scope needs at least one
+  // active site; general and IT requests don't, so an empty site register must
+  // never block them (the IT manager may not even see sites).
+  const scopeChoices: Array<"site" | "general" | "it"> =
+    auth.profile.role === "it_manager"
+      ? ["it"]
+      : canCreateOpsMaterialRequestScope(auth.profile.role, "it")
+        ? ["site", "general", "it"]
+        : ["site", "general"];
+  const allowedScopes =
+    siteOptions.length === 0
+      ? scopeChoices.filter((value) => value !== "site")
+      : scopeChoices;
   const canManageActivity = canCreate || canManageOpsMaterialRequest(auth.profile.role);
   const notice = materialRequestNotice(params);
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
@@ -1028,14 +1041,16 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                 Create request
               </span>
               <span className="mt-1 block text-sm text-muted-foreground">
-                Start with site, priority, first item, quantity, and target need date.
+                {allowedScopes.includes("site")
+                  ? "Start with site, priority, first item, quantity, and target need date."
+                  : "Start with priority, first item, quantity, and target need date."}
               </span>
             </span>
             <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
-          {siteOptions.length === 0 ? (
+          {allowedScopes.length === 0 ? (
             <div className="border-t border-border p-5">
               <div className={OPS_NOTICE_WARNING_CLASS}>
                 Add at least one active site before creating material requests.
@@ -1046,16 +1061,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
               action={createMaterialRequestAction}
               className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
-              <OpsScopeSitePicker
-                allowedScopes={
-                  auth.profile.role === "it_manager"
-                    ? ["it"]
-                    : canCreateOpsMaterialRequestScope(auth.profile.role, "it")
-                      ? ["site", "general", "it"]
-                      : ["site", "general"]
-                }
-                sites={siteOptions}
-              />
+              <OpsScopeSitePicker allowedScopes={allowedScopes} sites={siteOptions} />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Request title
                 <input className={OPS_INPUT_CLASS} name="title" required />
@@ -1104,7 +1110,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
               Request register
             </p>
             <h2 className="font-heading text-xl font-bold text-foreground">
-              Site material requests
+              {auth.profile.role === "it_manager" ? "IT material requests" : "Site material requests"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {requestPage.pagination.total} matching material requests filtered by status and
@@ -1482,7 +1488,9 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
             description={
               hasActiveListFilter
                 ? "Try clearing the search or switching the status filter — drafts, submitted, and priced sit in different buckets."
-                : "When a site engineer raises a material need, it appears here for procurement to act on. Use the form above to create the first draft."
+                : auth.profile.role === "it_manager"
+                  ? "When you raise an IT purchase request, it appears here and moves through Operations, Procurement, Finance, and the MD. Use the form above to create the first draft."
+                  : "When a site engineer raises a material need, it appears here for procurement to act on. Use the form above to create the first draft."
             }
             actions={
               hasActiveListFilter
