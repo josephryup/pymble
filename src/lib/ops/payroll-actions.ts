@@ -7,6 +7,7 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { postPayrollRunJournalSafe } from "@/lib/ops/gl-posting";
 import { canManageOps } from "@/lib/ops/permissions";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import { computePayslip } from "@/lib/ops/statutory/calculator";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -324,6 +325,18 @@ export async function createPayrollRunAction(formData: FormData) {
     },
   });
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["managing_director", "general_manager"],
+    title: `Approve payroll run: ${parsed.data.period_label}`,
+    body: `${profile.full_name} prepared the ${parsed.data.period_label} workers payroll run (net ZMW ${totalNet.toLocaleString("en-ZM")}). Approval needed before disbursement.`,
+    actionHref: "/ops/payroll",
+    moduleKey: "payroll",
+    sourceTable: "payroll_runs",
+    sourceId: createdRun.id,
+    eventKey: "created",
+  });
+
   revalidatePath("/ops");
   revalidatePath("/ops/attendance");
   revalidatePath("/ops/payroll");
@@ -365,6 +378,18 @@ export async function approvePayrollRunAction(formData: FormData) {
     action: "payroll_run.approved",
     entity_type: "payroll_run",
     entity_id: data.id,
+  });
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["finance_manager", "accountant"],
+    title: "Payroll run approved — ready to disburse",
+    body: `${profile.full_name} approved a workers payroll run. Complete it to record the disbursement.`,
+    actionHref: "/ops/payroll",
+    moduleKey: "payroll",
+    sourceTable: "payroll_runs",
+    sourceId: data.id,
+    eventKey: "approved",
   });
 
   revalidatePath("/ops/payroll");
@@ -454,6 +479,20 @@ export async function completePayrollRunAction(formData: FormData) {
     module_key: "payroll",
     source_table: "payroll_runs",
     source_id: run.id,
+  });
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["finance_manager", "accountant"],
+    oversightRoles: ["managing_director"],
+    title: "Payroll run disbursed",
+    body: `${profile.full_name} completed a workers payroll run — wages disbursed and posted to the ledger.`,
+    actionHref: "/ops/payroll",
+    moduleKey: "payroll",
+    sourceTable: "payroll_runs",
+    sourceId: run.id,
+    eventKey: "completed",
+    category: "info",
   });
 
   revalidatePath("/ops");

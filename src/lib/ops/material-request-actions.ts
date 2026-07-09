@@ -648,9 +648,34 @@ export async function submitMaterialRequestForApprovalAction(formData: FormData)
     (sum, item) => sum + normalizeMoney(item.estimated_total),
     0,
   );
-  const steps = materialRequestApprovalSteps(request.priority, estimatedTotal);
+  const steps = materialRequestApprovalSteps(request.priority, estimatedTotal, request.scope);
   const now = new Date().toISOString();
   const supabase = getOpsSupabaseServiceClient();
+
+  // PM → MD fallback, resolved once at chain-construction time: if the site
+  // chain calls for a Projects Manager review but no active PM exists, the
+  // Managing Director covers that stage directly. Deliberately NOT the generic
+  // notification fallback chain (which tries OM/GM first) — the requirement is
+  // that the accuracy check escalates straight to the MD, and
+  // canDecideOpsApprovalStep already grants a literal "managing_director" step
+  // to the MD, so this is correct by construction.
+  let pmFallbackApplied = false;
+  if (steps.some((step) => step.approverRole === "projects_manager")) {
+    const { count: activePmCount } = await supabase
+      .from("users")
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true)
+      .eq("role", "projects_manager");
+    if (!activePmCount) {
+      pmFallbackApplied = true;
+      for (const step of steps) {
+        if (step.approverRole === "projects_manager") {
+          step.approverRole = "managing_director";
+          step.label = "Projects Manager review (MD covering)";
+        }
+      }
+    }
+  }
   const { data: approval, error: approvalError } = await supabase
     .from("approval_requests")
     .insert({
@@ -765,8 +790,10 @@ export async function submitMaterialRequestForApprovalAction(formData: FormData)
     metadata: {
       estimated_total: estimatedTotal,
       item_count: items.length,
+      pm_fallback_to_md: pmFallbackApplied,
       request_id: request.id,
       request_number: request.request_number,
+      scope: request.scope,
       site_id: request.site_id,
       step_roles: steps.map((step) => step.approverRole),
     },

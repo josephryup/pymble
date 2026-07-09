@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import {
   canAllocateOpsEquipment,
   canApproveOpsEquipmentRequest,
@@ -796,6 +797,18 @@ export async function submitEquipmentRequestAction(formData: FormData) {
     summary: `Submitted equipment request ${request.request_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["operations_manager", "projects_manager"],
+    title: `Equipment request: ${request.request_number}`,
+    body: `${profile.full_name} submitted ${request.request_number} — ${request.title}. Approval needed.`,
+    actionHref: `${EQUIPMENT_ROUTE}?status=submitted#equipment-request-register`,
+    moduleKey: "equipment",
+    sourceTable: "equipment_requests",
+    sourceId: request.id,
+    eventKey: "submitted",
+  });
+
   revalidatePath(EQUIPMENT_ROUTE);
   redirect(`${EQUIPMENT_ROUTE}?updated=submitted`);
 }
@@ -842,6 +855,19 @@ export async function approveEquipmentRequestAction(formData: FormData) {
     summary: `Approved equipment request ${request.request_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [request.requested_by],
+    title: `Approved: ${request.request_number}`,
+    body: `${profile.full_name} approved your equipment request ${request.request_number} — ${request.title}.`,
+    actionHref: EQUIPMENT_ROUTE,
+    moduleKey: "equipment",
+    sourceTable: "equipment_requests",
+    sourceId: request.id,
+    eventKey: "approved",
+    category: "info",
+  });
+
   revalidatePath(EQUIPMENT_ROUTE);
   redirect(`${EQUIPMENT_ROUTE}?updated=approved`);
 }
@@ -887,6 +913,19 @@ export async function rejectEquipmentRequestAction(formData: FormData) {
     sourceTable: "equipment_requests",
     summary: `Rejected equipment request ${request.request_number}`,
   }).catch(() => null);
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [request.requested_by],
+    title: `Rejected: ${request.request_number}`,
+    body: `${profile.full_name} rejected your equipment request ${request.request_number} — ${request.title}.`,
+    actionHref: EQUIPMENT_ROUTE,
+    moduleKey: "equipment",
+    sourceTable: "equipment_requests",
+    sourceId: request.id,
+    eventKey: "rejected",
+    category: "info",
+  });
 
   revalidatePath(EQUIPMENT_ROUTE);
   redirect(`${EQUIPMENT_ROUTE}?updated=rejected`);

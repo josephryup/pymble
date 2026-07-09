@@ -51,19 +51,23 @@ describe("material request workflow guards", () => {
     );
   });
 
-  it("uses a single operations approval step (procurement and finance are explicit actions)", () => {
-    // Per the Phase H3 workflow:
-    //   submitted/in_review → (Operations approves) → pricing_pending →
+  it("uses a single operations step for general/IT scope; site adds a PM review first", () => {
+    // Per the Phase H3 workflow (+ system-wide audit §6a):
+    //   submitted → (site only: PM accuracy check) → in_review →
+    //   (Operations approves) → pricing_pending →
     //   (Procurement attaches prices) → priced →
     //   (Finance approves cost via action) → approved.
-    // The approval chain itself is just the single operations step.
     assert.deepEqual(
-      materialRequestApprovalSteps("normal", 25_000).map((step) => step.approverRole),
+      materialRequestApprovalSteps("normal", 25_000, "general").map((step) => step.approverRole),
       ["operations_manager"],
     );
     assert.deepEqual(
-      materialRequestApprovalSteps("urgent", 25_000).map((step) => step.approverRole),
+      materialRequestApprovalSteps("urgent", 25_000, "it").map((step) => step.approverRole),
       ["operations_manager"],
+    );
+    assert.deepEqual(
+      materialRequestApprovalSteps("normal", 25_000, "site").map((step) => step.approverRole),
+      ["projects_manager", "operations_manager"],
     );
   });
 
@@ -303,6 +307,95 @@ describe("IT material request confidentiality and flow", () => {
       siteChain.some((step) => step.key === "md_approved"),
       false,
       "site chain has no MD gate",
+    );
+  });
+});
+
+describe("site-scope Projects Manager review stage", () => {
+  it("prepends a PM step for site scope only", async () => {
+    const { materialRequestApprovalSteps } = await import(
+      "../src/lib/ops/material-request-permissions"
+    );
+    const site = materialRequestApprovalSteps("normal", 1000, "site");
+    assert.deepEqual(
+      site.map((step) => [step.stepNumber, step.approverRole]),
+      [
+        [1, "projects_manager"],
+        [2, "operations_manager"],
+      ],
+    );
+
+    for (const scope of ["general", "it"] as const) {
+      const steps = materialRequestApprovalSteps("normal", 1000, scope);
+      assert.deepEqual(
+        steps.map((step) => [step.stepNumber, step.approverRole]),
+        [[1, "operations_manager"]],
+        scope,
+      );
+    }
+  });
+
+  it("only notifies the first step's approver at submission", async () => {
+    const { materialRequestApprovalSteps, materialRequestApprovalRecipientRoles } =
+      await import("../src/lib/ops/material-request-permissions");
+    const roles = materialRequestApprovalRecipientRoles(
+      materialRequestApprovalSteps("normal", 1000, "site"),
+    );
+    assert.ok(roles.includes("projects_manager"));
+    assert.ok(
+      !roles.includes("operations_manager"),
+      "Operations must not be summoned before the PM has reviewed",
+    );
+  });
+
+  it("shows the PM chain step for site scope with correct states", async () => {
+    const { buildMaterialRequestChainSteps } = await import(
+      "../src/lib/ops/material-requests"
+    );
+    const base = {
+      request_number: "MR-002",
+      created_at: "2026-07-01T08:00:00Z",
+      submitted_at: "2026-07-01T09:00:00Z",
+      approved_at: null,
+      rejected_at: null,
+      ordered_at: null,
+      closed_at: null,
+      priced_at: null,
+      delivered_at: null,
+    };
+
+    const awaitingPm = buildMaterialRequestChainSteps({
+      ...base,
+      scope: "site",
+      status: "submitted",
+    });
+    assert.equal(awaitingPm.find((step) => step.key === "pm_reviewed")?.state, "current");
+    assert.equal(
+      awaitingPm.find((step) => step.key === "operations_approved")?.state,
+      "pending",
+      "Operations is not current while the PM review is open",
+    );
+
+    const awaitingOps = buildMaterialRequestChainSteps({
+      ...base,
+      scope: "site",
+      status: "in_review",
+    });
+    assert.equal(awaitingOps.find((step) => step.key === "pm_reviewed")?.state, "done");
+    assert.equal(
+      awaitingOps.find((step) => step.key === "operations_approved")?.state,
+      "current",
+    );
+
+    const generalChain = buildMaterialRequestChainSteps({
+      ...base,
+      scope: "general",
+      status: "submitted",
+    });
+    assert.equal(
+      generalChain.some((step) => step.key === "pm_reviewed"),
+      false,
+      "general scope keeps the single-step chain",
     );
   });
 });

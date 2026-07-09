@@ -13,6 +13,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // A custom viewport export REPLACES Next's default meta viewport entirely —
+  // it is not merged. Omitting width/initialScale here silently dropped
+  // `width=device-width, initial-scale=1` for every /ops route, so phones fell
+  // back to a ~980px virtual viewport and Tailwind sm:/md: breakpoints fired
+  // on mobile (system-wide audit §1). Never remove these two fields.
+  width: "device-width",
+  initialScale: 1,
   themeColor: "#2235DD",
   // Lets the installed PWA render edge-to-edge and exposes real
   // env(safe-area-inset-*) values (notch, Dynamic Island, home-indicator,

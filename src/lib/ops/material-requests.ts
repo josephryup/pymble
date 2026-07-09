@@ -199,6 +199,32 @@ export function buildMaterialRequestChainSteps(
       caption: chainDate(request.submitted_at) ?? (s === "draft" ? "Awaiting submission" : null),
       href: null,
     },
+    // Site-scoped requests carry a Projects Manager accuracy check before
+    // Operations (audit §6a). `submitted` = awaiting PM; `in_review` = PM done,
+    // awaiting Operations. On rejection the per-step outcome isn't derivable
+    // from the request status alone, so the rejected marker stays on the
+    // Operations step (as before) and this step renders neutral.
+    ...(request.scope === "site"
+      ? [
+          {
+            key: "pm_reviewed",
+            label: "Projects Manager reviewed",
+            state:
+              operationsApprovedDone || s === "in_review"
+                ? ("done" as const)
+                : s === "submitted"
+                  ? ("current" as const)
+                  : ("pending" as const),
+            caption:
+              s === "submitted"
+                ? "Awaiting Projects Manager"
+                : s === "in_review"
+                  ? "Accuracy check passed"
+                  : null,
+            href: null,
+          },
+        ]
+      : []),
     {
       key: "operations_approved",
       label: rejected ? "Rejected" : "Operations approved",
@@ -206,13 +232,15 @@ export function buildMaterialRequestChainSteps(
         ? "rejected"
         : operationsApprovedDone
           ? "done"
-          : ["submitted", "in_review"].includes(s)
+          : (request.scope === "site" ? s === "in_review" : ["submitted", "in_review"].includes(s))
             ? "current"
             : "pending",
       caption: rejected
         ? chainDate(request.rejected_at)
         : (chainDate(request.approved_at) ??
-          (["submitted", "in_review"].includes(s) ? "Awaiting Operations" : null)),
+          ((request.scope === "site" ? s === "in_review" : ["submitted", "in_review"].includes(s))
+            ? "Awaiting Operations"
+            : null)),
       href: null,
     },
     {

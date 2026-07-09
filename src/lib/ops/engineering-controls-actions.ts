@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import {
   canAcknowledgeOpsSiteInstruction,
   canArchiveOpsDrawingRecord,
@@ -463,6 +464,18 @@ export async function issueSiteInstructionAction(formData: FormData) {
     entityType: "site_instruction",
     sourceTable: "site_instructions",
     summary: `Issued site instruction ${instruction.instruction_number}`,
+  });
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [instruction.assigned_to],
+    title: `Site instruction issued: ${instruction.instruction_number}`,
+    body: `${profile.full_name} issued site instruction ${instruction.instruction_number} — acknowledgement needed.`,
+    actionHref: ENGINEERING_ROUTE,
+    moduleKey: "engineering_controls",
+    sourceTable: "site_instructions",
+    sourceId: instruction.id,
+    eventKey: "issued",
   });
 
   revalidatePath(ENGINEERING_ROUTE);
@@ -1136,6 +1149,18 @@ export async function resolveSnagItemAction(formData: FormData) {
     engineeringError(error.message);
   }
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["engineering_manager"],
+    title: `Verify snag: ${snag.snag_number}`,
+    body: `${profile.full_name} resolved snag ${snag.snag_number}. Verification needed to close it out.`,
+    actionHref: ENGINEERING_ROUTE,
+    moduleKey: "engineering_controls",
+    sourceTable: "snag_items",
+    sourceId: snag.id,
+    eventKey: "resolved",
+  });
+
   revalidatePath(ENGINEERING_ROUTE);
   engineeringNotice("snag_resolved");
 }
@@ -1162,6 +1187,19 @@ export async function verifySnagItemAction(formData: FormData) {
   if (error) {
     engineeringError(error.message);
   }
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [snag.assigned_to],
+    title: `Snag verified: ${snag.snag_number}`,
+    body: `${profile.full_name} verified snag ${snag.snag_number} as complete.`,
+    actionHref: ENGINEERING_ROUTE,
+    moduleKey: "engineering_controls",
+    sourceTable: "snag_items",
+    sourceId: snag.id,
+    eventKey: "verified",
+    category: "info",
+  });
 
   revalidatePath(ENGINEERING_ROUTE);
   engineeringNotice("snag_verified");

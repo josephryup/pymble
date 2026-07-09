@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import {
   canCancelOpsDeliveryException,
   canCreateOpsDeliveryException,
@@ -299,6 +300,18 @@ export async function createDeliveryExceptionAction(formData: FormData) {
     summary: `Created delivery exception ${data.exception_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["procurement_manager", "procurement"],
+    title: `Delivery exception: ${data.exception_number}`,
+    body: `${profile.full_name} raised delivery exception ${data.exception_number} — ${parsed.data.title} (${supplier.legal_name}). Investigation needed.`,
+    actionHref: DELIVERY_EXCEPTION_ROUTE,
+    moduleKey: "delivery_exceptions",
+    sourceTable: "delivery_exceptions",
+    sourceId: data.id,
+    eventKey: "created",
+  });
+
   revalidatePath(DELIVERY_EXCEPTION_ROUTE);
   revalidatePath("/ops/stores-inventory");
   redirect(`${DELIVERY_EXCEPTION_ROUTE}?created=exception`);
@@ -442,6 +455,19 @@ export async function resolveDeliveryExceptionAction(formData: FormData) {
     sourceTable: "delivery_exceptions",
     summary: `Resolved delivery exception ${exception.exception_number}`,
   }).catch(() => null);
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [exception.created_by],
+    title: `Exception resolved: ${exception.exception_number}`,
+    body: `${profile.full_name} resolved delivery exception ${exception.exception_number} — ${exception.title}.`,
+    actionHref: DELIVERY_EXCEPTION_ROUTE,
+    moduleKey: "delivery_exceptions",
+    sourceTable: "delivery_exceptions",
+    sourceId: exception.id,
+    eventKey: "resolved",
+    category: "info",
+  });
 
   revalidatePath(DELIVERY_EXCEPTION_ROUTE);
   revalidatePath("/ops/suppliers");

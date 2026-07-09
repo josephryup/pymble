@@ -33,6 +33,20 @@ const APPROVERS: OpsUserRole[] = [
 // Mirrors canApproveMaterialRequestMdReview (material-request-permissions.ts) — the
 // MD is the final gate on confidential IT-scoped material requests.
 const MD_REVIEWERS: OpsUserRole[] = ["developer", "owner", "managing_director"];
+// Equipment + transport request approvals (EQUIPMENT_REVIEW_ROLES /
+// FLEET_LOGISTICS_DECISION_ROLES minus the HR-only seats).
+const OPERATIONS_APPROVERS: OpsUserRole[] = [
+  ...LEADERSHIP,
+  "operations_manager",
+  "projects_manager",
+];
+// Commercial certification/approval decisions (COMMERCIAL_DECISION_ROLES).
+const COMMERCIAL_DECIDERS: OpsUserRole[] = [
+  ...LEADERSHIP,
+  "projects_manager",
+  "quantity_surveyor",
+  "finance_manager",
+];
 
 type QueueTask = {
   key: string;
@@ -203,6 +217,97 @@ export async function fetchOpsMyQueue(role: OpsUserRole, userId: string): Promis
           .select("id", { count: "exact", head: true })
           .eq("status", "md_review"),
       ),
+    });
+  }
+
+  if (OPERATIONS_APPROVERS.includes(role)) {
+    tasks.push({
+      key: "equipment_requests",
+      label: "Equipment requests to approve",
+      href: "/ops/equipment?status=submitted#equipment-request-register",
+      tone: "warn",
+      run: count(
+        supabase
+          .from("equipment_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "submitted"),
+      ),
+    });
+    tasks.push({
+      key: "transport_requests",
+      label: "Transport requests to approve",
+      href: "/ops/fleet-logistics?status=submitted#transport-register",
+      tone: "warn",
+      run: count(
+        supabase
+          .from("transport_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "submitted"),
+      ),
+    });
+  }
+
+  if (COMMERCIAL_DECIDERS.includes(role)) {
+    tasks.push({
+      key: "commercial_decisions",
+      label: "Commercial records awaiting decision",
+      href: "/ops/commercial",
+      tone: "warn",
+      run: Promise.all([
+        count(
+          supabase
+            .from("commercial_ipcs")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "submitted"),
+        ),
+        count(
+          supabase
+            .from("commercial_variations")
+            .select("id", { count: "exact", head: true })
+            .in("status", ["submitted", "priced"]),
+        ),
+        count(
+          supabase
+            .from("commercial_claims")
+            .select("id", { count: "exact", head: true })
+            .in("status", ["submitted", "under_review"]),
+        ),
+        count(
+          supabase
+            .from("commercial_valuations")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "submitted"),
+        ),
+        count(
+          supabase
+            .from("commercial_retention_releases")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "submitted"),
+        ),
+      ]).then((counts) => counts.reduce((sum, value) => sum + value, 0)),
+    });
+  }
+
+  if ([...LEADERSHIP, "general_manager"].includes(role)) {
+    tasks.push({
+      key: "payroll_runs",
+      label: "Payroll runs awaiting approval",
+      href: "/ops/payroll",
+      tone: "warn",
+      run: Promise.all([
+        count(
+          supabase
+            .from("payroll_runs")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "draft"),
+        ),
+        count(
+          supabase
+            .from("staff_payroll_runs")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "draft"),
+        ),
+      ]).then((counts) => counts.reduce((sum, value) => sum + value, 0)),
     });
   }
 

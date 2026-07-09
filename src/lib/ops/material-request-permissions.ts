@@ -166,14 +166,39 @@ export function canSubmitOpsMaterialRequest(
 export function materialRequestApprovalSteps(
   _priority: OpsPriority,
   _estimatedTotal: number,
+  scope: OpsMaterialRequestScope = "site",
 ): OpsMaterialApprovalStepTemplate[] {
   void _priority;
   void _estimatedTotal;
 
-  // Single operations approval step. When approved, the material request moves
-  // to `pricing_pending` for Procurement to attach supplier prices, then to
-  // `priced` for Finance to approve the cost — those two transitions are
-  // handled as explicit actions, not as approval steps.
+  // When the chain completes, the material request moves to `pricing_pending`
+  // for Procurement to attach supplier prices, then to `priced` for Finance to
+  // approve the cost — those transitions are explicit actions, not steps.
+  //
+  // Site-scoped requests get a Projects Manager accuracy/quality check BEFORE
+  // Operations (system-wide audit §6a): the PM confirms the request and its
+  // listed materials are correct for the project. IT and general/office
+  // requests keep the single Operations step — the PM check is a project-site
+  // concern only. If no active PM exists, the submit action swaps the step's
+  // approver to the Managing Director at chain-construction time (deliberately
+  // NOT the generic OM/GM fallback chain).
+  if (scope === "site") {
+    return [
+      {
+        approverRole: "projects_manager",
+        label: "Projects Manager review",
+        sequence: 1,
+        stepNumber: 1,
+      },
+      {
+        approverRole: "operations_manager",
+        label: "Operations review",
+        sequence: 1,
+        stepNumber: 2,
+      },
+    ];
+  }
+
   return [
     {
       approverRole: "operations_manager",
@@ -266,9 +291,16 @@ export function canDeleteOpsMaterialRequest(actorRole: OpsUserRole) {
 export function materialRequestApprovalRecipientRoles(
   steps: OpsMaterialApprovalStepTemplate[],
 ) {
+  // Only the FIRST step's approver(s) are notified at submission time — later
+  // steps are notified by decideOpsApprovalAction when the chain actually
+  // reaches them. Flattening every step here would prematurely summon the
+  // Operations Manager before the Projects Manager has reviewed (audit §6a.1).
+  const firstStepNumber = Math.min(...steps.map((step) => step.stepNumber));
   return Array.from(
     new Set<OpsUserRole>([
-      ...steps.map((step) => step.approverRole),
+      ...steps
+        .filter((step) => step.stepNumber === firstStepNumber)
+        .map((step) => step.approverRole),
       "developer",
     ]),
   );

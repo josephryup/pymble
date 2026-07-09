@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import {
   OPS_HSE_ESCALATION_NOTIFICATION_ROLES,
   OPS_HSE_REVIEW_NOTIFICATION_ROLES,
@@ -1968,6 +1969,21 @@ export async function approveHseRiskAssessmentAction(formData: FormData) {
     sourceTable: "hse_risk_assessments",
     title: "Risk assessment approved",
   }).catch(() => null);
+
+  // Close the loop to whoever raised the assessment (the broadcast above only
+  // fires for high/critical residual risk).
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [assessment.created_by, assessment.responsible_user_id],
+    title: `Risk assessment approved: ${assessment.assessment_number}`,
+    body: `${profile.full_name} approved ${assessment.assessment_number} — ${assessment.title}.`,
+    actionHref: `${HSE_COMPLIANCE_ROUTE}#risk-assessment-panel`,
+    moduleKey: "hse_compliance",
+    sourceTable: "hse_risk_assessments",
+    sourceId: assessment.id,
+    eventKey: "approved",
+    category: "info",
+  });
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
   revalidatePath("/ops/notifications");

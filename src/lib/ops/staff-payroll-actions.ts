@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canManageOpsStaffPayroll } from "@/lib/ops/staff-payroll";
 import { computeStaffPayslip } from "@/lib/ops/statutory/calculator";
@@ -317,6 +318,18 @@ export async function createStaffPayrollRunAction(formData: FormData) {
     summary: `Created staff payroll run ${parsed.data.period_label} (${inserts.length} employees)`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["managing_director", "general_manager"],
+    title: `Approve staff payroll run: ${parsed.data.period_label}`,
+    body: `${profile.full_name} prepared the ${parsed.data.period_label} staff payroll run. Approval needed before completion.`,
+    actionHref: STAFF_PAYROLL_ROUTE,
+    moduleKey: "staff_payroll",
+    sourceTable: "staff_payroll_runs",
+    sourceId: run.id,
+    eventKey: "created",
+  });
+
   revalidatePath(STAFF_PAYROLL_ROUTE);
   redirect(
     `${STAFF_PAYROLL_ROUTE}?created=run&included=${payable.length}&skipped=${skippedZeroPay.length}`,
@@ -356,6 +369,18 @@ export async function approveStaffPayrollRunAction(formData: FormData) {
     sourceTable: "staff_payroll_runs",
     summary: "Approved staff payroll run",
   }).catch(() => null);
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["finance_manager", "accountant"],
+    title: "Staff payroll run approved — ready to complete",
+    body: `${profile.full_name} approved a staff payroll run. Complete it to record the disbursement.`,
+    actionHref: STAFF_PAYROLL_ROUTE,
+    moduleKey: "staff_payroll",
+    sourceTable: "staff_payroll_runs",
+    sourceId: parsed.data.id,
+    eventKey: "approved",
+  });
+
   revalidatePath(STAFF_PAYROLL_ROUTE);
   redirect(`${STAFF_PAYROLL_ROUTE}?updated=approved`);
 }
@@ -398,6 +423,20 @@ export async function completeStaffPayrollRunAction(formData: FormData) {
     sourceTable: "staff_payroll_runs",
     summary: "Marked staff payroll run paid",
   }).catch(() => null);
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["finance_manager", "accountant"],
+    oversightRoles: ["managing_director"],
+    title: "Staff payroll run completed",
+    body: `${profile.full_name} completed a staff payroll run — salaries disbursed and posted.`,
+    actionHref: STAFF_PAYROLL_ROUTE,
+    moduleKey: "staff_payroll",
+    sourceTable: "staff_payroll_runs",
+    sourceId: parsed.data.id,
+    eventKey: "completed",
+    category: "info",
+  });
+
   revalidatePath(STAFF_PAYROLL_ROUTE);
   redirect(`${STAFF_PAYROLL_ROUTE}?updated=completed`);
 }

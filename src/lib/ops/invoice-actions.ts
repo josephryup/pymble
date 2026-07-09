@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import {
   canArchiveInvoice,
   canCreateInvoice,
@@ -212,6 +213,19 @@ async function updateInvoiceStatus(id: string, status: "paid" | "sent", userId: 
   // Post the matching GL journal (revenue recognition on send, cash receipt on
   // paid). Best-effort + idempotent — never blocks the status change.
   await postInvoiceJournalSafe(data.id, status === "sent" ? "issued" : "paid", userId);
+
+  await notifyOpsWorkflowEvent({
+    actorId: userId,
+    actionNeededRoles: ["finance_manager", "accountant"],
+    title: `Invoice ${status}`,
+    body: `An invoice was marked ${status} and the matching ledger journal was posted.`,
+    actionHref: "/ops/invoices",
+    moduleKey: "invoices",
+    sourceTable: "invoices",
+    sourceId: data.id,
+    eventKey: status,
+    category: "info",
+  });
 }
 
 export async function sendInvoiceAction(formData: FormData) {
@@ -232,6 +246,7 @@ export async function sendInvoiceAction(formData: FormData) {
   }
 
   await updateInvoiceStatus(parsed.data.id, "sent", profile.id);
+
   revalidatePath("/ops/invoices");
   redirect("/ops/invoices?updated=sent");
 }
@@ -385,6 +400,19 @@ export async function voidInvoiceAction(formData: FormData) {
   // A sent invoice already posted a revenue/AR accrual — unwind it. A no-op if
   // the invoice was still draft (nothing was ever posted) or already reversed.
   await reverseOpsJournalSafe("invoices", parsed.data.id, "invoice_issued", profile.id);
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["finance_manager", "accountant"],
+    title: "Invoice voided",
+    body: `${profile.full_name} voided an invoice. Review the receivables position.`,
+    actionHref: "/ops/invoices",
+    moduleKey: "invoices",
+    sourceTable: "invoices",
+    sourceId: parsed.data.id,
+    eventKey: "voided",
+    category: "info",
+  });
 
   revalidatePath("/ops/invoices");
   redirect("/ops/invoices?updated=voided");

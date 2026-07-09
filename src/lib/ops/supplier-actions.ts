@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import {
   canArchiveOpsSupplier,
   canCreateOpsSupplier,
@@ -460,6 +461,21 @@ export async function updateSupplierStatusAction(formData: FormData) {
     sourceTable: "suppliers",
     summary: `Updated ${supplier.supplier_code} status to ${parsed.data.status}`,
   }).catch(() => null);
+
+  // Procurement must hear immediately when a supplier is suspended or
+  // blacklisted — a live order could otherwise still go out to them.
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["procurement_manager", "procurement"],
+    title: `Supplier ${parsed.data.status}: ${supplier.legal_name}`,
+    body: `${profile.full_name} changed ${supplier.legal_name} to ${parsed.data.status}. Check open RFQs and purchase orders against this supplier.`,
+    actionHref: SUPPLIER_ROUTE,
+    moduleKey: "suppliers",
+    sourceTable: "suppliers",
+    sourceId: supplier.id,
+    eventKey: `status_${parsed.data.status}`,
+    category: "info",
+  });
 
   revalidatePath(SUPPLIER_ROUTE);
   redirect(`${SUPPLIER_ROUTE}?updated=status`);

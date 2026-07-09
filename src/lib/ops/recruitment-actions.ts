@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import { canManageOpsJobPosting, canReviewOpsJobApplication } from "@/lib/ops/hr-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsJobApplicationStatus } from "@/lib/ops/types";
@@ -231,6 +232,19 @@ export async function updateJobApplicationStatusAction(formData: FormData) {
     sourceTable: "job_applications",
     summary: `Moved application to ${parsed.data.status}`,
   }).catch(() => null);
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["human_resource", "hr"],
+    title: `Application ${parsed.data.status}`,
+    body: `${profile.full_name} moved a job application to ${parsed.data.status}.`,
+    actionHref: `${RECRUITMENT_ROUTE}#applications`,
+    moduleKey: "recruitment",
+    sourceTable: "job_applications",
+    sourceId: parsed.data.application_id,
+    eventKey: `status_${parsed.data.status}`,
+    category: "info",
+  });
 
   revalidatePath(RECRUITMENT_ROUTE);
   redirect(`${RECRUITMENT_ROUTE}?updated=application#applications`);

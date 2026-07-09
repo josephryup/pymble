@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import {
   canApproveOpsTransportRequest,
   canCancelOpsAccommodationBooking,
@@ -688,6 +689,18 @@ export async function submitTransportRequestAction(formData: FormData) {
     summary: `Submitted transport request ${request.request_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["operations_manager"],
+    title: `Transport request: ${request.request_number}`,
+    body: `${profile.full_name} submitted transport request ${request.request_number}. Approval needed.`,
+    actionHref: FLEET_LOGISTICS_ROUTE,
+    moduleKey: "fleet_logistics",
+    sourceTable: "transport_requests",
+    sourceId: request.id,
+    eventKey: "submitted",
+  });
+
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_submitted`);
 }
@@ -749,6 +762,19 @@ export async function approveTransportRequestAction(formData: FormData) {
     summary: `Approved transport request ${request.request_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [request.requested_by],
+    title: `Approved: ${request.request_number}`,
+    body: `${profile.full_name} approved your transport request ${request.request_number}.`,
+    actionHref: FLEET_LOGISTICS_ROUTE,
+    moduleKey: "fleet_logistics",
+    sourceTable: "transport_requests",
+    sourceId: request.id,
+    eventKey: "approved",
+    category: "info",
+  });
+
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
   redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_approved`);
@@ -803,6 +829,19 @@ export async function rejectTransportRequestAction(formData: FormData) {
     sourceTable: "transport_requests",
     summary: `Rejected transport request ${request.request_number}`,
   }).catch(() => null);
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [request.requested_by],
+    title: `Rejected: ${request.request_number}`,
+    body: `${profile.full_name} rejected your transport request ${request.request_number}.`,
+    actionHref: FLEET_LOGISTICS_ROUTE,
+    moduleKey: "fleet_logistics",
+    sourceTable: "transport_requests",
+    sourceId: request.id,
+    eventKey: "rejected",
+    category: "info",
+  });
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_rejected`);

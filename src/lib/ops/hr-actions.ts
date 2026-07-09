@@ -7,6 +7,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import {
   canApproveOpsLeaveRequest,
   canArchiveOpsEmployeeDocument,
@@ -2076,6 +2077,18 @@ export async function submitLeaveRequestAction(formData: FormData) {
     hrError(error.message);
   }
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["human_resource", "hr"],
+    title: `Leave request: ${leaveRequest.leave_number}`,
+    body: `${profile.full_name} submitted leave request ${leaveRequest.leave_number}. Approval needed.`,
+    actionHref: HR_ROUTE,
+    moduleKey: "employees",
+    sourceTable: "leave_requests",
+    sourceId: leaveRequest.id,
+    eventKey: "submitted",
+  });
+
   revalidatePath(HR_ROUTE);
   redirect(`${HR_ROUTE}?updated=leave_submitted`);
 }
@@ -2111,6 +2124,19 @@ export async function approveLeaveRequestAction(formData: FormData) {
   if (error) {
     hrError(error.message);
   }
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [leaveRequest.employee?.user_id, leaveRequest.created_by],
+    title: `Leave approved: ${leaveRequest.leave_number}`,
+    body: `${profile.full_name} approved leave request ${leaveRequest.leave_number}.`,
+    actionHref: HR_ROUTE,
+    moduleKey: "employees",
+    sourceTable: "leave_requests",
+    sourceId: leaveRequest.id,
+    eventKey: "approved",
+    category: "info",
+  });
 
   revalidatePath(HR_ROUTE);
   redirect(`${HR_ROUTE}?updated=leave_approved`);
@@ -2151,6 +2177,19 @@ export async function rejectLeaveRequestAction(formData: FormData) {
   if (error) {
     hrError(error.message);
   }
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [leaveRequest.employee?.user_id, leaveRequest.created_by],
+    title: `Leave rejected: ${leaveRequest.leave_number}`,
+    body: `${profile.full_name} rejected leave request ${leaveRequest.leave_number}. Reason: ${parsed.data.rejection_reason}`,
+    actionHref: HR_ROUTE,
+    moduleKey: "employees",
+    sourceTable: "leave_requests",
+    sourceId: leaveRequest.id,
+    eventKey: "rejected",
+    category: "info",
+  });
 
   revalidatePath(HR_ROUTE);
   redirect(`${HR_ROUTE}?updated=leave_rejected`);

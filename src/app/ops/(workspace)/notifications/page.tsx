@@ -34,13 +34,19 @@ type PageProps = {
   searchParams?: Promise<OpsSearchParams>;
 };
 
+type InboxFilter = OpsNotificationStatus | "all";
+
 type StatusOption = {
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   label: string;
-  status: OpsNotificationStatus;
+  status: InboxFilter;
 };
 
+// "All" merges unread + read into one chronological feed (Gmail-style) with the
+// unread styling doing the differentiation, so nobody has to tab-switch to see
+// history. Archived stays its own view.
 const STATUS_OPTIONS: StatusOption[] = [
+  { icon: Bell, label: "All", status: "all" },
   { icon: Inbox, label: "Unread", status: "unread" },
   { icon: MailOpen, label: "Read", status: "read" },
   { icon: Archive, label: "Archived", status: "archived" },
@@ -53,10 +59,10 @@ const noticeMessages: Record<string, string> = {
   notification_restored: "Notification restored.",
 };
 
-function parseNotificationStatus(value: string | undefined): OpsNotificationStatus {
+function parseNotificationStatus(value: string | undefined): InboxFilter {
   return STATUS_OPTIONS.some((option) => option.status === value)
-    ? (value as OpsNotificationStatus)
-    : "unread";
+    ? (value as InboxFilter)
+    : "all";
 }
 
 function formatModule(moduleKey: string) {
@@ -92,7 +98,9 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
   const status = parseNotificationStatus(firstParam(params.status));
   const returnTo = `/ops/notifications?status=${status}`;
   const [notifications, counts] = await Promise.all([
-    fetchOpsNotifications({ limit: 60, status }),
+    fetchOpsNotifications(
+      status === "all" ? { limit: 60, statuses: ["unread", "read"] } : { limit: 60, status },
+    ),
     fetchOpsNotificationStatusCounts(),
   ]);
   const error = firstParam(params.error);
@@ -117,7 +125,7 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
             </p>
           </div>
           <div className="grid gap-3 min-[520px]:grid-cols-3">
-            {STATUS_OPTIONS.map((option) => {
+            {STATUS_OPTIONS.filter((option) => option.status !== "all").map((option) => {
               const Icon = option.icon;
               return (
                 <div
@@ -131,7 +139,7 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
                     <Icon className="size-4 text-primary-blue" aria-hidden={true} />
                   </div>
                   <p className="mt-1 font-heading text-2xl font-bold text-foreground">
-                    {counts[option.status]}
+                    {counts[option.status as OpsNotificationStatus]}
                   </p>
                 </div>
               );
@@ -169,7 +177,7 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
             </p>
           </div>
           <nav aria-label="Notification filters" className="flex flex-wrap gap-2">
-            {status === "unread" && counts.unread > 0 ? (
+            {(status === "unread" || status === "all") && counts.unread > 0 ? (
               <form action={markAllOpsNotificationsReadAction}>
                 <input name="return_to" type="hidden" value={returnTo} />
                 <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
@@ -201,7 +209,9 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
                         : "bg-muted/40 text-foreground"
                     }`}
                   >
-                    {counts[option.status]}
+                    {option.status === "all"
+                      ? counts.unread + counts.read
+                      : counts[option.status]}
                   </span>
                 </Link>
               );
@@ -213,16 +223,34 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
           <div className="divide-y divide-border">
             {notifications.map((notification) => {
               const actionHref = safeActionHref(notification.action_href);
+              const isUnread = notification.status === "unread";
               return (
-                <article className="p-5" key={notification.id}>
+                <article
+                  className={`border-l-4 p-5 ${
+                    isUnread
+                      ? "border-l-primary-blue bg-sky-50/50"
+                      : "border-l-transparent"
+                  }`}
+                  key={notification.id}
+                >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex min-w-0 gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
+                      <div
+                        className={`flex size-10 shrink-0 items-center justify-center rounded-md ${
+                          isUnread
+                            ? "bg-primary-blue text-white"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
                         <Bell className="size-4" aria-hidden="true" />
                       </div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-heading text-lg font-bold text-foreground">
+                          <h3
+                            className={`font-heading text-lg ${
+                              isUnread ? "font-bold text-foreground" : "font-semibold text-foreground/70"
+                            }`}
+                          >
                             {notification.title}
                           </h3>
                           <span
@@ -297,7 +325,7 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
             <CheckCircle2 className="size-10 text-emerald-600" aria-hidden="true" />
             <div>
               <p className="font-heading text-xl font-bold text-foreground">
-                No {status} notifications
+                {status === "all" ? "No notifications yet" : `No ${status} notifications`}
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 Workflow alerts from approvals, documents, and future ERP modules will appear here

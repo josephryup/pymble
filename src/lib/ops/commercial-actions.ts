@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import {
   canAgreeOpsCommercialClaim,
   canActivateOpsCommercialContract,
@@ -1037,6 +1038,18 @@ export async function submitCommercialIpcAction(formData: FormData) {
     summary: `Submitted IPC ${ipc.ipc_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["quantity_surveyor", "projects_manager", "finance_manager"],
+    title: `Certify IPC: ${ipc.ipc_number}`,
+    body: `${profile.full_name} submitted ${ipc.ipc_number} — ${ipc.title}. Your decision is needed.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_ipcs",
+    sourceId: ipc.id,
+    eventKey: "submitted",
+  });
+
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=ipc_submitted`);
 }
@@ -1101,6 +1114,19 @@ export async function certifyCommercialIpcAction(formData: FormData) {
     summary: `Certified IPC ${ipc.ipc_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [ipc.submitted_by, ipc.created_by],
+    title: `IPC certified: ${ipc.ipc_number}`,
+    body: `${profile.full_name} marked ${ipc.ipc_number} — ${ipc.title} as certified.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_ipcs",
+    sourceId: ipc.id,
+    eventKey: "certified",
+    category: "info",
+  });
+
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=ipc_certified`);
 }
@@ -1154,6 +1180,19 @@ export async function rejectCommercialIpcAction(formData: FormData) {
     sourceTable: "commercial_ipcs",
     summary: `Rejected IPC ${ipc.ipc_number}`,
   }).catch(() => null);
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [ipc.submitted_by, ipc.created_by],
+    title: `IPC rejected: ${ipc.ipc_number}`,
+    body: `${profile.full_name} marked ${ipc.ipc_number} — ${ipc.title} as rejected.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_ipcs",
+    sourceId: ipc.id,
+    eventKey: "rejected",
+    category: "info",
+  });
 
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=ipc_rejected`);
@@ -1409,6 +1448,18 @@ export async function submitCommercialVariationAction(formData: FormData) {
     summary: `Submitted variation ${variation.variation_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["quantity_surveyor", "projects_manager", "finance_manager"],
+    title: `Review variation: ${variation.variation_number}`,
+    body: `${profile.full_name} submitted ${variation.variation_number} — ${variation.title}. Your decision is needed.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_variations",
+    sourceId: variation.id,
+    eventKey: "submitted",
+  });
+
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=variation_submitted`);
 }
@@ -1464,6 +1515,18 @@ export async function priceCommercialVariationAction(formData: FormData) {
     sourceTable: "commercial_variations",
     summary: `Priced variation ${variation.variation_number}`,
   }).catch(() => null);
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["quantity_surveyor", "projects_manager", "finance_manager"],
+    title: `Approve priced variation: ${variation.variation_number}`,
+    body: `${profile.full_name} priced ${variation.variation_number} — ${variation.title}. Your decision is needed.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_variations",
+    sourceId: variation.id,
+    eventKey: "priced",
+  });
 
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=variation_priced`);
@@ -1521,6 +1584,19 @@ export async function approveCommercialVariationAction(formData: FormData) {
     summary: `Approved variation ${variation.variation_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [variation.submitted_by, variation.created_by],
+    title: `Variation approved: ${variation.variation_number}`,
+    body: `${profile.full_name} marked ${variation.variation_number} — ${variation.title} as approved.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_variations",
+    sourceId: variation.id,
+    eventKey: "approved",
+    category: "info",
+  });
+
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=variation_approved`);
 }
@@ -1574,6 +1650,19 @@ export async function rejectCommercialVariationAction(formData: FormData) {
     sourceTable: "commercial_variations",
     summary: `Rejected variation ${variation.variation_number}`,
   }).catch(() => null);
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [variation.submitted_by, variation.created_by],
+    title: `Variation rejected: ${variation.variation_number}`,
+    body: `${profile.full_name} marked ${variation.variation_number} — ${variation.title} as rejected.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_variations",
+    sourceId: variation.id,
+    eventKey: "rejected",
+    category: "info",
+  });
 
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=variation_rejected`);
@@ -1791,6 +1880,18 @@ export async function submitCommercialClaimAction(formData: FormData) {
     summary: `Submitted claim ${claim.claim_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    actionNeededRoles: ["quantity_surveyor", "projects_manager", "finance_manager"],
+    title: `Review claim: ${claim.claim_number}`,
+    body: `${profile.full_name} submitted ${claim.claim_number} — ${claim.title}. Your decision is needed.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_claims",
+    sourceId: claim.id,
+    eventKey: "submitted",
+  });
+
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=claim_submitted`);
 }
@@ -1893,6 +1994,19 @@ export async function agreeCommercialClaimAction(formData: FormData) {
     summary: `Agreed claim ${claim.claim_number}`,
   }).catch(() => null);
 
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [claim.submitted_by, claim.created_by],
+    title: `Claim agreed: ${claim.claim_number}`,
+    body: `${profile.full_name} marked ${claim.claim_number} — ${claim.title} as agreed.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_claims",
+    sourceId: claim.id,
+    eventKey: "agreed",
+    category: "info",
+  });
+
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=claim_agreed`);
 }
@@ -1946,6 +2060,19 @@ export async function rejectCommercialClaimAction(formData: FormData) {
     sourceTable: "commercial_claims",
     summary: `Rejected claim ${claim.claim_number}`,
   }).catch(() => null);
+
+  await notifyOpsWorkflowEvent({
+    actorId: profile.id,
+    stakeholderIds: [claim.submitted_by, claim.created_by],
+    title: `Claim rejected: ${claim.claim_number}`,
+    body: `${profile.full_name} marked ${claim.claim_number} — ${claim.title} as rejected.`,
+    actionHref: COMMERCIAL_ROUTE,
+    moduleKey: "commercial",
+    sourceTable: "commercial_claims",
+    sourceId: claim.id,
+    eventKey: "rejected",
+    category: "info",
+  });
 
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=claim_rejected`);
@@ -2616,6 +2743,33 @@ async function updateCommercialValuationStatus(
     summary: `Updated valuation ${valuation.valuation_number} to ${status}`,
   }).catch(() => null);
 
+  if (status === "submitted") {
+    await notifyOpsWorkflowEvent({
+      actorId: profile.id,
+      actionNeededRoles: ["quantity_surveyor", "projects_manager", "finance_manager"],
+      title: `Certify valuation: ${valuation.valuation_number}`,
+      body: `${profile.full_name} submitted valuation ${valuation.valuation_number} — ${valuation.title} for certification.`,
+      actionHref: COMMERCIAL_ROUTE,
+      moduleKey: "commercial",
+      sourceTable: "commercial_valuations",
+      sourceId: valuation.id,
+      eventKey: status,
+    });
+  } else if (status === "certified" || status === "rejected") {
+    await notifyOpsWorkflowEvent({
+      actorId: profile.id,
+      stakeholderIds: [valuation.submitted_by, valuation.created_by],
+      title: `Valuation ${status}: ${valuation.valuation_number}`,
+      body: `${profile.full_name} marked valuation ${valuation.valuation_number} — ${valuation.title} as ${status}.`,
+      actionHref: COMMERCIAL_ROUTE,
+      moduleKey: "commercial",
+      sourceTable: "commercial_valuations",
+      sourceId: valuation.id,
+      eventKey: status,
+      category: "info",
+    });
+  }
+
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=valuation_${status}`);
 }
@@ -2998,6 +3152,33 @@ async function updateCommercialRetentionReleaseStatus(
     sourceTable: "commercial_retention_releases",
     summary: `Updated retention release ${release.release_number} to ${status}`,
   }).catch(() => null);
+
+  if (status === "submitted") {
+    await notifyOpsWorkflowEvent({
+      actorId: profile.id,
+      actionNeededRoles: ["finance_manager", "quantity_surveyor"],
+      title: `Approve retention release: ${release.release_number}`,
+      body: `${profile.full_name} submitted retention release ${release.release_number} — ${release.title} for approval.`,
+      actionHref: COMMERCIAL_ROUTE,
+      moduleKey: "commercial",
+      sourceTable: "commercial_retention_releases",
+      sourceId: release.id,
+      eventKey: status,
+    });
+  } else if (status === "approved" || status === "released" || status === "rejected") {
+    await notifyOpsWorkflowEvent({
+      actorId: profile.id,
+      stakeholderIds: [release.submitted_by, release.created_by],
+      title: `Retention release ${status}: ${release.release_number}`,
+      body: `${profile.full_name} marked retention release ${release.release_number} — ${release.title} as ${status}.`,
+      actionHref: COMMERCIAL_ROUTE,
+      moduleKey: "commercial",
+      sourceTable: "commercial_retention_releases",
+      sourceId: release.id,
+      eventKey: status,
+      category: "info",
+    });
+  }
 
   revalidatePath(COMMERCIAL_ROUTE);
   redirect(`${COMMERCIAL_ROUTE}?updated=retention_${status}#retention-panel`);

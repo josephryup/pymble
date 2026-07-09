@@ -36,6 +36,8 @@ export type FetchOpsNotificationsOptions = {
   limit?: number;
   recipientId?: string;
   status?: OpsNotificationStatus;
+  /** Multiple statuses in one feed (e.g. unread+read for the merged inbox view). */
+  statuses?: OpsNotificationStatus[];
 };
 
 export type QueueOpsNotificationInput = {
@@ -96,7 +98,9 @@ export async function fetchOpsNotifications(options: FetchOpsNotificationsOption
     .order("created_at", { ascending: false })
     .limit(normalizeLimit(options.limit));
 
-  if (options.status) {
+  if (options.statuses && options.statuses.length > 0) {
+    query = query.in("status", options.statuses);
+  } else if (options.status) {
     query = query.eq("status", options.status);
   }
 
