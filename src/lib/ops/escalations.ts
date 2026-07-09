@@ -24,10 +24,14 @@ export const OPS_ESCALATION_SLA_DAYS = {
   approvals: 2,
   deliveryExceptions: 2,
   departmentReports: 2,
+  equipmentRequests: 2,
+  leaveRequests: 2,
   materialRequests: 2,
   paymentRequests: 2,
   purchaseOrders: 1,
   rfqs: 2,
+  subcontractorPayments: 2,
+  transportRequests: 2,
 } as const;
 
 // Reporting cadence is weekly: reminders fire on Monday and Tuesday until
@@ -74,6 +78,20 @@ const PURCHASE_ORDER_ESCALATION_ROLES: OpsUserRole[] = [
   ...LEADERSHIP_ESCALATION_ROLES,
   "procurement_manager",
   "finance_manager",
+];
+
+// Equipment + transport request approvals (mirrors My Queue's
+// OPERATIONS_APPROVERS / the equipment & fleet decision-role gates).
+const OPERATIONS_ESCALATION_ROLES: OpsUserRole[] = [
+  ...LEADERSHIP_ESCALATION_ROLES,
+  "operations_manager",
+  "projects_manager",
+];
+
+const HR_ESCALATION_ROLES: OpsUserRole[] = [
+  ...LEADERSHIP_ESCALATION_ROLES,
+  "human_resource",
+  "hr",
 ];
 
 type SupabaseServiceClient = ReturnType<typeof getOpsSupabaseServiceClient>;
@@ -182,6 +200,48 @@ type DepartmentReportEscalationRow = {
   title: string;
 };
 
+type EquipmentRequestEscalationRow = {
+  created_at: string;
+  id: string;
+  needed_from: string | null;
+  request_number: string;
+  requested_by: string | null;
+  status: string;
+  submitted_at: string | null;
+  title: string;
+};
+
+type TransportRequestEscalationRow = {
+  created_at: string;
+  id: string;
+  request_number: string;
+  requested_by: string | null;
+  requested_for: string | null;
+  status: string;
+  submitted_at: string | null;
+  title: string;
+};
+
+type SubcontractorPaymentEscalationRow = {
+  amount: number | string | null;
+  created_at: string;
+  id: string;
+  payment_type: string;
+  requested_by: string | null;
+  scheduled_for: string | null;
+  status: string;
+};
+
+type LeaveRequestEscalationRow = {
+  created_at: string;
+  created_by: string | null;
+  id: string;
+  leave_number: string;
+  start_date: string | null;
+  status: string;
+  submitted_at: string | null;
+};
+
 type QueueEscalationInput = {
   actionHref: string;
   body: string;
@@ -199,9 +259,13 @@ export type OpsEscalationSnapshot = {
   staleApprovals: number;
   staleDeliveryExceptions: number;
   staleDepartmentReports: number;
+  staleEquipmentRequests: number;
+  staleLeaveRequests: number;
   staleMaterialRequests: number;
   stalePaymentRequests: number;
   staleRfqs: number;
+  staleSubcontractorPayments: number;
+  staleTransportRequests: number;
   stalePurchaseOrders: number;
   budgetVariance: number;
   total: number;
@@ -214,10 +278,14 @@ export type OpsEscalationSweepResult = {
     approvals: number;
     deliveryExceptions: number;
     departmentReports: number;
+    equipmentRequests: number;
+    leaveRequests: number;
     materialRequests: number;
     paymentRequests: number;
     rfqs: number;
     purchaseOrders: number;
+    subcontractorPayments: number;
+    transportRequests: number;
     budgets: number;
   };
   notificationFailures: number;
@@ -652,6 +720,68 @@ async function fetchPurchaseOrderEscalationRows(supabase: SupabaseServiceClient)
   return (data ?? []) as PurchaseOrderEscalationRow[];
 }
 
+async function fetchEquipmentRequestEscalationRows(supabase: SupabaseServiceClient) {
+  const { data, error } = await supabase
+    .from("equipment_requests")
+    .select("id, request_number, title, status, requested_by, needed_from, submitted_at, created_at")
+    .eq("status", "submitted")
+    .is("archived_at", null)
+    .order("created_at", { ascending: true })
+    .limit(MAX_ESCALATION_RECORDS_PER_TABLE);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as EquipmentRequestEscalationRow[];
+}
+
+async function fetchTransportRequestEscalationRows(supabase: SupabaseServiceClient) {
+  const { data, error } = await supabase
+    .from("transport_requests")
+    .select("id, request_number, title, status, requested_by, requested_for, submitted_at, created_at")
+    .eq("status", "submitted")
+    .order("created_at", { ascending: true })
+    .limit(MAX_ESCALATION_RECORDS_PER_TABLE);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as TransportRequestEscalationRow[];
+}
+
+async function fetchSubcontractorPaymentEscalationRows(supabase: SupabaseServiceClient) {
+  const { data, error } = await supabase
+    .from("subcontractor_payments")
+    .select("id, payment_type, amount, status, requested_by, scheduled_for, created_at")
+    .eq("status", "pending")
+    .is("archived_at", null)
+    .order("created_at", { ascending: true })
+    .limit(MAX_ESCALATION_RECORDS_PER_TABLE);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as SubcontractorPaymentEscalationRow[];
+}
+
+async function fetchLeaveRequestEscalationRows(supabase: SupabaseServiceClient) {
+  const { data, error } = await supabase
+    .from("leave_requests")
+    .select("id, leave_number, status, start_date, submitted_at, created_at, created_by")
+    .eq("status", "submitted")
+    .order("created_at", { ascending: true })
+    .limit(MAX_ESCALATION_RECORDS_PER_TABLE);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as LeaveRequestEscalationRow[];
+}
+
 export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsEscalationSnapshot> {
   const supabase = getOpsSupabaseServiceClient();
   const nowIso = now.toISOString();
@@ -671,6 +801,10 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
     purchaseOrders,
     budgetVariances,
     departmentReports,
+    equipmentRequests,
+    transportRequests,
+    subcontractorPayments,
+    leaveRequests,
   ] = await Promise.all([
     fetchApprovalEscalationRows(supabase),
     fetchMaterialRequestEscalationRows(supabase),
@@ -680,6 +814,10 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
     fetchPurchaseOrderEscalationRows(supabase),
     fetchBudgetVarianceCandidates(supabase),
     fetchDepartmentReportEscalationRows(supabase),
+    fetchEquipmentRequestEscalationRows(supabase),
+    fetchTransportRequestEscalationRows(supabase),
+    fetchSubcontractorPaymentEscalationRows(supabase),
+    fetchLeaveRequestEscalationRows(supabase),
   ]);
 
   const staleApprovals = approvals.filter((approval) =>
@@ -745,22 +883,70 @@ export async function fetchOpsEscalationSnapshot(now = new Date()): Promise<OpsE
     }),
   ).length;
 
+  const staleEquipmentRequests = equipmentRequests.filter((request) =>
+    classifyOpsEscalationAge({
+      dueDate: request.needed_from,
+      nowIso,
+      staleAt: request.submitted_at ?? request.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.equipmentRequests, now),
+      todayIsoDate,
+    }),
+  ).length;
+  const staleTransportRequests = transportRequests.filter((request) =>
+    classifyOpsEscalationAge({
+      dueDate: request.requested_for,
+      nowIso,
+      staleAt: request.submitted_at ?? request.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.transportRequests, now),
+      todayIsoDate,
+    }),
+  ).length;
+  const staleSubcontractorPayments = subcontractorPayments.filter((payment) =>
+    classifyOpsEscalationAge({
+      dueDate: payment.scheduled_for,
+      nowIso,
+      staleAt: payment.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(
+        OPS_ESCALATION_SLA_DAYS.subcontractorPayments,
+        now,
+      ),
+      todayIsoDate,
+    }),
+  ).length;
+  const staleLeaveRequests = leaveRequests.filter((request) =>
+    classifyOpsEscalationAge({
+      dueDate: request.start_date,
+      nowIso,
+      staleAt: request.submitted_at ?? request.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.leaveRequests, now),
+      todayIsoDate,
+    }),
+  ).length;
+
   return {
     staleApprovals,
     staleDeliveryExceptions,
     staleDepartmentReports,
+    staleEquipmentRequests,
+    staleLeaveRequests,
     staleMaterialRequests,
     stalePaymentRequests,
     staleRfqs,
+    staleSubcontractorPayments,
+    staleTransportRequests,
     stalePurchaseOrders,
     budgetVariance: budgetVariances.length,
     total:
       staleApprovals +
       staleDeliveryExceptions +
       staleDepartmentReports +
+      staleEquipmentRequests +
+      staleLeaveRequests +
       staleMaterialRequests +
       stalePaymentRequests +
       staleRfqs +
+      staleSubcontractorPayments +
+      staleTransportRequests +
       stalePurchaseOrders +
       budgetVariances.length,
   };
@@ -781,6 +967,10 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     purchaseOrders,
     budgetVariances,
     departmentReports,
+    equipmentRequests,
+    transportRequests,
+    subcontractorPayments,
+    leaveRequests,
   ] = await Promise.all([
     fetchApprovalEscalationRows(supabase),
     fetchMaterialRequestEscalationRows(supabase),
@@ -790,6 +980,10 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     fetchPurchaseOrderEscalationRows(supabase),
     fetchBudgetVarianceCandidates(supabase),
     fetchDepartmentReportEscalationRows(supabase),
+    fetchEquipmentRequestEscalationRows(supabase),
+    fetchTransportRequestEscalationRows(supabase),
+    fetchSubcontractorPaymentEscalationRows(supabase),
+    fetchLeaveRequestEscalationRows(supabase),
   ]);
   const approvalSteps = await fetchPendingApprovalSteps(
     supabase,
@@ -801,9 +995,13 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       staleApprovals: 0,
       staleDeliveryExceptions: 0,
       staleDepartmentReports: 0,
+      staleEquipmentRequests: 0,
+      staleLeaveRequests: 0,
       staleMaterialRequests: 0,
       stalePaymentRequests: 0,
       staleRfqs: 0,
+      staleSubcontractorPayments: 0,
+      staleTransportRequests: 0,
       stalePurchaseOrders: 0,
       budgetVariance: 0,
       total: 0,
@@ -812,10 +1010,14 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       approvals: approvals.length,
       deliveryExceptions: deliveryExceptions.length,
       departmentReports: departmentReports.length,
+      equipmentRequests: equipmentRequests.length,
+      leaveRequests: leaveRequests.length,
       materialRequests: materialRequests.length,
       paymentRequests: paymentRequests.length,
       rfqs: rfqs.length,
       purchaseOrders: purchaseOrders.length,
+      subcontractorPayments: subcontractorPayments.length,
+      transportRequests: transportRequests.length,
       budgets: budgetVariances.length,
     },
     notificationFailures: 0,
@@ -1045,6 +1247,147 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     result.notificationsQueued += queued.queued;
   }
 
+  for (const request of equipmentRequests) {
+    const reason = classifyOpsEscalationAge({
+      dueDate: request.needed_from,
+      nowIso,
+      staleAt: request.submitted_at ?? request.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.equipmentRequests, now),
+      todayIsoDate,
+    });
+
+    if (!reason) {
+      continue;
+    }
+
+    const queued = await queueEscalationNotifications({
+      actionHref: "/ops/equipment?status=submitted#equipment-request-register",
+      body: `${request.request_number} - ${request.title} is ${reasonText(reason)}. Operations should approve or reject it so the crew can plan.`,
+      idempotencyBase: buildOpsEscalationIdempotencyKey({
+        dateKey,
+        reason,
+        recipientId: "role",
+        sourceId: request.id,
+        sourceTable: "equipment_requests",
+      }),
+      moduleKey: "equipment",
+      recipients: recipientsFor(users, OPERATIONS_ESCALATION_ROLES, [request.requested_by]),
+      sourceId: request.id,
+      sourceTable: "equipment_requests",
+      title: "Equipment request escalation",
+    });
+    result.escalated.staleEquipmentRequests += 1;
+    result.notificationFailures += queued.failures;
+    result.notificationsQueued += queued.queued;
+  }
+
+  for (const request of transportRequests) {
+    const reason = classifyOpsEscalationAge({
+      dueDate: request.requested_for,
+      nowIso,
+      staleAt: request.submitted_at ?? request.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.transportRequests, now),
+      todayIsoDate,
+    });
+
+    if (!reason) {
+      continue;
+    }
+
+    const queued = await queueEscalationNotifications({
+      actionHref: "/ops/fleet-logistics?status=submitted#transport-register",
+      body: `${request.request_number} - ${request.title} is ${reasonText(reason)}. Operations should approve or schedule the trip.`,
+      idempotencyBase: buildOpsEscalationIdempotencyKey({
+        dateKey,
+        reason,
+        recipientId: "role",
+        sourceId: request.id,
+        sourceTable: "transport_requests",
+      }),
+      moduleKey: "fleet_logistics",
+      recipients: recipientsFor(users, OPERATIONS_ESCALATION_ROLES, [request.requested_by]),
+      sourceId: request.id,
+      sourceTable: "transport_requests",
+      title: "Transport request escalation",
+    });
+    result.escalated.staleTransportRequests += 1;
+    result.notificationFailures += queued.failures;
+    result.notificationsQueued += queued.queued;
+  }
+
+  for (const payment of subcontractorPayments) {
+    const reason = classifyOpsEscalationAge({
+      dueDate: payment.scheduled_for,
+      nowIso,
+      staleAt: payment.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(
+        OPS_ESCALATION_SLA_DAYS.subcontractorPayments,
+        now,
+      ),
+      todayIsoDate,
+    });
+
+    if (!reason) {
+      continue;
+    }
+
+    const queued = await queueEscalationNotifications({
+      actionHref: "/ops/subcontractors",
+      body: `A pending subcontractor payment (${payment.payment_type.replace(/_/g, " ")}${moneyText(
+        payment.amount,
+      )}) is ${reasonText(reason)}. Finance should approve, pay, or reject it.`,
+      idempotencyBase: buildOpsEscalationIdempotencyKey({
+        dateKey,
+        reason,
+        recipientId: "role",
+        sourceId: payment.id,
+        sourceTable: "subcontractor_payments",
+      }),
+      moduleKey: "subcontractors",
+      recipients: recipientsFor(users, FINANCE_ESCALATION_ROLES, [payment.requested_by]),
+      sourceId: payment.id,
+      sourceTable: "subcontractor_payments",
+      title: "Subcontractor payment escalation",
+    });
+    result.escalated.staleSubcontractorPayments += 1;
+    result.notificationFailures += queued.failures;
+    result.notificationsQueued += queued.queued;
+  }
+
+  for (const request of leaveRequests) {
+    const reason = classifyOpsEscalationAge({
+      dueDate: request.start_date,
+      nowIso,
+      staleAt: request.submitted_at ?? request.created_at,
+      staleBeforeIso: getOpsEscalationIsoDaysAgo(OPS_ESCALATION_SLA_DAYS.leaveRequests, now),
+      todayIsoDate,
+    });
+
+    if (!reason) {
+      continue;
+    }
+
+    const queued = await queueEscalationNotifications({
+      actionHref: "/ops/employees",
+      body: `Leave request ${request.leave_number} is ${reasonText(reason)}. HR should approve or decline it before the leave start date.`,
+      idempotencyBase: buildOpsEscalationIdempotencyKey({
+        dateKey,
+        reason,
+        recipientId: "role",
+        sourceId: request.id,
+        sourceTable: "leave_requests",
+      }),
+      moduleKey: "employees",
+      recipients: recipientsFor(users, HR_ESCALATION_ROLES, [request.created_by]),
+      sourceId: request.id,
+      sourceTable: "leave_requests",
+      title: "Leave request escalation",
+    });
+    result.escalated.staleLeaveRequests += 1;
+    result.notificationFailures += queued.failures;
+    result.notificationsQueued += queued.queued;
+  }
+
   for (const variance of budgetVariances) {
     const overspendPct = Math.round((variance.variance_ratio - 1) * 100);
     const queued = await queueEscalationNotifications({
@@ -1179,6 +1522,10 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     result.escalated.staleRfqs +
     result.escalated.stalePurchaseOrders +
     result.escalated.staleDepartmentReports +
+    result.escalated.staleEquipmentRequests +
+    result.escalated.staleTransportRequests +
+    result.escalated.staleSubcontractorPayments +
+    result.escalated.staleLeaveRequests +
     result.escalated.budgetVariance;
 
   return result;

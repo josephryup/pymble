@@ -10,6 +10,7 @@ import {
   PackagePlus,
   Pencil,
   Plus,
+  Save,
   Send,
   Trash2,
   Truck,
@@ -183,6 +184,12 @@ function materialRequestNotice(params: OpsSearchParams) {
   }
   if (u === "item_deleted") {
     return { tone: "success" as const, message: "Line item removed." };
+  }
+  if (u === "prices_saved") {
+    return {
+      tone: "success" as const,
+      message: "Draft prices saved. The request stays with Procurement — send to Finance when pricing is final.",
+    };
   }
   if (u === "priced") {
     return { tone: "success" as const, message: "Supplier prices attached. Finance has been notified." };
@@ -539,8 +546,10 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
         </p>
         <p className="text-sm leading-6 text-foreground/70">
           Enter the actual unit price you have agreed with the supplier for each line item.
-          When you save, the request moves to <strong>Priced</strong> and Finance is notified
-          to approve the cost.
+          Use <strong>Save prices</strong> to store your progress and keep editing later
+          (the request stays with Procurement), or <strong>Send to Finance</strong> when
+          pricing is final — that moves the request to <strong>Priced</strong> and notifies
+          Finance to approve the cost.
         </p>
       </div>
       <div className="grid gap-3">
@@ -575,14 +584,30 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
           </div>
         ))}
       </div>
-      <div className="mt-3 flex items-center justify-between gap-3">
+      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs font-bold text-muted-foreground">
           Priced total so far: <span className="text-foreground">{formatZmw(request.actual_total)}</span>
         </p>
-        <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
-          <Send className="size-4" aria-hidden="true" />
-          Save prices and send to Finance
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            className={OPS_SECONDARY_BUTTON_CLASS}
+            name="mode"
+            type="submit"
+            value="save"
+          >
+            <Save className="size-4" aria-hidden="true" />
+            Save prices
+          </button>
+          <button
+            className={OPS_PRIMARY_BUTTON_CLASS}
+            name="mode"
+            type="submit"
+            value="send"
+          >
+            <Send className="size-4" aria-hidden="true" />
+            Send to Finance
+          </button>
+        </div>
       </div>
     </form>
   );

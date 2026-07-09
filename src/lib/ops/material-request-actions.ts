@@ -874,12 +874,21 @@ export async function attachMaterialRequestPricingAction(formData: FormData) {
     );
   }
 
-  // Collect every `actual_unit_cost::<itemId>` field from the form. We don't
-  // require every line — a partial update is allowed so procurement can save
-  // progress — but we need at least one valid entry.
+  // Two-mode submit: "save" keeps the request in pricing_pending so procurement
+  // can come back and edit prices later; "send" moves it to `priced` and
+  // notifies Finance. Default to "send" so any legacy caller keeps its behaviour.
+  const mode = field(formData, "mode") === "save" ? "save" : "send";
+
+  // Collect every `actual_unit_cost::<itemId>` field from the form. A partial
+  // update is allowed so procurement can price some lines now and the rest
+  // later — EMPTY inputs are skipped (not coerced to 0), so leaving a line
+  // blank preserves its current price instead of wiping it.
   const updates: { item_id: string; actual_unit_cost: number }[] = [];
   for (const [key, value] of formData.entries()) {
     if (!key.startsWith("actual_unit_cost::")) {
+      continue;
+    }
+    if (typeof value !== "string" || value.trim() === "") {
       continue;
     }
     const itemId = key.slice("actual_unit_cost::".length);
@@ -891,7 +900,11 @@ export async function attachMaterialRequestPricingAction(formData: FormData) {
   }
 
   if (updates.length === 0) {
-    materialRequestError("Enter at least one supplier price before saving.");
+    materialRequestError(
+      mode === "save"
+        ? "Enter at least one supplier price to save."
+        : "Enter at least one supplier price before sending to Finance.",
+    );
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -945,7 +958,30 @@ export async function attachMaterialRequestPricingAction(formData: FormData) {
     0,
   );
 
-  // Move the request to `priced` so Finance can approve the cost.
+  // "Save" mode: prices are stored but the request stays in pricing_pending so
+  // procurement can keep editing. No status change, no Finance notification.
+  if (mode === "save") {
+    await recordOpsAuditEvent({
+      action: "material_request.prices_saved",
+      actorUserId: profile.id,
+      entityId: request.id,
+      entityType: "material_request",
+      metadata: {
+        request_number: request.request_number,
+        priced_total_zmw: pricedTotal,
+        lines_updated: updates.length,
+      },
+      moduleKey: "material_requests",
+      sourceId: request.id,
+      sourceTable: "material_requests",
+      summary: `Procurement saved draft supplier prices on ${request.request_number}`,
+    }).catch(() => null);
+
+    revalidatePath(MATERIAL_REQUEST_ROUTE);
+    redirect(`${MATERIAL_REQUEST_ROUTE}?updated=prices_saved#mr-${request.id}`);
+  }
+
+  // "Send" mode: move the request to `priced` so Finance can approve the cost.
   const nowIso = new Date().toISOString();
   const { error: stateError } = await supabase
     .from("material_requests")

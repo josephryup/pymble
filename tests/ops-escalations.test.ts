@@ -5,6 +5,7 @@ import {
   classifyOpsEscalationAge,
   getOpsEscalationDateDaysAgo,
   getOpsEscalationTodayKey,
+  OPS_ESCALATION_SLA_DAYS,
 } from "../src/lib/ops/escalations";
 
 describe("ops escalation helpers", () => {
@@ -63,3 +64,66 @@ describe("ops escalation helpers", () => {
     );
   });
 });
+
+describe("ops escalation — new source tables (equipment/transport/subcontractor/leave)", () => {
+  const now = new Date("2026-06-08T10:00:00.000Z");
+
+  it("configures an SLA window for every escalated source table", () => {
+    for (const key of [
+      "equipmentRequests",
+      "transportRequests",
+      "subcontractorPayments",
+      "leaveRequests",
+    ] as const) {
+      assert.ok(
+        typeof OPS_ESCALATION_SLA_DAYS[key] === "number" && OPS_ESCALATION_SLA_DAYS[key] >= 1,
+        `${key} SLA missing`,
+      );
+    }
+  });
+
+  it("flags a subcontractor payment past its scheduled date as overdue", () => {
+    assert.equal(
+      classifyOpsEscalationAge({
+        dueDate: "2026-06-06",
+        nowIso: now.toISOString(),
+        staleAt: "2026-06-07T09:00:00.000Z",
+        staleBeforeIso: getOpsEscalationDaysAgoIso(2, now),
+        todayIsoDate: "2026-06-08",
+      }),
+      "overdue",
+    );
+  });
+
+  it("flags a leave request whose start date passed while still submitted", () => {
+    // A leave that should already have started but is not approved is overdue —
+    // the employee cannot lawfully take unapproved leave.
+    assert.equal(
+      classifyOpsEscalationAge({
+        dueDate: "2026-06-07",
+        nowIso: now.toISOString(),
+        staleAt: "2026-06-08T08:00:00.000Z",
+        staleBeforeIso: getOpsEscalationDaysAgoIso(2, now),
+        todayIsoDate: "2026-06-08",
+      }),
+      "overdue",
+    );
+  });
+
+  it("leaves a not-yet-due equipment request alone until it ages past the SLA", () => {
+    assert.equal(
+      classifyOpsEscalationAge({
+        dueDate: "2026-06-12",
+        nowIso: now.toISOString(),
+        staleAt: "2026-06-08T09:00:00.000Z",
+        staleBeforeIso: getOpsEscalationDaysAgoIso(2, now),
+        todayIsoDate: "2026-06-08",
+      }),
+      null,
+    );
+  });
+});
+
+function getOpsEscalationDaysAgoIso(days: number, now: Date) {
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+}

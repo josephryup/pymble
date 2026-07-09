@@ -355,13 +355,21 @@ Ordered by blast-radius-to-effort ratio:
       awaiting decision (aggregated across IPCs/variations/claims/valuations/retention,
       QS/PM/Finance/leadership), and payroll runs awaiting approval (draft workers +
       staff runs, leadership).
-- [ ] Add the newly-notification-worthy source tables (equipment_requests,
-      transport_requests, subcontractor_payments, leave_requests) to
-      `src/lib/ops/escalations.ts`. **Deliberately deferred (2026-07-08):** each table
-      touches the SLA config, the `OpsEscalationSnapshot` type (consumed by
-      executive/overview KPIs), and the sweep's notification loop — a focused change
-      with its own tests, not something to batch with 30+ notification wires. The My
-      Queue counts above provide the persistent backstop in the meantime.
+- [x] **(2026-07-08)** Added `equipment_requests`, `transport_requests`,
+      `subcontractor_payments`, and `leave_requests` to `src/lib/ops/escalations.ts`
+      end-to-end: 4 SLA-config entries (2 days each), 4 row types, 4 fetchers, 4 fields
+      on `OpsEscalationSnapshot` + `OpsEscalationSweepResult.inspected` (both totals
+      updated), the fallback literal in `overview-role-metrics.ts`, and 4 escalation
+      loops in the sweep (equipment/transport → Operations + requester; subcontractor
+      payments → Finance + requester, with type + amount in the body; leave → HR +
+      submitter, keyed off the leave start date). Due dates: equipment `needed_from`,
+      transport `requested_for`, subcontractor `scheduled_for`, leave `start_date` (all
+      `date` columns, verified against the live schema). New role groups
+      `OPERATIONS_ESCALATION_ROLES` and `HR_ESCALATION_ROLES`. Idempotency keys are
+      per-table so nobody is double-nagged. Verified: all 4 queries resolve against
+      production (the 2 pending HENRY PAVERS subcontractor payments will now age into
+      SLA escalations — the exact records that started this thread). 4 new unit tests;
+      `npm run verify` clean, 314/314.
 - [x] **(2026-07-08)** `materialRequestApprovalSteps` takes `scope`; site returns
       PM (step 1) then OM (step 2); general/IT unchanged. Unit-tested.
 - [x] **(2026-07-08)** `materialRequestApprovalRecipientRoles` now only surfaces the
