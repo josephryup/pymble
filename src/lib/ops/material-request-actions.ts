@@ -876,8 +876,10 @@ export async function attachMaterialRequestPricingAction(formData: FormData) {
 
   // Two-mode submit: "save" keeps the request in pricing_pending so procurement
   // can come back and edit prices later; "send" moves it to `priced` and
-  // notifies Finance. Default to "send" so any legacy caller keeps its behaviour.
-  const mode = field(formData, "mode") === "save" ? "save" : "send";
+  // notifies Finance. Sending is the EXPLICIT opt-in — anything other than a
+  // literal "send" (including a missing/garbled submitter value) defaults to
+  // "save", so a stray submit can never accidentally push a request to Finance.
+  const mode = field(formData, "mode") === "send" ? "send" : "save";
 
   // Collect every `actual_unit_cost::<itemId>` field from the form. A partial
   // update is allowed so procurement can price some lines now and the rest
