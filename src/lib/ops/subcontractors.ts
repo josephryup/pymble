@@ -237,6 +237,35 @@ type RawPendingPayment = {
 };
 
 /**
+ * How many subcontractor payments are pending, workspace-wide. Cheap head
+ * count for KPI cards / queue widgets that only need the number — use
+ * fetchOpsPendingSubcontractorPayments when the full list is needed.
+ */
+export async function fetchOpsPendingSubcontractorPaymentsCount(): Promise<number> {
+  const { profile } = await requireOpsUser();
+  if (!canApproveSubcontractorPayment(profile.role)) {
+    return 0;
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { count, error } = await supabase
+    .from("subcontractor_payments")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .is("archived_at", null);
+
+  if (error) {
+    logOpsServerError(error, {
+      module: "subcontractor_payments",
+      action: "fetchOpsPendingSubcontractorPaymentsCount",
+    });
+    throw error;
+  }
+
+  return count ?? 0;
+}
+
+/**
  * Every pending subcontractor payment across the register, newest first, for
  * the Finance/oversight queue. This is the visibility that was missing — a
  * pending payment used to be reachable only by opening the one subcontractor's

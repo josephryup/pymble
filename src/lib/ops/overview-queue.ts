@@ -30,6 +30,9 @@ const APPROVERS: OpsUserRole[] = [
   "procurement_manager",
   "operations_manager",
 ];
+// Mirrors canApproveMaterialRequestMdReview (material-request-permissions.ts) — the
+// MD is the final gate on confidential IT-scoped material requests.
+const MD_REVIEWERS: OpsUserRole[] = ["developer", "owner", "managing_director"];
 
 type QueueTask = {
   key: string;
@@ -147,6 +150,58 @@ export async function fetchOpsMyQueue(role: OpsUserRole, userId: string): Promis
           .from("payment_requests")
           .select("id", { count: "exact", head: true })
           .in("status", ["submitted", "finance_review"]),
+      ),
+    });
+    // Material requests priced by Procurement wait on a Finance cost decision —
+    // a bespoke status-column transition, not an approval_steps row, so it
+    // never surfaced via countActionableApprovals above. Previously the only
+    // signal Finance got was a one-time notification when it was priced.
+    tasks.push({
+      key: "material_requests_priced",
+      label: "Material requests — cost approval needed",
+      href: "/ops/material-requests?status=priced",
+      tone: "warn",
+      run: count(
+        supabase
+          .from("material_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "priced"),
+      ),
+    });
+    // Subcontractor payments live in their own table (subcontractor_payments),
+    // disconnected from payment_requests — see
+    // docs/pymble-ops-subcontractor-payments-audit.md. Without this, a pending
+    // payment was only visible by opening /ops/subcontractors directly.
+    tasks.push({
+      key: "subcontractor_payments_pending",
+      label: "Subcontractor payments to review",
+      href: "/ops/subcontractors",
+      tone: "warn",
+      run: count(
+        supabase
+          .from("subcontractor_payments")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending")
+          .is("archived_at", null),
+      ),
+    });
+  }
+
+  if (MD_REVIEWERS.includes(role)) {
+    // Confidential IT-scoped material requests: Finance approves the cost,
+    // then the MD is the final gate (md_review status) before Procurement can
+    // order. See docs/pymble-ops-it-material-requests-... — same visibility
+    // gap as the Finance cost-approval stage above.
+    tasks.push({
+      key: "md_review",
+      label: "IT requests awaiting your approval",
+      href: "/ops/material-requests?status=md_review",
+      tone: "warn",
+      run: count(
+        supabase
+          .from("material_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "md_review"),
       ),
     });
   }

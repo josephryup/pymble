@@ -8,6 +8,7 @@ import {
 } from "@/lib/ops/listing";
 import { logOpsServerError } from "@/lib/ops/log";
 import {
+  canApproveMaterialRequestCost,
   canViewAllOpsMaterialRequests,
   canViewOpsItMaterialRequests,
 } from "@/lib/ops/material-request-permissions";
@@ -556,6 +557,33 @@ export async function fetchPaginatedOpsMaterialRequests(
 ): Promise<OpsPaginatedResult<OpsMaterialRequestSummary>> {
   const result = await fetchOpsMaterialRequestItems(options, options.listState);
   return toOpsPaginatedResult(result.items, result.count, options.listState);
+}
+
+/**
+ * How many material requests are sitting in `priced`, waiting on a Finance
+ * cost decision. This is a bespoke status-column transition (not an
+ * approval_steps row), so it never showed up in the generic Approvals module
+ * or the "My Queue" widget — previously the only signal Finance got was a
+ * one-time notification when Procurement priced the request. Feeds the
+ * Finance dashboard KPI card and the "My Queue" widget.
+ */
+export async function fetchOpsMaterialRequestsPricedCount(): Promise<number> {
+  const { profile } = await requireOpsUser();
+  if (!canApproveMaterialRequestCost(profile.role)) {
+    return 0;
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { count, error } = await supabase
+    .from("material_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "priced");
+
+  if (error) {
+    throw error;
+  }
+
+  return count ?? 0;
 }
 
 /**

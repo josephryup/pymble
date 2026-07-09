@@ -4,7 +4,9 @@ import {
   BookOpen,
   CheckCircle2,
   ClipboardList,
+  HardHat,
   Layers,
+  PackageCheck,
   Receipt,
   ScrollText,
   Target,
@@ -43,8 +45,10 @@ import {
   fetchOpsSupplierAgeing,
 } from "@/lib/ops/finance-kpis";
 import { fetchOpsGlMonthlyTrend } from "@/lib/ops/gl-trends";
+import { fetchOpsMaterialRequestsPricedCount } from "@/lib/ops/material-requests";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchOpsProjectPnl } from "@/lib/ops/project-pnl";
+import { fetchOpsPendingSubcontractorPaymentsCount } from "@/lib/ops/subcontractors";
 import {
   formatZmw,
   OPS_SECONDARY_BUTTON_CLASS,
@@ -77,6 +81,8 @@ export default async function OpsFinanceOverviewPage() {
     pnl,
     commercialKpis,
     glTrend,
+    materialRequestsPricedCount,
+    subcontractorPaymentsPendingCount,
   ] = await Promise.all([
     fetchOpsFinanceCashflowDashboard(),
     fetchOpsPaymentRequestStats(),
@@ -88,6 +94,8 @@ export default async function OpsFinanceOverviewPage() {
     fetchOpsProjectPnl(),
     fetchOpsCommercialKpis(),
     fetchOpsGlMonthlyTrend().catch(() => []),
+    fetchOpsMaterialRequestsPricedCount(),
+    fetchOpsPendingSubcontractorPaymentsCount(),
   ]);
   const hasGlActivity = glTrend.some(
     (point) => point.income !== 0 || point.expenses !== 0 || point.cashBalance !== 0,
@@ -127,6 +135,28 @@ export default async function OpsFinanceOverviewPage() {
           </>
         }
       />
+
+      {/* Action queue: things awaiting a Finance decision that live outside
+          payment_requests, so they never showed up on this dashboard before —
+          see docs/pymble-ops-subcontractor-payments-audit.md (Round 3). */}
+      <section className="grid gap-3 md:grid-cols-2">
+        <OpsKpiCard
+          href="/ops/material-requests?status=priced"
+          icon={PackageCheck}
+          label="Material requests — cost approval needed"
+          tone={materialRequestsPricedCount > 0 ? "warn" : "default"}
+          hint="Priced by Procurement"
+          value={String(materialRequestsPricedCount)}
+        />
+        <OpsKpiCard
+          href="/ops/subcontractors"
+          icon={HardHat}
+          label="Subcontractor payments to review"
+          tone={subcontractorPaymentsPendingCount > 0 ? "warn" : "default"}
+          hint="Pending decision"
+          value={String(subcontractorPaymentsPendingCount)}
+        />
+      </section>
 
       {/* Cash & liability signal */}
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
