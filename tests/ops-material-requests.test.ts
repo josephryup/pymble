@@ -8,6 +8,7 @@ import {
   canEditOpsMaterialRequest,
   canSetMaterialRequestTransportCost,
   canSubmitOpsMaterialRequest,
+  canViewOpsMaterialRequestFinanceQueue,
   materialRequestApprovalRecipientRoles,
   materialRequestApprovalSteps,
 } from "../src/lib/ops/material-request-permissions";
@@ -111,6 +112,12 @@ describe("material request pricing flow gates", () => {
     assert.equal(canApproveMaterialRequestCost("managing_director"), true);
     assert.equal(canApproveMaterialRequestCost("procurement_manager"), false);
     assert.equal(canApproveMaterialRequestCost("engineer"), false);
+  });
+
+  it("gives both Finance roles the shared priced approval queue", () => {
+    assert.equal(canViewOpsMaterialRequestFinanceQueue("finance_manager"), true);
+    assert.equal(canViewOpsMaterialRequestFinanceQueue("accountant"), true);
+    assert.equal(canViewOpsMaterialRequestFinanceQueue("procurement_manager"), false);
   });
 
   it("permits editing while a request is in pricing_pending or priced", () => {

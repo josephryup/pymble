@@ -121,6 +121,17 @@ export function canViewAllOpsMaterialRequests(role: OpsUserRole) {
   return MATERIAL_REQUEST_MANAGER_ROLES.includes(role);
 }
 
+/**
+ * Finance does not manage the full material-request register, but both finance
+ * seats must be able to open every request that is waiting for the shared cost
+ * decision. Keeping this separate from the manager gate prevents the priced
+ * approval queue from accidentally granting access to drafts and procurement
+ * work in progress.
+ */
+export function canViewOpsMaterialRequestFinanceQueue(role: OpsUserRole) {
+  return MATERIAL_REQUEST_FINANCE_APPROVAL_ROLES.includes(role);
+}
+
 export function canManageOpsMaterialRequest(role: OpsUserRole) {
   return MATERIAL_REQUEST_MANAGER_ROLES.includes(role);
 }

@@ -83,6 +83,9 @@ const OPS_MATERIAL_REQUEST_ROLES: OpsUserRole[] = [
   "quantity_surveyor",
   "procurement",
   "procurement_assistant",
+  // Finance must open the priced queue to make the shared cost decision.
+  "finance_manager",
+  "accountant",
   "engineer",
   "manager",
   "supervisor",

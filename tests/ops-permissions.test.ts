@@ -138,8 +138,10 @@ describe("ops module visibility", () => {
     // HSE raise PPE / safety-equipment requisitions through this flow.
     assert.equal(canAccessOpsHref("hse_officer", "/ops/material-requests"), true);
     assert.equal(canAccessOpsHref("hse_assistant_officer", "/ops/material-requests"), true);
-    // Finance/admin roles still have no material-request access.
-    assert.equal(canAccessOpsHref("accountant", "/ops/material-requests"), false);
+    // Finance can open the priced approval queue; Accountant and Finance
+    // Manager are interchangeable cost approvers.
+    assert.equal(canAccessOpsHref("finance_manager", "/ops/material-requests"), true);
+    assert.equal(canAccessOpsHref("accountant", "/ops/material-requests"), true);
     assert.equal(canAccessOpsHref("admin_receptionist", "/ops/material-requests"), false);
   });
 

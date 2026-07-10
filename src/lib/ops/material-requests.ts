@@ -10,6 +10,7 @@ import { logOpsServerError } from "@/lib/ops/log";
 import {
   canApproveMaterialRequestCost,
   canViewAllOpsMaterialRequests,
+  canViewOpsMaterialRequestFinanceQueue,
   canViewOpsItMaterialRequests,
 } from "@/lib/ops/material-request-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
@@ -527,7 +528,12 @@ async function fetchOpsMaterialRequestItems(
     requestQuery = requestQuery.or(searchFilter);
   }
 
-  if (!canViewAllOpsMaterialRequests(profile.role)) {
+  if (canViewOpsMaterialRequestFinanceQueue(profile.role) && !canViewAllOpsMaterialRequests(profile.role)) {
+    // Cost approval is deliberately a shared Finance queue: either Finance
+    // Manager or Accountant may decide a priced request. Do not expose the
+    // rest of the register to Finance through this exception.
+    requestQuery = requestQuery.eq("status", "priced");
+  } else if (!canViewAllOpsMaterialRequests(profile.role)) {
     requestQuery = requestQuery.eq("requested_by", profile.id);
   }
 
