@@ -849,7 +849,10 @@ const pricingItemSchema = z.object({
     .max(1_000_000_000, "Actual unit cost looks unrealistic."),
 });
 
-export async function attachMaterialRequestPricingAction(formData: FormData) {
+// Shared core for pricing actions. Accepts an explicit `mode` parameter so we
+// don't depend on the submit button's name/value being in FormData — React 19
+// server actions don't reliably include the submitter's name/value pair.
+async function applyMaterialRequestPricing(formData: FormData, mode: "save" | "send") {
   const { profile } = await requireOpsUser();
 
   if (!canAttachMaterialRequestPricing(profile.role)) {
@@ -873,13 +876,6 @@ export async function attachMaterialRequestPricingAction(formData: FormData) {
       "Supplier prices can only be attached once Operations has approved the request.",
     );
   }
-
-  // Two-mode submit: "save" keeps the request in pricing_pending so procurement
-  // can come back and edit prices later; "send" moves it to `priced` and
-  // notifies Finance. Sending is the EXPLICIT opt-in — anything other than a
-  // literal "send" (including a missing/garbled submitter value) defaults to
-  // "save", so a stray submit can never accidentally push a request to Finance.
-  const mode = field(formData, "mode") === "send" ? "send" : "save";
 
   // Collect every `actual_unit_cost::<itemId>` field from the form. A partial
   // update is allowed so procurement can price some lines now and the rest
@@ -1044,6 +1040,16 @@ export async function attachMaterialRequestPricingAction(formData: FormData) {
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   revalidatePath("/ops/notifications");
   redirect(`${MATERIAL_REQUEST_ROUTE}?updated=priced#mr-${request.id}`);
+}
+
+/** Save draft supplier prices — request stays in `pricing_pending`. */
+export async function attachMaterialRequestPricingAction(formData: FormData) {
+  return applyMaterialRequestPricing(formData, "save");
+}
+
+/** Finalize supplier prices and send to Finance — request moves to `priced`. */
+export async function sendMaterialRequestToFinanceAction(formData: FormData) {
+  return applyMaterialRequestPricing(formData, "send");
 }
 
 // =============================================================================

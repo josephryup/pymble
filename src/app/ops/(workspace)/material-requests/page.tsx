@@ -35,6 +35,7 @@ import {
   archiveMaterialRequestAction,
   attachMaterialRequestPricingAction,
   cancelMaterialRequestAction,
+  sendMaterialRequestToFinanceAction,
   confirmMaterialRequestDeliveryAction,
   createMaterialRequestAction,
   decideMaterialRequestCostAction,
@@ -591,18 +592,15 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
             className={OPS_SECONDARY_BUTTON_CLASS}
-            name="mode"
             type="submit"
-            value="save"
           >
             <Save className="size-4" aria-hidden="true" />
             Save prices
           </button>
           <button
             className={OPS_PRIMARY_BUTTON_CLASS}
-            name="mode"
+            formAction={sendMaterialRequestToFinanceAction}
             type="submit"
-            value="send"
           >
             <Send className="size-4" aria-hidden="true" />
             Send to Finance
