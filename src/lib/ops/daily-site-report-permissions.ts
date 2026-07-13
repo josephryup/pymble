@@ -13,6 +13,7 @@ const DAILY_SITE_REPORT_VIEW_ROLES = new Set<OpsUserRole>([
   "finance_manager",
   "accountant",
   "engineer",
+  "engineering_intern",
   "hse_officer",
   "hse_assistant_officer",
   "supervisor",
@@ -27,6 +28,7 @@ const DAILY_SITE_REPORT_CREATE_ROLES = new Set<OpsUserRole>([
   "operations_manager",
   "projects_manager",
   "engineer",
+  "engineering_intern",
   "supervisor",
 ]);
 

@@ -5,6 +5,8 @@ import {
   type OpsPaginatedResult,
 } from "@/lib/ops/listing";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
+import { fetchActiveOpsAssignedSiteIds, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
+import { requireOpsUser } from "@/lib/ops/auth";
 import type {
   OpsDailySiteReportEntryType,
   OpsDailySiteReportStatus,
@@ -157,6 +159,7 @@ async function fetchOpsDailySiteReportItems(
   options: FetchOpsDailySiteReportsOptions = {},
   listState?: OpsListState,
 ) {
+  const { profile } = await requireOpsUser();
   const supabase = getOpsSupabaseServiceClient();
   let query = supabase
     .from("daily_site_reports")
@@ -197,6 +200,12 @@ async function fetchOpsDailySiteReportItems(
     .is("cancelled_at", null)
     .order("report_date", { ascending: false })
     .order("created_at", { ascending: false });
+
+  if (requiresOpsSiteAssignment(profile.role)) {
+    const siteIds = await fetchActiveOpsAssignedSiteIds(profile.id);
+    if (siteIds.length === 0) return { count: 0, items: [] };
+    query = query.in("site_id", siteIds);
+  }
 
   if (options.status) {
     query = query.eq("status", options.status);

@@ -6,6 +6,7 @@ import {
   type OpsPaginatedResult,
 } from "@/lib/ops/listing";
 import { canViewSiteActualBudget, canViewSiteBudget } from "@/lib/ops/permissions";
+import { fetchActiveOpsAssignedSiteIds, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 import type { OpsSiteStage, OpsSiteStatus } from "@/lib/ops/types";
 
 export type OpsSite = {
@@ -133,12 +134,21 @@ export async function fetchPaginatedOpsSites(
 }
 
 export async function fetchActiveSiteOptions() {
+  const { profile } = await requireOpsUser();
   const supabase = await createOpsServerSessionClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("sites")
     .select("id, code, name")
     .eq("is_active", true)
     .order("name", { ascending: true });
+
+  if (requiresOpsSiteAssignment(profile.role)) {
+    const siteIds = await fetchActiveOpsAssignedSiteIds(profile.id);
+    if (siteIds.length === 0) return [];
+    query = query.in("id", siteIds);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;

@@ -4,6 +4,7 @@ import { createOpsServerSessionClient } from "@/lib/ops/auth";
 import { computeAttendanceEarnings } from "@/lib/ops/attendance-earnings";
 import { parseCoordinateInput } from "@/lib/ops/coordinates";
 import { canRecordAttendance } from "@/lib/ops/permissions";
+import { hasActiveOpsSiteAssignment, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 
 /**
  * Shared core for creating an attendance record — used by both
@@ -85,14 +86,21 @@ export async function createAttendanceRecordCore(
     return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the attendance details." };
   }
 
+  if (
+    requiresOpsSiteAssignment(profile.role) &&
+    !(await hasActiveOpsSiteAssignment(profile.id, parsed.data.site_id))
+  ) {
+    return { ok: false, message: "You can only record attendance for a site assigned to you." };
+  }
+
   const supabase = await createOpsServerSessionClient();
   const [workerRes, orgRes] = await Promise.all([
     supabase
       .from("workers")
-      .select("daily_rate")
+      .select("daily_rate, site_id")
       .eq("id", parsed.data.worker_id)
       .eq("is_active", true)
-      .single<{ daily_rate: number | string }>(),
+      .single<{ daily_rate: number | string; site_id: string | null }>(),
     supabase
       .from("organization_profile")
       .select("standard_daily_hours, overtime_multiplier")
@@ -104,6 +112,9 @@ export async function createAttendanceRecordCore(
     return { ok: false, message: "The selected worker could not be found." };
   }
   const worker = workerRes.data;
+  if (worker.site_id && worker.site_id !== parsed.data.site_id) {
+    return { ok: false, message: "The selected worker is assigned to a different site." };
+  }
 
   const standardDailyHours = Number(orgRes.data?.standard_daily_hours ?? 8);
   const overtimeMultiplier = Number(orgRes.data?.overtime_multiplier ?? 1.5);

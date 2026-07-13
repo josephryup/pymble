@@ -19,6 +19,7 @@ import {
   canSubmitOpsDailySiteReport,
 } from "@/lib/ops/daily-site-report-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
+import { hasActiveOpsSiteAssignment, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 import type { OpsDailySiteReportStatus } from "@/lib/ops/types";
 
 const entrySchema = z.object({
@@ -39,6 +40,7 @@ type ReportPermissionRecord = {
   id: string;
   prepared_by: string | null;
   report_number: string;
+  site_id: string;
   status: OpsDailySiteReportStatus;
 };
 
@@ -59,7 +61,7 @@ async function fetchReportForPermission(reportId: string) {
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("daily_site_reports")
-    .select("id, report_number, prepared_by, status")
+    .select("id, report_number, site_id, prepared_by, status")
     .eq("id", reportId)
     .maybeSingle<ReportPermissionRecord>();
 
@@ -68,6 +70,10 @@ async function fetchReportForPermission(reportId: string) {
   }
 
   return data;
+}
+
+async function canAccessReportSite(profile: { id: string; role: import("@/lib/ops/types").OpsUserRole }, report: ReportPermissionRecord) {
+  return !requiresOpsSiteAssignment(profile.role) || hasActiveOpsSiteAssignment(profile.id, report.site_id);
 }
 
 export async function createDailySiteReportAction(formData: FormData) {
@@ -102,6 +108,10 @@ export async function addDailySiteReportEntryAction(formData: FormData) {
 
   if (!report) {
     reportError("The daily report could not be found.");
+  }
+
+  if (!(await canAccessReportSite(profile, report))) {
+    reportError("This report belongs to a site that is not assigned to you.");
   }
 
   if (!canEditOpsDailySiteReport(profile.id, profile.role, report)) {
@@ -153,6 +163,10 @@ export async function submitDailySiteReportAction(formData: FormData) {
 
   if (!report) {
     reportError("The daily report could not be found.");
+  }
+
+  if (!(await canAccessReportSite(profile, report))) {
+    reportError("This report belongs to a site that is not assigned to you.");
   }
 
   if (!canSubmitOpsDailySiteReport(profile.id, profile.role, report)) {
@@ -356,6 +370,9 @@ export async function updateDailySiteReportAction(formData: FormData) {
   const report = await fetchReportForPermission(parsed.data.report_id);
   if (!report) {
     reportError("Daily site report was not found.");
+  }
+  if (!(await canAccessReportSite(profile, report))) {
+    reportError("This report belongs to a site that is not assigned to you.");
   }
   if (!canEditOpsDailySiteReport(profile.id, profile.role, report)) {
     reportError("This daily site report can no longer be edited.");

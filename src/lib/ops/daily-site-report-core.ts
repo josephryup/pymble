@@ -3,6 +3,7 @@ import type { OpsUserProfile } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { canCreateOpsDailySiteReport } from "@/lib/ops/daily-site-report-permissions";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
+import { hasActiveOpsSiteAssignment, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 
 /**
  * Shared core for creating a daily site report — used by both
@@ -69,6 +70,13 @@ export async function createDailySiteReportCore(
 
   if (!parsed.success) {
     return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the daily report details." };
+  }
+
+  if (
+    requiresOpsSiteAssignment(profile.role) &&
+    !(await hasActiveOpsSiteAssignment(profile.id, parsed.data.site_id))
+  ) {
+    return { ok: false, message: "You can only create reports for a site assigned to you." };
   }
 
   // Sprint 10 offline support: if the page submitted a client_id (UUID

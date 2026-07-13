@@ -129,6 +129,16 @@ export const OPS_PRODUCTION_ROLE_POLICY: OpsProductionRolePolicy[] = [
     notes: "Accounting execution role with module access only.",
   },
   {
+    role: "accountant_intern",
+    label: "Accountant Intern",
+    accountModel: "many",
+    canInviteStaff: false,
+    canDeactivateStaff: false,
+    visibleInAccessRegister: true,
+    notes:
+      "Finance support role. No approval, payment, payroll, posting, or company-wide finance access; assigned-work controls are required before operational access is enabled.",
+  },
+  {
     role: "engineer",
     label: "Engineer",
     accountModel: "many",
@@ -136,6 +146,16 @@ export const OPS_PRODUCTION_ROLE_POLICY: OpsProductionRolePolicy[] = [
     canDeactivateStaff: false,
     visibleInAccessRegister: true,
     notes: "Field engineering role with module access only.",
+  },
+  {
+    role: "engineering_intern",
+    label: "Engineering Intern",
+    accountModel: "many",
+    canInviteStaff: false,
+    canDeactivateStaff: false,
+    visibleInAccessRegister: true,
+    notes:
+      "Site-scoped field support role. Access must be limited to active site assignments and excludes engineering decisions, procurement, and finance.",
   },
   {
     role: "engineering_manager",

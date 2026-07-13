@@ -1,4 +1,5 @@
-import { createOpsServerSessionClient } from "@/lib/ops/auth";
+import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
+import { fetchActiveOpsAssignedSiteIds, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 import type { OpsAttendancePresence, OpsAttendanceSource } from "@/lib/ops/types";
 
 export type OpsAttendanceWorkerOption = {
@@ -63,12 +64,21 @@ function normalizeRelation<T>(value: T | T[] | null) {
 }
 
 export async function fetchAttendanceWorkerOptions() {
+  const { profile } = await requireOpsUser();
   const supabase = await createOpsServerSessionClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("workers")
     .select("id, worker_code, full_name, trade, daily_rate")
     .eq("is_active", true)
     .order("full_name", { ascending: true });
+
+  if (requiresOpsSiteAssignment(profile.role)) {
+    const siteIds = await fetchActiveOpsAssignedSiteIds(profile.id);
+    if (siteIds.length === 0) return [];
+    query = query.in("site_id", siteIds);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;
@@ -92,6 +102,7 @@ export type OpsAttendanceFilters = {
 };
 
 export async function fetchOpsAttendanceRecords(filters: OpsAttendanceFilters = {}) {
+  const { profile } = await requireOpsUser();
   const supabase = await createOpsServerSessionClient();
   let query = supabase
     .from("attendance_records")
@@ -118,6 +129,12 @@ export async function fetchOpsAttendanceRecords(filters: OpsAttendanceFilters = 
     .eq("is_active", true)
     // Cancelled rows are soft-deleted: keep them out of the working list.
     .is("cancelled_at", null);
+
+  if (requiresOpsSiteAssignment(profile.role)) {
+    const siteIds = await fetchActiveOpsAssignedSiteIds(profile.id);
+    if (siteIds.length === 0) return [];
+    query = query.in("site_id", siteIds);
+  }
 
   if (filters.workerId) query = query.eq("worker_id", filters.workerId);
   if (filters.siteId) query = query.eq("site_id", filters.siteId);
@@ -194,16 +211,31 @@ const LUSAKA_LABEL_FORMAT = new Intl.DateTimeFormat("en-ZM", {
 export async function fetchOpsAttendanceDailySummary(
   windowDays = 7,
 ): Promise<OpsAttendanceDailySummary> {
+  const { profile } = await requireOpsUser();
   const supabase = await createOpsServerSessionClient();
   const windowStart = new Date(Date.now() - (windowDays - 1) * 24 * 60 * 60 * 1000);
   const windowStartDay = LUSAKA_DAY_FORMAT.format(windowStart);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("attendance_records")
     .select("clock_in_at, presence, hours_worked, approved_at")
     .eq("is_active", true)
     .is("cancelled_at", null)
     .gte("clock_in_at", `${windowStartDay}T00:00:00+02:00`);
+
+  if (requiresOpsSiteAssignment(profile.role)) {
+    const siteIds = await fetchActiveOpsAssignedSiteIds(profile.id);
+    if (siteIds.length === 0) {
+      return {
+        windowDays,
+        days: [],
+        today: { present: 0, late: 0, absent: 0, pendingApproval: 0 },
+      };
+    }
+    query = query.in("site_id", siteIds);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw error;
