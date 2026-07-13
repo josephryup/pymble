@@ -73,6 +73,7 @@ export type OpsDailySiteReport = {
 
 export type FetchOpsDailySiteReportsOptions = {
   query?: string;
+  siteId?: string;
   status?: OpsDailySiteReportStatus;
 };
 
@@ -204,7 +205,12 @@ async function fetchOpsDailySiteReportItems(
   if (requiresOpsSiteAssignment(profile.role)) {
     const siteIds = await fetchActiveOpsAssignedSiteIds(profile.id);
     if (siteIds.length === 0) return { count: 0, items: [] };
-    query = query.in("site_id", siteIds);
+    if (options.siteId && !siteIds.includes(options.siteId)) {
+      return { count: 0, items: [] };
+    }
+    query = options.siteId ? query.eq("site_id", options.siteId) : query.in("site_id", siteIds);
+  } else if (options.siteId) {
+    query = query.eq("site_id", options.siteId);
   }
 
   if (options.status) {

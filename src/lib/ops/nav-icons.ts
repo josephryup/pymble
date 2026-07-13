@@ -35,6 +35,7 @@ import {
   LifeBuoy,
   LineChart,
   ListChecks,
+  MapPin,
   MessageSquare,
   MonitorCog,
   Network,
@@ -69,6 +70,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   "/ops": LayoutDashboard,
 
   // Operations
+  "/ops/my-sites": MapPin,
   "/ops/sites": Building2,
   "/ops/workers": HardHat,
   "/ops/attendance": ClipboardCheck,

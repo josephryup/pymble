@@ -31,6 +31,10 @@ export function canRecordAttendance(role: OpsUserRole) {
   return role !== "crew";
 }
 
+export function canApproveAttendance(role: OpsUserRole) {
+  return canRecordAttendance(role) && role !== "engineering_intern";
+}
+
 // Site register: who can create/edit, archive, and hard-delete sites.
 const SITE_MANAGE_ROLES: OpsUserRole[] = [
   "developer",

@@ -1,4 +1,4 @@
-import { ShieldCheck, UserPlus, Users } from "lucide-react";
+import { ShieldCheck, UserMinus, UserPlus, Users } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
@@ -21,6 +21,15 @@ import {
   deactivateStaffMemberAction,
 } from "@/lib/ops/staff-actions";
 import { fetchOpsStaffMembers } from "@/lib/ops/staff";
+import {
+  assignEngineeringInternToSiteAction,
+  unassignEngineeringInternFromSiteAction,
+} from "@/lib/ops/site-assignment-actions";
+import {
+  canManageOpsSiteAssignments,
+  fetchActiveEngineeringInternSiteAssignments,
+} from "@/lib/ops/site-assignments";
+import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import {
   firstParam,
   noticeFromParams,
@@ -72,6 +81,14 @@ function staffNotice(params: OpsSearchParams) {
     };
   }
 
+  if (firstParam(params.updated) === "site-assignment") {
+    return { tone: "success" as const, message: "Engineering Intern site assignment saved." };
+  }
+
+  if (firstParam(params.updated) === "site-unassigned") {
+    return { tone: "success" as const, message: "Engineering Intern site assignment removed." };
+  }
+
   return null;
 }
 
@@ -107,8 +124,16 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
     notFound();
   }
 
-  const staffMembers = await fetchOpsStaffMembers();
+  const canManageAssignments = canManageOpsSiteAssignments(auth.profile.role);
+  const [staffMembers, siteOptions, siteAssignments] = await Promise.all([
+    fetchOpsStaffMembers(),
+    fetchActiveSiteOptions(),
+    canManageAssignments ? fetchActiveEngineeringInternSiteAssignments() : Promise.resolve([]),
+  ]);
   const canCreateStaff = canManageStaff(auth.profile.role);
+  const engineeringInterns = staffMembers.filter(
+    (member) => member.is_active && member.role === "engineering_intern",
+  );
   const notice = staffNotice(params);
   const activeStaff = staffMembers.filter((member) => member.is_active).length;
   const directorCount = staffMembers.filter(
@@ -289,6 +314,57 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
           Resource accounts. Your role can view the access register available to it.
         </div>
       )}
+
+      {canManageAssignments ? (
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-heading text-xl font-bold text-foreground">Engineering Intern site assignments</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Assign an intern to one or more active sites. Their attendance and daily-report access is limited to these sites.
+          </p>
+          {engineeringInterns.length > 0 && siteOptions.length > 0 ? (
+            <form action={assignEngineeringInternToSiteAction} className="mt-4 grid gap-4 md:grid-cols-3">
+              <label className={OPS_LABEL_CLASS}>
+                Engineering Intern
+                <select className={OPS_INPUT_CLASS} name="user_id" required>
+                  {engineeringInterns.map((intern) => <option key={intern.id} value={intern.id}>{intern.full_name}</option>)}
+                </select>
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Site
+                <select className={OPS_INPUT_CLASS} name="site_id" required>
+                  {siteOptions.map((site) => <option key={site.id} value={site.id}>{site.code} — {site.name}</option>)}
+                </select>
+              </label>
+              <div className="flex items-end">
+                <OpsSubmitButton className={OPS_PRIMARY_BUTTON_CLASS} pendingLabel="Assigning site...">Assign site</OpsSubmitButton>
+              </div>
+            </form>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">Invite an Engineering Intern and ensure an active site exists before creating an assignment.</p>
+          )}
+          {siteAssignments.length > 0 ? (
+            <div className="mt-5 divide-y divide-border rounded-md border border-border">
+              {siteAssignments.map((assignment) => (
+                <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between" key={assignment.id}>
+                  <div>
+                    <p className="font-bold text-foreground">{assignment.user?.full_name ?? "Unknown intern"}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {assignment.site ? `${assignment.site.code} - ${assignment.site.name}` : "Unknown site"}
+                    </p>
+                  </div>
+                  <form action={unassignEngineeringInternFromSiteAction}>
+                    <input name="assignment_id" type="hidden" value={assignment.id} />
+                    <OpsConfirmSubmitButton className={OPS_DANGER_BUTTON_CLASS} confirmText="Remove site assignment">
+                      <UserMinus className="size-4" aria-hidden="true" />
+                      Remove
+                    </OpsConfirmSubmitButton>
+                  </form>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-border bg-card">
         <div className="border-b border-border p-5">

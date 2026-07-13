@@ -274,10 +274,12 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
 
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = dailyReportStatusFromParam(firstParam(params.status));
+  const siteId = firstParam(params.site_id);
   const [reportPage, siteOptions] = await Promise.all([
     fetchPaginatedOpsDailySiteReports({
       listState,
       query: listState.query,
+      siteId,
       status: status || undefined,
     }),
     fetchActiveSiteOptions(),
@@ -287,7 +289,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
   const canCreate = canCreateOpsDailySiteReport(auth.profile.role);
   const canReview = canReviewOpsDailySiteReport(auth.profile.role);
   const canClose = canCloseOpsDailySiteReport(auth.profile.role);
-  const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
+  const hasActiveListFilter = listState.query.length > 0 || Boolean(status) || Boolean(siteId);
   const draftCount = reports.filter((report) => report.status === "draft").length;
   const submittedCount = reports.filter((report) => report.status === "submitted").length;
   const reviewedCount = reports.filter((report) => report.status === "reviewed").length;
@@ -310,6 +312,10 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
 
   if (status) {
     createPanelParams.set("status", status);
+  }
+
+  if (siteId) {
+    createPanelParams.set("site_id", siteId);
   }
 
   createPanelParams.set("create", "report");
@@ -582,6 +588,18 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
               options: DAILY_REPORT_STATUS_OPTIONS,
               value: status,
             },
+            {
+              label: "Site",
+              name: "site_id",
+              options: [
+                { label: "All sites", value: "" },
+                ...siteOptions.map((site) => ({
+                  label: `${site.code} - ${site.name}`,
+                  value: site.id,
+                })),
+              ],
+              value: siteId ?? "",
+            },
           ]}
           placeholder="Search report number, weather, progress, notes"
           query={listState.query}
@@ -752,6 +770,12 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
               name: "status",
               options: [],
               value: status,
+            },
+            {
+              label: "Site",
+              name: "site_id",
+              options: [],
+              value: siteId ?? "",
             },
           ]}
           pagination={reportPage.pagination}

@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import { OPS_MODULES } from "../src/lib/ops/constants";
 import {
   canAccessOpsHref,
+  canApproveAttendance,
   canDeleteOpsArchived,
+  canRecordAttendance,
   canViewOpsBackoffice,
   canViewSiteActualBudget,
   canViewSiteBudget,
@@ -76,6 +78,14 @@ describe("operations manager requisition rights", () => {
   });
 });
 
+describe("Engineering Intern attendance permissions", () => {
+  it("can record attendance but cannot approve it", () => {
+    assert.equal(canRecordAttendance("engineering_intern"), true);
+    assert.equal(canApproveAttendance("engineering_intern"), false);
+    assert.equal(canApproveAttendance("supervisor"), true);
+  });
+});
+
 describe("ops module visibility", () => {
   it("gives Developer every route and every planned registry module", () => {
     const readyRoutes = OPS_MODULES.filter((module) => module.status === "ready");
@@ -143,6 +153,13 @@ describe("ops module visibility", () => {
     assert.equal(canAccessOpsHref("finance_manager", "/ops/material-requests"), true);
     assert.equal(canAccessOpsHref("accountant", "/ops/material-requests"), true);
     assert.equal(canAccessOpsHref("admin_receptionist", "/ops/material-requests"), false);
+  });
+
+  it("gives Engineering Intern staff-facing IT support without IT administration", () => {
+    assert.equal(canAccessOpsHref("engineering_intern", "/ops/it/helpdesk/mine"), true);
+    assert.equal(canAccessOpsHref("engineering_intern", "/ops/it/handbook"), true);
+    assert.equal(canAccessOpsHref("engineering_intern", "/ops/it"), false);
+    assert.equal(canAccessOpsHref("engineering_intern", "/ops/it/assets"), false);
   });
 
   it("shows suppliers to procurement, finance, and delivery management roles", () => {

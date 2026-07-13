@@ -37,7 +37,7 @@ import {
 } from "@/lib/ops/attendance";
 import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
-import { canAccessOpsHref, canRecordAttendance } from "@/lib/ops/permissions";
+import { canAccessOpsHref, canApproveAttendance, canRecordAttendance } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import type { OpsAttendancePresence } from "@/lib/ops/types";
 import {
@@ -304,6 +304,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
     fetchOpsAttendanceDailySummary(7),
   ]);
   const canRecord = canRecordAttendance(auth.profile.role);
+  const canApprove = canApproveAttendance(auth.profile.role);
   const notice = attendanceNotice(params);
   const pendingCount = records.filter((record) => !record.approved_at).length;
   const earnedTotal = records.reduce((sum, record) => sum + record.amount_earned, 0);
@@ -711,16 +712,18 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                       </span>
                     ) : canRecord ? (
                       <div className="flex flex-wrap items-center gap-2">
-                        <form action={approveAttendanceAction}>
-                          <input name="id" type="hidden" value={record.id} />
-                          <OpsConfirmSubmitButton
-                            className={OPS_SECONDARY_BUTTON_CLASS}
-                            confirmText="Confirm approval"
-                          >
-                            <Check className="size-3" aria-hidden="true" />
-                            Approve
-                          </OpsConfirmSubmitButton>
-                        </form>
+                        {canApprove ? (
+                          <form action={approveAttendanceAction}>
+                            <input name="id" type="hidden" value={record.id} />
+                            <OpsConfirmSubmitButton
+                              className={OPS_SECONDARY_BUTTON_CLASS}
+                              confirmText="Confirm approval"
+                            >
+                              <Check className="size-3" aria-hidden="true" />
+                              Approve
+                            </OpsConfirmSubmitButton>
+                          </form>
+                        ) : null}
                         <form action={cancelAttendanceAction}>
                           <input name="id" type="hidden" value={record.id} />
                           <OpsConfirmSubmitButton
@@ -851,16 +854,18 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                         </span>
                       ) : canRecord ? (
                         <div className="flex flex-wrap items-center gap-2">
-                          <form action={approveAttendanceAction}>
-                            <input name="id" type="hidden" value={record.id} />
-                            <OpsConfirmSubmitButton
-                              className={OPS_SECONDARY_BUTTON_CLASS}
-                              confirmText="Confirm approval"
-                            >
-                              <Check className="size-3" aria-hidden="true" />
-                              Approve
-                            </OpsConfirmSubmitButton>
-                          </form>
+                          {canApprove ? (
+                            <form action={approveAttendanceAction}>
+                              <input name="id" type="hidden" value={record.id} />
+                              <OpsConfirmSubmitButton
+                                className={OPS_SECONDARY_BUTTON_CLASS}
+                                confirmText="Confirm approval"
+                              >
+                                <Check className="size-3" aria-hidden="true" />
+                                Approve
+                              </OpsConfirmSubmitButton>
+                            </form>
+                          ) : null}
                           <form action={cancelAttendanceAction}>
                             <input name="id" type="hidden" value={record.id} />
                             <OpsConfirmSubmitButton

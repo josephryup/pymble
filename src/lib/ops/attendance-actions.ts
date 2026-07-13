@@ -14,7 +14,8 @@ import { computeAttendanceEarnings } from "@/lib/ops/attendance-earnings";
 import { parseCoordinateInput } from "@/lib/ops/coordinates";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
-import { canRecordAttendance } from "@/lib/ops/permissions";
+import { canApproveAttendance, canRecordAttendance } from "@/lib/ops/permissions";
+import { hasActiveOpsSiteAssignment, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 
 const approveAttendanceSchema = z.object({
   id: z.string().uuid("Select an attendance record."),
@@ -45,7 +46,7 @@ export async function createAttendanceAction(formData: FormData) {
 export async function approveAttendanceAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canRecordAttendance(profile.role)) {
+  if (!canApproveAttendance(profile.role)) {
     attendanceError("Your role cannot approve attendance yet.");
   }
 
@@ -149,15 +150,35 @@ export async function updateAttendanceAction(formData: FormData) {
   const { id, ...patch } = parsed.data;
   const supabase = await createOpsServerSessionClient();
 
+  if (requiresOpsSiteAssignment(profile.role)) {
+    if (!(await hasActiveOpsSiteAssignment(profile.id, patch.site_id))) {
+      attendanceError("You can only edit attendance for sites assigned to you.");
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from("attendance_records")
+      .select("created_by, site_id")
+      .eq("id", id)
+      .maybeSingle<{ created_by: string | null; site_id: string }>();
+
+    if (existingError) {
+      attendanceError(existingError.message);
+    }
+
+    if (!existing || existing.created_by !== profile.id || existing.site_id !== patch.site_id) {
+      attendanceError("You can only edit attendance records that you created for your assigned site.");
+    }
+  }
+
   // Recompute earnings from the (possibly changed) worker and hours so an edit
   // never leaves amount_earned / overtime stale ahead of payroll.
   const [workerRes, orgRes] = await Promise.all([
     supabase
       .from("workers")
-      .select("daily_rate")
+      .select("daily_rate, site_id")
       .eq("id", patch.worker_id)
       .eq("is_active", true)
-      .single<{ daily_rate: number | string }>(),
+      .single<{ daily_rate: number | string; site_id: string | null }>(),
     supabase
       .from("organization_profile")
       .select("standard_daily_hours, overtime_multiplier")
@@ -167,6 +188,10 @@ export async function updateAttendanceAction(formData: FormData) {
 
   if (workerRes.error || !workerRes.data) {
     attendanceError("The selected worker could not be found.");
+  }
+
+  if (workerRes.data.site_id && workerRes.data.site_id !== patch.site_id) {
+    attendanceError("The selected worker belongs to a different site.");
   }
 
   const hoursWorked = patch.presence === "absent" ? 0 : patch.hours_worked;
@@ -235,6 +260,26 @@ export async function cancelAttendanceAction(formData: FormData) {
   }
 
   const supabase = await createOpsServerSessionClient();
+  if (requiresOpsSiteAssignment(profile.role)) {
+    const { data: existing, error: existingError } = await supabase
+      .from("attendance_records")
+      .select("created_by, site_id")
+      .eq("id", parsed.data.id)
+      .maybeSingle<{ created_by: string | null; site_id: string }>();
+
+    if (existingError) {
+      attendanceError(existingError.message);
+    }
+
+    if (
+      !existing ||
+      existing.created_by !== profile.id ||
+      !(await hasActiveOpsSiteAssignment(profile.id, existing.site_id))
+    ) {
+      attendanceError("You can only cancel attendance records that you created for your assigned site.");
+    }
+  }
+
   const { error } = await supabase
     .from("attendance_records")
     .update({
