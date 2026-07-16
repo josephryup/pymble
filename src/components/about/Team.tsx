@@ -69,8 +69,8 @@ const teamMembers = [
         id: 9,
         name: "Mateo Chalwe",
         role: "Engineer",
-        credentials: "",
-        image: COMPANY_LOGO,
+        credentials: "B.Eng. (Hons) Civil Engineering",
+        image: "/images/team/mateo.jpeg",
     },
     {
         id: 10,
@@ -83,8 +83,8 @@ const teamMembers = [
         id: 11,
         name: "Thandiwe Mulenga",
         role: "Engineer",
-        credentials: "",
-        image: COMPANY_LOGO,
+        credentials: "B.Eng. Civil and Environmental Engineering",
+        image: "/images/team/thandiwe.jpeg",
     },
     {
         id: 12,
