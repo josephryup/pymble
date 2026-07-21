@@ -37,7 +37,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       .order("full_name", { ascending: true });
     if (itemsError) throw itemsError;
 
-    const workbook = buildStaffPayrollExportXlsx(
+    const workbook = await buildStaffPayrollExportXlsx(
       run,
       (items ?? []) as unknown as OpsStaffPayrollItem[],
     );
