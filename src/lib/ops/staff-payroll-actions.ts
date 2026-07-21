@@ -505,6 +505,54 @@ export async function completeStaffPayrollRunAction(formData: FormData) {
   redirect(`${STAFF_PAYROLL_ROUTE}?updated=completed`);
 }
 
+/** Archive a draft run only. Approved and paid payroll must remain on record. */
+export async function archiveStaffPayrollRunAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    staffPayrollError("Your role cannot archive staff payroll runs.");
+  }
+  const parsed = runIdSchema.safeParse({ id: field(formData, "id") });
+  if (!parsed.success) {
+    staffPayrollError("Select a staff payroll run.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: archivedRun, error } = await supabase
+    .from("staff_payroll_runs")
+    .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
+    .eq("id", parsed.data.id)
+    .eq("status", "draft")
+    .is("archived_at", null)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (error || !archivedRun) {
+    staffPayrollError(error?.message ?? "Only an unapproved draft payroll run can be archived.");
+  }
+
+  // A draft's advances have not been paid, so make them available to the next run.
+  const { error: advanceError } = await supabase
+    .from("staff_advances")
+    .update({ deducted_in_run_id: null })
+    .eq("deducted_in_run_id", parsed.data.id);
+  if (advanceError) {
+    staffPayrollError(advanceError.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "staff_payroll_run.archived",
+    actorUserId: profile.id,
+    entityId: parsed.data.id,
+    entityType: "staff_payroll_run",
+    moduleKey: "staff_payroll",
+    sourceId: parsed.data.id,
+    sourceTable: "staff_payroll_runs",
+    summary: "Archived draft staff payroll run and released its advances",
+  }).catch(() => null);
+
+  revalidatePath(STAFF_PAYROLL_ROUTE);
+  redirect(`${STAFF_PAYROLL_ROUTE}?updated=archived`);
+}
+
 export async function createStaffAdvanceAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   if (!canManageOpsStaffPayroll(profile.role)) {

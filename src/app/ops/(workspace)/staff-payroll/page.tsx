@@ -1,4 +1,5 @@
 import {
+  Archive,
   Banknote,
   Check,
   CircleDollarSign,
@@ -22,6 +23,7 @@ import {
 import {
   approveStaffPayrollRunAction,
   archiveStaffAdvanceAction,
+  archiveStaffPayrollRunAction,
   completeStaffPayrollRunAction,
   createStaffAdvanceAction,
   createStaffPayrollRunAction,
@@ -67,6 +69,7 @@ function pageNotice(params: OpsSearchParams) {
   if (created === "advance") return { tone: "success" as const, message: "Staff advance recorded." };
   if (updated === "approved") return { tone: "success" as const, message: "Staff payroll run approved." };
   if (updated === "completed") return { tone: "success" as const, message: "Staff payroll run marked paid." };
+  if (updated === "archived") return { tone: "success" as const, message: "Draft staff payroll run archived. Its advances are available for the next run." };
   if (updated === "advance_archived") return { tone: "success" as const, message: "Staff advance archived." };
   if (updated === "statutory_contributions") return { tone: "success" as const, message: "Statutory contribution setting updated." };
   return null;
@@ -325,17 +328,36 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
                     >
                       {run.status}
                     </span>
+                    <a
+                      className={OPS_SECONDARY_BUTTON_CLASS}
+                      href={`/api/ops/staff-payroll/${run.id}/export`}
+                    >
+                      <Download className="size-3" aria-hidden="true" />
+                      Excel
+                    </a>
                     {canManage && run.status === "draft" ? (
-                      <form action={approveStaffPayrollRunAction}>
-                        <input name="id" type="hidden" value={run.id} />
-                        <OpsConfirmSubmitButton
-                          className={OPS_SECONDARY_BUTTON_CLASS}
-                          confirmText="Confirm approval"
-                        >
-                          <Check className="size-3" aria-hidden="true" />
-                          Approve
-                        </OpsConfirmSubmitButton>
-                      </form>
+                      <>
+                        <form action={approveStaffPayrollRunAction}>
+                          <input name="id" type="hidden" value={run.id} />
+                          <OpsConfirmSubmitButton
+                            className={OPS_SECONDARY_BUTTON_CLASS}
+                            confirmText="Confirm approval"
+                          >
+                            <Check className="size-3" aria-hidden="true" />
+                            Approve
+                          </OpsConfirmSubmitButton>
+                        </form>
+                        <form action={archiveStaffPayrollRunAction}>
+                          <input name="id" type="hidden" value={run.id} />
+                          <OpsConfirmSubmitButton
+                            className={OPS_DANGER_BUTTON_CLASS}
+                            confirmText="Confirm archive"
+                          >
+                            <Archive className="size-3" aria-hidden="true" />
+                            Archive draft
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      </>
                     ) : null}
                     {canManage && run.status === "approved" ? (
                       <form action={completeStaffPayrollRunAction}>
