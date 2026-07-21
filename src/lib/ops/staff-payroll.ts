@@ -76,6 +76,15 @@ export type OpsStaffAdvance = {
   } | null;
 };
 
+export type OpsStaffPayrollEmployee = {
+  id: string;
+  employee_number: string;
+  full_name: string;
+  job_title: string;
+  department: string;
+  statutory_contributions_enabled: boolean;
+};
+
 const MONEY_KEYS = [
   "basic_pay",
   "housing_allowance",
@@ -123,9 +132,34 @@ export function canViewOpsStaffPayroll(role: OpsUserRole) {
   );
 }
 
-/** Only leadership + HR may *create / approve / disburse* a run (finance can read). */
+/** Leadership, HR, and the Finance Manager manage staff payroll runs. */
 export function canManageOpsStaffPayroll(role: OpsUserRole) {
-  return isLeadershipRole(role) || isHumanResourceRole(role);
+  return (
+    isLeadershipRole(role) ||
+    isHumanResourceRole(role) ||
+    role === "finance_manager"
+  );
+}
+
+export async function fetchOpsStaffPayrollEmployees(): Promise<OpsStaffPayrollEmployee[]> {
+  const { profile } = await requireOpsUser();
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    return [];
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("employees")
+    .select("id, employee_number, full_name, job_title, department, statutory_contributions_enabled")
+    .eq("status", "active")
+    .order("full_name", { ascending: true });
+
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as OpsStaffPayrollEmployee[]).map((employee) => ({
+    ...employee,
+    statutory_contributions_enabled: employee.statutory_contributions_enabled !== false,
+  }));
 }
 
 export async function fetchOpsStaffPayrollRuns(): Promise<OpsStaffPayrollRun[]> {

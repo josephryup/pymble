@@ -311,7 +311,7 @@ Finance Manager submits periodic reports for the Finance department. Same flow a
 3. The system tracks actual spend versus budget in real time.
 
 **Payroll approval (Finance sign-off):**
-After Operations Manager approves a payroll run, Finance Manager clicks **Mark paid** once workers are paid out via MoMo or cash. Payroll runs must not be marked paid until funds leave the account.
+Finance Manager can select staff for a payroll run, set whether NAPSA/NHIMA/WCF contributions apply to each employee, approve the run, and click **Mark paid** once staff are paid via MoMo or cash. PAYE remains calculated for included staff. Payroll runs must not be marked paid until funds leave the account.
 
 ### Accountant
 

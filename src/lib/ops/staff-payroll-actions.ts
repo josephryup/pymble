@@ -20,6 +20,7 @@ const createRunSchema = z
     period_label: z.string().trim().min(3, "Period label is required.").max(80),
     period_start: dateSchema,
     period_end: dateSchema,
+    employee_ids: z.array(z.string().uuid()).min(1, "Select at least one employee."),
   })
   .refine((value) => value.period_end >= value.period_start, {
     message: "Period end must be the same day or later than the start date.",
@@ -36,6 +37,11 @@ const advanceSchema = z.object({
 });
 
 const advanceIdSchema = z.object({ id: z.string().uuid("Select an advance.") });
+
+const statutoryContributionsSchema = z.object({
+  employee_id: z.string().uuid("Select an employee."),
+  enabled: z.enum(["true", "false"]),
+});
 
 function field(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -105,6 +111,7 @@ export async function createStaffPayrollRunAction(formData: FormData) {
     period_label: field(formData, "period_label"),
     period_start: field(formData, "period_start"),
     period_end: field(formData, "period_end"),
+    employee_ids: formData.getAll("employee_ids").filter((value): value is string => typeof value === "string"),
   });
 
   if (!parsed.success) {
@@ -129,13 +136,17 @@ export async function createStaffPayrollRunAction(formData: FormData) {
         "current_contract:employee_contracts!employee_contracts_employee_id_fkey(basic_pay, housing_allowance, other_allowances, status)",
       ].join(", "),
     )
-    .eq("status", "active");
+    .eq("status", "active")
+    .in("id", parsed.data.employee_ids);
 
   if (employeesError) {
     staffPayrollError(employeesError.message);
   }
 
   const employees = (employeesData ?? []) as unknown as EmployeeForPayroll[];
+  if (employees.length !== parsed.data.employee_ids.length) {
+    staffPayrollError("One or more selected employees are no longer active.");
+  }
   const withActiveContract = employees
     .map((employee) => ({
       employee,
@@ -173,6 +184,20 @@ export async function createStaffPayrollRunAction(formData: FormData) {
 
   // Open advances per employee (deducted in this run).
   const employeeIds = payable.map((row) => row.employee.id);
+  const { data: statutoryData, error: statutoryError } = await supabase
+    .from("employees")
+    .select("id, statutory_contributions_enabled")
+    .in("id", employeeIds);
+  if (statutoryError) {
+    staffPayrollError(statutoryError.message);
+  }
+  const statutoryByEmployeeId = new Map(
+    (statutoryData ?? []).map((employee) => [
+      employee.id as string,
+      employee.statutory_contributions_enabled !== false,
+    ]),
+  );
+
   const { data: advanceData, error: advanceError } = await supabase
     .from("staff_advances")
     .select("id, employee_id, amount")
@@ -233,6 +258,7 @@ export async function createStaffPayrollRunAction(formData: FormData) {
       otherAllowances: sumOtherAllowances(contract.other_allowances),
       advanceDeduction: advanceTotal,
       periodDate: parsed.data.period_end,
+      statutoryContributionsEnabled: statutoryByEmployeeId.get(employee.id) !== false,
     });
 
     totalBasic += slip.basic;
@@ -334,6 +360,44 @@ export async function createStaffPayrollRunAction(formData: FormData) {
   redirect(
     `${STAFF_PAYROLL_ROUTE}?created=run&included=${payable.length}&skipped=${skippedZeroPay.length}`,
   );
+}
+
+export async function updateStaffStatutoryContributionsAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    staffPayrollError("Your role cannot update statutory contribution settings.");
+  }
+
+  const parsed = statutoryContributionsSchema.safeParse({
+    employee_id: field(formData, "employee_id"),
+    enabled: field(formData, "enabled"),
+  });
+  if (!parsed.success) {
+    staffPayrollError(parsed.error.issues[0]?.message ?? "Check the contribution setting.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("employees")
+    .update({ statutory_contributions_enabled: parsed.data.enabled === "true" })
+    .eq("id", parsed.data.employee_id)
+    .eq("status", "active");
+  if (error) staffPayrollError(error.message);
+
+  await recordOpsAuditEvent({
+    action: "employee.statutory_contributions_updated",
+    actorUserId: profile.id,
+    entityId: parsed.data.employee_id,
+    entityType: "employee",
+    metadata: { statutory_contributions_enabled: parsed.data.enabled === "true" },
+    moduleKey: "staff_payroll",
+    sourceId: parsed.data.employee_id,
+    sourceTable: "employees",
+    summary: `Updated statutory contributions for an employee`,
+  }).catch(() => null);
+
+  revalidatePath(STAFF_PAYROLL_ROUTE);
+  redirect(`${STAFF_PAYROLL_ROUTE}?updated=statutory_contributions`);
 }
 
 /** Approve a draft staff payroll run (manager+leadership only). */

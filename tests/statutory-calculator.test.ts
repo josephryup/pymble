@@ -124,3 +124,20 @@ test("computeStaffPayslip never lets a staff advance push net below zero", () =>
   assert.equal(slip.advanceDeduction, 31_000 - 10_748);
   assert.equal(slip.net, 0);
 });
+
+test("computeStaffPayslip can exclude NAPSA, NHIMA, and WCF per employee", () => {
+  const slip = computeStaffPayslip({
+    basic: 20_000,
+    housing: 11_000,
+    periodDate: AUGUST_2025,
+    statutoryContributionsEnabled: false,
+  });
+
+  assert.equal(slip.paye, 9_096);
+  assert.equal(slip.napsaEmployee, 0);
+  assert.equal(slip.napsaEmployer, 0);
+  assert.equal(slip.nhimaEmployee, 0);
+  assert.equal(slip.nhimaEmployer, 0);
+  assert.equal(slip.wcfEmployer, 0);
+  assert.equal(slip.net, 21_904);
+});

@@ -14,6 +14,7 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import {
   canManageOpsStaffPayroll,
+  fetchOpsStaffPayrollEmployees,
   canViewOpsStaffPayroll,
   fetchOpsStaffAdvances,
   fetchOpsStaffPayrollRuns,
@@ -24,6 +25,7 @@ import {
   completeStaffPayrollRunAction,
   createStaffAdvanceAction,
   createStaffPayrollRunAction,
+  updateStaffStatutoryContributionsAction,
 } from "@/lib/ops/staff-payroll-actions";
 import {
   firstParam,
@@ -66,6 +68,7 @@ function pageNotice(params: OpsSearchParams) {
   if (updated === "approved") return { tone: "success" as const, message: "Staff payroll run approved." };
   if (updated === "completed") return { tone: "success" as const, message: "Staff payroll run marked paid." };
   if (updated === "advance_archived") return { tone: "success" as const, message: "Staff advance archived." };
+  if (updated === "statutory_contributions") return { tone: "success" as const, message: "Statutory contribution setting updated." };
   return null;
 }
 
@@ -77,19 +80,14 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
   }
 
   const canManage = canManageOpsStaffPayroll(profile.role);
-  const [runs, advances] = await Promise.all([
+  const [runs, advances, employees] = await Promise.all([
     fetchOpsStaffPayrollRuns(),
     fetchOpsStaffAdvances(),
+    fetchOpsStaffPayrollEmployees(),
   ]);
   const notice = pageNotice(params);
   const openAdvances = advances.filter((advance) => !advance.deducted_in_run_id);
-  const employeeOptions = Array.from(
-    new Map(
-      advances.flatMap((advance) =>
-        advance.employee ? [[advance.employee.id, advance.employee] as const] : [],
-      ),
-    ).values(),
-  );
+  const employeeOptions = employees;
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -123,8 +121,7 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
                 Generate a payroll run
               </h2>
               <p className="text-sm text-muted-foreground">
-                One line item is generated for every active employee with an active contract.
-                Open staff advances are deducted automatically.
+                Select the staff to include. Open staff advances are deducted automatically.
               </p>
             </div>
           </div>
@@ -153,7 +150,46 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
                 Generate run
               </button>
             </div>
+            <fieldset className="md:col-span-4">
+              <legend className={OPS_LABEL_CLASS}>Staff to include</legend>
+              <div className="mt-2 grid gap-2 rounded-md border border-border p-3 sm:grid-cols-2 lg:grid-cols-3">
+                {employees.map((employee) => (
+                  <label className="flex items-center gap-2 text-sm text-foreground" key={employee.id}>
+                    <input defaultChecked name="employee_ids" type="checkbox" value={employee.id} />
+                    <span>{employee.employee_number} - {employee.full_name}</span>
+                  </label>
+                ))}
+                {employees.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No active staff are available.</p>
+                ) : null}
+              </div>
+            </fieldset>
           </form>
+        </section>
+      ) : null}
+
+      {canManage && employees.length > 0 ? (
+        <section className="rounded-lg border border-border bg-card p-5">
+          <h2 className="font-heading text-xl font-bold text-foreground">Statutory contributions</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Set whether NAPSA, NHIMA, and WCF apply to each employee. PAYE remains calculated for all included staff.
+          </p>
+          <div className="mt-3 divide-y divide-border rounded-md border border-border">
+            {employees.map((employee) => (
+              <form action={updateStaffStatutoryContributionsAction} className="flex items-center justify-between gap-3 p-3" key={employee.id}>
+                <input name="employee_id" type="hidden" value={employee.id} />
+                <div>
+                  <p className="font-semibold text-foreground">{employee.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{employee.employee_number}{employee.job_title ? ` · ${employee.job_title}` : ""}</p>
+                </div>
+                <select className={OPS_INPUT_CLASS} defaultValue={String(employee.statutory_contributions_enabled)} name="enabled">
+                  <option value="true">Contributions apply</option>
+                  <option value="false">No contributions</option>
+                </select>
+                <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">Save</button>
+              </form>
+            ))}
+          </div>
         </section>
       ) : null}
 

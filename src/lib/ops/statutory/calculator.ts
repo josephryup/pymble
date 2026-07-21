@@ -44,6 +44,8 @@ export type StaffPayslipInput = {
   advanceDeduction?: number;
   /** Payroll period date used to pick the right ZRA rates. */
   periodDate: Date | string;
+  /** Whether NAPSA, NHIMA, and WCF contributions apply to this employee. */
+  statutoryContributionsEnabled?: boolean;
 };
 
 export type StaffPayslipBreakdown = PayslipBreakdown & {
@@ -173,11 +175,12 @@ export function computeStaffPayslip(input: StaffPayslipInput): StaffPayslipBreak
   const gross = roundToCents(basic + housing + otherAllowances);
 
   const paye = computePaye(gross, rates);
-  const napsaEmployee = computeNapsaEmployee(gross, rates);
-  const napsaEmployer = computeNapsaEmployer(gross, rates);
-  const nhimaEmployee = computeNhimaEmployee(gross, rates);
-  const nhimaEmployer = computeNhimaEmployer(gross, rates);
-  const wcfEmployer = computeWcfEmployer(gross, rates);
+  const statutoryContributionsEnabled = input.statutoryContributionsEnabled !== false;
+  const napsaEmployee = statutoryContributionsEnabled ? computeNapsaEmployee(gross, rates) : 0;
+  const napsaEmployer = statutoryContributionsEnabled ? computeNapsaEmployer(gross, rates) : 0;
+  const nhimaEmployee = statutoryContributionsEnabled ? computeNhimaEmployee(gross, rates) : 0;
+  const nhimaEmployer = statutoryContributionsEnabled ? computeNhimaEmployer(gross, rates) : 0;
+  const wcfEmployer = statutoryContributionsEnabled ? computeWcfEmployer(gross, rates) : 0;
 
   const requestedAdvance = roundToCents(Math.max(input.advanceDeduction ?? 0, 0));
   const statutoryDeductions = roundToCents(paye + napsaEmployee + nhimaEmployee);
