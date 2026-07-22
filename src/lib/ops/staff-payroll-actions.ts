@@ -43,6 +43,13 @@ const statutoryContributionsSchema = z.object({
   enabled: z.enum(["true", "false"]),
 });
 
+const bankDetailsSchema = z.object({
+  employee_id: z.string().uuid("Select an employee."),
+  bank_name: z.string().trim().max(120).default(""),
+  bank_branch: z.string().trim().max(120).default(""),
+  bank_account_number: z.string().trim().max(80).default(""),
+});
+
 function field(formData: FormData, name: string) {
   const value = formData.get(name);
   return typeof value === "string" ? value : "";
@@ -62,6 +69,9 @@ type EmployeeForPayroll = {
   department: string;
   nrc_number: string;
   napsa_number: string;
+  bank_name: string;
+  bank_branch: string;
+  bank_account_number: string;
   status: string;
   current_contract:
     | {
@@ -132,6 +142,9 @@ export async function createStaffPayrollRunAction(formData: FormData) {
         "department",
         "nrc_number",
         "napsa_number",
+        "bank_name",
+        "bank_branch",
+        "bank_account_number",
         "status",
         "current_contract:employee_contracts!employee_contracts_employee_id_fkey(basic_pay, housing_allowance, other_allowances, status)",
       ].join(", "),
@@ -276,6 +289,9 @@ export async function createStaffPayrollRunAction(formData: FormData) {
       department: employee.department ?? "",
       nrc_number: employee.nrc_number ?? "",
       napsa_number: employee.napsa_number ?? "",
+      bank_name: employee.bank_name ?? "",
+      bank_branch: employee.bank_branch ?? "",
+      bank_account_number: employee.bank_account_number ?? "",
       basic_pay: slip.basic,
       housing_allowance: slip.housing,
       other_allowances: slip.otherAllowances,
@@ -618,4 +634,49 @@ export async function archiveStaffAdvanceAction(formData: FormData) {
   }
   revalidatePath(STAFF_PAYROLL_ROUTE);
   redirect(`${STAFF_PAYROLL_ROUTE}?updated=advance_archived`);
+}
+
+/** Update bank details for a staff employee (finance use). */
+export async function updateStaffBankDetailsAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    staffPayrollError("Your role cannot update staff bank details.");
+  }
+
+  const parsed = bankDetailsSchema.safeParse({
+    employee_id: field(formData, "employee_id"),
+    bank_name: field(formData, "bank_name"),
+    bank_branch: field(formData, "bank_branch"),
+    bank_account_number: field(formData, "bank_account_number"),
+  });
+  if (!parsed.success) {
+    staffPayrollError(parsed.error.issues[0]?.message ?? "Check the bank details.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("employees")
+    .update({
+      bank_name: parsed.data.bank_name,
+      bank_branch: parsed.data.bank_branch,
+      bank_account_number: parsed.data.bank_account_number,
+    })
+    .eq("id", parsed.data.employee_id)
+    .eq("status", "active");
+  if (error) staffPayrollError(error.message);
+
+  await recordOpsAuditEvent({
+    action: "employee.bank_details_updated",
+    actorUserId: profile.id,
+    entityId: parsed.data.employee_id,
+    entityType: "employee",
+    metadata: { bank_name: parsed.data.bank_name },
+    moduleKey: "staff_payroll",
+    sourceId: parsed.data.employee_id,
+    sourceTable: "employees",
+    summary: "Updated bank details for an employee",
+  }).catch(() => null);
+
+  revalidatePath(STAFF_PAYROLL_ROUTE);
+  redirect(`${STAFF_PAYROLL_ROUTE}?updated=bank_details`);
 }

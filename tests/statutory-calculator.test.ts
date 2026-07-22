@@ -83,9 +83,9 @@ test("resolveZambianTaxYear falls back to the most recent year for unknown years
 const RATES_2025 = ZAMBIAN_TAX_YEARS["2025"];
 const AUGUST_2025 = new Date("2025-08-15T00:00:00+02:00");
 
-test("NHIMA helpers compute 1/1 of gross under 2025 rates", () => {
-  assert.equal(computeNhimaEmployee(31_000, RATES_2025), 310);
-  assert.equal(computeNhimaEmployer(31_000, RATES_2025), 310);
+test("NHIMA helpers compute 1/1 of basic pay under 2025 rates", () => {
+  assert.equal(computeNhimaEmployee(20_000, RATES_2025), 200);
+  assert.equal(computeNhimaEmployer(20_000, RATES_2025), 200);
   assert.equal(computeNhimaEmployee(0, RATES_2025), 0);
 });
 
@@ -107,10 +107,10 @@ test("computeStaffPayslip reproduces the PCL August 2025 payslip", () => {
   assert.equal(slip.gross, 31_000);
   assert.equal(slip.paye, 9_096);
   assert.equal(slip.napsaEmployee, 1_342);
-  assert.equal(slip.nhimaEmployee, 310);
+  assert.equal(slip.nhimaEmployee, 200);
   assert.equal(slip.advanceDeduction, 0);
-  assert.equal(slip.totalEmployeeDeductions, 10_748);
-  assert.equal(slip.net, 20_252);
+  assert.equal(slip.totalEmployeeDeductions, 10_638);
+  assert.equal(slip.net, 20_362);
 });
 
 test("computeStaffPayslip never lets a staff advance push net below zero", () => {
@@ -120,8 +120,8 @@ test("computeStaffPayslip never lets a staff advance push net below zero", () =>
     advanceDeduction: 100_000, // far more than remaining pay
     periodDate: AUGUST_2025,
   });
-  // Statutory deductions take K10,748. Advance is capped at the remainder.
-  assert.equal(slip.advanceDeduction, 31_000 - 10_748);
+  // Statutory deductions take K10,638. Advance is capped at the remainder.
+  assert.equal(slip.advanceDeduction, 31_000 - 10_638);
   assert.equal(slip.net, 0);
 });
 

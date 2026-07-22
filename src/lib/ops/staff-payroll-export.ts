@@ -21,6 +21,7 @@ const COLUMNS = [
   ["Basic pay", 16], ["Housing allowance", 18], ["Other allowances", 18], ["Gross pay", 16],
   ["PAYE", 14], ["NAPSA (employee)", 18], ["NHIMA (employee)", 18], ["Advance deduction", 18], ["Net pay", 16],
   ["NAPSA (employer)", 18], ["NHIMA (employer)", 18], ["WCF (employer)", 18], ["Total employer cost", 20],
+  ["Bank name", 20], ["Branch", 18], ["Account number", 22],
 ] as const;
 
 const money = (value: number) => Math.round(value * 100) / 100;
@@ -57,9 +58,9 @@ export async function buildStaffPayrollExportXlsx(run: ExportRun, items: OpsStaf
   const logoId = workbook.addImage({ base64: logo, extension: "png" });
   worksheet.addImage(logoId, "A1:C3");
 
-  worksheet.mergeCells("D1:Q1");
-  worksheet.mergeCells("D2:Q2");
-  worksheet.mergeCells("D3:Q3");
+  worksheet.mergeCells("D1:T1");
+  worksheet.mergeCells("D2:T2");
+  worksheet.mergeCells("D3:T3");
   worksheet.getCell("D1").value = "PYMBLE CONSTRUCTION";
   worksheet.getCell("D2").value = "STAFF PAYROLL REGISTER";
   worksheet.getCell("D3").value = `Payroll period: ${run.period_label}  |  ${run.period_start} to ${run.period_end}  |  Status: ${run.status.toUpperCase()}`;
@@ -94,7 +95,7 @@ export async function buildStaffPayrollExportXlsx(run: ExportRun, items: OpsStaf
   styleCell(worksheet.getCell("Q5"), { font: { bold: true, color: { argb: NAVY } }, fill: { type: "pattern", pattern: "solid", fgColor: { argb: PALE_GREY } }, alignment: { horizontal: "center" } });
   styleCell(worksheet.getCell("Q6"), { font: { bold: true, size: 13, color: { argb: NAVY } }, fill: { type: "pattern", pattern: "solid", fgColor: { argb: PALE_GREY } }, alignment: { horizontal: "center" } });
 
-  const groups = [["A8:D8", "Employee details"], ["E8:H8", "Earnings"], ["I8:M8", "Employee deductions"], ["N8:Q8", "Employer contributions"]] as const;
+  const groups = [["A8:D8", "Employee details"], ["E8:H8", "Earnings"], ["I8:M8", "Employee deductions"], ["N8:Q8", "Employer contributions"], ["R8:T8", "Bank details"]] as const;
   for (const [range, label] of groups) {
     worksheet.mergeCells(range);
     const cell = worksheet.getCell(range.slice(0, 2));
@@ -105,7 +106,7 @@ export async function buildStaffPayrollExportXlsx(run: ExportRun, items: OpsStaf
   worksheet.getRow(HEADER_ROW).values = COLUMNS.map(([header]) => header);
   worksheet.getRow(HEADER_ROW).height = 32;
   worksheet.getRow(HEADER_ROW).eachCell((cell, columnNumber) => {
-    styleCell(cell, { font: { bold: true, color: { argb: WHITE } }, fill: { type: "pattern", pattern: "solid", fgColor: { argb: columnNumber >= 9 && columnNumber <= 16 ? "806000" : NAVY } }, alignment: { horizontal: "center", vertical: "middle", wrapText: true }, border: { bottom: { style: "medium", color: { argb: NAVY } } } });
+    styleCell(cell, { font: { bold: true, color: { argb: WHITE } }, fill: { type: "pattern", pattern: "solid", fgColor: { argb: columnNumber >= 9 && columnNumber <= 17 ? "806000" : NAVY } }, alignment: { horizontal: "center", vertical: "middle", wrapText: true }, border: { bottom: { style: "medium", color: { argb: NAVY } } } });
   });
 
   items.forEach((item, index) => {
@@ -116,11 +117,12 @@ export async function buildStaffPayrollExportXlsx(run: ExportRun, items: OpsStaf
       item.paye_amount, item.napsa_employee, item.nhima_employee, item.advance_deduction, item.net_pay,
       item.napsa_employer, item.nhima_employer, item.wcf_employer,
       money(item.gross_pay + item.napsa_employer + item.nhima_employer + item.wcf_employer),
+      item.bank_name ?? "", item.bank_branch ?? "", item.bank_account_number ?? "",
     ];
     row.eachCell((cell, columnNumber) => {
-      const fill = columnNumber === 13 ? PALE_GREEN : columnNumber >= 9 && columnNumber <= 16 ? PALE_YELLOW : index % 2 === 0 ? WHITE : PALE_GREY;
-      styleCell(cell, { fill: { type: "pattern", pattern: "solid", fgColor: { argb: fill } }, alignment: { vertical: "middle", horizontal: columnNumber >= 5 ? "right" : "left" }, border: { bottom: { style: "hair", color: { argb: "D9E2F3" } } } });
-      if (columnNumber >= 5) cell.numFmt = CURRENCY_FORMAT;
+      const fill = columnNumber === 13 ? PALE_GREEN : columnNumber >= 9 && columnNumber <= 17 ? PALE_YELLOW : index % 2 === 0 ? WHITE : PALE_GREY;
+      styleCell(cell, { fill: { type: "pattern", pattern: "solid", fgColor: { argb: fill } }, alignment: { vertical: "middle", horizontal: columnNumber >= 5 && columnNumber <= 17 ? "right" : "left" }, border: { bottom: { style: "hair", color: { argb: "D9E2F3" } } } });
+      if (columnNumber >= 5 && columnNumber <= 17) cell.numFmt = CURRENCY_FORMAT;
     });
   });
 
@@ -130,13 +132,14 @@ export async function buildStaffPayrollExportXlsx(run: ExportRun, items: OpsStaf
     total(items, (item) => item.basic_pay), total(items, (item) => item.housing_allowance), total(items, (item) => item.other_allowances), total(items, (item) => item.gross_pay),
     total(items, (item) => item.paye_amount), total(items, (item) => item.napsa_employee), total(items, (item) => item.nhima_employee), total(items, (item) => item.advance_deduction), total(items, (item) => item.net_pay),
     total(items, (item) => item.napsa_employer), total(items, (item) => item.nhima_employer), total(items, (item) => item.wcf_employer), total(items, (item) => item.gross_pay + item.napsa_employer + item.nhima_employer + item.wcf_employer),
+    "", "", "",
   ];
   totalRow.height = 22;
   totalRow.eachCell((cell, columnNumber) => {
-    styleCell(cell, { font: { bold: true, color: { argb: NAVY } }, fill: { type: "pattern", pattern: "solid", fgColor: { argb: PALE_BLUE } }, border: { top: { style: "medium", color: { argb: NAVY } } }, alignment: { horizontal: columnNumber >= 5 ? "right" : "left", vertical: "middle" } });
-    if (columnNumber >= 5) cell.numFmt = CURRENCY_FORMAT;
+    styleCell(cell, { font: { bold: true, color: { argb: NAVY } }, fill: { type: "pattern", pattern: "solid", fgColor: { argb: PALE_BLUE } }, border: { top: { style: "medium", color: { argb: NAVY } } }, alignment: { horizontal: columnNumber >= 5 && columnNumber <= 17 ? "right" : "left", vertical: "middle" } });
+    if (columnNumber >= 5 && columnNumber <= 17) cell.numFmt = CURRENCY_FORMAT;
   });
-  worksheet.autoFilter = `A${HEADER_ROW}:Q${DATA_ROW + items.length - 1}`;
+  worksheet.autoFilter = `A${HEADER_ROW}:T${DATA_ROW + items.length - 1}`;
   worksheet.headerFooter.oddFooter = "Generated by Pymble Operations · Page &P of &N";
 
   return Buffer.from(await workbook.xlsx.writeBuffer());

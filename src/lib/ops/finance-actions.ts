@@ -15,6 +15,7 @@ import {
   canCreateOpsPaymentRequest,
   canCreateOpsProjectBudget,
   canDeleteOpsPaymentRequest,
+  canEditOpsProjectBudget,
   canEditOpsPaymentRequest,
   canEditOpsProjectBudgetLine,
   canLockOpsProjectBudget,
@@ -636,6 +637,88 @@ export async function archiveProjectBudgetAction(formData: FormData) {
 
   revalidatePath(PROJECT_BUDGETS_ROUTE);
   redirect(`${PROJECT_BUDGETS_ROUTE}?updated=archived`);
+}
+
+const editProjectBudgetSchema = budgetIdSchema.extend({
+  contingency_amount: z.coerce.number().min(0, "Contingency cannot be negative.").default(0),
+  currency_code: z
+    .string()
+    .trim()
+    .default("ZMW")
+    .transform((value) => value.toUpperCase())
+    .refine((value) => /^[A-Z]{3}$/.test(value), "Use a valid currency code."),
+  description: z.string().trim().max(1000).default(""),
+  effective_from: z.string().trim().default(""),
+  site_id: z.string().uuid("Select a site."),
+  title: z.string().trim().min(2, "Budget title is required.").max(180),
+});
+
+export async function editProjectBudgetAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const parsed = editProjectBudgetSchema.safeParse({
+    budget_id: field(formData, "budget_id"),
+    contingency_amount: field(formData, "contingency_amount") || "0",
+    currency_code: field(formData, "currency_code") || "ZMW",
+    description: field(formData, "description"),
+    effective_from: field(formData, "effective_from"),
+    site_id: field(formData, "site_id"),
+    title: field(formData, "title"),
+  });
+
+  if (!parsed.success) {
+    budgetError(parsed.error.issues[0]?.message ?? "Check the project budget.");
+  }
+
+  const budget = await fetchProjectBudgetForMutation(parsed.data.budget_id);
+
+  if (!budget) {
+    budgetError("Project budget was not found.");
+  }
+
+  if (!canEditOpsProjectBudget(profile.role, budget)) {
+    budgetError("Your role cannot edit this budget. Only draft budgets can be edited.");
+  }
+
+  await assertActiveSite(parsed.data.site_id, budgetError);
+  const effectiveFrom =
+    normalizeDateInput(parsed.data.effective_from, true, budgetError) ??
+    new Date().toISOString().slice(0, 10);
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("project_budgets")
+    .update({
+      contingency_amount: parsed.data.contingency_amount,
+      currency_code: parsed.data.currency_code,
+      description: parsed.data.description,
+      effective_from: effectiveFrom,
+      site_id: parsed.data.site_id,
+      title: parsed.data.title,
+    })
+    .eq("id", budget.id)
+    .eq("status", "draft");
+
+  if (error) {
+    budgetError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "project_budget.edited",
+    actorUserId: profile.id,
+    entityId: budget.id,
+    entityType: "project_budget",
+    metadata: {
+      site_id: parsed.data.site_id,
+      title: parsed.data.title,
+    },
+    moduleKey: "project_budgets",
+    sourceId: budget.id,
+    sourceTable: "project_budgets",
+    summary: `Edited draft project budget ${budget.title}`,
+  }).catch(() => null);
+
+  revalidatePath(PROJECT_BUDGETS_ROUTE);
+  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=edited`);
 }
 
 export async function createPaymentRequestAction(formData: FormData) {

@@ -7,6 +7,7 @@ import {
   Gauge,
   Landmark,
   Lock,
+  Pencil,
   Plus,
   Truck,
 } from "lucide-react";
@@ -24,12 +25,14 @@ import {
   addProjectBudgetLineAction,
   archiveProjectBudgetAction,
   createProjectBudgetAction,
+  editProjectBudgetAction,
   lockProjectBudgetAction,
 } from "@/lib/ops/finance-actions";
 import {
   canActivateOpsProjectBudget,
   canArchiveOpsProjectBudget,
   canCreateOpsProjectBudget,
+  canEditOpsProjectBudget,
   canEditOpsProjectBudgetLine,
   canLockOpsProjectBudget,
   canManageOpsProjectBudget,
@@ -94,6 +97,7 @@ function projectBudgetNotice(params: OpsSearchParams) {
     archived: "Project budget archived.",
     attachment: "Project budget attachment uploaded.",
     comment: "Project budget comment added.",
+    edited: "Project budget updated.",
     line_added: "Project budget line added.",
     locked: "Project budget locked.",
   };
@@ -559,6 +563,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           <div className="divide-y divide-border">
             {budgetPage.items.map((budget) => {
               const canAddLine = canEditOpsProjectBudgetLine(auth.profile.role, budget);
+              const canEdit = canEditOpsProjectBudget(auth.profile.role, budget);
               const canActivate = canActivateOpsProjectBudget(auth.profile.role, budget);
               const canLock = canLockOpsProjectBudget(auth.profile.role, budget);
               const canArchive = canArchiveOpsProjectBudget(auth.profile.role, budget);
@@ -661,6 +666,78 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                   ) : null}
 
                   <div className="mt-4 grid gap-3">
+                    {canEdit ? (
+                      <details className="rounded-md border border-border">
+                        <summary
+                          className={`flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <Pencil className="size-4" aria-hidden="true" />
+                            Edit budget
+                          </span>
+                          <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                            Open
+                          </span>
+                        </summary>
+                        <form
+                          action={editProjectBudgetAction}
+                          className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                        >
+                          <input name="budget_id" type="hidden" value={budget.id} />
+                          <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                            Site
+                            <select className={OPS_INPUT_CLASS} defaultValue={budget.site_id} name="site_id" required>
+                              <option value="" disabled>
+                                Select site
+                              </option>
+                              {siteOptions.map((site) => (
+                                <option key={site.id} value={site.id}>
+                                  {site.code} - {site.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                            Budget title
+                            <input className={OPS_INPUT_CLASS} defaultValue={budget.title} name="title" required />
+                          </label>
+                          <label className={OPS_LABEL_CLASS}>
+                            Currency
+                            <input className={OPS_INPUT_CLASS} defaultValue={budget.currency_code} name="currency_code" />
+                          </label>
+                          <label className={OPS_LABEL_CLASS}>
+                            Effective from
+                            <input
+                              className={OPS_INPUT_CLASS}
+                              defaultValue={budget.effective_from}
+                              name="effective_from"
+                              type="date"
+                            />
+                          </label>
+                          <label className={OPS_LABEL_CLASS}>
+                            Contingency
+                            <input
+                              className={OPS_INPUT_CLASS}
+                              defaultValue={budget.contingency_amount}
+                              min="0"
+                              name="contingency_amount"
+                              step="0.01"
+                              type="number"
+                            />
+                          </label>
+                          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-5`}>
+                            Description
+                            <textarea className={`${OPS_INPUT_CLASS} min-h-24`} defaultValue={budget.description} name="description" />
+                          </label>
+                          <div className="flex items-end">
+                            <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
+                              <Pencil className="size-4" aria-hidden="true" />
+                              Save changes
+                            </button>
+                          </div>
+                        </form>
+                      </details>
+                    ) : null}
                     {canAddLine ? <AddBudgetLineForm budget={budget} /> : null}
                     {budget.lines.length > 0 ? (
                       <div className="overflow-x-auto rounded-md border border-border">

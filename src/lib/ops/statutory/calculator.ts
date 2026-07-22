@@ -53,9 +53,9 @@ export type StaffPayslipBreakdown = PayslipBreakdown & {
   basic: number;
   housing: number;
   otherAllowances: number;
-  /** NHIMA employee contribution (deducted from worker, 1% of gross). */
+  /** NHIMA employee contribution (deducted from worker, 1% of basic pay). */
   nhimaEmployee: number;
-  /** NHIMA employer contribution (paid on top, not deducted). */
+  /** NHIMA employer contribution (paid on top, 1% of basic pay). */
   nhimaEmployer: number;
   /** Staff advance applied this run (deducted from net pay). */
   advanceDeduction: number;
@@ -113,19 +113,19 @@ export function computeWcfEmployer(
 }
 
 export function computeNhimaEmployee(
-  monthlyGross: number,
+  monthlyBasic: number,
   rates: ZambianTaxYearRates,
 ): number {
-  if (monthlyGross <= 0) return 0;
-  return roundToCents(monthlyGross * rates.nhimaEmployeeRate);
+  if (monthlyBasic <= 0) return 0;
+  return roundToCents(monthlyBasic * rates.nhimaEmployeeRate);
 }
 
 export function computeNhimaEmployer(
-  monthlyGross: number,
+  monthlyBasic: number,
   rates: ZambianTaxYearRates,
 ): number {
-  if (monthlyGross <= 0) return 0;
-  return roundToCents(monthlyGross * rates.nhimaEmployerRate);
+  if (monthlyBasic <= 0) return 0;
+  return roundToCents(monthlyBasic * rates.nhimaEmployerRate);
 }
 
 /**
@@ -178,8 +178,8 @@ export function computeStaffPayslip(input: StaffPayslipInput): StaffPayslipBreak
   const statutoryContributionsEnabled = input.statutoryContributionsEnabled !== false;
   const napsaEmployee = statutoryContributionsEnabled ? computeNapsaEmployee(gross, rates) : 0;
   const napsaEmployer = statutoryContributionsEnabled ? computeNapsaEmployer(gross, rates) : 0;
-  const nhimaEmployee = statutoryContributionsEnabled ? computeNhimaEmployee(gross, rates) : 0;
-  const nhimaEmployer = statutoryContributionsEnabled ? computeNhimaEmployer(gross, rates) : 0;
+  const nhimaEmployee = statutoryContributionsEnabled ? computeNhimaEmployee(basic, rates) : 0;
+  const nhimaEmployer = statutoryContributionsEnabled ? computeNhimaEmployer(basic, rates) : 0;
   const wcfEmployer = statutoryContributionsEnabled ? computeWcfEmployer(gross, rates) : 0;
 
   const requestedAdvance = roundToCents(Math.max(input.advanceDeduction ?? 0, 0));

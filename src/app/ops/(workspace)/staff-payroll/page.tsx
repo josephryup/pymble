@@ -1,6 +1,7 @@
 import {
   Archive,
   Banknote,
+  Building2,
   Check,
   CircleDollarSign,
   Download,
@@ -27,6 +28,7 @@ import {
   completeStaffPayrollRunAction,
   createStaffAdvanceAction,
   createStaffPayrollRunAction,
+  updateStaffBankDetailsAction,
   updateStaffStatutoryContributionsAction,
 } from "@/lib/ops/staff-payroll-actions";
 import {
@@ -72,6 +74,7 @@ function pageNotice(params: OpsSearchParams) {
   if (updated === "archived") return { tone: "success" as const, message: "Draft staff payroll run archived. Its advances are available for the next run." };
   if (updated === "advance_archived") return { tone: "success" as const, message: "Staff advance archived." };
   if (updated === "statutory_contributions") return { tone: "success" as const, message: "Statutory contribution setting updated." };
+  if (updated === "bank_details") return { tone: "success" as const, message: "Bank details updated." };
   return null;
 }
 
@@ -190,6 +193,48 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
                   <option value="false">No contributions</option>
                 </select>
                 <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">Save</button>
+              </form>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {canManage && employees.length > 0 ? (
+        <section className="rounded-lg border border-border bg-card p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
+              <Building2 className="size-5" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="font-heading text-xl font-bold text-foreground">Bank details</h2>
+              <p className="text-sm text-muted-foreground">
+                Set where each employee's payroll payment should be sent. These are snapshotted on each payroll run.
+              </p>
+            </div>
+          </div>
+          <div className="divide-y divide-border rounded-md border border-border">
+            {employees.map((employee) => (
+              <form action={updateStaffBankDetailsAction} className="grid gap-3 p-3 md:grid-cols-5" key={`bank-${employee.id}`}>
+                <input name="employee_id" type="hidden" value={employee.id} />
+                <div className="flex flex-col justify-center">
+                  <p className="font-semibold text-foreground">{employee.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{employee.employee_number}</p>
+                </div>
+                <label className={OPS_LABEL_CLASS}>
+                  Bank name
+                  <input className={OPS_INPUT_CLASS} defaultValue={employee.bank_name} name="bank_name" placeholder="e.g. Zanaco" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Branch
+                  <input className={OPS_INPUT_CLASS} defaultValue={employee.bank_branch} name="bank_branch" placeholder="e.g. Lusaka Main" />
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Account number
+                  <input className={OPS_INPUT_CLASS} defaultValue={employee.bank_account_number} name="bank_account_number" />
+                </label>
+                <div className="flex items-end">
+                  <button className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} type="submit">Save</button>
+                </div>
               </form>
             ))}
           </div>

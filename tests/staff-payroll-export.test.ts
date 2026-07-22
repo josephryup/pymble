@@ -34,6 +34,9 @@ function item(overrides: Partial<OpsStaffPayrollItem>): OpsStaffPayrollItem {
     payout_reference: null,
     tax_year: 2025,
     statutory_citation: null,
+    bank_name: "",
+    bank_branch: "",
+    bank_account_number: "",
     created_at: "2025-08-31T00:00:00Z",
     ...overrides,
   };

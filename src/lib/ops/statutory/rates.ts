@@ -46,11 +46,10 @@ export type ZambianTaxYearRates = {
   napsaMonthlyCeiling: number;
   /**
    * National Health Insurance Scheme (NHIMA) employee contribution rate.
-   * Applied on gross pay per Pymble's policy decision and the PCL payslip
-   * convention.
+   * Applied on basic pay per Pymble's policy decision.
    */
   nhimaEmployeeRate: number;
-  /** NHIMA employer contribution rate (paid on top, not deducted). */
+  /** NHIMA employer contribution rate (paid on top of basic pay, not deducted). */
   nhimaEmployerRate: number;
   /**
    * Workers' Compensation Fund employer rate. Construction-industry default.
@@ -87,7 +86,7 @@ export const ZAMBIAN_TAX_YEARS: Record<string, ZambianTaxYearRates> = {
     wcfEmployerRate: 0.02,
     vatRate: 0.16,
     citation:
-      "PAYE per ZRA 2024 budget; NAPSA 5/5 capped at K1,377.30; NHIMA 1/1 on gross; WCF construction 2%; VAT 16%.",
+      "PAYE per ZRA 2024 budget; NAPSA 5/5 capped at K1,377.30; NHIMA 1/1 on basic pay; WCF construction 2%; VAT 16%.",
   },
   "2025": {
     year: 2025,
@@ -110,7 +109,7 @@ export const ZAMBIAN_TAX_YEARS: Record<string, ZambianTaxYearRates> = {
     wcfEmployerRate: 0.02,
     vatRate: 0.16,
     citation:
-      "PAYE per ZRA 2025 budget (top band 37%); NAPSA 5/5 capped at K1,342; NHIMA 1/1 on gross; WCF construction 2%; VAT 16%.",
+      "PAYE per ZRA 2025 budget (top band 37%); NAPSA 5/5 capped at K1,342; NHIMA 1/1 on basic pay; WCF construction 2%; VAT 16%.",
   },
 };
 

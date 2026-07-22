@@ -38,6 +38,9 @@ export type OpsStaffPayrollItem = {
   payout_reference: string | null;
   tax_year: number | null;
   statutory_citation: string | null;
+  bank_name: string;
+  bank_branch: string;
+  bank_account_number: string;
   created_at: string;
 };
 
@@ -83,6 +86,9 @@ export type OpsStaffPayrollEmployee = {
   job_title: string;
   department: string;
   statutory_contributions_enabled: boolean;
+  bank_name: string;
+  bank_branch: string;
+  bank_account_number: string;
 };
 
 const MONEY_KEYS = [
@@ -150,7 +156,7 @@ export async function fetchOpsStaffPayrollEmployees(): Promise<OpsStaffPayrollEm
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("employees")
-    .select("id, employee_number, full_name, job_title, department, statutory_contributions_enabled")
+    .select("id, employee_number, full_name, job_title, department, statutory_contributions_enabled, bank_name, bank_branch, bank_account_number")
     .eq("status", "active")
     .order("full_name", { ascending: true });
 

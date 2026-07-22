@@ -201,7 +201,7 @@ export function StaffPayslipPdf({
           rows={[
             ["Pay As You Earn (PAYE) — ZRA", formatPdfMoney(item.paye_amount)],
             ["NAPSA — Employee contribution (5%)", formatPdfMoney(item.napsa_employee)],
-            ["NHIMA — Employee contribution (1%)", formatPdfMoney(item.nhima_employee)],
+            ["NHIMA — Employee contribution (1% of basic)", formatPdfMoney(item.nhima_employee)],
             ["Staff advances", formatPdfMoney(item.advance_deduction)],
             ["Total employee deductions", formatPdfMoney(totalEmployeeDeductions)],
           ]}
@@ -224,7 +224,7 @@ export function StaffPayslipPdf({
           ]}
           rows={[
             ["NAPSA — Employer contribution (5%)", formatPdfMoney(item.napsa_employer)],
-            ["NHIMA — Employer contribution (1%)", formatPdfMoney(item.nhima_employer)],
+            ["NHIMA — Employer contribution (1% of basic)", formatPdfMoney(item.nhima_employer)],
             ["Workers' Compensation Fund (construction sector)", formatPdfMoney(item.wcf_employer)],
             ["Total employer cost (gross + contributions)", formatPdfMoney(employerTotalCost)],
           ]}

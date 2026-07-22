@@ -86,6 +86,13 @@ export function canManageOpsProjectBudget(role: OpsUserRole) {
   return FINANCE_MANAGER_ROLES.includes(role);
 }
 
+export function canEditOpsProjectBudget(
+  role: OpsUserRole,
+  budget: OpsProjectBudgetMutationTarget,
+) {
+  return canCreateOpsProjectBudget(role) && budget.status === "draft";
+}
+
 export function canEditOpsProjectBudgetLine(
   role: OpsUserRole,
   budget: OpsProjectBudgetMutationTarget,
