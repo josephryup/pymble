@@ -1,24 +1,37 @@
 /**
  * Pure attendance earnings calculator.
  *
- * Splits a worker's hours into regular and overtime, pays each band at its
- * own rate. Configurable so a change to the standard day or overtime
- * multiplier in the organization profile flows through automatically.
+ * Pymble pays site workers a **fixed daily rate** (K60 by default): showing up
+ * for the day earns the full rate regardless of how many hours were logged.
+ * Overtime is captured separately, as its own hours figure, and paid on top.
  *
  * Conventions:
- *  - Daily rate is what the worker is paid for a standard day's work.
- *  - Hourly rate = dailyRate / standardDailyHours.
- *  - Hours up to standardDailyHours pay at the hourly rate.
- *  - Hours above that pay at hourly rate × overtimeMultiplier.
- *  - Absent / zero hours = zero pay, zero overtime.
+ *  - Present / late  → the full daily rate, whatever hours_worked says.
+ *  - Absent          → zero pay, zero overtime.
+ *  - Hourly rate     = dailyRate / standardDailyHours (used only for overtime).
+ *  - Overtime pay    = overtimeHours × hourlyRate × overtimeMultiplier.
+ *  - Total           = dailyRate + overtime pay.
+ *
+ * Overtime hours can be given explicitly (the "Overtime hours" input) or left
+ * blank, in which case they are derived from hours worked beyond the standard
+ * day — so a supervisor who only records a 10-hour day still gets the 2h of
+ * overtime priced automatically.
  */
 
+/** Standard Pymble worker daily rate in ZMW. */
+export const DEFAULT_WORKER_DAILY_RATE = 60;
+
 export type ComputeAttendanceInput = {
-  /** Total hours the worker actually worked. */
+  /** Total hours the worker actually worked (informational; does not scale base pay). */
   hoursWorked: number;
-  /** Daily rate in ZMW for a standard day. */
+  /**
+   * Overtime hours as captured on the record. Pass `null`/`undefined` to derive
+   * them from `hoursWorked` above the standard day.
+   */
+  overtimeHours?: number | null;
+  /** Fixed daily rate in ZMW for a day's attendance. */
   dailyRate: number;
-  /** Standard working hours per day (typically 8). */
+  /** Standard working hours per day (typically 8) — the overtime threshold. */
   standardDailyHours: number;
   /** Overtime pay multiplier (typically 1.5). */
   overtimeMultiplier: number;
@@ -27,22 +40,64 @@ export type ComputeAttendanceInput = {
 };
 
 export type ComputeAttendanceResult = {
-  /** Hours paid at the standard rate. */
+  /** Hours counted inside the standard day (display only). */
   regularHours: number;
   /** Hours paid at the overtime rate. */
   overtimeHours: number;
   /** Hourly rate derived from dailyRate / standardDailyHours. */
   hourlyRate: number;
-  /** Pay attributable to regular hours. */
+  /** Base pay for the day — the flat daily rate, or 0 when absent. */
   regularAmount: number;
   /** Pay attributable to overtime hours. */
   overtimeAmount: number;
-  /** Total amount the worker earned for the period (regular + overtime). */
+  /** Total amount the worker earned for the day (daily rate + overtime). */
   totalAmount: number;
 };
 
 function roundCents(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function roundHours(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Overtime implied by a plain hours figure: everything beyond the standard day.
+ * Used when a record does not carry an explicit overtime entry.
+ */
+export function deriveOvertimeHours(hoursWorked: number, standardDailyHours: number): number {
+  const standardHours = Math.max(standardDailyHours, 0);
+  if (!Number.isFinite(hoursWorked) || hoursWorked <= standardHours) {
+    return 0;
+  }
+  return roundHours(hoursWorked - standardHours);
+}
+
+/**
+ * Hours between two HH:MM clock times on the same work day. A clock-out that
+ * reads earlier than clock-in is treated as a night shift crossing midnight.
+ * Returns null when either time is missing or unparseable.
+ */
+export function hoursBetweenClockTimes(
+  clockInTime: string | null | undefined,
+  clockOutTime: string | null | undefined,
+): number | null {
+  const toMinutes = (value: string | null | undefined) => {
+    if (!value) return null;
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value.trim());
+    if (!match) return null;
+    return Number(match[1]) * 60 + Number(match[2]);
+  };
+
+  const start = toMinutes(clockInTime);
+  const end = toMinutes(clockOutTime);
+  if (start === null || end === null) {
+    return null;
+  }
+
+  const span = end >= start ? end - start : end + 24 * 60 - start;
+  return roundHours(span / 60);
 }
 
 export function computeAttendanceEarnings(
@@ -53,12 +108,12 @@ export function computeAttendanceEarnings(
   const dailyRate = Math.max(input.dailyRate, 0);
   // Keep the full-precision rate for the money math and only expose a rounded
   // value for display. Rounding the hourly rate *before* multiplying loses (or
-  // gains) cents whenever dailyRate / standardHours isn't exact — e.g.
-  // 100 / 3 = 33.33 -> a full 3h day would pay 99.99 instead of 100.
+  // gains) cents whenever dailyRate / standardHours isn't exact.
   const exactHourlyRate = dailyRate / standardHours;
   const hourlyRate = roundCents(exactHourlyRate);
+  const hoursWorked = Number.isFinite(input.hoursWorked) ? Math.max(input.hoursWorked, 0) : 0;
 
-  if (input.isAbsent || input.hoursWorked <= 0) {
+  if (input.isAbsent) {
     return {
       regularHours: 0,
       overtimeHours: 0,
@@ -69,18 +124,22 @@ export function computeAttendanceEarnings(
     };
   }
 
-  const regularHours = Math.min(input.hoursWorked, standardHours);
-  const overtimeHours = Math.max(input.hoursWorked - standardHours, 0);
-  const regularAmount = roundCents(regularHours * exactHourlyRate);
+  const overtimeHours =
+    input.overtimeHours === null || input.overtimeHours === undefined
+      ? deriveOvertimeHours(hoursWorked, standardHours)
+      : Math.max(roundHours(input.overtimeHours), 0);
+
+  // The daily rate is fixed: a present worker earns it in full even if the
+  // logged hours fall short of a standard day.
+  const regularAmount = roundCents(dailyRate);
   const overtimeAmount = roundCents(overtimeHours * exactHourlyRate * multiplier);
-  const totalAmount = roundCents(regularAmount + overtimeAmount);
 
   return {
-    regularHours,
+    regularHours: roundHours(Math.min(hoursWorked, standardHours)),
     overtimeHours,
     hourlyRate,
     regularAmount,
     overtimeAmount,
-    totalAmount,
+    totalAmount: roundCents(regularAmount + overtimeAmount),
   };
 }

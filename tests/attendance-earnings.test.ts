@@ -1,115 +1,165 @@
 import test from "node:test";
 import { strict as assert } from "node:assert";
-import { computeAttendanceEarnings } from "@/lib/ops/attendance-earnings";
+import {
+  computeAttendanceEarnings,
+  DEFAULT_WORKER_DAILY_RATE,
+  deriveOvertimeHours,
+  hoursBetweenClockTimes,
+} from "@/lib/ops/attendance-earnings";
 
 const STANDARD = { standardDailyHours: 8, overtimeMultiplier: 1.5 };
 
-test("standard 8h day pays daily rate exactly", () => {
+test("the default Pymble worker daily rate is K60", () => {
+  assert.equal(DEFAULT_WORKER_DAILY_RATE, 60);
+});
+
+test("a full 8h day pays the fixed daily rate", () => {
   const result = computeAttendanceEarnings({
     hoursWorked: 8,
-    dailyRate: 240,
+    dailyRate: 60,
     ...STANDARD,
   });
-  assert.equal(result.regularHours, 8);
   assert.equal(result.overtimeHours, 0);
-  assert.equal(result.regularAmount, 240);
+  assert.equal(result.regularAmount, 60);
   assert.equal(result.overtimeAmount, 0);
-  assert.equal(result.totalAmount, 240);
+  assert.equal(result.totalAmount, 60);
 });
 
-test("half day pays half the daily rate", () => {
+test("a short day still pays the full fixed daily rate", () => {
   const result = computeAttendanceEarnings({
-    hoursWorked: 4,
-    dailyRate: 240,
+    hoursWorked: 3,
+    dailyRate: 60,
     ...STANDARD,
   });
-  assert.equal(result.regularHours, 4);
-  assert.equal(result.overtimeHours, 0);
-  assert.equal(result.regularAmount, 120);
-  assert.equal(result.totalAmount, 120);
+  assert.equal(result.regularAmount, 60);
+  assert.equal(result.overtimeAmount, 0);
+  assert.equal(result.totalAmount, 60);
 });
 
-test("hours above standard split into overtime at 1.5x", () => {
-  // dailyRate 240 / 8 hrs = K30/hr standard, K45/hr overtime
+test("zero logged hours while present still pays the daily rate", () => {
+  const result = computeAttendanceEarnings({
+    hoursWorked: 0,
+    dailyRate: 60,
+    ...STANDARD,
+  });
+  assert.equal(result.totalAmount, 60);
+});
+
+test("absent pays nothing regardless of hours or overtime", () => {
   const result = computeAttendanceEarnings({
     hoursWorked: 10,
-    dailyRate: 240,
-    ...STANDARD,
-  });
-  assert.equal(result.regularHours, 8);
-  assert.equal(result.overtimeHours, 2);
-  assert.equal(result.regularAmount, 240); // 8 * 30
-  assert.equal(result.overtimeAmount, 90); // 2 * 30 * 1.5
-  assert.equal(result.totalAmount, 330);
-});
-
-test("12-hour day produces 4h overtime", () => {
-  const result = computeAttendanceEarnings({
-    hoursWorked: 12,
-    dailyRate: 240,
-    ...STANDARD,
-  });
-  assert.equal(result.overtimeHours, 4);
-  assert.equal(result.overtimeAmount, 180); // 4 * 30 * 1.5
-  assert.equal(result.totalAmount, 420); // 240 + 180
-});
-
-test("absent record pays nothing regardless of hours", () => {
-  const result = computeAttendanceEarnings({
-    hoursWorked: 10,
-    dailyRate: 240,
+    overtimeHours: 2,
+    dailyRate: 60,
     isAbsent: true,
     ...STANDARD,
   });
   assert.equal(result.totalAmount, 0);
+  assert.equal(result.regularAmount, 0);
   assert.equal(result.overtimeHours, 0);
+  assert.equal(result.overtimeAmount, 0);
 });
 
-test("zero hours pays zero", () => {
+test("explicit overtime hours are added on top of the daily rate", () => {
+  // K60/day over an 8h standard day = K7.50/hr → K11.25/hr overtime.
   const result = computeAttendanceEarnings({
-    hoursWorked: 0,
-    dailyRate: 240,
+    hoursWorked: 8,
+    overtimeHours: 2,
+    dailyRate: 60,
     ...STANDARD,
   });
-  assert.equal(result.totalAmount, 0);
+  assert.equal(result.hourlyRate, 7.5);
+  assert.equal(result.overtimeHours, 2);
+  assert.equal(result.overtimeAmount, 22.5);
+  assert.equal(result.totalAmount, 82.5);
 });
 
-test("non-default 7-hour standard day with 2x overtime multiplier", () => {
+test("overtime is derived from hours beyond the standard day when not supplied", () => {
+  const result = computeAttendanceEarnings({
+    hoursWorked: 11,
+    dailyRate: 60,
+    ...STANDARD,
+  });
+  assert.equal(result.overtimeHours, 3);
+  assert.equal(result.overtimeAmount, 33.75); // 3 * 7.5 * 1.5
+  assert.equal(result.totalAmount, 93.75);
+});
+
+test("explicit overtime wins over the derived value", () => {
+  // Supervisor logged 12 hours but only 1 hour was authorised as overtime.
+  const result = computeAttendanceEarnings({
+    hoursWorked: 12,
+    overtimeHours: 1,
+    dailyRate: 60,
+    ...STANDARD,
+  });
+  assert.equal(result.overtimeHours, 1);
+  assert.equal(result.overtimeAmount, 11.25);
+  assert.equal(result.totalAmount, 71.25);
+});
+
+test("explicit zero overtime suppresses the derived overtime", () => {
+  const result = computeAttendanceEarnings({
+    hoursWorked: 12,
+    overtimeHours: 0,
+    dailyRate: 60,
+    ...STANDARD,
+  });
+  assert.equal(result.overtimeHours, 0);
+  assert.equal(result.totalAmount, 60);
+});
+
+test("negative overtime is clamped to zero", () => {
+  const result = computeAttendanceEarnings({
+    hoursWorked: 8,
+    overtimeHours: -4,
+    dailyRate: 60,
+    ...STANDARD,
+  });
+  assert.equal(result.overtimeHours, 0);
+  assert.equal(result.totalAmount, 60);
+});
+
+test("a non-default standard day and multiplier flow through", () => {
   const result = computeAttendanceEarnings({
     hoursWorked: 9,
-    dailyRate: 210, // 30/hr standard
+    dailyRate: 70,
     standardDailyHours: 7,
     overtimeMultiplier: 2,
   });
-  assert.equal(result.regularHours, 7);
+  assert.equal(result.hourlyRate, 10);
   assert.equal(result.overtimeHours, 2);
-  assert.equal(result.regularAmount, 210);
-  assert.equal(result.overtimeAmount, 120); // 2 * 30 * 2
-  assert.equal(result.totalAmount, 330);
+  assert.equal(result.overtimeAmount, 40); // 2 * 10 * 2
+  assert.equal(result.totalAmount, 110);
 });
 
-test("full day pays the daily rate exactly even when the hourly rate is not exact", () => {
-  // 100 / 3 = 33.333... per hour. Rounding the hourly rate before multiplying
-  // would pay 3 * 33.33 = 99.99; the money math must use the full-precision rate
-  // so a full standard day always pays the daily rate exactly.
+test("overtime money rounds to cents", () => {
+  // K100/day, 8h standard → K12.50/hr; 1.5h OT = 1.5 * 12.5 * 1.5 = 28.125 → 28.13
   const result = computeAttendanceEarnings({
-    hoursWorked: 3,
-    dailyRate: 100,
-    standardDailyHours: 3,
-    overtimeMultiplier: 1.5,
-  });
-  assert.equal(result.regularAmount, 100);
-  assert.equal(result.totalAmount, 100);
-  assert.equal(result.hourlyRate, 33.33); // display value stays rounded
-});
-
-test("rounds to cents", () => {
-  // Awkward rate K100/day, 8h standard → hourly K12.50
-  // 9 hours = 8*12.5 + 1*12.5*1.5 = 100 + 18.75 = 118.75
-  const result = computeAttendanceEarnings({
-    hoursWorked: 9,
+    hoursWorked: 9.5,
     dailyRate: 100,
     ...STANDARD,
   });
-  assert.equal(result.totalAmount, 118.75);
+  assert.equal(result.overtimeHours, 1.5);
+  assert.equal(result.overtimeAmount, 28.13);
+  assert.equal(result.totalAmount, 128.13);
+});
+
+test("deriveOvertimeHours only counts hours beyond the standard day", () => {
+  assert.equal(deriveOvertimeHours(8, 8), 0);
+  assert.equal(deriveOvertimeHours(4, 8), 0);
+  assert.equal(deriveOvertimeHours(10.5, 8), 2.5);
+});
+
+test("hoursBetweenClockTimes measures a normal shift", () => {
+  assert.equal(hoursBetweenClockTimes("07:00", "16:30"), 9.5);
+});
+
+test("hoursBetweenClockTimes treats an earlier clock-out as a night shift", () => {
+  assert.equal(hoursBetweenClockTimes("21:00", "05:00"), 8);
+});
+
+test("hoursBetweenClockTimes returns null without a usable pair", () => {
+  assert.equal(hoursBetweenClockTimes("07:00", null), null);
+  assert.equal(hoursBetweenClockTimes("", "16:00"), null);
+  assert.equal(hoursBetweenClockTimes("7am", "16:00"), null);
 });

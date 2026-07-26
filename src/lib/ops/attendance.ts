@@ -1,3 +1,4 @@
+import { attendanceRateSettings, type AttendanceRateSettings } from "@/lib/ops/attendance-core";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { fetchActiveOpsAssignedSiteIds, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 import type { OpsAttendancePresence, OpsAttendanceSource } from "@/lib/ops/types";
@@ -29,10 +30,11 @@ export type OpsAttendanceRecord = {
   overtime_amount: number;
   presence: OpsAttendancePresence;
   source: OpsAttendanceSource;
-  gps_label: string;
-  gps_latitude: number | null;
-  gps_longitude: number | null;
+  /** Free-text site note. Stored in the legacy `gps_label` column. */
+  site_note: string;
   approved_at: string | null;
+  /** Who captured the record — drives the maker/checker approval rule. */
+  created_by: string | null;
   created_at: string;
   worker: OpsAttendanceRelation | null;
   site: OpsAttendanceRelation | null;
@@ -45,12 +47,14 @@ type RawAttendanceRecord = Omit<
   | "overtime_amount"
   | "overtime_hours"
   | "site"
+  | "site_note"
   | "worker"
 > & {
   amount_earned: number | string;
   hours_worked: number | string;
   overtime_amount: number | string;
   overtime_hours: number | string;
+  gps_label: string | null;
   site: OpsAttendanceRelation | OpsAttendanceRelation[] | null;
   worker: OpsAttendanceRelation | OpsAttendanceRelation[] | null;
 };
@@ -92,6 +96,89 @@ export async function fetchAttendanceWorkerOptions() {
   }));
 }
 
+/**
+ * Company standard day + overtime multiplier, used to price overtime and to
+ * drive the live earnings preview on the capture form.
+ */
+export async function fetchAttendanceRateSettings(): Promise<AttendanceRateSettings> {
+  const supabase = await createOpsServerSessionClient();
+  const { data } = await supabase
+    .from("organization_profile")
+    .select("standard_daily_hours, overtime_multiplier")
+    .eq("id", 1)
+    .maybeSingle<{ standard_daily_hours: number | string; overtime_multiplier: number | string }>();
+
+  return attendanceRateSettings(data ?? null);
+}
+
+export type OpsAttendanceRosterWorker = {
+  id: string;
+  worker_code: string;
+  full_name: string;
+  trade: string;
+  daily_rate: number;
+  /** Id of the record this worker already has for the roster date, if any. */
+  existing_record_id: string | null;
+};
+
+/**
+ * Roster for bulk attendance capture: every active worker assigned to a site,
+ * flagged with whether they already have a record for that work day so the
+ * form can show it instead of inviting a duplicate (audit finding A4).
+ */
+export async function fetchAttendanceRoster(
+  siteId: string,
+  workDate: string,
+): Promise<OpsAttendanceRosterWorker[]> {
+  const { profile } = await requireOpsUser();
+  const supabase = await createOpsServerSessionClient();
+
+  if (requiresOpsSiteAssignment(profile.role)) {
+    const siteIds = await fetchActiveOpsAssignedSiteIds(profile.id);
+    if (!siteIds.includes(siteId)) return [];
+  }
+
+  const [workersRes, existingRes] = await Promise.all([
+    supabase
+      .from("workers")
+      .select("id, worker_code, full_name, trade, daily_rate")
+      .eq("is_active", true)
+      .eq("site_id", siteId)
+      .order("full_name", { ascending: true }),
+    supabase
+      .from("attendance_records")
+      .select("id, worker_id")
+      .eq("site_id", siteId)
+      .eq("is_active", true)
+      .is("cancelled_at", null)
+      .gte("clock_in_at", `${workDate}T00:00:00+02:00`)
+      .lte("clock_in_at", `${workDate}T23:59:59.999+02:00`),
+  ]);
+
+  if (workersRes.error) throw workersRes.error;
+
+  const existingByWorker = new Map(
+    ((existingRes.data ?? []) as Array<{ id: string; worker_id: string }>).map((row) => [
+      row.worker_id,
+      row.id,
+    ]),
+  );
+
+  return (
+    (workersRes.data ?? []) as Array<{
+      id: string;
+      worker_code: string;
+      full_name: string;
+      trade: string;
+      daily_rate: number | string;
+    }>
+  ).map((worker) => ({
+    ...worker,
+    daily_rate: normalizeMoney(worker.daily_rate),
+    existing_record_id: existingByWorker.get(worker.id) ?? null,
+  }));
+}
+
 export type OpsAttendanceFilters = {
   workerId?: string | null;
   siteId?: string | null;
@@ -101,7 +188,10 @@ export type OpsAttendanceFilters = {
   dateTo?: string | null;
 };
 
-export async function fetchOpsAttendanceRecords(filters: OpsAttendanceFilters = {}) {
+export async function fetchOpsAttendanceRecords(
+  filters: OpsAttendanceFilters = {},
+  options: { limit?: number } = {},
+) {
   const { profile } = await requireOpsUser();
   const supabase = await createOpsServerSessionClient();
   let query = supabase
@@ -118,9 +208,8 @@ export async function fetchOpsAttendanceRecords(filters: OpsAttendanceFilters = 
         presence,
         source,
         gps_label,
-        gps_latitude,
-        gps_longitude,
         approved_at,
+        created_by,
         created_at,
         worker:workers!attendance_records_worker_id_fkey(id, worker_code, full_name, trade),
         site:sites!attendance_records_site_id_fkey(id, code, name)
@@ -151,14 +240,15 @@ export async function fetchOpsAttendanceRecords(filters: OpsAttendanceFilters = 
 
   const { data, error } = await query
     .order("clock_in_at", { ascending: false })
-    .limit(100);
+    .limit(options.limit ?? 100);
 
   if (error) {
     throw error;
   }
 
-  return ((data ?? []) as unknown as RawAttendanceRecord[]).map((record) => ({
+  return ((data ?? []) as unknown as RawAttendanceRecord[]).map(({ gps_label, ...record }) => ({
     ...record,
+    site_note: gps_label ?? "",
     amount_earned: normalizeMoney(record.amount_earned),
     hours_worked: normalizeMoney(record.hours_worked),
     overtime_amount: normalizeMoney(record.overtime_amount),

@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getOptionalOpsUser } from "@/lib/ops/auth";
 import { createDailySiteReportCore } from "@/lib/ops/daily-site-report-core";
+import { checkOpsOfflineReplayRateLimit } from "@/lib/ops/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,22 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { message: "Sign in again, then resubmit this daily site report.", ok: false },
       { status: 401 },
+    );
+  }
+
+  const rateLimit = await checkOpsOfflineReplayRateLimit(
+    auth.profile.id,
+    "daily-site-reports",
+    request.headers,
+  );
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { message: "Too many report syncs. The outbox will retry shortly.", ok: false },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.max(rateLimit.retryAfterSeconds, 1)) },
+      },
     );
   }
 

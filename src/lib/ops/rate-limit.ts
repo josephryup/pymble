@@ -16,6 +16,17 @@ export const OPS_LOGIN_RATE_LIMIT = {
   ip: { maxHits: 20, windowSeconds: 15 * 60 },
 } as const;
 
+/**
+ * Offline outbox replay throttle. These endpoints accept business writes
+ * (attendance, site reports, photos) over plain fetch, so a signed-in client —
+ * or a stolen session — can otherwise write without bound. Generous enough for
+ * a phone flushing a whole day's queue on reconnect (audit finding A5).
+ */
+export const OPS_OFFLINE_REPLAY_RATE_LIMIT = {
+  user: { maxHits: 120, windowSeconds: 5 * 60 },
+  ip: { maxHits: 300, windowSeconds: 5 * 60 },
+} as const;
+
 type RateLimitDecision = {
   allowed: boolean;
   retryAfterSeconds: number;
@@ -80,6 +91,50 @@ export async function checkOpsLoginRateLimit(
   return {
     allowed: false,
     retryAfterSeconds: Math.max(...blocked.map((d) => d.retryAfterSeconds)),
+  };
+}
+
+export function opsOfflineReplayUserRateLimitKey(userId: string, kind: string) {
+  return `offline:${kind}:user:${userId}`;
+}
+
+export function opsOfflineReplayIpRateLimitKey(ip: string, kind: string) {
+  return `offline:${kind}:ip:${ip}`;
+}
+
+/**
+ * Throttle an offline replay POST. `kind` separates the buckets per endpoint
+ * (e.g. "attendance") so a photo backlog cannot starve attendance sync.
+ */
+export async function checkOpsOfflineReplayRateLimit(
+  userId: string,
+  kind: string,
+  headers: Headers,
+): Promise<RateLimitDecision> {
+  const ip = opsClientIp(headers);
+  const decisions = await Promise.all([
+    hitRateLimit(
+      opsOfflineReplayUserRateLimitKey(userId, kind),
+      OPS_OFFLINE_REPLAY_RATE_LIMIT.user,
+    ),
+    ...(ip
+      ? [
+          hitRateLimit(
+            opsOfflineReplayIpRateLimitKey(ip, kind),
+            OPS_OFFLINE_REPLAY_RATE_LIMIT.ip,
+          ),
+        ]
+      : []),
+  ]);
+
+  const blocked = decisions.filter((decision) => !decision.allowed);
+  if (blocked.length === 0) {
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  return {
+    allowed: false,
+    retryAfterSeconds: Math.max(...blocked.map((decision) => decision.retryAfterSeconds)),
   };
 }
 

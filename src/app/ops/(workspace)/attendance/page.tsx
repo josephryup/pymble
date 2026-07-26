@@ -4,10 +4,12 @@ import {
   Check,
   ClipboardCheck,
   Clock,
+  Download,
   Filter,
   Pencil,
   Plus,
   UserCheck,
+  Users,
   UserX,
 } from "lucide-react";
 import React from "react";
@@ -19,6 +21,7 @@ import {
   OpsMobileRecordList,
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
+import { OpsAttendanceEntryFields } from "@/components/ops/OpsAttendanceEntryFields";
 import { OpsOfflineForm } from "@/components/ops/OpsOfflineForm";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -26,18 +29,27 @@ import {
   approveAttendanceAction,
   cancelAttendanceAction,
   createAttendanceAction,
+  createBulkAttendanceAction,
   updateAttendanceAction,
 } from "@/lib/ops/attendance-actions";
 import {
+  fetchAttendanceRateSettings,
+  fetchAttendanceRoster,
   fetchAttendanceWorkerOptions,
   fetchOpsAttendanceDailySummary,
   fetchOpsAttendanceRecords,
   type OpsAttendanceFilters,
   type OpsAttendanceRecord,
+  type OpsAttendanceRosterWorker,
 } from "@/lib/ops/attendance";
 import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
-import { canAccessOpsHref, canApproveAttendance, canRecordAttendance } from "@/lib/ops/permissions";
+import {
+  canAccessOpsHref,
+  canApproveAttendance,
+  canRecordAttendance,
+  canSelfApproveAttendance,
+} from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import type { OpsAttendancePresence } from "@/lib/ops/types";
 import {
@@ -69,6 +81,19 @@ function attendanceNotice(params: OpsSearchParams) {
 
   if (baseNotice) {
     return baseNotice;
+  }
+
+  const rosterSaved = Number(firstParam(params.roster_saved) ?? "");
+  if (Number.isFinite(rosterSaved) && rosterSaved > 0) {
+    const skipped = Number(firstParam(params.roster_skipped) ?? "");
+    return {
+      tone: "success" as const,
+      message: `Roster saved — ${rosterSaved} attendance record${rosterSaved === 1 ? "" : "s"} created.${
+        Number.isFinite(skipped) && skipped > 0
+          ? ` ${skipped} worker${skipped === 1 ? " was" : "s were"} already recorded for that day and skipped.`
+          : ""
+      }`,
+    };
   }
 
   if (firstParam(params.updated) === "approved") {
@@ -161,17 +186,6 @@ function AttendanceEditPanel({
         className="grid gap-3 border-t border-border p-4 md:grid-cols-2 lg:grid-cols-4"
       >
         <input name="id" type="hidden" value={record.id} />
-        {/* Preserve stored coordinates so an edit does not wipe them. */}
-        <input
-          name="gps_latitude"
-          type="hidden"
-          value={record.gps_latitude ?? ""}
-        />
-        <input
-          name="gps_longitude"
-          type="hidden"
-          value={record.gps_longitude ?? ""}
-        />
         <label className={OPS_LABEL_CLASS}>
           Worker
           <select
@@ -246,24 +260,35 @@ function AttendanceEditPanel({
           />
         </label>
         <label className={OPS_LABEL_CLASS}>
-          Hours
+          Hours worked
           <input
             className={OPS_INPUT_CLASS}
             defaultValue={record.hours_worked}
             max="24"
             min="0"
             name="hours_worked"
-            required
             step="0.25"
             type="number"
           />
         </label>
         <label className={OPS_LABEL_CLASS}>
-          GPS or site note
+          Overtime hours
           <input
             className={OPS_INPUT_CLASS}
-            defaultValue={record.gps_label}
-            name="gps_label"
+            defaultValue={record.overtime_hours}
+            max="16"
+            min="0"
+            name="overtime_hours"
+            step="0.25"
+            type="number"
+          />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Site note
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={record.site_note}
+            name="site_note"
           />
         </label>
         <div className="flex items-end lg:col-span-4">
@@ -296,15 +321,44 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
     dateTo: dateParam(firstParam(params.date_to)),
   };
   const hasActiveFilter = Object.values(filters).some(Boolean);
+  // Carry the active filters into the Excel export so the file matches the view.
+  const exportQuery = new URLSearchParams(
+    Object.entries({
+      approval: filters.approval,
+      date_from: filters.dateFrom,
+      date_to: filters.dateTo,
+      presence: filters.presence,
+      site_id: filters.siteId,
+      worker_id: filters.workerId,
+    }).flatMap(([key, value]) => (value ? [[key, value] as [string, string]] : [])),
+  ).toString();
 
-  const [records, workerOptions, siteOptions, dailySummary] = await Promise.all([
-    fetchOpsAttendanceRecords(filters),
-    fetchAttendanceWorkerOptions(),
-    fetchActiveSiteOptions(),
-    fetchOpsAttendanceDailySummary(7),
-  ]);
+  // Bulk roster capture is driven by GET params so the crew list is rendered on
+  // the server, no client-side fetching needed.
+  const rosterSiteId = firstParam(params.roster_site) || null;
+  const rosterDate = dateParam(firstParam(params.roster_date)) ?? todayInLusaka();
+
+  const [records, workerOptions, siteOptions, dailySummary, rateSettings, roster] =
+    await Promise.all([
+      fetchOpsAttendanceRecords(filters),
+      fetchAttendanceWorkerOptions(),
+      fetchActiveSiteOptions(),
+      fetchOpsAttendanceDailySummary(7),
+      fetchAttendanceRateSettings(),
+      rosterSiteId
+        ? fetchAttendanceRoster(rosterSiteId, rosterDate)
+        : Promise.resolve([] as OpsAttendanceRosterWorker[]),
+    ]);
+  const rosterPendingCount = roster.filter((worker) => !worker.existing_record_id).length;
   const canRecord = canRecordAttendance(auth.profile.role);
   const canApprove = canApproveAttendance(auth.profile.role);
+  const canSelfApprove = canSelfApproveAttendance(auth.profile.role);
+  /**
+   * Maker/checker: hide Approve on records this user captured unless their role
+   * carries self-approval authority, so the button never dead-ends in an error.
+   */
+  const canApproveRecord = (record: OpsAttendanceRecord) =>
+    canApprove && (canSelfApprove || record.created_by !== auth.profile.id);
   const notice = attendanceNotice(params);
   const pendingCount = records.filter((record) => !record.approved_at).length;
   const earnedTotal = records.reduce((sum, record) => sum + record.amount_earned, 0);
@@ -446,7 +500,9 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                 Add attendance
               </h2>
               <p className="text-sm text-muted-foreground">
-                Amount earned is calculated from the worker daily rate.
+                Attending earns the worker their full fixed daily rate. Overtime hours are
+                priced on top at {rateSettings.overtimeMultiplier}× the hourly rate (anything
+                beyond {rateSettings.standardDailyHours}h).
               </p>
             </div>
           </div>
@@ -462,90 +518,38 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
               replayEndpoint="/api/ops/offline/attendance"
               summary="Attendance record"
             >
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Worker
-                <select className={OPS_INPUT_CLASS} defaultValue="" name="worker_id" required>
-                  <option value="" disabled>
-                    Select Pymble worker
-                  </option>
-                  {workerOptions.map((worker) => (
-                    <option key={worker.id} value={worker.id}>
-                      {worker.worker_code} - {worker.full_name}
+              <OpsAttendanceEntryFields
+                overtimeMultiplier={rateSettings.overtimeMultiplier}
+                standardDailyHours={rateSettings.standardDailyHours}
+                workerOptions={workerOptions}
+              >
+                <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                  Site
+                  <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id" required>
+                    <option value="" disabled>
+                      Select Pymble site
                     </option>
-                  ))}
-                </select>
-              </label>
+                    {siteOptions.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.code} - {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={OPS_LABEL_CLASS}>
+                  Date
+                  <input
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={todayInLusaka()}
+                    name="work_date"
+                    required
+                    type="date"
+                  />
+                </label>
+              </OpsAttendanceEntryFields>
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Site
-                <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id" required>
-                  <option value="" disabled>
-                    Select Pymble site
-                  </option>
-                  {siteOptions.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.code} - {site.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Date
-                <input
-                  className={OPS_INPUT_CLASS}
-                  defaultValue={todayInLusaka()}
-                  name="work_date"
-                  required
-                  type="date"
-                />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Presence
-                <select className={OPS_INPUT_CLASS} defaultValue="present" name="presence">
-                  <option value="present">Present</option>
-                  <option value="late">Late</option>
-                  <option value="absent">Absent</option>
-                </select>
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Clock in
-                <input
-                  className={OPS_INPUT_CLASS}
-                  name="clock_in_time"
-                  required
-                  type="time"
-                />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Clock out
-                <input
-                  className={OPS_INPUT_CLASS}
-                  name="clock_out_time"
-                  type="time"
-                />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Hours
-                <input
-                  className={OPS_INPUT_CLASS}
-                  max="24"
-                  min="0"
-                  name="hours_worked"
-                  required
-                  step="0.25"
-                  type="number"
-                />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                GPS or site note
-                <input className={OPS_INPUT_CLASS} name="gps_label" />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                GPS latitude
-                <input className={OPS_INPUT_CLASS} inputMode="decimal" name="gps_latitude" />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                GPS longitude
-                <input className={OPS_INPUT_CLASS} inputMode="decimal" name="gps_longitude" />
+                Site note
+                <input className={OPS_INPUT_CLASS} name="site_note" />
               </label>
               <div className="flex items-end min-[520px]:col-span-2 lg:col-span-1">
                 <OpsSubmitButton className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} pendingLabel="Adding...">
@@ -556,16 +560,220 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
             </OpsOfflineForm>
           )}
         </section>
-      ) : (
+      ) : null}
+
+      {canRecord && siteOptions.length > 0 ? (
+        <section className="rounded-lg border border-border bg-card p-5">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-md bg-primary-dark text-white">
+              <Users className="size-5" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="font-heading text-xl font-bold text-foreground">
+                Bulk roster capture
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Mark a whole crew in one submit. Pick a site and date to load its roster.
+              </p>
+            </div>
+          </div>
+
+          <form
+            action="/ops/attendance"
+            className="grid gap-3 md:grid-cols-3 lg:grid-cols-4"
+            method="get"
+          >
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Site
+              <select
+                className={OPS_INPUT_CLASS}
+                defaultValue={rosterSiteId ?? ""}
+                name="roster_site"
+                required
+              >
+                <option value="" disabled>
+                  Select Pymble site
+                </option>
+                {siteOptions.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.code} - {site.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Date
+              <input
+                className={OPS_INPUT_CLASS}
+                defaultValue={rosterDate}
+                name="roster_date"
+                required
+                type="date"
+              />
+            </label>
+            <div className="flex items-end">
+              <button className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} type="submit">
+                <Users className="size-4" aria-hidden="true" />
+                Load roster
+              </button>
+            </div>
+          </form>
+
+          {rosterSiteId ? (
+            roster.length === 0 ? (
+              <div className={`mt-4 ${OPS_NOTICE_WARNING_CLASS}`}>
+                No active workers are assigned to that site. Assign workers on the Workers page
+                first.
+              </div>
+            ) : (
+              <form action={createBulkAttendanceAction} className="mt-5 space-y-4">
+                <input name="site_id" type="hidden" value={rosterSiteId} />
+                <input name="work_date" type="hidden" value={rosterDate} />
+                <div className="grid gap-3 rounded-md border border-border bg-muted/40 p-4 md:grid-cols-3">
+                  <label className={OPS_LABEL_CLASS}>
+                    Default clock in
+                    <input
+                      className={OPS_INPUT_CLASS}
+                      defaultValue="07:30"
+                      name="default_clock_in_time"
+                      required
+                      type="time"
+                    />
+                  </label>
+                  <label className={OPS_LABEL_CLASS}>
+                    Default clock out
+                    <input
+                      className={OPS_INPUT_CLASS}
+                      defaultValue="16:30"
+                      name="default_clock_out_time"
+                      type="time"
+                    />
+                  </label>
+                  <p className="self-end text-xs text-muted-foreground">
+                    Applied to every worker below unless the row overrides it. Each attending
+                    worker earns their full daily rate; overtime is added on top.
+                  </p>
+                </div>
+
+                <div className={OPS_TABLE_SCROLL_CLASS} tabIndex={0}>
+                  <table className="min-w-full divide-y divide-border text-sm">
+                    <caption className="sr-only">
+                      Roster for bulk attendance capture with presence, clock times, and overtime
+                      per worker.
+                    </caption>
+                    <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.12em] text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3" scope="col">
+                          Worker
+                        </th>
+                        <th className="px-4 py-3" scope="col">
+                          Presence
+                        </th>
+                        <th className="px-4 py-3" scope="col">
+                          Clock in
+                        </th>
+                        <th className="px-4 py-3" scope="col">
+                          Clock out
+                        </th>
+                        <th className="px-4 py-3" scope="col">
+                          Overtime hours
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {roster.map((worker) => (
+                        <tr key={worker.id}>
+                          <td className="px-4 py-3">
+                            <p className="font-bold text-foreground">{worker.full_name}</p>
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                              {worker.worker_code} - {formatZmw(worker.daily_rate)}/day
+                            </p>
+                          </td>
+                          {worker.existing_record_id ? (
+                            <td className="px-4 py-3 text-sm text-muted-foreground" colSpan={4}>
+                              Already recorded for this day — edit it in the register below.
+                            </td>
+                          ) : (
+                            <>
+                              <td className="px-4 py-3">
+                                <input name="roster_worker_id" type="hidden" value={worker.id} />
+                                <select
+                                  aria-label={`Presence for ${worker.full_name}`}
+                                  className={OPS_INPUT_CLASS}
+                                  defaultValue="present"
+                                  name={`presence_${worker.id}`}
+                                >
+                                  <option value="present">Present</option>
+                                  <option value="late">Late</option>
+                                  <option value="absent">Absent</option>
+                                  <option value="skip">Skip — no record</option>
+                                </select>
+                              </td>
+                              <td className="px-4 py-3">
+                                <input
+                                  aria-label={`Clock in for ${worker.full_name}`}
+                                  className={OPS_INPUT_CLASS}
+                                  name={`clock_in_${worker.id}`}
+                                  type="time"
+                                />
+                              </td>
+                              <td className="px-4 py-3">
+                                <input
+                                  aria-label={`Clock out for ${worker.full_name}`}
+                                  className={OPS_INPUT_CLASS}
+                                  name={`clock_out_${worker.id}`}
+                                  type="time"
+                                />
+                              </td>
+                              <td className="px-4 py-3">
+                                <input
+                                  aria-label={`Overtime hours for ${worker.full_name}`}
+                                  className={OPS_INPUT_CLASS}
+                                  max="16"
+                                  min="0"
+                                  name={`overtime_hours_${worker.id}`}
+                                  step="0.25"
+                                  type="number"
+                                />
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <OpsSubmitButton
+                  className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`}
+                  pendingLabel="Saving roster..."
+                >
+                  <ClipboardCheck className="size-4" aria-hidden="true" />
+                  Save roster ({rosterPendingCount} to record)
+                </OpsSubmitButton>
+              </form>
+            )
+          ) : null}
+        </section>
+      ) : null}
+
+      {!canRecord ? (
         <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
           Your role does not have attendance recording permissions. Contact your manager to request
           access.
         </div>
-      )}
+      ) : null}
 
       <section className="rounded-lg border border-border bg-card">
-        <div className="border-b border-border p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
           <h2 className="font-heading text-xl font-bold text-foreground">Recent attendance</h2>
+          <a
+            className={OPS_SECONDARY_BUTTON_CLASS}
+            href={`/api/ops/attendance/export${exportQuery ? `?${exportQuery}` : ""}`}
+          >
+            <Download className="size-4" aria-hidden="true" />
+            Export to Excel
+          </a>
         </div>
         <form
           action="/ops/attendance"
@@ -712,7 +920,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                       </span>
                     ) : canRecord ? (
                       <div className="flex flex-wrap items-center gap-2">
-                        {canApprove ? (
+                        {canApproveRecord(record) ? (
                           <form action={approveAttendanceAction}>
                             <input name="id" type="hidden" value={record.id} />
                             <OpsConfirmSubmitButton
@@ -723,6 +931,10 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                               Approve
                             </OpsConfirmSubmitButton>
                           </form>
+                        ) : canApprove ? (
+                          <span className="text-xs text-muted-foreground">
+                            You recorded this — another approver must sign it off
+                          </span>
                         ) : null}
                         <form action={cancelAttendanceAction}>
                           <input name="id" type="hidden" value={record.id} />
@@ -854,7 +1066,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                         </span>
                       ) : canRecord ? (
                         <div className="flex flex-wrap items-center gap-2">
-                          {canApprove ? (
+                          {canApproveRecord(record) ? (
                             <form action={approveAttendanceAction}>
                               <input name="id" type="hidden" value={record.id} />
                               <OpsConfirmSubmitButton
@@ -865,6 +1077,10 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                                 Approve
                               </OpsConfirmSubmitButton>
                             </form>
+                          ) : canApprove ? (
+                            <span className="text-xs text-muted-foreground">
+                              You recorded this — another approver must sign it off
+                            </span>
                           ) : null}
                           <form action={cancelAttendanceAction}>
                             <input name="id" type="hidden" value={record.id} />

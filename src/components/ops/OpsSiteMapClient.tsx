@@ -92,13 +92,6 @@ export function OpsSiteMapClient({
     typeof headquarters.latitude === "number" && typeof headquarters.longitude === "number";
   const selectedSite =
     sitesWithCoordinates.find((site) => site.id === selectedSiteId) ?? sitesWithCoordinates[0];
-  const attendancePoints = useMemo(
-    () =>
-      attendancePings.filter(
-        (record) => record.gps_latitude !== null && record.gps_longitude !== null,
-      ),
-    [attendancePings],
-  );
   const siteCounts = useMemo(() => {
     const crewBySite = new Map<string, number>();
     const approvedBySite = new Map<string, number>();
@@ -131,13 +124,8 @@ export function OpsSiteMapClient({
         latitude: site.latitude,
         longitude: site.longitude,
       })),
-      ...attendancePoints.map((record) => ({
-        latitude: record.gps_latitude as number,
-        longitude: record.gps_longitude as number,
-      })),
     ],
     [
-      attendancePoints,
       headquarters.latitude,
       headquarters.longitude,
       headquartersHasCoordinates,
@@ -247,39 +235,6 @@ export function OpsSiteMapClient({
             </CircleMarker>
           );
         })}
-
-        {attendancePoints.map((record) => (
-          <CircleMarker
-            center={[record.gps_latitude as number, record.gps_longitude as number]}
-            key={record.id}
-            pathOptions={{
-              color: "#FFA500",
-              fillColor: "#FFA500",
-              fillOpacity: 0.85,
-              weight: 1,
-            }}
-            radius={6}
-          >
-            <Popup>
-              <div className="space-y-1 p-1 text-sm text-foreground">
-                <p className="font-bold text-foreground">
-                  {record.gps_label || "Clock point"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  GPS: {record.gps_latitude?.toFixed(4)},{" "}
-                  {record.gps_longitude?.toFixed(4)}
-                </p>
-                <p className="mt-1 text-xs font-semibold capitalize text-accent-orange">
-                  {record.presence} - {new Date(record.clock_in_at).toLocaleTimeString("en-ZM", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    timeZone: "Africa/Lusaka",
-                  })}
-                </p>
-              </div>
-            </Popup>
-          </CircleMarker>
-        ))}
       </MapContainer>
 
       <div className="pointer-events-none absolute left-3 top-3 z-[1000] hidden max-w-xs rounded-md border border-border bg-card/95 px-3.5 py-2.5 shadow-sm md:block">

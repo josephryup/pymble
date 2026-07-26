@@ -7,6 +7,7 @@ import {
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { DEFAULT_WORKER_DAILY_RATE } from "@/lib/ops/attendance-earnings";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
@@ -131,12 +132,16 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
               Daily rate
               <input
                 className={OPS_INPUT_CLASS}
+                defaultValue={DEFAULT_WORKER_DAILY_RATE}
                 min="1"
                 name="daily_rate"
                 required
                 step="0.01"
                 type="number"
               />
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                Fixed rate paid for a day&apos;s attendance, regardless of hours worked.
+              </span>
             </label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Site assignment

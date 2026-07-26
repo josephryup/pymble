@@ -35,6 +35,31 @@ export function canApproveAttendance(role: OpsUserRole) {
   return canRecordAttendance(role) && role !== "engineering_intern";
 }
 
+/**
+ * Roles senior enough to approve an attendance record they created themselves.
+ *
+ * Attendance approval is the gate into payroll, and workers are on a fixed daily
+ * rate — so a supervisor who can both record and approve can create pay
+ * unopposed. Everyone else needs a second pair of eyes (audit finding A1).
+ */
+const ATTENDANCE_SELF_APPROVAL_ROLES: OpsUserRole[] = [
+  "developer",
+  "managing_director",
+  "owner",
+  "general_manager",
+  "manager",
+  "operations_manager",
+  "projects_manager",
+];
+
+/**
+ * Whether `role` may approve an attendance record it created. Records created by
+ * someone else are governed by `canApproveAttendance` alone.
+ */
+export function canSelfApproveAttendance(role: OpsUserRole) {
+  return canApproveAttendance(role) && ATTENDANCE_SELF_APPROVAL_ROLES.includes(role);
+}
+
 // Site register: who can create/edit, archive, and hard-delete sites.
 const SITE_MANAGE_ROLES: OpsUserRole[] = [
   "developer",

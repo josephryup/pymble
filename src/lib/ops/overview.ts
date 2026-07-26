@@ -44,9 +44,6 @@ export type OpsOverviewAttendancePing = {
   worker_id: string;
   clock_in_at: string;
   presence: OpsAttendancePresence;
-  gps_label: string;
-  gps_latitude: number | null;
-  gps_longitude: number | null;
   approved_at: string | null;
 };
 
@@ -99,13 +96,7 @@ type RawOverviewSite = Omit<OpsOverviewSite, "budget_zmw" | "latitude" | "longit
   longitude: number | string | null;
 };
 
-type RawOverviewAttendancePing = Omit<
-  OpsOverviewAttendancePing,
-  "gps_latitude" | "gps_longitude"
-> & {
-  gps_latitude: number | string | null;
-  gps_longitude: number | string | null;
-};
+type RawOverviewAttendancePing = OpsOverviewAttendancePing;
 
 type RawOverviewPayrollRun = Omit<NonNullable<OpsOverviewPayrollRun>, "total_net"> & {
   total_net: number | string;
@@ -329,11 +320,7 @@ function normalizeSites(sites: RawOverviewSite[] | null | undefined) {
 }
 
 function normalizeAttendancePings(records: RawOverviewAttendancePing[] | null | undefined) {
-  return (records ?? []).map((record) => ({
-    ...record,
-    gps_latitude: normalizeCoordinate(record.gps_latitude),
-    gps_longitude: normalizeCoordinate(record.gps_longitude),
-  }));
+  return records ?? [];
 }
 
 function normalizeDraftPayroll(payroll: RawOverviewPayrollRun | null | undefined) {
@@ -444,7 +431,7 @@ async function fetchOpsOverviewViaQueries() {
     supabase
       .from("attendance_records")
       .select(
-        "id, site_id, worker_id, clock_in_at, presence, gps_label, gps_latitude, gps_longitude, approved_at",
+        "id, site_id, worker_id, clock_in_at, presence, approved_at",
       )
       .eq("is_active", true)
       .gte("clock_in_at", dayStartIso)
@@ -528,13 +515,7 @@ async function fetchOpsOverviewViaQueries() {
     longitude: normalizeCoordinate(site.longitude),
   }));
   const workers = (workersResult.data ?? []) as OpsOverviewWorker[];
-  const attendancePings = ((todayAttendanceResult.data ?? []) as RawOverviewAttendancePing[]).map(
-    (record) => ({
-      ...record,
-      gps_latitude: normalizeCoordinate(record.gps_latitude),
-      gps_longitude: normalizeCoordinate(record.gps_longitude),
-    }),
-  );
+  const attendancePings = (todayAttendanceResult.data ?? []) as RawOverviewAttendancePing[];
   const draftPayroll = draftPayrollResult.data
     ? {
         ...draftPayrollResult.data,

@@ -1,8 +1,11 @@
 import { z } from "zod";
 import type { OpsUserProfile } from "@/lib/ops/auth";
 import { createOpsServerSessionClient } from "@/lib/ops/auth";
-import { computeAttendanceEarnings } from "@/lib/ops/attendance-earnings";
-import { parseCoordinateInput } from "@/lib/ops/coordinates";
+import {
+  computeAttendanceEarnings,
+  DEFAULT_WORKER_DAILY_RATE,
+  hoursBetweenClockTimes,
+} from "@/lib/ops/attendance-earnings";
 import { canRecordAttendance } from "@/lib/ops/permissions";
 import { hasActiveOpsSiteAssignment, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 
@@ -17,6 +20,21 @@ import { hasActiveOpsSiteAssignment, requiresOpsSiteAssignment } from "@/lib/ops
 
 export const ATTENDANCE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+/**
+ * Optional numeric form field: blank means "not supplied", so the server can
+ * derive the value instead of treating it as a hard zero.
+ */
+const optionalHours = (max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .transform((value) => (value.length > 0 ? value : null))
+    .refine(
+      (value) => value === null || (Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= max),
+      label,
+    )
+    .transform((value) => (value === null ? null : Number(value)));
+
 export const createAttendanceSchema = z.object({
   worker_id: z.string().uuid("Select a Pymble worker."),
   site_id: z.string().uuid("Select a Pymble site."),
@@ -27,11 +45,12 @@ export const createAttendanceSchema = z.object({
     .trim()
     .transform((value) => (value.length > 0 ? value : null))
     .pipe(z.string().regex(ATTENDANCE_TIME_PATTERN).nullable()),
-  hours_worked: z.coerce.number().min(0).max(24),
+  /** Blank = derive from the clock times. */
+  hours_worked: optionalHours(24, "Hours worked must be between 0 and 24."),
+  /** Blank = derive from hours beyond the standard day. */
+  overtime_hours: optionalHours(16, "Overtime hours must be between 0 and 16."),
   presence: z.enum(["present", "late", "absent"]),
-  gps_label: z.string().trim().max(160).default(""),
-  gps_latitude: z.number().min(-90).max(90).nullable(),
-  gps_longitude: z.number().min(-180).max(180).nullable(),
+  site_note: z.string().trim().max(160).default(""),
 });
 
 export function attendanceField(formData: FormData, name: string) {
@@ -42,6 +61,91 @@ export function attendanceField(formData: FormData, name: string) {
 export function combineAttendanceDateTime(date: string, time: string) {
   return `${date}T${time}:00+02:00`;
 }
+
+export type AttendanceRateSettings = {
+  standardDailyHours: number;
+  overtimeMultiplier: number;
+};
+
+/**
+ * Company-wide standard day and overtime multiplier, with the documented
+ * defaults when the organization profile has not been filled in yet.
+ */
+export function attendanceRateSettings(
+  row: { standard_daily_hours?: number | string | null; overtime_multiplier?: number | string | null } | null,
+): AttendanceRateSettings {
+  return {
+    standardDailyHours: Number(row?.standard_daily_hours ?? 8),
+    overtimeMultiplier: Number(row?.overtime_multiplier ?? 1.5),
+  };
+}
+
+export type AttendanceEarningsInputs = {
+  presence: "present" | "late" | "absent";
+  clockInTime: string;
+  clockOutTime: string | null;
+  hoursWorked: number | null;
+  overtimeHours: number | null;
+  dailyRate: number;
+  settings: AttendanceRateSettings;
+};
+
+/**
+ * Resolve what actually gets stored on the record. Hours worked fall back to
+ * the clock in/out span, overtime falls back to hours beyond the standard day,
+ * and an absent record zeroes everything.
+ */
+export function resolveAttendanceEarnings(inputs: AttendanceEarningsInputs) {
+  const isAbsent = inputs.presence === "absent";
+  const clockedHours = hoursBetweenClockTimes(inputs.clockInTime, inputs.clockOutTime);
+  const hoursWorked = isAbsent ? 0 : (inputs.hoursWorked ?? clockedHours ?? 0);
+  const earnings = computeAttendanceEarnings({
+    hoursWorked,
+    overtimeHours: isAbsent ? 0 : inputs.overtimeHours,
+    dailyRate: inputs.dailyRate,
+    standardDailyHours: inputs.settings.standardDailyHours,
+    overtimeMultiplier: inputs.settings.overtimeMultiplier,
+    isAbsent,
+  });
+
+  return { hoursWorked, earnings };
+}
+
+/**
+ * Guard against paying a worker twice for the same day.
+ *
+ * Under the fixed daily rate a duplicate record is a duplicate day's pay, and
+ * the hours column no longer makes the mistake obvious. This cannot be a unique
+ * index because the work day has to be derived from clock_in_at in the Lusaka
+ * zone (`at time zone` is STABLE, not IMMUTABLE, so Postgres will not index
+ * it), so it is enforced here on the write path instead.
+ *
+ * Returns the clashing record id, or null when the day is free.
+ */
+export async function findAttendanceDayClash(
+  supabase: Awaited<ReturnType<typeof createOpsServerSessionClient>>,
+  args: { workerId: string; workDate: string; excludeId?: string },
+): Promise<string | null> {
+  let query = supabase
+    .from("attendance_records")
+    .select("id")
+    .eq("worker_id", args.workerId)
+    .eq("is_active", true)
+    .is("cancelled_at", null)
+    .gte("clock_in_at", `${args.workDate}T00:00:00+02:00`)
+    .lte("clock_in_at", `${args.workDate}T23:59:59.999+02:00`)
+    .limit(1);
+
+  if (args.excludeId) {
+    query = query.neq("id", args.excludeId);
+  }
+
+  const { data } = await query.maybeSingle<{ id: string }>();
+  return data?.id ?? null;
+}
+
+export const ATTENDANCE_DAY_CLASH_MESSAGE =
+  "That worker already has an attendance record for this day. Edit or cancel the existing record instead.";
 
 export type CreateAttendanceResult =
   | { ok: true; id: string }
@@ -55,20 +159,6 @@ export async function createAttendanceRecordCore(
     return { ok: false, message: "Your role cannot record attendance yet." };
   }
 
-  const gpsLatitude = parseCoordinateInput(attendanceField(formData, "gps_latitude"), "latitude");
-  if (gpsLatitude === undefined) {
-    return { ok: false, message: "Enter a valid latitude." };
-  }
-
-  const gpsLongitude = parseCoordinateInput(attendanceField(formData, "gps_longitude"), "longitude");
-  if (gpsLongitude === undefined) {
-    return { ok: false, message: "Enter a valid longitude." };
-  }
-
-  if ((gpsLatitude === null) !== (gpsLongitude === null)) {
-    return { ok: false, message: "Enter both GPS latitude and longitude, or leave both blank." };
-  }
-
   const parsed = createAttendanceSchema.safeParse({
     worker_id: attendanceField(formData, "worker_id"),
     site_id: attendanceField(formData, "site_id"),
@@ -76,10 +166,9 @@ export async function createAttendanceRecordCore(
     clock_in_time: attendanceField(formData, "clock_in_time"),
     clock_out_time: attendanceField(formData, "clock_out_time"),
     hours_worked: attendanceField(formData, "hours_worked"),
+    overtime_hours: attendanceField(formData, "overtime_hours"),
     presence: attendanceField(formData, "presence") || "present",
-    gps_label: attendanceField(formData, "gps_label"),
-    gps_latitude: gpsLatitude,
-    gps_longitude: gpsLongitude,
+    site_note: attendanceField(formData, "site_note"),
   });
 
   if (!parsed.success) {
@@ -116,22 +205,31 @@ export async function createAttendanceRecordCore(
     return { ok: false, message: "The selected worker is assigned to a different site." };
   }
 
-  const standardDailyHours = Number(orgRes.data?.standard_daily_hours ?? 8);
-  const overtimeMultiplier = Number(orgRes.data?.overtime_multiplier ?? 1.5);
+  // Offline replays are deduplicated by client_id, so only guard fresh entries.
+  const clientId = (attendanceField(formData, "client_id") || "").trim() || null;
+  if (!clientId) {
+    const clash = await findAttendanceDayClash(supabase, {
+      workerId: parsed.data.worker_id,
+      workDate: parsed.data.work_date,
+    });
+    if (clash) {
+      return { ok: false, message: ATTENDANCE_DAY_CLASH_MESSAGE };
+    }
+  }
 
-  const hoursWorked = parsed.data.presence === "absent" ? 0 : parsed.data.hours_worked;
-  const earnings = computeAttendanceEarnings({
-    hoursWorked,
-    dailyRate: Number(worker.daily_rate),
-    standardDailyHours,
-    overtimeMultiplier,
-    isAbsent: parsed.data.presence === "absent",
+  const { hoursWorked, earnings } = resolveAttendanceEarnings({
+    presence: parsed.data.presence,
+    clockInTime: parsed.data.clock_in_time,
+    clockOutTime: parsed.data.clock_out_time,
+    hoursWorked: parsed.data.hours_worked,
+    overtimeHours: parsed.data.overtime_hours,
+    dailyRate: Number(worker.daily_rate) || DEFAULT_WORKER_DAILY_RATE,
+    settings: attendanceRateSettings(orgRes.data),
   });
 
   // Sprint 10 offline support: upsert on the optional client_id so a queued
   // attendance record from a phone that's been offline doesn't double-insert
   // when it eventually syncs.
-  const clientId = (attendanceField(formData, "client_id") || "").trim() || null;
   const attendancePayload = {
     worker_id: parsed.data.worker_id,
     site_id: parsed.data.site_id,
@@ -145,9 +243,8 @@ export async function createAttendanceRecordCore(
     overtime_amount: earnings.overtimeAmount,
     presence: parsed.data.presence,
     source: "manual",
-    gps_label: parsed.data.gps_label,
-    gps_latitude: parsed.data.gps_latitude,
-    gps_longitude: parsed.data.gps_longitude,
+    // gps_label is the legacy column name; it now stores a plain site note.
+    gps_label: parsed.data.site_note,
     created_by: profile.id,
     is_active: true,
   };
@@ -188,8 +285,6 @@ export async function createAttendanceRecordCore(
     metadata: {
       worker_id: parsed.data.worker_id,
       site_id: parsed.data.site_id,
-      gps_latitude: parsed.data.gps_latitude,
-      gps_longitude: parsed.data.gps_longitude,
       hours_worked: hoursWorked,
       amount_earned: earnings.totalAmount,
       overtime_hours: earnings.overtimeHours,

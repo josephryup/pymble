@@ -230,7 +230,12 @@ export async function replayOutboxIntent(intent: OpsOutboxIntent): Promise<boole
       return true;
     }
 
-    if (response.status >= 400 && response.status < 500) {
+    // 429 (throttled) and 408 (timeout) are the client being asked to wait, not
+    // a rejected intent — keep them retryable so a rate-limited sync does not
+    // dead-letter a real attendance record.
+    const isRetryableClientStatus = response.status === 429 || response.status === 408;
+
+    if (response.status >= 400 && response.status < 500 && !isRetryableClientStatus) {
       await markOutboxIntent(intent.id, {
         status: "dead_letter",
         last_error: `HTTP ${response.status}`,

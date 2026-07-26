@@ -208,7 +208,7 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
             <div>
               <h2 className="font-heading text-xl font-bold text-foreground">Bank details</h2>
               <p className="text-sm text-muted-foreground">
-                Set where each employee's payroll payment should be sent. These are snapshotted on each payroll run.
+                Set where each employee&apos;s payroll payment should be sent. These are snapshotted on each payroll run.
               </p>
             </div>
           </div>
