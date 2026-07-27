@@ -125,7 +125,10 @@ test("computeStaffPayslip never lets a staff advance push net below zero", () =>
   assert.equal(slip.net, 0);
 });
 
-test("computeStaffPayslip can exclude NAPSA, NHIMA, and WCF per employee", () => {
+test("opting out of statutory deductions pays the full gross — PAYE included", () => {
+  // The flag used to drop only NAPSA/NHIMA/WCF and still withhold PAYE. For a
+  // non-employment engagement that is wrong: they invoice gross and settle
+  // their own tax with ZRA.
   const slip = computeStaffPayslip({
     basic: 20_000,
     housing: 11_000,
@@ -133,11 +136,56 @@ test("computeStaffPayslip can exclude NAPSA, NHIMA, and WCF per employee", () =>
     statutoryContributionsEnabled: false,
   });
 
-  assert.equal(slip.paye, 9_096);
+  assert.equal(slip.gross, 31_000);
+  assert.equal(slip.paye, 0);
   assert.equal(slip.napsaEmployee, 0);
   assert.equal(slip.napsaEmployer, 0);
   assert.equal(slip.nhimaEmployee, 0);
   assert.equal(slip.nhimaEmployer, 0);
   assert.equal(slip.wcfEmployer, 0);
-  assert.equal(slip.net, 21_904);
+  assert.equal(slip.totalEmployeeDeductions, 0);
+  assert.equal(slip.net, slip.gross);
+});
+
+test("an opted-out person costs the employer exactly their gross", () => {
+  const slip = computeStaffPayslip({
+    basic: 18_000,
+    housing: 4_000,
+    otherAllowances: 3_000,
+    periodDate: AUGUST_2025,
+    statutoryContributionsEnabled: false,
+  });
+
+  assert.equal(slip.employerTotalCost, slip.gross);
+  assert.equal(slip.employerTotalCost, 25_000);
+});
+
+test("advances are still recovered from an opted-out person", () => {
+  // Repaying an advance is not a deduction — it is money already received.
+  const slip = computeStaffPayslip({
+    basic: 20_000,
+    housing: 0,
+    advanceDeduction: 5_000,
+    periodDate: AUGUST_2025,
+    statutoryContributionsEnabled: false,
+  });
+
+  assert.equal(slip.paye, 0);
+  assert.equal(slip.advanceDeduction, 5_000);
+  assert.equal(slip.totalEmployeeDeductions, 5_000);
+  assert.equal(slip.net, 15_000);
+});
+
+test("opting out does not change anyone else's payslip", () => {
+  const optedIn = computeStaffPayslip({
+    basic: 20_000,
+    housing: 11_000,
+    periodDate: AUGUST_2025,
+  });
+
+  // Same inputs as the opted-out case above; PAYE and contributions still apply.
+  assert.equal(optedIn.gross, 31_000);
+  assert.ok(optedIn.paye > 0);
+  assert.ok(optedIn.napsaEmployee > 0);
+  assert.ok(optedIn.net < optedIn.gross);
 });

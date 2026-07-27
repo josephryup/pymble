@@ -178,7 +178,10 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
         <section className="rounded-lg border border-border bg-card p-5">
           <h2 className="font-heading text-xl font-bold text-foreground">Statutory contributions</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Set whether NAPSA, NHIMA, and WCF apply to each employee. PAYE remains calculated for all included staff.
+            Set whether statutory deductions apply to each person. Opting someone out removes
+            PAYE, NAPSA, NHIMA and WCF entirely — they are paid their full gross and settle their
+            own tax with ZRA. Use it only for engagements that are not employment for tax purposes;
+            advances are still recovered.
           </p>
           <div className="mt-3 divide-y divide-border rounded-md border border-border">
             {employees.map((employee) => (
@@ -189,8 +192,8 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
                   <p className="text-xs text-muted-foreground">{employee.employee_number}{employee.job_title ? ` · ${employee.job_title}` : ""}</p>
                 </div>
                 <select className={OPS_INPUT_CLASS} defaultValue={String(employee.statutory_contributions_enabled)} name="enabled">
-                  <option value="true">Contributions apply</option>
-                  <option value="false">No contributions</option>
+                  <option value="true">PAYE + contributions apply</option>
+                  <option value="false">None — paid gross</option>
                 </select>
                 <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">Save</button>
               </form>

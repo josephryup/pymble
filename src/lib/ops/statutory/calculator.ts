@@ -44,7 +44,16 @@ export type StaffPayslipInput = {
   advanceDeduction?: number;
   /** Payroll period date used to pick the right ZRA rates. */
   periodDate: Date | string;
-  /** Whether NAPSA, NHIMA, and WCF contributions apply to this employee. */
+  /**
+   * Whether statutory deductions apply to this person at all — PAYE as well as
+   * NAPSA, NHIMA and WCF.
+   *
+   * Set false only for engagements that are not employment for tax purposes
+   * (contractors and consultants who invoice gross and settle their own tax
+   * with ZRA). Such a person is paid their full gross: no PAYE withheld, no
+   * contributions either side. Advances still come off, since repaying an
+   * advance is not a deduction — it is money already received.
+   */
   statutoryContributionsEnabled?: boolean;
 };
 
@@ -174,8 +183,10 @@ export function computeStaffPayslip(input: StaffPayslipInput): StaffPayslipBreak
   const otherAllowances = roundToCents(Math.max(input.otherAllowances ?? 0, 0));
   const gross = roundToCents(basic + housing + otherAllowances);
 
-  const paye = computePaye(gross, rates);
   const statutoryContributionsEnabled = input.statutoryContributionsEnabled !== false;
+  // Opted out means opted out of everything statutory, PAYE included — the
+  // person is paid gross and settles their own tax.
+  const paye = statutoryContributionsEnabled ? computePaye(gross, rates) : 0;
   const napsaEmployee = statutoryContributionsEnabled ? computeNapsaEmployee(gross, rates) : 0;
   const napsaEmployer = statutoryContributionsEnabled ? computeNapsaEmployer(gross, rates) : 0;
   const nhimaEmployee = statutoryContributionsEnabled ? computeNhimaEmployee(basic, rates) : 0;
