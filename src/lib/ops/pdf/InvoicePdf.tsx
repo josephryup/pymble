@@ -144,7 +144,7 @@ export function InvoicePdf({
             />
             {invoice.boq ? (
               <Field
-                label="Linked Bill of Quantities"
+                label="Linked material schedule"
                 value={invoice.boq.title}
               />
             ) : null}

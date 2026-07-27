@@ -7,9 +7,17 @@ import type { OpsProjectBudgetStatus } from "@/lib/ops/types";
 // estimated_transport_cost across every line, regardless of that line's own
 // category — transport is a cross-cutting cost, not a phase). Idempotent, so
 // re-issuing a new BOQ version re-syncs cleanly.
+//
+// Ownership (audit B4/B3): every line this module creates is stamped
+// source = 'boq', and every lookup filters on it. Finance's own lines
+// (source = 'manual') are invisible here — they are never matched, never
+// overwritten, and their categories may repeat freely. A partial unique index
+// on (budget_id, category) where source = 'boq' guarantees the lookup below
+// matches at most one row.
 
 const TRANSPORT_CATEGORY = "transport";
 const UNPLANNED_CATEGORY = "unplanned";
+const BOQ_LINE_SOURCE = "boq";
 
 type BoqDocumentForSync = {
   id: string;
@@ -151,6 +159,7 @@ async function upsertBudgetLineByCategory(
     .select("id, category, line_number")
     .eq("budget_id", budgetId)
     .eq("category", category)
+    .eq("source", BOQ_LINE_SOURCE)
     .maybeSingle<BudgetLineForSync>();
 
   if (existingError) {
@@ -198,6 +207,7 @@ async function upsertBudgetLineByCategory(
       category,
       description,
       budgeted_amount: budgetedAmount,
+      source: BOQ_LINE_SOURCE,
       created_by: actorUserId,
     })
     .select("id")
@@ -208,6 +218,17 @@ async function upsertBudgetLineByCategory(
   }
 
   return created.id;
+}
+
+/**
+ * Thrown when the site's budget is locked. Callers surface this rather than
+ * silently editing a budget Finance has closed (audit B1/B5).
+ */
+export class LockedBudgetError extends Error {
+  constructor(public readonly budgetId: string) {
+    super("The site budget is locked, so it was not updated from this schedule.");
+    this.name = "LockedBudgetError";
+  }
 }
 
 export async function syncProjectBudgetFromBoq(boqId: string, actorUserId: string) {
@@ -223,7 +244,7 @@ export async function syncProjectBudgetFromBoq(boqId: string, actorUserId: strin
     throw documentError;
   }
   if (!document) {
-    throw new Error("Bill of Quantities was not found.");
+    throw new Error("Material schedule was not found.");
   }
 
   const { data: lineRows, error: lineError } = await supabase
@@ -238,6 +259,12 @@ export async function syncProjectBudgetFromBoq(boqId: string, actorUserId: strin
   const lines = (lineRows ?? []) as BoqLineForSync[];
 
   const budget = await findOrCreateSiteBudget(document.site_id, document.title, actorUserId);
+
+  // findOrCreateSiteBudget only matches draft/active budgets, but a budget can
+  // be locked between issue and re-issue. Refuse rather than edit it.
+  if (budget.status === "locked") {
+    throw new LockedBudgetError(budget.id);
+  }
 
   const totalsByCategory = new Map<string, number>();
   let transportTotal = 0;
@@ -258,6 +285,35 @@ export async function syncProjectBudgetFromBoq(boqId: string, actorUserId: strin
   // been issued, even if the current estimate is zero, so material requests
   // always have somewhere to resolve transport_budget_line_id to.
   await upsertBudgetLineByCategory(budget.id, TRANSPORT_CATEGORY, transportTotal, actorUserId);
+
+  // A revision can drop a category entirely. Zero the schedule-owned lines it
+  // no longer covers rather than deleting them — cost entries may already
+  // reference the line, and a zeroed line still shows the overspend (audit B1).
+  const liveCategories = new Set([...totalsByCategory.keys(), TRANSPORT_CATEGORY]);
+  const { data: staleRows, error: staleError } = await supabase
+    .from("project_budget_lines")
+    .select("id, category")
+    .eq("budget_id", budget.id)
+    .eq("source", BOQ_LINE_SOURCE)
+    .gt("budgeted_amount", 0);
+
+  if (staleError) {
+    throw staleError;
+  }
+
+  const staleIds = ((staleRows ?? []) as Array<{ id: string; category: string }>)
+    .filter((row) => !liveCategories.has(row.category) && row.category !== UNPLANNED_CATEGORY)
+    .map((row) => row.id);
+
+  if (staleIds.length > 0) {
+    const { error: zeroError } = await supabase
+      .from("project_budget_lines")
+      .update({ budgeted_amount: 0 })
+      .in("id", staleIds);
+    if (zeroError) {
+      throw zeroError;
+    }
+  }
 
   const { error: linkError } = await supabase
     .from("boq_documents")

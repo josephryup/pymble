@@ -1,7 +1,7 @@
 // Map record_comments.source_table → the page where the user can act on the
 // underlying record. Used by /ops/inbox so each mention has a working link.
 const SOURCE_TABLE_ROUTE: Record<string, string> = {
-  boq_documents: "/ops/boq",
+  boq_documents: "/ops/material-schedule",
   sites: "/ops/sites",
   material_requests: "/ops/material-requests",
   suppliers: "/ops/suppliers",
@@ -40,7 +40,7 @@ export function getOpsInboxRecordRoute(sourceTable: string, sourceId: string) {
 
 export function getOpsRecordLabel(sourceTable: string) {
   const map: Record<string, string> = {
-    boq_documents: "Bill of Quantities",
+    boq_documents: "Material schedule",
     sites: "Project site",
     material_requests: "Material request",
     suppliers: "Supplier",

@@ -68,6 +68,8 @@ export type OpsProjectBudgetLineSummary = {
   line_number: number;
   notes: string;
   posted_amount: number;
+  /** 'boq' lines are generated from an issued material schedule (audit B4). */
+  source: string;
 };
 
 export type OpsProjectBudgetSummary = {
@@ -443,7 +445,7 @@ async function fetchProjectBudgetLines(budgetIds: string[]) {
   const { data, error } = await supabase
     .from("project_budget_lines")
     .select(
-      "id, budget_id, line_number, cost_code, category, description, budgeted_amount, notes, created_at",
+      "id, budget_id, line_number, cost_code, category, description, budgeted_amount, notes, created_at, source",
     )
     .in("budget_id", budgetIds)
     .order("line_number", { ascending: true });

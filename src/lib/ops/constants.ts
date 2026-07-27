@@ -435,15 +435,15 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Staff Payroll",
   },
   {
-    description: "Build project Bills of Quantities, track line items, compare quantities, and prepare exportable records.",
+    description: "Build the project material schedule: measured lines, procurement pricing, revisions, and the project budget generated from it.",
     group: "commercial",
-    href: "/ops/boq",
+    href: "/ops/material-schedule",
     id: "boq",
     navigationRoles: [...OPS_COMMERCIAL_ROLES, ...OPS_PROCUREMENT_ROLES],
     phase: "Foundation",
     roles: OPS_OPERATIONAL_ROLES,
     status: "ready",
-    title: "Bill of Quantities",
+    title: "Material Schedule",
   },
   {
     description: "Create client invoices, apply Value Added Tax details, track status, and prepare PDF outputs.",

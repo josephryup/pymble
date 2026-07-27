@@ -36,7 +36,7 @@ type OpsTopUtilityBarProps = {
 
 const SEARCHABLE_WORKSPACE_PATHS = [
   "/ops/approvals",
-  "/ops/boq",
+  "/ops/material-schedule",
   "/ops/commercial",
   "/ops/daily-site-reports",
   "/ops/delivery-exceptions",

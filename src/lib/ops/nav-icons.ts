@@ -96,7 +96,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   "/ops/fleet-logistics": Bus,
 
   // Commercial
-  "/ops/boq": BarChart3,
+  "/ops/material-schedule": BarChart3,
   "/ops/invoices": ReceiptText,
   "/ops/customers": Users,
   "/ops/commercial": ChartNoAxesCombined,

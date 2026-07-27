@@ -330,7 +330,7 @@ function actionSetForGroup(group: DashboardGroup): DashboardAction[] {
   const actions: Record<DashboardGroup, DashboardAction[]> = {
     commercial: [
       { href: "/ops/commercial", icon: BarChart3, label: "Review IPCs" },
-      { href: "/ops/boq", icon: ReceiptText, label: "Open BOQs" },
+      { href: "/ops/material-schedule", icon: ReceiptText, label: "Open BOQs" },
       { href: "/ops/invoices?create=invoice#invoice-create-panel", icon: FilePlus2, label: "Create invoice" },
     ],
     delivery: [
@@ -602,7 +602,7 @@ function kpisForGroup(
       {
         cta: "Open BOQ",
         hint: overview.latestBoq ? `${formatZmw(overview.latestBoq.actual_total)} actual` : "Create to anchor reporting",
-        href: "/ops/boq",
+        href: "/ops/material-schedule",
         icon: ReceiptText,
         label: "Latest BOQ",
         tone: overview.latestBoq ? "good" : "default",
@@ -1084,7 +1084,7 @@ function shortcutGroupsForRole(group: DashboardGroup, role: OpsUserRole): Shortc
       {
         title: "Commercial controls",
         items: [
-          { href: "/ops/boq", label: "BOQ documents" },
+          { href: "/ops/material-schedule", label: "BOQ documents" },
           { href: "/ops/commercial", label: "IPCs and variations" },
           { href: "/ops/invoices", label: "Invoice register" },
           { href: "/ops/project-budgets", label: "Project budgets" },
@@ -1125,7 +1125,7 @@ function shortcutGroupsForRole(group: DashboardGroup, role: OpsUserRole): Shortc
           { href: "/ops/engineering-controls", label: "Site instructions and Quality Assurance and Quality Control" },
           { href: "/ops/daily-site-reports", label: "Daily site reports" },
           { href: "/ops/material-requests", label: "Material requests" },
-          { href: "/ops/boq", label: "Bills of Quantities" },
+          { href: "/ops/material-schedule", label: "Material Schedule" },
         ],
       },
       {

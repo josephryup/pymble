@@ -6,6 +6,7 @@ import {
   Clock3,
   FileSpreadsheet,
   FileText,
+  GitBranch,
   Pencil,
   Plus,
   ReceiptText,
@@ -39,6 +40,7 @@ import {
   submitBoqForPricingAction,
   updateBoqDocumentAction,
   updateBoqLineItemAction,
+  createBoqRevisionAction,
   importBoqLineItemsCsvAction,
 } from "@/lib/ops/boq-actions";
 import {
@@ -46,8 +48,12 @@ import {
   fetchOpsMaterialTriggerAlerts,
   fetchPaginatedOpsBoqDocuments,
   type OpsBoqDocument,
+  boqLinePriceBenchmark,
+  fetchOpsBoqStockItemOptions,
+  type OpsBoqLineItem,
   type OpsMaterialTriggerAlert,
 } from "@/lib/ops/boq";
+import { boqLineVariance } from "@/lib/ops/boq-actuals";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import {
@@ -56,6 +62,7 @@ import {
   canCreateBoq,
   canEditBoq,
   canIssueBoq,
+  canReviseBoq,
   canSubmitBoqForPricing,
 } from "@/lib/ops/boq-permissions";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -147,7 +154,7 @@ function boqNotice(params: OpsSearchParams) {
 
   const updatedKey = firstParam(params.updated);
   if (updatedKey === "boq") {
-    return { tone: "success" as const, message: "Bill of Quantities updated." };
+    return { tone: "success" as const, message: "material schedule updated." };
   }
   if (updatedKey === "line") {
     return { tone: "success" as const, message: "Line item updated." };
@@ -156,13 +163,13 @@ function boqNotice(params: OpsSearchParams) {
     return { tone: "success" as const, message: "Line item deleted." };
   }
   if (updatedKey === "archived") {
-    return { tone: "success" as const, message: "Bill of Quantities archived." };
+    return { tone: "success" as const, message: "material schedule archived." };
   }
   if (updatedKey === "restored") {
-    return { tone: "success" as const, message: "Bill of Quantities restored." };
+    return { tone: "success" as const, message: "material schedule restored." };
   }
   if (updatedKey === "deleted") {
-    return { tone: "success" as const, message: "Bill of Quantities permanently deleted." };
+    return { tone: "success" as const, message: "material schedule permanently deleted." };
   }
   if (updatedKey === "submitted_for_pricing") {
     return {
@@ -215,6 +222,83 @@ function boqStatusLabel(status: OpsBoqDocument["status"]) {
     return "pricing pending";
   }
   return status;
+}
+
+/**
+ * Planned-vs-requested position for one schedule line (audit A2).
+ *
+ * Replaces the old manual "Actual" column, which froze the moment a schedule
+ * was issued. Derived from the material requests actually raised against the
+ * line, so it stays true after issue.
+ */
+function BoqRequestedCell({ item }: { item: OpsBoqLineItem }) {
+  const { actuals } = item;
+
+  if (actuals.requestCount === 0) {
+    return <span className="text-muted-foreground">Nothing requested</span>;
+  }
+
+  const variance = boqLineVariance({
+    plannedQuantity: item.quantity,
+    plannedValue: item.budgeted_total,
+    actuals,
+  });
+
+  return (
+    <div className="min-w-40">
+      <p className="font-semibold text-foreground">
+        {formatNumber(actuals.requestedQuantity)} {item.unit}
+        <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+          of {formatNumber(item.quantity)}
+        </span>
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        {formatZmw(actuals.requestedValue)} across {actuals.requestCount} request
+        {actuals.requestCount === 1 ? "" : "s"}
+        {actuals.deliveredQuantity > 0
+          ? ` · ${formatNumber(actuals.deliveredQuantity)} delivered`
+          : ""}
+      </p>
+      <span
+        className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+          variance.isOverRequested || variance.isOverValue
+            ? "bg-red-50 text-red-700"
+            : "bg-emerald-50 text-emerald-700"
+        }`}
+      >
+        {variance.isOverRequested
+          ? `Over plan by ${formatNumber(actuals.requestedQuantity - item.quantity)} ${item.unit}`
+          : variance.isOverValue
+            ? `Over budget by ${formatZmw(Math.abs(variance.valueVariance))}`
+            : `${variance.requestedPercent}% requested`}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Unit rate against the last price actually paid for the same dictionary item
+ * (audit A5). Silent when there is nothing to compare, so it never nags about
+ * one-off materials or items with no purchase history.
+ */
+function BoqPriceBenchmark({ item }: { item: OpsBoqLineItem }) {
+  const benchmark = boqLinePriceBenchmark(item);
+
+  if (!benchmark) {
+    return null;
+  }
+
+  return (
+    <span
+      className={`mt-1 block text-xs font-normal ${
+        benchmark.isAbove ? "text-red-700" : "text-emerald-700"
+      }`}
+      title={`Last paid ${formatZmw(benchmark.lastUnitCost)} per ${item.unit}`}
+    >
+      {benchmark.isAbove ? "▲" : "▼"} {Math.abs(benchmark.percent)}% vs last paid (
+      {formatZmw(benchmark.lastUnitCost)})
+    </span>
+  );
 }
 
 function BoqValueMetric({ label, value }: { label: string; value: string }) {
@@ -347,6 +431,7 @@ function BoqPricingWorkflowPanel({
                       step="0.01"
                       type="number"
                     />
+                    <BoqPriceBenchmark item={item} />
                   </label>
                   <label className="text-xs font-bold text-muted-foreground">
                     Transport
@@ -374,6 +459,28 @@ function BoqPricingWorkflowPanel({
     );
   }
 
+  // Issued: the schedule is live and its budget is generated. The only move
+  // left is to revise it — which creates a new version rather than editing
+  // this one, so history and the issued budget stay intact (audit B1).
+  if (document.status === "issued" && canReviseBoq(role, document)) {
+    return (
+      <form
+        action={createBoqRevisionAction}
+        className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/40 p-4"
+      >
+        <input name="boq_id" type="hidden" value={document.id} />
+        <p className="text-sm leading-6 text-foreground/70">
+          Scope changed? Open revision v{document.version + 1}. This schedule stays live and its
+          budget untouched until the revision is priced and issued.
+        </p>
+        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+          <GitBranch className="size-4" aria-hidden="true" />
+          Revise schedule
+        </button>
+      </form>
+    );
+  }
+
   return null;
 }
 
@@ -383,13 +490,13 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/boq")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/material-schedule")) {
     notFound();
   }
 
   const listState = parseOpsListState(params, { defaultPageSize: 6 });
   const status = boqStatusFromParam(firstParam(params.status));
-  const [documents, siteOptions, supplierOptions] = await Promise.all([
+  const [documents, siteOptions, supplierOptions, stockItemOptions] = await Promise.all([
     fetchPaginatedOpsBoqDocuments({
       listState,
       query: listState.query,
@@ -397,16 +504,17 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
     }),
     fetchActiveSiteOptions(),
     fetchActiveSupplierOptions(),
+    fetchOpsBoqStockItemOptions(),
   ]);
   const boqDocuments = documents.items;
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
-  // canCreate gates the "New Bill of Quantities" button and the global form.
+  // canCreate gates the "New material schedule" button and the global form.
   // Per-document edit/delete uses canEditBoq(role, doc) so the rules also
   // respect the document's draft/issued/archived state.
   const canCreate = canCreateBoq(auth.profile.role);
   const canArchive = canArchiveBoq(auth.profile.role);
   // Many UI sections (activity panel, comments) just need write access. Use
-  // canCreate as a stand-in for that — anyone who can create a Bill of Quantities can manage
+  // canCreate as a stand-in for that — anyone who can create a material schedule can manage
   // its comments / attachments.
   const canManage = canCreate;
   const notice = boqNotice(params);
@@ -444,7 +552,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
   }
 
   createPanelParams.set("create", "boq");
-  const createBoqHref = `/ops/boq?${createPanelParams.toString()}#boq-create-panel`;
+  const createBoqHref = `/ops/material-schedule?${createPanelParams.toString()}#boq-create-panel`;
   const openCreatePanel = firstParam(params.create) === "boq";
 
   return (
@@ -457,7 +565,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
       </datalist>
       <OpsPageHeader
         eyebrow="Commercial control"
-        title="Bill of Quantities"
+        title="material schedule"
         description="Project bills of quantities — measured line items, budgeted values, actual quantities, and invoice-ready commercial source records."
         actions={
           <>
@@ -472,7 +580,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
             {canManage ? (
               <a className={OPS_PRIMARY_BUTTON_CLASS} href={createBoqHref}>
                 <Plus className="size-4" aria-hidden="true" />
-                New Bill of Quantities
+                New material schedule
               </a>
             ) : null}
           </>
@@ -494,14 +602,14 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <OpsKpiCard
-          href="/ops/boq#boq-register"
+          href="/ops/material-schedule#boq-register"
           icon={FileSpreadsheet}
-          label="Bill of Quantities documents"
+          label="material schedule documents"
           hint="Register"
           value={documents.pagination.total.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
-          href="/ops/boq?status=draft#boq-register"
+          href="/ops/material-schedule?status=draft#boq-register"
           icon={Clock3}
           label="Draft shown"
           tone={draftCount > 0 ? "warn" : "default"}
@@ -509,7 +617,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           value={draftCount.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
-          href="/ops/boq?status=pricing_pending#boq-register"
+          href="/ops/material-schedule?status=pricing_pending#boq-register"
           icon={Send}
           label="With procurement"
           tone={pricingCount > 0 ? "warn" : "default"}
@@ -517,7 +625,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           value={pricingCount.toLocaleString("en-ZM")}
         />
         <OpsKpiCard
-          href="/ops/boq?status=issued#boq-register"
+          href="/ops/material-schedule?status=issued#boq-register"
           icon={CheckCircle2}
           label="Issued shown"
           tone="good"
@@ -528,7 +636,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <OpsKpiCard
-          href="/ops/boq#boq-register"
+          href="/ops/material-schedule#boq-register"
           icon={Calculator}
           label="Line items shown"
           hint="Measured"
@@ -544,7 +652,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
-        <OpsDashboardPanel eyebrow="Visible values" title="Current Bill of Quantities selection">
+        <OpsDashboardPanel eyebrow="Visible values" title="Current material schedule selection">
           <dl className="grid gap-3 min-[520px]:grid-cols-2 xl:grid-cols-4">
             <BoqValueMetric label="Budgeted shown" value={formatZmw(totalBudgeted)} />
             <BoqValueMetric label="Actual shown" value={formatZmw(totalActual)} />
@@ -563,7 +671,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
             </Link>
           }
           eyebrow="Commercial flow"
-          title="Bill of Quantities to invoice"
+          title="material schedule to invoice"
         >
           <div className="grid gap-3">
             <BoqFlowStep
@@ -608,10 +716,10 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block font-heading text-xl font-bold text-foreground">
-                Create Bill of Quantities
+                Create material schedule
               </span>
               <span className="mt-1 block text-sm text-muted-foreground">
-                Create the site-linked Bill of Quantities header before adding measured line items in the register.
+                Create the site-linked material schedule header before adding measured line items in the register.
               </span>
             </span>
             <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
@@ -621,7 +729,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           {siteOptions.length === 0 ? (
             <div className="border-t border-border p-5">
               <div className={OPS_NOTICE_WARNING_CLASS}>
-                Add at least one site before creating a Bill of Quantities.
+                Add at least one site before creating a material schedule.
               </div>
             </div>
           ) : (
@@ -673,13 +781,19 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
       <section className="grid scroll-mt-24 gap-5" id="boq-register">
         <div className="rounded-lg border border-border bg-card">
           <div className="border-b border-border p-5">
-            <h2 className="font-heading text-xl font-bold text-foreground">BOQ documents</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-heading text-xl font-bold text-foreground">Material schedules</h2>
+              <a className={OPS_SECONDARY_BUTTON_CLASS} href="/api/ops/material-schedule/export">
+                <FileSpreadsheet className="size-4" aria-hidden="true" />
+                Export to Excel
+              </a>
+            </div>
             <p className="mt-1 text-sm text-muted-foreground">
               Search and filter document headers before opening their line items.
             </p>
           </div>
           <OpsListControls
-            action="/ops/boq"
+            action="/ops/material-schedule"
             filters={[
               {
                 label: "Status",
@@ -688,9 +802,9 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                 value: status,
               },
             ]}
-            placeholder="Search Bill of Quantities title"
+            placeholder="Search material schedule title"
             query={listState.query}
-            resultLabel="Bill of Quantities documents"
+            resultLabel="material schedule documents"
           />
         </div>
 
@@ -730,10 +844,16 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     </div>
                     <div className="rounded-md border border-border px-3 py-2">
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                        Actual
+                        Requested
                       </p>
-                      <p className="mt-1 font-bold text-foreground">
-                        {formatZmw(document.actual_total)}
+                      <p
+                        className={`mt-1 font-bold ${
+                          document.requested_total > document.budgeted_total
+                            ? "text-red-700"
+                            : "text-foreground"
+                        }`}
+                      >
+                        {formatZmw(document.requested_total)}
                       </p>
                     </div>
                     <div className="rounded-md border border-border px-3 py-2">
@@ -822,6 +942,20 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                         />
                       </label>
                       <label className={OPS_LABEL_CLASS}>
+                        Material (dictionary)
+                        <select className={OPS_INPUT_CLASS} defaultValue="" name="stock_item_id">
+                          <option value="">Not in dictionary</option>
+                          {stockItemOptions.map((stockItem) => (
+                            <option key={stockItem.id} value={stockItem.id}>
+                              {stockItem.item_code} - {stockItem.item_name}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                          Supplies lead time and the last paid price.
+                        </span>
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
                         Unit
                         <input className={OPS_INPUT_CLASS} defaultValue="pcs" name="unit" required />
                       </label>
@@ -843,16 +977,6 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           min="0"
                           name="unit_rate"
                           required
-                          step="0.01"
-                          type="number"
-                        />
-                      </label>
-                      <label className={OPS_LABEL_CLASS}>
-                        Actual
-                        <input
-                          className={OPS_INPUT_CLASS}
-                          min="0"
-                          name="actual_quantity"
                           step="0.01"
                           type="number"
                         />
@@ -933,7 +1057,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                       </p>
                       <OpsImportTemplateLinks kind="boq" />
                       <label className={OPS_LABEL_CLASS}>
-                        Bill of Quantities file
+                        material schedule file
                         <input
                           accept=".csv,.xlsx,.xls,.pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/pdf"
                           className={OPS_INPUT_CLASS}
@@ -957,7 +1081,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     >
                       <span className="inline-flex items-center gap-2">
                         <Pencil className="size-4" aria-hidden="true" />
-                        Edit Bill of Quantities details
+                        Edit material schedule details
                       </span>
                       <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
                         Open
@@ -1007,7 +1131,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     <input name="boq_id" type="hidden" value={document.id} />
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm text-red-800">
-                        Archive removes this Bill of Quantities from default listings.
+                        Archive removes this material schedule from default listings.
                         Leadership can restore it later.
                       </p>
                       <button
@@ -1040,8 +1164,8 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           <OpsMobileRecordRow label="Rate">
                             {formatZmw(item.unit_rate)}
                           </OpsMobileRecordRow>
-                          <OpsMobileRecordRow label="Actual">
-                            {formatNumber(item.actual_quantity)}
+                          <OpsMobileRecordRow label="Requested">
+                            <BoqRequestedCell item={item} />
                           </OpsMobileRecordRow>
                           <OpsMobileRecordRow label="Total">
                             {formatZmw(item.budgeted_total)}
@@ -1097,7 +1221,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           Rate
                         </th>
                         <th className="px-5 py-3" scope="col">
-                          Actual
+                          Requested
                         </th>
                         <th className="px-5 py-3" scope="col">
                           Total
@@ -1126,6 +1250,11 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                         <tr key={item.id}>
                           <td className="px-5 py-4 font-semibold text-foreground">
                             {item.description}
+                            {item.stock_item ? (
+                              <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                                {item.stock_item.item_code}
+                              </span>
+                            ) : null}
                           </td>
                           <td className="px-5 py-4 text-foreground/70">{item.unit}</td>
                           <td className="px-5 py-4 text-foreground/70">
@@ -1133,9 +1262,10 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                           </td>
                           <td className="px-5 py-4 text-foreground/70">
                             {formatZmw(item.unit_rate)}
+                            <BoqPriceBenchmark item={item} />
                           </td>
-                          <td className="px-5 py-4 text-foreground/70">
-                            {formatNumber(item.actual_quantity)}
+                          <td className="px-5 py-4">
+                            <BoqRequestedCell item={item} />
                           </td>
                           <td className="px-5 py-4 font-semibold text-foreground">
                             {formatZmw(item.budgeted_total)}
@@ -1217,10 +1347,6 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
                                           <label className="text-xs font-bold text-muted-foreground">
-                                            Actual qty
-                                            <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={String(item.actual_quantity)} min="0" name="actual_quantity" step="0.01" type="number" />
-                                          </label>
-                                          <label className="text-xs font-bold text-muted-foreground">
                                             Supplier
                                             <select className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.supplier_id ?? ""} name="supplier_id">
                                               <option value="">None</option>
@@ -1281,7 +1407,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                 </>
               ) : (
                 <div className="flex min-h-32 items-center justify-center p-8 text-center text-sm text-muted-foreground">
-                  No line items added to this Bill of Quantities yet.
+                  No line items added to this material schedule yet.
                 </div>
               )}
               <OpsRecordActivityPanel
@@ -1297,18 +1423,18 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
             <FileSpreadsheet className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
               <p className="font-heading text-xl font-bold text-foreground">
-                {hasActiveListFilter ? "No matching Bill of Quantities documents" : "No Bill of Quantities documents yet"}
+                {hasActiveListFilter ? "No matching material schedule documents" : "No material schedule documents yet"}
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
                 {hasActiveListFilter
-                  ? "Adjust the search or status filter to widen the Bill of Quantities document list."
-                  : "Create a site first, then start your first Bill of Quantities document."}
+                  ? "Adjust the search or status filter to widen the material schedule document list."
+                  : "Create a site first, then start your first material schedule document."}
               </p>
             </div>
           </div>
         )}
         <OpsPaginationControls
-          basePath="/ops/boq"
+          basePath="/ops/material-schedule"
           filters={[
             {
               label: "Status",
@@ -1319,7 +1445,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           ]}
           pagination={documents.pagination}
           query={listState.query}
-          resultLabel="Bill of Quantities documents"
+          resultLabel="material schedule documents"
         />
       </section>
     </div>

@@ -40,7 +40,7 @@ type RecordContext = {
   moduleKey: string;
   route:
     | "/ops/sites"
-    | "/ops/boq"
+    | "/ops/material-schedule"
     | "/ops/invoices"
     | "/ops/material-requests"
     | "/ops/suppliers"
@@ -123,7 +123,7 @@ async function resolveRecordContext(
           category: "boq",
           label: data.title,
           moduleKey: "boq",
-          route: "/ops/boq",
+          route: "/ops/material-schedule",
           siteId: data.site_id,
           sourceId: data.id,
           sourceTable,

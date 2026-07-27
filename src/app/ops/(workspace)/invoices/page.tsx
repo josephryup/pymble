@@ -198,12 +198,12 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
       <OpsPageHeader
         eyebrow="Commercial / Finance"
         title="Invoices"
-        description="Value-Added Tax invoices, Bill of Quantities links, client TPIN records, receivables status, and invoice evidence."
+        description="Value-Added Tax invoices, material schedule links, client TPIN records, receivables status, and invoice evidence."
         actions={
           <>
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/boq">
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/material-schedule">
               <FileText className="size-4" aria-hidden="true" />
-              Bill of Quantities
+              Material schedule
             </Link>
             <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/customers">
               <Users className="size-4" aria-hidden="true" />
@@ -594,14 +594,14 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
               description={
                 hasActiveListFilter
                   ? "Try clearing the search or switching the status filter — drafts, sent, and paid invoices sit in different buckets."
-                  : "The first client invoice will appear here once Finance creates one against a Bill of Quantities or Interim Payment Certificate."
+                  : "The first client invoice will appear here once Finance creates one against a material schedule or Interim Payment Certificate."
               }
               actions={
                 hasActiveListFilter
                   ? [{ href: "/ops/invoices", label: "Clear filters" }]
                   : canManage
                     ? [{ href: createInvoiceHref, label: "Create the first invoice" }]
-                    : [{ href: "/ops/boq", label: "Open Bill of Quantities", variant: "secondary" }]
+                    : [{ href: "/ops/material-schedule", label: "Open material schedule", variant: "secondary" }]
               }
             />
           )}

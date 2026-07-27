@@ -54,6 +54,7 @@ export type OpsBoqMutationTarget = {
   status: "draft" | "pricing_pending" | "priced" | "issued";
   deleted_at?: string | null;
   archived_at?: string | null;
+  superseded_at?: string | null;
 };
 
 export function canCreateBoq(role: OpsUserRole) {
@@ -104,6 +105,23 @@ export function canIssueBoq(role: OpsUserRole, document: OpsBoqMutationTarget) {
   }
 
   if (document.archived_at || document.deleted_at) {
+    return false;
+  }
+
+  return BOQ_EDIT_ROLES.includes(role);
+}
+
+/**
+ * Revise an issued schedule (audit B1). Produces a new draft that supersedes
+ * this one — the issued document itself is never edited, so history stays
+ * intact. Same owners as authoring: this is a QS act, not a procurement one.
+ */
+export function canReviseBoq(role: OpsUserRole, document: OpsBoqMutationTarget) {
+  if (document.status !== "issued") {
+    return false;
+  }
+
+  if (document.archived_at || document.deleted_at || document.superseded_at) {
     return false;
   }
 

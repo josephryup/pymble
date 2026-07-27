@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 const SOURCE_ROUTE: Record<
   OpsRecordActivitySourceTable,
   | "/ops/sites"
-  | "/ops/boq"
+  | "/ops/material-schedule"
   | "/ops/invoices"
   | "/ops/material-requests"
   | "/ops/suppliers"
@@ -33,7 +33,7 @@ const SOURCE_ROUTE: Record<
   | "/ops/employees"
 > = {
   accommodation_bookings: "/ops/fleet-logistics",
-  boq_documents: "/ops/boq",
+  boq_documents: "/ops/material-schedule",
   commercial_claims: "/ops/commercial",
   commercial_contracts: "/ops/commercial",
   commercial_contract_milestones: "/ops/commercial",

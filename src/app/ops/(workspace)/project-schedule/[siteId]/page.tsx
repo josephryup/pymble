@@ -200,7 +200,7 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
         </div>
         <Link
           className="block rounded-md border border-orange-200 bg-orange-50 px-4 py-3 shadow-sm transition hover:bg-orange-100"
-          href="/ops/boq"
+          href="/ops/material-schedule"
         >
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">
             <Package className="size-3.5" aria-hidden="true" />

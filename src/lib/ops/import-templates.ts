@@ -75,7 +75,7 @@ export const OPS_IMPORT_TEMPLATES: Record<OpsImportTemplateKind, OpsImportTempla
     ],
   },
   boq: {
-    title: "Bill of Quantities lines",
+    title: "Material schedule lines",
     filename: "pymble-boq-lines-template",
     description:
       "One row per BOQ line. Description, Unit, Quantity, and Rate are required; the rest are optional.",

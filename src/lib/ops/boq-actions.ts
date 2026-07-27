@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
+import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import {
   canArchiveBoq,
@@ -12,11 +13,14 @@ import {
   canDeleteBoq,
   canEditBoq,
   canIssueBoq,
+  canReviseBoq,
   canSubmitBoqForPricing,
   type OpsBoqMutationTarget,
 } from "@/lib/ops/boq-permissions";
-import { syncProjectBudgetFromBoq } from "@/lib/ops/boq-budget-sync";
+import { LockedBudgetError, syncProjectBudgetFromBoq } from "@/lib/ops/boq-budget-sync";
+import { diffBoqRevision, summarizeBoqRevisionDiff } from "@/lib/ops/boq-revisions";
 import { readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
+import { logOpsServerError, swallowOpsError } from "@/lib/ops/log";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
@@ -34,7 +38,7 @@ const optionalSupplierId = z
 
 const createBoqSchema = z.object({
   site_id: z.string().uuid("Select a Pymble site."),
-  title: z.string().trim().min(2, "BOQ title is required.").max(160),
+  title: z.string().trim().min(2, "Schedule title is required.").max(160),
   version: z.coerce.number().int().positive().default(1),
 });
 
@@ -61,6 +65,15 @@ const optionalDateInput = z
     message: "Use a valid date.",
   });
 
+const optionalStockItemId = z
+  .string()
+  .trim()
+  .default("")
+  .transform((value) => (value.length > 0 ? value : null))
+  .refine((value) => value === null || UUID_PATTERN.test(value), {
+    message: "Select a valid material from the dictionary.",
+  });
+
 const optionalProjectTaskId = z
   .string()
   .trim()
@@ -80,7 +93,7 @@ const optionalLeadTimeDays = z
   });
 
 const createLineItemSchema = z.object({
-  boq_id: z.string().uuid("Select a BOQ document."),
+  boq_id: z.string().uuid("Select a material schedule."),
   description: z.string().trim().min(2, "Line item description is required.").max(220),
   unit: z.string().trim().min(1, "Unit is required.").max(40),
   quantity: z.coerce.number().min(0, "Quantity cannot be negative."),
@@ -91,6 +104,7 @@ const createLineItemSchema = z.object({
   needed_by: optionalDateInput,
   project_task_id: optionalProjectTaskId,
   lead_time_days_override: optionalLeadTimeDays,
+  stock_item_id: optionalStockItemId,
 });
 
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
@@ -197,7 +211,7 @@ function field(formData: FormData, name: string) {
 }
 
 function boqError(message: string): never {
-  redirect(`/ops/boq?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
+  redirect(`/ops/material-schedule?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
 }
 
 export async function createBoqDocumentAction(formData: FormData) {
@@ -205,7 +219,7 @@ export async function createBoqDocumentAction(formData: FormData) {
 
   if (!canCreateBoq(profile.role)) {
     boqError(
-      "Only the Quantity Surveyor, Projects Manager, and leadership can create Bills of Quantities.",
+      "Only the Quantity Surveyor, Projects Manager, and leadership can create material schedules.",
     );
   }
 
@@ -248,8 +262,8 @@ export async function createBoqDocumentAction(formData: FormData) {
     },
   });
 
-  revalidatePath("/ops/boq");
-  redirect("/ops/boq?created=boq");
+  revalidatePath("/ops/material-schedule");
+  redirect("/ops/material-schedule?created=boq");
 }
 
 export async function createBoqLineItemAction(formData: FormData) {
@@ -267,6 +281,7 @@ export async function createBoqLineItemAction(formData: FormData) {
     needed_by: field(formData, "needed_by"),
     project_task_id: field(formData, "project_task_id"),
     lead_time_days_override: field(formData, "lead_time_days_override"),
+    stock_item_id: field(formData, "stock_item_id"),
   });
 
   if (!parsed.success) {
@@ -275,11 +290,11 @@ export async function createBoqLineItemAction(formData: FormData) {
 
   const target = await fetchBoqMutationTarget(parsed.data.boq_id);
   if (!target) {
-    boqError("Bill of Quantities was not found.");
+    boqError("material schedule was not found.");
   }
   if (!canEditBoq(profile.role, target)) {
     boqError(
-      "Lines can only be added to a Bill of Quantities while it is in draft and not archived.",
+      "Lines can only be added to a material schedule while it is in draft and not archived.",
     );
   }
 
@@ -307,8 +322,8 @@ export async function createBoqLineItemAction(formData: FormData) {
     },
   });
 
-  revalidatePath("/ops/boq");
-  redirect("/ops/boq?created=line");
+  revalidatePath("/ops/material-schedule");
+  redirect("/ops/material-schedule?created=line");
 }
 
 // ---------------------------------------------------------------------------
@@ -316,7 +331,7 @@ export async function createBoqLineItemAction(formData: FormData) {
 // ---------------------------------------------------------------------------
 
 const boqIdSchema = z.object({
-  boq_id: z.string().uuid("Select a Bill of Quantities."),
+  boq_id: z.string().uuid("Select a material schedule."),
 });
 
 const lineItemIdSchema = z.object({
@@ -343,6 +358,7 @@ const updateLineItemSchema = lineItemIdSchema.extend({
   needed_by: optionalDateInput,
   project_task_id: optionalProjectTaskId,
   lead_time_days_override: optionalLeadTimeDays,
+  stock_item_id: optionalStockItemId,
 });
 
 type BoqDocumentForMutation = OpsBoqMutationTarget & {
@@ -356,7 +372,7 @@ async function fetchBoqMutationTarget(boqId: string): Promise<BoqDocumentForMuta
   const supabase = await createOpsServerSessionClient();
   const { data, error } = await supabase
     .from("boq_documents")
-    .select("id, site_id, title, created_by, status, deleted_at, archived_at")
+    .select("id, site_id, title, created_by, status, deleted_at, archived_at, superseded_at")
     .eq("id", boqId)
     .maybeSingle<BoqDocumentForMutation>();
   if (error) {
@@ -392,11 +408,11 @@ export async function updateBoqDocumentAction(formData: FormData) {
 
   const target = await fetchBoqMutationTarget(parsed.data.boq_id);
   if (!target) {
-    boqError("Bill of Quantities was not found.");
+    boqError("material schedule was not found.");
   }
   if (!canEditBoq(profile.role, target)) {
     boqError(
-      "Only the Quantity Surveyor, Projects Manager, and leadership can edit a Bill of Quantities while it is in draft.",
+      "Only the Quantity Surveyor, Projects Manager, and leadership can edit a material schedule while it is in draft.",
     );
   }
 
@@ -426,8 +442,8 @@ export async function updateBoqDocumentAction(formData: FormData) {
     metadata: { title: parsed.data.title, version: parsed.data.version },
   });
 
-  revalidatePath("/ops/boq");
-  redirect("/ops/boq?updated=boq");
+  revalidatePath("/ops/material-schedule");
+  redirect("/ops/material-schedule?updated=boq");
 }
 
 export async function updateBoqLineItemAction(formData: FormData) {
@@ -445,6 +461,7 @@ export async function updateBoqLineItemAction(formData: FormData) {
     needed_by: field(formData, "needed_by"),
     project_task_id: field(formData, "project_task_id"),
     lead_time_days_override: field(formData, "lead_time_days_override"),
+    stock_item_id: field(formData, "stock_item_id"),
   });
   if (!parsed.success) {
     boqError(parsed.error.issues[0]?.message ?? "Check the line item details.");
@@ -456,10 +473,10 @@ export async function updateBoqLineItemAction(formData: FormData) {
   }
   const target = await fetchBoqMutationTarget(boqId);
   if (!target) {
-    boqError("Bill of Quantities was not found.");
+    boqError("material schedule was not found.");
   }
   if (!canEditBoq(profile.role, target)) {
-    boqError("Lines can only be edited while the Bill of Quantities is in draft.");
+    boqError("Lines can only be edited while the material schedule is in draft.");
   }
 
   const supabase = await createOpsServerSessionClient();
@@ -470,12 +487,12 @@ export async function updateBoqLineItemAction(formData: FormData) {
       unit: parsed.data.unit,
       quantity: parsed.data.quantity,
       unit_rate: parsed.data.unit_rate,
-      actual_quantity: parsed.data.actual_quantity,
       supplier_id: parsed.data.supplier_id,
       category: parsed.data.category,
       needed_by: parsed.data.needed_by,
       project_task_id: parsed.data.project_task_id,
       lead_time_days_override: parsed.data.lead_time_days_override,
+      stock_item_id: parsed.data.stock_item_id,
     })
     .eq("id", parsed.data.line_item_id);
   if (error) {
@@ -493,8 +510,8 @@ export async function updateBoqLineItemAction(formData: FormData) {
     metadata: { description: parsed.data.description },
   });
 
-  revalidatePath("/ops/boq");
-  redirect("/ops/boq?updated=line");
+  revalidatePath("/ops/material-schedule");
+  redirect("/ops/material-schedule?updated=line");
 }
 
 export async function deleteBoqLineItemAction(formData: FormData) {
@@ -511,10 +528,10 @@ export async function deleteBoqLineItemAction(formData: FormData) {
   }
   const target = await fetchBoqMutationTarget(boqId);
   if (!target) {
-    boqError("Bill of Quantities was not found.");
+    boqError("material schedule was not found.");
   }
   if (!canEditBoq(profile.role, target)) {
-    boqError("Lines can only be deleted while the Bill of Quantities is in draft.");
+    boqError("Lines can only be deleted while the material schedule is in draft.");
   }
 
   const supabase = await createOpsServerSessionClient();
@@ -537,8 +554,8 @@ export async function deleteBoqLineItemAction(formData: FormData) {
     metadata: { boq_id: boqId },
   });
 
-  revalidatePath("/ops/boq");
-  redirect("/ops/boq?updated=line_deleted");
+  revalidatePath("/ops/material-schedule");
+  redirect("/ops/material-schedule?updated=line_deleted");
 }
 
 export async function archiveBoqAction(formData: FormData) {
@@ -546,21 +563,21 @@ export async function archiveBoqAction(formData: FormData) {
 
   if (!canArchiveBoq(profile.role)) {
     boqError(
-      "Only Developer, Managing Director, General Manager, Operations Manager, and Projects Manager can archive a Bill of Quantities.",
+      "Only Developer, Managing Director, General Manager, Operations Manager, and Projects Manager can archive a material schedule.",
     );
   }
 
   const parsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
   if (!parsed.success) {
-    boqError(parsed.error.issues[0]?.message ?? "Select a BOQ.");
+    boqError(parsed.error.issues[0]?.message ?? "Select a material schedule.");
   }
 
   const target = await fetchBoqMutationTarget(parsed.data.boq_id);
   if (!target) {
-    boqError("Bill of Quantities was not found.");
+    boqError("material schedule was not found.");
   }
   if (target.archived_at) {
-    boqError("This Bill of Quantities is already archived.");
+    boqError("This material schedule is already archived.");
   }
 
   const supabase = await createOpsServerSessionClient();
@@ -583,20 +600,20 @@ export async function archiveBoqAction(formData: FormData) {
     source_id: parsed.data.boq_id,
   });
 
-  revalidatePath("/ops/boq");
-  redirect("/ops/boq?updated=archived");
+  revalidatePath("/ops/material-schedule");
+  redirect("/ops/material-schedule?updated=archived");
 }
 
 export async function restoreBoqAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
   if (!canArchiveBoq(profile.role)) {
-    boqError("Your role cannot restore archived Bills of Quantities.");
+    boqError("Your role cannot restore archived material schedules.");
   }
 
   const parsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
   if (!parsed.success) {
-    boqError(parsed.error.issues[0]?.message ?? "Select a BOQ.");
+    boqError(parsed.error.issues[0]?.message ?? "Select a material schedule.");
   }
 
   const supabase = await createOpsServerSessionClient();
@@ -618,20 +635,20 @@ export async function restoreBoqAction(formData: FormData) {
     source_id: parsed.data.boq_id,
   });
 
-  revalidatePath("/ops/boq");
-  redirect("/ops/boq?updated=restored");
+  revalidatePath("/ops/material-schedule");
+  redirect("/ops/material-schedule?updated=restored");
 }
 
 export async function deleteBoqAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
   if (!canDeleteBoq(profile.role)) {
-    boqError("Only the Developer can permanently delete a Bill of Quantities.");
+    boqError("Only the Developer can permanently delete a material schedule.");
   }
 
   const parsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
   if (!parsed.success) {
-    boqError(parsed.error.issues[0]?.message ?? "Select a BOQ.");
+    boqError(parsed.error.issues[0]?.message ?? "Select a material schedule.");
   }
 
   const supabase = await createOpsServerSessionClient();
@@ -655,8 +672,8 @@ export async function deleteBoqAction(formData: FormData) {
     source_id: parsed.data.boq_id,
   });
 
-  revalidatePath("/ops/boq");
-  redirect("/ops/boq?updated=deleted");
+  revalidatePath("/ops/material-schedule");
+  redirect("/ops/material-schedule?updated=deleted");
 }
 
 // ---------------------------------------------------------------------------
@@ -671,12 +688,12 @@ export async function submitBoqForPricingAction(formData: FormData) {
 
   const parsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
   if (!parsed.success) {
-    boqError(parsed.error.issues[0]?.message ?? "Select a BOQ.");
+    boqError(parsed.error.issues[0]?.message ?? "Select a material schedule.");
   }
 
   const target = await fetchBoqMutationTarget(parsed.data.boq_id);
   if (!target) {
-    boqError("Bill of Quantities was not found.");
+    boqError("material schedule was not found.");
   }
   if (!canSubmitBoqForPricing(profile.role, target)) {
     boqError(
@@ -721,7 +738,7 @@ export async function submitBoqForPricingAction(formData: FormData) {
   await Promise.all(
     recipients.map((recipient) =>
       queueOpsNotification({
-        actionHref: `/ops/boq?boq=${target.id}`,
+        actionHref: `/ops/material-schedule?boq=${target.id}`,
         body: `${profile.full_name} submitted "${target.title}" for pricing. Add unit rates and transport estimates.`,
         idempotencyKey: `boq-submitted-pricing:${target.id}:${recipient.id}`,
         moduleKey: "boq",
@@ -733,8 +750,8 @@ export async function submitBoqForPricingAction(formData: FormData) {
     ),
   );
 
-  revalidatePath("/ops/boq");
-  redirect(`/ops/boq?updated=submitted_for_pricing#boq-${target.id}`);
+  revalidatePath("/ops/material-schedule");
+  redirect(`/ops/material-schedule?updated=submitted_for_pricing#boq-${target.id}`);
 }
 
 const pricingLineItemSchema = z.object({
@@ -752,12 +769,12 @@ export async function attachBoqPricingAction(formData: FormData) {
 
   const idParsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
   if (!idParsed.success) {
-    boqError(idParsed.error.issues[0]?.message ?? "Select a BOQ.");
+    boqError(idParsed.error.issues[0]?.message ?? "Select a material schedule.");
   }
 
   const target = await fetchBoqMutationTarget(idParsed.data.boq_id);
   if (!target) {
-    boqError("Bill of Quantities was not found.");
+    boqError("material schedule was not found.");
   }
   if (!canAttachBoqPricing(profile.role, target)) {
     boqError(
@@ -862,7 +879,7 @@ export async function attachBoqPricingAction(formData: FormData) {
   await Promise.all(
     Array.from(notifyIds).map((recipientId) =>
       queueOpsNotification({
-        actionHref: `/ops/boq?boq=${target.id}`,
+        actionHref: `/ops/material-schedule?boq=${target.id}`,
         body: `${profile.full_name} priced "${target.title}". It's ready to issue.`,
         idempotencyKey: `boq-priced:${target.id}:${recipientId}`,
         moduleKey: "boq",
@@ -874,8 +891,179 @@ export async function attachBoqPricingAction(formData: FormData) {
     ),
   );
 
-  revalidatePath("/ops/boq");
-  redirect(`/ops/boq?updated=priced#boq-${target.id}`);
+  revalidatePath("/ops/material-schedule");
+  redirect(`/ops/material-schedule?updated=priced#boq-${target.id}`);
+}
+
+/**
+ * Diff a schedule against the one it supersedes. Returns null when this is not
+ * a revision, so callers can treat "first issue" and "re-issue" uniformly.
+ */
+async function buildBoqRevisionDiff(boqId: string) {
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: document } = await supabase
+    .from("boq_documents")
+    .select("supersedes_id")
+    .eq("id", boqId)
+    .maybeSingle<{ supersedes_id: string | null }>();
+
+  const previousId = document?.supersedes_id ?? null;
+  if (!previousId) {
+    return null;
+  }
+
+  const { data: rows, error } = await supabase
+    .from("boq_line_items")
+    .select("boq_id, description, unit, quantity, unit_rate, category, estimated_transport_cost")
+    .in("boq_id", [previousId, boqId]);
+
+  if (error) {
+    throw error;
+  }
+
+  const toDiffLines = (targetId: string) =>
+    ((rows ?? []) as Array<{
+      boq_id: string;
+      description: string;
+      unit: string;
+      quantity: number | string;
+      unit_rate: number | string;
+      category: string;
+      estimated_transport_cost: number | string;
+    }>)
+      .filter((row) => row.boq_id === targetId)
+      .map((row) => {
+        const quantity = Number(row.quantity ?? 0);
+        const unitRate = Number(row.unit_rate ?? 0);
+        return {
+          description: row.description,
+          unit: row.unit,
+          quantity,
+          unitRate,
+          category: row.category || "general",
+          total: Math.round((quantity * unitRate + Number.EPSILON) * 100) / 100,
+          transportCost: Number(row.estimated_transport_cost ?? 0),
+        };
+      });
+
+  return {
+    previousId,
+    diff: diffBoqRevision(toDiffLines(previousId), toDiffLines(boqId)),
+  };
+}
+
+/**
+ * Open a revision of an issued schedule (audit B1).
+ *
+ * Clones the document and every line into a fresh draft at version + 1,
+ * pointing back at the original via supersedes_id. The issued schedule is left
+ * completely untouched — it stays the live version, and the budget it generated
+ * stays authoritative, until the revision is itself issued. That keeps a
+ * half-finished revision from disturbing anything downstream.
+ */
+export async function createBoqRevisionAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
+  if (!parsed.success) {
+    boqError(parsed.error.issues[0]?.message ?? "Select a schedule.");
+  }
+
+  const target = await fetchBoqMutationTarget(parsed.data.boq_id);
+  if (!target) {
+    boqError("Material schedule was not found.");
+  }
+  if (!canReviseBoq(profile.role, target)) {
+    boqError(
+      "Only an issued schedule can be revised, and only by the Quantity Surveyor, Projects Manager, or leadership.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: source, error: sourceError } = await supabase
+    .from("boq_documents")
+    .select("id, site_id, title, version")
+    .eq("id", target.id)
+    .single<{ id: string; site_id: string; title: string; version: number }>();
+  if (sourceError || !source) {
+    boqError(sourceError?.message ?? "Material schedule was not found.");
+  }
+
+  // The partial unique index on supersedes_id is the real guard against two
+  // people branching the same version; check first so they get a clear message
+  // rather than a constraint violation.
+  const { data: openRevision } = await supabase
+    .from("boq_documents")
+    .select("id")
+    .eq("supersedes_id", target.id)
+    .is("superseded_at", null)
+    .is("deleted_at", null)
+    .maybeSingle<{ id: string }>();
+
+  if (openRevision) {
+    boqError("A revision of this schedule is already open. Finish or discard it first.");
+  }
+
+  const { data: revision, error: revisionError } = await supabase
+    .from("boq_documents")
+    .insert({
+      site_id: source.site_id,
+      title: source.title,
+      version: source.version + 1,
+      status: "draft",
+      supersedes_id: source.id,
+      created_by: profile.id,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (revisionError || !revision) {
+    boqError(revisionError?.message ?? "The revision could not be created.");
+  }
+
+  const { data: sourceLines, error: linesError } = await supabase
+    .from("boq_line_items")
+    .select(
+      "description, unit, quantity, unit_rate, category, needed_by, estimated_transport_cost, lead_time_days_override, project_task_id, supplier_id, supplier_name_freeform",
+    )
+    .eq("boq_id", source.id)
+    .order("created_at", { ascending: true });
+
+  if (linesError) {
+    boqError(linesError.message);
+  }
+
+  const lines = (sourceLines ?? []) as Array<Record<string, unknown>>;
+  if (lines.length > 0) {
+    const { error: cloneError } = await supabase
+      .from("boq_line_items")
+      .insert(lines.map((line) => ({ ...line, boq_id: revision.id })));
+    if (cloneError) {
+      boqError(cloneError.message);
+    }
+  }
+
+  await recordOpsAuditEvent({
+    action: "boq.revision_opened",
+    actorUserId: profile.id,
+    entityId: revision.id,
+    entityType: "boq_document",
+    metadata: {
+      supersedes_id: source.id,
+      title: source.title,
+      version: source.version + 1,
+      lines_cloned: lines.length,
+    },
+    moduleKey: "boq",
+    sourceId: revision.id,
+    sourceTable: "boq_documents",
+    summary: `${profile.full_name} opened revision v${source.version + 1} of "${source.title}"`,
+  }).catch(swallowOpsError({ module: "boq", action: "createBoqRevisionAction" }));
+
+  revalidatePath("/ops/material-schedule");
+  redirect(`/ops/material-schedule?updated=revision#boq-${revision.id}`);
 }
 
 export async function issueBoqAction(formData: FormData) {
@@ -883,12 +1071,12 @@ export async function issueBoqAction(formData: FormData) {
 
   const parsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
   if (!parsed.success) {
-    boqError(parsed.error.issues[0]?.message ?? "Select a BOQ.");
+    boqError(parsed.error.issues[0]?.message ?? "Select a material schedule.");
   }
 
   const target = await fetchBoqMutationTarget(parsed.data.boq_id);
   if (!target) {
-    boqError("Bill of Quantities was not found.");
+    boqError("material schedule was not found.");
   }
   if (!canIssueBoq(profile.role, target)) {
     boqError(
@@ -898,6 +1086,11 @@ export async function issueBoqAction(formData: FormData) {
 
   const supabase = getOpsSupabaseServiceClient();
   const nowIso = new Date().toISOString();
+
+  // Capture the diff before anything changes, so the audit trail and the
+  // notification can say what actually moved (audit B1).
+  const revisionDiff = await buildBoqRevisionDiff(target.id);
+
   const { error } = await supabase
     .from("boq_documents")
     .update({ status: "issued", issued_at: nowIso, issued_by: profile.id })
@@ -905,6 +1098,22 @@ export async function issueBoqAction(formData: FormData) {
     .eq("status", "priced");
   if (error) {
     boqError(error.message);
+  }
+
+  // Retire the predecessor only once its replacement is safely issued.
+  if (revisionDiff) {
+    const { error: supersedeError } = await supabase
+      .from("boq_documents")
+      .update({ superseded_at: nowIso, superseded_by: profile.id })
+      .eq("id", revisionDiff.previousId)
+      .is("superseded_at", null);
+    if (supersedeError) {
+      logOpsServerError(supersedeError, {
+        module: "boq",
+        action: "issueBoqAction.supersede",
+        entityId: revisionDiff.previousId,
+      });
+    }
   }
 
   await supabase.from("audit_events").insert({
@@ -915,15 +1124,50 @@ export async function issueBoqAction(formData: FormData) {
     module_key: "boq",
     source_table: "boq_documents",
     source_id: target.id,
-    metadata: { title: target.title },
+    metadata: {
+      title: target.title,
+      ...(revisionDiff
+        ? {
+            supersedes_id: revisionDiff.previousId,
+            revision_summary: summarizeBoqRevisionDiff(revisionDiff.diff),
+            total_delta: revisionDiff.diff.totalDelta,
+            category_deltas: revisionDiff.diff.categoryDeltas,
+          }
+        : {}),
+    },
   });
 
   // Generate/sync the project budget from the priced schedule. Best-effort:
   // a sync failure shouldn't block the issue itself, but is recorded so it
   // can be retried/investigated (same non-fatal pattern used for
   // material-request cost entries).
-  await syncProjectBudgetFromBoq(target.id, profile.id).catch((syncError: unknown) =>
-    supabase.from("audit_events").insert({
+  await syncProjectBudgetFromBoq(target.id, profile.id).catch((syncError: unknown) => {
+    // A locked budget is a legitimate refusal, not a fault — record it, but
+    // don't page anyone (audit B1/B5).
+    if (syncError instanceof LockedBudgetError) {
+      return supabase.from("audit_events").insert({
+        actor_user_id: profile.id,
+        action: "boq.issued_budget_locked",
+        entity_type: "boq_document",
+        entity_id: target.id,
+        module_key: "boq",
+        source_table: "boq_documents",
+        source_id: target.id,
+        metadata: { budget_id: syncError.budgetId },
+      });
+    }
+
+    // Report as well as record: the audit row alone meant a failed sync was
+    // invisible until someone went looking (audit B4/S1).
+    logOpsServerError(syncError, {
+      module: "boq",
+      action: "issueBoqAction.syncProjectBudget",
+      actorUserId: profile.id,
+      entityType: "boq_document",
+      entityId: target.id,
+    });
+
+    return supabase.from("audit_events").insert({
       actor_user_id: profile.id,
       action: "boq.issued_budget_sync_failed",
       entity_type: "boq_document",
@@ -934,8 +1178,8 @@ export async function issueBoqAction(formData: FormData) {
       metadata: {
         error: syncError instanceof Error ? syncError.message : String(syncError),
       },
-    }),
-  );
+    });
+  });
 
   const recipients = await fanoutToOpsRoles(
     ["procurement_manager", "procurement", "finance_manager", "projects_manager"],
@@ -944,7 +1188,7 @@ export async function issueBoqAction(formData: FormData) {
   await Promise.all(
     recipients.map((recipient) =>
       queueOpsNotification({
-        actionHref: `/ops/boq?boq=${target.id}`,
+        actionHref: `/ops/material-schedule?boq=${target.id}`,
         body: `${profile.full_name} issued "${target.title}". The project budget has been generated from it.`,
         idempotencyKey: `boq-issued:${target.id}:${recipient.id}`,
         moduleKey: "boq",
@@ -956,9 +1200,9 @@ export async function issueBoqAction(formData: FormData) {
     ),
   );
 
-  revalidatePath("/ops/boq");
+  revalidatePath("/ops/material-schedule");
   revalidatePath("/ops/project-budgets");
-  redirect(`/ops/boq?updated=issued#boq-${target.id}`);
+  redirect(`/ops/material-schedule?updated=issued#boq-${target.id}`);
 }
 
 export async function importBoqLineItemsCsvAction(formData: FormData) {
@@ -967,16 +1211,16 @@ export async function importBoqLineItemsCsvAction(formData: FormData) {
   const boqId = field(formData, "boq_id");
 
   if (!UUID_PATTERN.test(boqId)) {
-    boqError("Select a Bill of Quantities before importing.");
+    boqError("Select a material schedule before importing.");
   }
 
   const target = await fetchBoqMutationTarget(boqId);
   if (!target) {
-    boqError("Bill of Quantities was not found.");
+    boqError("material schedule was not found.");
   }
   if (!canEditBoq(profile.role, target)) {
     boqError(
-      "Only the Quantity Surveyor, Projects Manager, and leadership can import lines while a Bill of Quantities is in draft.",
+      "Only the Quantity Surveyor, Projects Manager, and leadership can import lines while a material schedule is in draft.",
     );
   }
 
@@ -1160,6 +1404,6 @@ export async function importBoqLineItemsCsvAction(formData: FormData) {
     },
   });
 
-  revalidatePath("/ops/boq");
-  redirect(`/ops/boq?imported=${inserts.length}&skipped=${rowErrors.length}#boq-register`);
+  revalidatePath("/ops/material-schedule");
+  redirect(`/ops/material-schedule?imported=${inserts.length}&skipped=${rowErrors.length}#boq-register`);
 }

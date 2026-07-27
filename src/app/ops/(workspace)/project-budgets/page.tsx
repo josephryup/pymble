@@ -43,6 +43,11 @@ import {
   fetchPaginatedOpsProjectBudgets,
   type OpsProjectBudgetSummary,
 } from "@/lib/ops/finance";
+import {
+  fetchOpsScheduleComposition,
+  scheduleCompositionKey,
+  type OpsScheduleCompositionLine,
+} from "@/lib/ops/boq";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchOpsProjectPnl } from "@/lib/ops/project-pnl";
@@ -108,6 +113,54 @@ function projectBudgetNotice(params: OpsSearchParams) {
         tone: "success" as const,
       }
     : null;
+}
+
+/**
+ * Drill-down from a generated budget line to the material schedule lines that
+ * produced it (audit B2).
+ *
+ * The budget stays category-level on purpose — Finance wants a handful of lines,
+ * not two hundred — so traceability is a look-through rather than an explosion
+ * of the budget itself. Renders nothing for lines Finance entered by hand.
+ */
+function BudgetLineComposition({
+  currencyCode,
+  lines,
+}: {
+  currencyCode: string;
+  lines: OpsScheduleCompositionLine[];
+}) {
+  if (lines.length === 0) {
+    return null;
+  }
+
+  return (
+    <details className="mt-1">
+      <summary className="cursor-pointer text-xs font-semibold text-primary-blue">
+        {lines.length} schedule line{lines.length === 1 ? "" : "s"}
+      </summary>
+      <ul className="mt-1 space-y-1 border-l border-border pl-3">
+        {lines.map((line) => (
+          <li key={line.id} className="text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">{line.description}</span>{" "}
+            — {line.quantity.toLocaleString("en-ZM", { maximumFractionDigits: 2 })} {line.unit} @{" "}
+            {formatMoney(line.unitRate, currencyCode)} ={" "}
+            {formatMoney(line.plannedTotal, currencyCode)}
+            {line.requestedValue > 0 ? (
+              <span
+                className={
+                  line.requestedValue > line.plannedTotal ? "text-red-700" : "text-emerald-700"
+                }
+              >
+                {" "}
+                · {formatMoney(line.requestedValue, currencyCode)} requested
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 function formatMoney(value: number, currencyCode = "ZMW") {
@@ -216,6 +269,10 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
     fetchActiveSiteOptions(),
     fetchOpsProjectPnl(),
   ]);
+  // Which schedule lines compose each generated budget line (audit B2).
+  const scheduleComposition = await fetchOpsScheduleComposition(
+    [...new Set(budgetPage.items.map((budget) => budget.site?.id).filter((id): id is string => Boolean(id)))],
+  );
   const notice = projectBudgetNotice(params);
   const canCreate = canCreateOpsProjectBudget(auth.profile.role);
   const canManage = canManageOpsProjectBudget(auth.profile.role);
@@ -784,6 +841,16 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                                 </td>
                                 <td className="px-3 py-3 text-foreground/70">
                                   {line.description}
+                                  <BudgetLineComposition
+                                    currencyCode={budget.currency_code}
+                                    lines={
+                                      line.source === "boq" && budget.site
+                                        ? (scheduleComposition.get(
+                                            scheduleCompositionKey(budget.site.id, line.category),
+                                          ) ?? [])
+                                        : []
+                                    }
+                                  />
                                 </td>
                                 <td className="px-3 py-3 font-semibold text-foreground">
                                   {formatMoney(line.budgeted_amount, budget.currency_code)}
