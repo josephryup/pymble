@@ -285,6 +285,18 @@ describe("ops module visibility", () => {
     }
   });
 
+  it("gives the Operations Manager the material and project schedules", () => {
+    // project-schedule was already covered: OPS_ENGINEERING_CONTROL_ROLES builds
+    // on OPS_SITE_DELIVERY_ROLES, which includes operations_manager. Only the
+    // material-schedule navigation entry had to be added.
+    const navHrefs = visibleOpsModules("operations_manager").map((module) => module.href);
+
+    for (const href of ["/ops/material-schedule", "/ops/project-schedule"]) {
+      assert.equal(canAccessOpsHref("operations_manager", href), true, `${href} route`);
+      assert.ok(navHrefs.includes(href), `${href} should appear in OM navigation`);
+    }
+  });
+
   it("does not widen commercial access beyond the Operations Manager", () => {
     // Guards the inline role extension on the commercial module: it must not
     // leak to roles that were previously excluded.

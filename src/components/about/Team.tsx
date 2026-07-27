@@ -80,13 +80,6 @@ const teamMembers = [
         image: COMPANY_LOGO,
     },
     {
-        id: 11,
-        name: "Thandiwe Mulenga",
-        role: "Engineer",
-        credentials: "B.Eng. Civil and Environmental Engineering",
-        image: "/images/team/thandiwe.jpeg",
-    },
-    {
         id: 12,
         name: "Cassim Musolo",
         role: "HSE Officer",

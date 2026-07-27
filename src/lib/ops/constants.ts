@@ -453,7 +453,11 @@ export const OPS_MODULES: OpsModule[] = [
     group: "commercial",
     href: "/ops/material-schedule",
     id: "boq",
-    navigationRoles: [...OPS_COMMERCIAL_ROLES, ...OPS_PROCUREMENT_ROLES],
+    navigationRoles: [
+      ...OPS_COMMERCIAL_ROLES,
+      ...OPS_PROCUREMENT_ROLES,
+      "operations_manager",
+    ],
     phase: "Foundation",
     roles: OPS_OPERATIONAL_ROLES,
     status: "ready",
