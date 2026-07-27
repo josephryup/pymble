@@ -39,10 +39,10 @@ export const CONTACT = {
         secondary: "tel:+260974998463",
     },
     address: {
-        street: "Plot No. 1822 Azikiwe Road",
+        street: "31 Harry Mwangakumbula Rd, Woodlands",
         city: "Lusaka",
         country: "Zambia",
-        full: "Plot No. 1822 Azikiwe Road, Lusaka, Zambia",
+        full: "31 Harry Mwangakumbula Rd, Woodlands, Lusaka, Zambia",
     },
 } as const;
 

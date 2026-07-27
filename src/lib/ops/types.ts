@@ -83,6 +83,12 @@ export type OpsEmailDeliveryStatus = "sent" | "failed" | "skipped";
 export type OpsSupplierStatus = "active" | "on_hold" | "archived";
 export type OpsSupplierKind = "vendor" | "subcontractor" | "both";
 export type OpsCustomerStatus = "active" | "archived";
+export type OpsQuotationStatus =
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "declined"
+  | "expired";
 export type OpsSupplierPerformanceEventType =
   | "delivery"
   | "quality"

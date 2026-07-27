@@ -122,8 +122,7 @@ export type PymblePdfOrgSnapshot = {
 export const PYMBLE_ORG_FALLBACK: PymblePdfOrgSnapshot = {
   legal_name: "Pymble Construction Limited",
   trading_name: "Pymble Construction",
-  headquarters_address:
-    "Plot 5170, Great East Road, Lusaka, Zambia",
+  headquarters_address: "31 Harry Mwangakumbula Rd, Woodlands, Lusaka, Zambia",
   phone: "+260 211 000 000",
   email: "info@pymbleconstruction.com",
   website: "https://pymbleconstruction.com",

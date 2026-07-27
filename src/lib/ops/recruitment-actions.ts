@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { CONTACT } from "@/lib/constants";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
@@ -327,7 +328,7 @@ function offerLetterText(input: {
 
   return [
     `Pymble Construction Limited`,
-    `Plot No. 1822 Azikiwe Road, Lusaka, Zambia`,
+    CONTACT.address.full,
     ``,
     today,
     ``,

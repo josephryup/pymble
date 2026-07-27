@@ -83,7 +83,7 @@ insert into public.organization_profile (
   'info@pymbleconstruction.com',
   '+260 979 521 035',
   '+260 974 998 463',
-  'Plot No. 1822 Azikiwe Road',
+  '31 Harry Mwangakumbula Rd, Woodlands',
   'Lusaka',
   'Zambia',
   -15.4029868,

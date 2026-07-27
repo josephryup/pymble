@@ -209,6 +209,20 @@ const OPS_COMMERCIAL_ROLES: OpsUserRole[] = [
   "engineer",
 ];
 
+// Leadership + accounts + HR + procurement. Mirrors
+// `canViewOpsQuotations` in src/lib/ops/quotation-permissions.ts — note it
+// excludes admin_receptionist, so it is not OPS_HR_ROLES.
+const OPS_QUOTATION_ROLES: OpsUserRole[] = [
+  ...OPS_LEADERSHIP_ROLES,
+  "finance_manager",
+  "accountant",
+  "human_resource",
+  "hr",
+  "procurement_manager",
+  "procurement",
+  "procurement_assistant",
+];
+
 const OPS_HSE_ROLES: OpsUserRole[] = [
   ...OPS_SITE_DELIVERY_ROLES,
   "hse_officer",
@@ -444,6 +458,17 @@ export const OPS_MODULES: OpsModule[] = [
     roles: OPS_OPERATIONAL_ROLES,
     status: "ready",
     title: "Material Schedule",
+  },
+  {
+    description: "Prepare priced client quotations with VAT, track whether they were accepted, and export a branded PDF.",
+    group: "commercial",
+    href: "/ops/quotations",
+    id: "quotations",
+    navigationRoles: OPS_QUOTATION_ROLES,
+    phase: "Foundation",
+    roles: OPS_QUOTATION_ROLES,
+    status: "ready",
+    title: "Quotations",
   },
   {
     description: "Create client invoices, apply Value Added Tax details, track status, and prepare PDF outputs.",

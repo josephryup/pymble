@@ -18,6 +18,7 @@ import {
   ChartNoAxesCombined,
   ClipboardCheck,
   ClipboardList,
+  FileSignature,
   FileText,
   FolderOpen,
   Hammer,
@@ -98,6 +99,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   // Commercial
   "/ops/material-schedule": BarChart3,
   "/ops/invoices": ReceiptText,
+  "/ops/quotations": FileSignature,
   "/ops/customers": Users,
   "/ops/commercial": ChartNoAxesCombined,
 
