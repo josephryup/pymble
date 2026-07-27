@@ -100,6 +100,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   "/ops/material-schedule": BarChart3,
   "/ops/invoices": ReceiptText,
   "/ops/quotations": FileSignature,
+  "/ops/site-checklists": ClipboardCheck,
   "/ops/customers": Users,
   "/ops/commercial": ChartNoAxesCombined,
 

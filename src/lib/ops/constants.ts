@@ -618,6 +618,17 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Site Instructions and Quality Assurance / Quality Control",
   },
   {
+    description: "Run the company inspection checklist for each construction process: contractor and client verdicts, photo evidence on failures, hold points, and client sign-off on site.",
+    group: "engineering",
+    href: "/ops/site-checklists",
+    id: "site-checklists",
+    navigationRoles: OPS_ENGINEERING_CONTROL_ROLES,
+    phase: "Phase 6",
+    roles: OPS_ENGINEERING_CONTROL_ROLES,
+    status: "ready",
+    title: "Site Checklists",
+  },
+  {
     description: "Per-site task schedule with planned dates and assigned engineers. Engineers mark progress; the system computes site completion and flags overdue tasks.",
     group: "engineering",
     href: "/ops/project-schedule",

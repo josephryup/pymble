@@ -55,6 +55,18 @@ const ENGINEERING_VERIFY_ROLES = new Set<OpsUserRole>([
   "hse_officer",
 ]);
 
+/**
+ * Release an unmet hold point on a site checklist.
+ *
+ * Same set as other engineering decisions — Projects Manager, Operations
+ * Manager and leadership. Note engineering_manager is absent because that role
+ * is not in ENGINEERING_VIEW_ROLES either, so it cannot see the module at all;
+ * worth revisiting as a separate question rather than silently widening here.
+ */
+export function canReleaseOpsQaHoldPoint(role: OpsUserRole) {
+  return ENGINEERING_DECISION_ROLES.has(role);
+}
+
 export function canViewOpsEngineeringControls(role: OpsUserRole) {
   return ENGINEERING_VIEW_ROLES.has(role);
 }

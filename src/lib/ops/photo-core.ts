@@ -19,6 +19,23 @@ const uploadPhotoSchema = z.object({
   caption: z.string().trim().max(180).default(""),
   site_id: z.string().uuid("Select a Pymble site."),
   tag: z.enum(["progress", "delivery", "safety"]),
+  /**
+   * Set when the photo is evidence against a failed checklist item. Optional so
+   * ordinary site photos are unaffected, and routed through this core (rather
+   * than a second uploader) so checklist evidence inherits the R2 upload,
+   * idempotent client_id replay, and offline queueing already proven here.
+   */
+  qa_inspection_item_id: z
+    .string()
+    .trim()
+    .default("")
+    .transform((value) => (value.length > 0 ? value : null))
+    .refine(
+      (value) =>
+        value === null ||
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value),
+      { message: "Select a valid checklist item." },
+    ),
 });
 
 function field(formData: FormData, name: string) {
@@ -48,6 +65,7 @@ export async function uploadSitePhotoCore(
     caption: field(formData, "caption"),
     site_id: field(formData, "site_id"),
     tag: field(formData, "tag") || "progress",
+    qa_inspection_item_id: field(formData, "qa_inspection_item_id"),
   });
 
   if (!parsed.success) {
@@ -90,6 +108,7 @@ export async function uploadSitePhotoCore(
             client_id: clientId,
             mime_type: file.type,
             r2_key: key,
+            qa_inspection_item_id: parsed.data.qa_inspection_item_id,
             site_id: parsed.data.site_id,
             tag: parsed.data.tag,
             uploaded_by: profile.id,
@@ -103,6 +122,7 @@ export async function uploadSitePhotoCore(
         .insert({
           caption: parsed.data.caption,
           mime_type: file.type,
+          qa_inspection_item_id: parsed.data.qa_inspection_item_id,
           r2_key: key,
           site_id: parsed.data.site_id,
           tag: parsed.data.tag,
