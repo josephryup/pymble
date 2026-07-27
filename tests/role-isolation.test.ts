@@ -22,8 +22,10 @@ import type { OpsUserRole } from "@/lib/ops/types";
  *
  * Per the Pymble organogram (see docs/pymble-ops-workflow-design.md Part 17):
  *  - Managing Director, General Manager, Developer, Owner: executive view
- *  - Operations Manager: operations only — NO executive view, NO HR data,
- *    NO finance deep dives
+ *  - Operations Manager: operations, plus commercial, project budgets and
+ *    payment requests (added 2026-07-26 by request). Still NO executive view
+ *    and NO HR data, and no budget approval / lock authority — those stay with
+ *    Finance and leadership.
  *  - Engineering Manager: oversees engineers; sees engineering / site /
  *    commercial / HSE; does NOT see HR, payroll, executive
  *  - Department managers: their own department only

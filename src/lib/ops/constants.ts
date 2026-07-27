@@ -684,7 +684,12 @@ export const OPS_MODULES: OpsModule[] = [
     group: "finance",
     href: "/ops/project-budgets",
     id: "project-budgets",
-    navigationRoles: [...OPS_FINANCE_ROLES, "projects_manager", "quantity_surveyor"],
+    navigationRoles: [
+      ...OPS_FINANCE_ROLES,
+      "operations_manager",
+      "projects_manager",
+      "quantity_surveyor",
+    ],
     phase: "Phase 3",
     roles: OPS_FINANCE_BRIDGE_ROLES,
     status: "ready",
@@ -849,9 +854,12 @@ export const OPS_MODULES: OpsModule[] = [
     group: "commercial",
     href: "/ops/commercial",
     id: "commercial-maturity",
-    navigationRoles: OPS_COMMERCIAL_ROLES,
+    // Operations Manager is added here rather than to OPS_COMMERCIAL_ROLES so
+    // the material-schedule navigation (which shares that group) is unchanged.
+    // commercial-permissions.ts already grants OM view + create.
+    navigationRoles: [...OPS_COMMERCIAL_ROLES, "operations_manager"],
     phase: "Phase 6",
-    roles: OPS_COMMERCIAL_ROLES,
+    roles: [...OPS_COMMERCIAL_ROLES, "operations_manager"],
     status: "ready",
     title: "Interim Payment Certificates, Variations and Claims",
   },

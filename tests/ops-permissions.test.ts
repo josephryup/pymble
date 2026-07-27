@@ -271,6 +271,37 @@ describe("ops module visibility", () => {
     assert.equal(canAccessOpsHref("procurement_assistant", "/ops/commercial"), false);
   });
 
+  it("gives the Operations Manager commercial, project budgets, and payment requests", () => {
+    // Requested addition. Note these were partly true already: OM had route
+    // access to project budgets and payment requests via OPS_FINANCE_BRIDGE_ROLES
+    // and view rights via FINANCE_VIEW_ROLES, but project budgets was missing
+    // from the navigation and commercial was blocked outright even though
+    // commercial-permissions.ts already granted OM view + create.
+    const navHrefs = visibleOpsModules("operations_manager").map((module) => module.href);
+
+    for (const href of ["/ops/commercial", "/ops/project-budgets", "/ops/payment-requests"]) {
+      assert.equal(canAccessOpsHref("operations_manager", href), true, `${href} route`);
+      assert.ok(navHrefs.includes(href), `${href} should appear in OM navigation`);
+    }
+  });
+
+  it("does not widen commercial access beyond the Operations Manager", () => {
+    // Guards the inline role extension on the commercial module: it must not
+    // leak to roles that were previously excluded.
+    assert.equal(canAccessOpsHref("hse_officer", "/ops/commercial"), false);
+    assert.equal(canAccessOpsHref("human_resource", "/ops/commercial"), false);
+    assert.equal(canAccessOpsHref("procurement_assistant", "/ops/commercial"), false);
+    assert.equal(canAccessOpsHref("supervisor", "/ops/commercial"), false);
+    assert.equal(canAccessOpsHref("crew", "/ops/commercial"), false);
+  });
+
+  it("leaves the material schedule navigation unchanged by the commercial grant", () => {
+    // OPS_COMMERCIAL_ROLES is shared with the material-schedule nav, so the
+    // commercial grant was made inline to avoid a side effect there.
+    const engineeringInternNav = visibleOpsModules("engineering_intern").map((m) => m.href);
+    assert.ok(!engineeringInternNav.includes("/ops/commercial"));
+  });
+
   it("shows the executive dashboard only to leadership roles", () => {
     assert.equal(canAccessOpsHref("developer", "/ops/executive"), true);
     assert.equal(canAccessOpsHref("managing_director", "/ops/executive"), true);
