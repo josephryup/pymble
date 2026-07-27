@@ -50,6 +50,18 @@ export async function recordOpsAuditEvent(input: RecordOpsAuditEventInput) {
   });
 
   if (error) {
+    // 139 call sites wrap this in `.catch(() => null)` — correct, since a failed
+    // audit write must not fail the business write that triggered it. But that
+    // made every audit failure invisible (audit finding S1). Report before
+    // throwing so the swallow costs observability, not knowledge.
+    Sentry.captureException(error, {
+      tags: { module: input.moduleKey ?? "ops-audit", action: input.action },
+      extra: {
+        entity_id: input.entityId ?? undefined,
+        entity_type: input.entityType,
+        source_table: input.sourceTable ?? undefined,
+      },
+    });
     throw error;
   }
 }

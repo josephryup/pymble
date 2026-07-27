@@ -4,7 +4,14 @@ import { COMPANY, SITE_URL } from "@/lib/constants";
 import { fetchPublishedJobPostings, type OpsJobPosting } from "@/lib/ops/recruitment";
 import { CareersApplyForm } from "./CareersApplyForm";
 
-export const dynamic = "force-dynamic";
+/**
+ * Public careers page: no session, no search params — just published postings.
+ * ISR rather than force-dynamic (audit finding S2), so visitors are served from
+ * cache instead of hitting the database on every page view. Publishing and
+ * unpublishing already call `revalidatePath("/careers")`, so a new posting
+ * appears immediately; the window below is only a backstop.
+ */
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Careers | Join Pymble Construction in Zambia",

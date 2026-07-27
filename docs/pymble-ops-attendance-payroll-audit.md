@@ -116,24 +116,46 @@ name. The overview map's clock-point layer has already been removed.
 
 ## Part 3 — System-wide findings
 
-### S1 — 345 silently swallowed errors 🟠
+### S1 — 345 silently swallowed errors ✅ FIXED (at the root)
 `grep` finds 345 instances of `.catch(() => null)` / `.catch(() => {})` across
 `src`. For notification fanout this is correct — a failed push must not fail a
 business write. But the pattern is now applied uniformly, including to audit-event
 inserts, so a failed audit write is indistinguishable from a successful one.
 
-**Fix:** keep the swallow, add observability — route these through a helper that
-reports to Sentry (already installed) instead of discarding. One helper, mechanical
-call-site migration.
+**Fixed — and it did not need 345 edits.** 139 of those swallows wrap
+`recordOpsAuditEvent`, which threw on failure and had every caller discard the
+throw. Reporting to Sentry *inside* `recordOpsAuditEvent` before it throws fixes
+all 139 call sites in one function: the swallow stays (correct — a failed audit
+write must not fail the business write) but now costs observability, not
+knowledge.
 
-### S2 — 70 files opt out of caching 🟠
-70 files carry `force-dynamic`. Much of it is necessary (session-scoped ops pages),
-but it is applied as a default rather than a decision, so genuinely static or
-short-TTL-cacheable reads (dashboards, trend charts, org profile) re-query on every
-navigation. This is the most likely cause of perceived slowness in the workspace.
+New `swallowOpsError(context)` in [log.ts](../src/lib/ops/log.ts) is the
+replacement for a bare `.catch(() => null)` in new code. The attendance module has
+been migrated onto it, including four raw `audit_events` inserts that never
+checked their error at all.
 
-**Fix:** audit the list, and give the read-heavy analytics fetchers a short
-`revalidate` instead.
+**Remaining:** the other ~200 swallows are mostly notification fanout, where
+discarding is genuinely correct. Migrate opportunistically, not as a campaign.
+
+### S2 — 70 files opt out of caching ✅ AUDITED — I overstated this
+Breaking the 70 down: **29 API routes** (correct — they must not be cached),
+**41 ops pages** (correct — every one is session- and role-scoped, and caching
+them risks serving one user's data to another), and **1 public page**.
+
+So the real finding is one file, not seventy. My original framing — that
+dashboards and trend charts were needlessly re-querying — was wrong: they are
+per-user views that genuinely cannot be page-cached as written.
+
+**Fixed:** [careers/page.tsx](../src/app/careers/page.tsx) is public, session-free
+and search-param-free, and was hitting the database on every visitor. Now
+`revalidate = 300`; the recruitment actions already call
+`revalidatePath("/careers")` on publish/unpublish, so new postings still appear
+immediately and the window is only a backstop.
+
+**Still true, but a different job:** ops page loads would benefit from caching at
+the *data* layer (`unstable_cache` keyed by role and assigned sites) rather than
+the page layer. That is a design change, not a config flip — worth scoping
+separately if workspace latency is a live complaint.
 
 ### S3 — Four files over 2,000 lines 🟠
 `commercial-actions.ts` (3,730), `commercial/page.tsx` (3,027),
@@ -152,6 +174,36 @@ is a place where a schema change compiles clean and fails at runtime. The
 **Fix:** generate Supabase types and delete the casts module by module, highest-
 traffic first (payroll, attendance, GL).
 
+### S6 — The migration ledger is missing 50 entries 🟠 NEW
+`supabase_migrations.schema_migrations` on `zuezxgyhhrhklrhqsvvs` lists 63 rows;
+`supabase/migrations/` holds 111 files. Diffing by name, **50 local migrations
+are absent from the ledger** — including `pymble_ops_single_company`, which
+creates most of the core schema.
+
+I verified the schema itself is fine: every table and column those 50 create is
+present (the one exception, `supplier_quotes`, is absent because
+`pymble_ops_drop_supplier_quotes` intentionally dropped it). So they were applied
+by a route that did not record them — the SQL editor, or `execute_sql`.
+
+**Why it matters:** `supabase db push` from a fresh clone, or a CI job that
+provisions a branch database, would try to replay all 50. Most are guarded with
+`if not exists`, but not all are, and the ordering is not guaranteed to be
+reproducible.
+
+Two further wrinkles found while applying:
+- **Local filenames do not map to remote versions.** The ledger assigns its own
+  timestamp at apply time, so `pymble_ops_fix_partial_unique_onconflict` is file
+  `20260723090000` but version `20260629191918`. Never match the two by number.
+- **Four timestamp prefixes are duplicated across files** (`20260701090000`,
+  `20260725090000`, `20260726090000`, `20260730090000`), so replay order between
+  each pair is undefined. I hit this myself: the attendance migration was
+  originally written as `20260726090000`, colliding with the general-ledger
+  migration and sorting *before* five later ones. Renamed to `20260731090000`.
+
+**Fix:** backfill the ledger with the 50 missing names (insert the rows without
+running the SQL — `supabase migration repair --status applied <version>`), then
+de-duplicate the four colliding prefixes.
+
 ### S5 — Test suite is broad but action-thin 🟡
 327 tests across 49 files, and they are good tests — the statutory calculator and
 the attendance calculator are both properly covered. But coverage concentrates on
@@ -167,8 +219,16 @@ than the happy paths.
 ## Status
 
 **Shipped:** everything in Part 1, plus A1 (maker/checker), A4 (bulk roster
-capture), A5 (offline throttling + the 4xx dead-letter bug it uncovered), and A6
-(Excel export). Verified: `tsc` clean, ESLint clean, 339/339 tests pass.
+capture), A5 (offline throttling + the 4xx dead-letter bug it uncovered), A6
+(Excel export), S1 (audit-failure observability at the root), and S2 (audited —
+one real file, now on ISR). Verified: `tsc` clean, ESLint clean, 339/339 tests
+pass.
+
+**Migration applied.** The
+[fixed-daily-rate migration](../supabase/migrations/20260731090000_pymble_attendance_fixed_daily_rate.sql)
+ran against `zuezxgyhhrhklrhqsvvs` on 2026-07-26 and is recorded as version
+`20260727070900`. Verified after the fact: `workers.daily_rate` now defaults to
+`60` and the column comments are in place. Applying it surfaced **S6** below.
 
 **Waiting on a pay decision — these are yours to call, not a refactor:**
 
@@ -179,7 +239,10 @@ capture), A5 (offline throttling + the 4xx dead-letter bug it uncovered), and A6
 
 Both should be settled before the next payroll run.
 
-**Remaining engineering work, in order:** S1 + S2 (error observability and the
-caching audit — cheap, system-wide), then A7 (rename `gps_label` → `site_note`
-and drop the coordinate columns, migration applied *before* the code), then
-S3–S5 as capacity allows.
+**Remaining engineering work, in order:** S6 (repair the migration ledger — it
+silently breaks any fresh clone or CI branch database), then A7 (rename
+`gps_label` → `site_note`,
+drop the coordinate columns — needs the migration applied *before* the code
+deploys, or done additively in two releases), then S3 (the four 2,000-line
+files), S4 (generated Supabase types to kill the 184 casts), S5 (a mocked-client
+harness so server-action guards are testable).

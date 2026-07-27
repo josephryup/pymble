@@ -6,6 +6,8 @@ import {
   DEFAULT_WORKER_DAILY_RATE,
   hoursBetweenClockTimes,
 } from "@/lib/ops/attendance-earnings";
+import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { swallowOpsError } from "@/lib/ops/log";
 import { canRecordAttendance } from "@/lib/ops/permissions";
 import { hasActiveOpsSiteAssignment, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 
@@ -274,14 +276,11 @@ export async function createAttendanceRecordCore(
     };
   }
 
-  await supabase.from("audit_events").insert({
-    actor_user_id: profile.id,
+  await recordOpsAuditEvent({
     action: "attendance.created",
-    entity_type: "attendance_record",
-    entity_id: data.id,
-    module_key: "attendance",
-    source_table: "attendance_records",
-    source_id: data.id,
+    actorUserId: profile.id,
+    entityId: data.id,
+    entityType: "attendance_record",
     metadata: {
       worker_id: parsed.data.worker_id,
       site_id: parsed.data.site_id,
@@ -290,7 +289,11 @@ export async function createAttendanceRecordCore(
       overtime_hours: earnings.overtimeHours,
       overtime_amount: earnings.overtimeAmount,
     },
-  });
+    moduleKey: "attendance",
+    sourceId: data.id,
+    sourceTable: "attendance_records",
+    summary: `${profile.full_name} recorded attendance`,
+  }).catch(swallowOpsError({ module: "attendance", action: "createAttendanceRecordCore" }));
 
   return { ok: true, id: data.id };
 }

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
+import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import { swallowOpsError } from "@/lib/ops/log";
 import {
   ATTENDANCE_DAY_CLASH_MESSAGE,
   ATTENDANCE_TIME_PATTERN,
@@ -230,7 +232,9 @@ export async function createBulkAttendanceAction(formData: FormData) {
 
   const insertedRows = (inserted ?? []) as Array<{ id: string }>;
   if (insertedRows.length > 0) {
-    await supabase.from("audit_events").insert(
+    // Batched deliberately: one insert for the whole roster rather than N round
+    // trips. The error is reported but never fails the roster save.
+    const { error: auditError } = await supabase.from("audit_events").insert(
       insertedRows.map((record, index) => ({
         actor_user_id: profile.id,
         action: "attendance.created",
@@ -250,6 +254,14 @@ export async function createBulkAttendanceAction(formData: FormData) {
         },
       })),
     );
+
+    if (auditError) {
+      swallowOpsError({
+        module: "attendance",
+        action: "createBulkAttendanceAction.audit",
+        extra: { records: insertedRows.length },
+      })(auditError);
+    }
   }
 
   revalidatePath("/ops");
@@ -312,15 +324,16 @@ export async function approveAttendanceAction(formData: FormData) {
     attendanceError(error.message);
   }
 
-  await supabase.from("audit_events").insert({
-    actor_user_id: profile.id,
+  await recordOpsAuditEvent({
     action: "attendance.approved",
-    entity_type: "attendance_record",
-    entity_id: parsed.data.id,
-    module_key: "attendance",
-    source_table: "attendance_records",
-    source_id: parsed.data.id,
-  });
+    actorUserId: profile.id,
+    entityId: parsed.data.id,
+    entityType: "attendance_record",
+    moduleKey: "attendance",
+    sourceId: parsed.data.id,
+    sourceTable: "attendance_records",
+    summary: `${profile.full_name} approved an attendance record`,
+  }).catch(swallowOpsError({ module: "attendance", action: "approveAttendanceAction" }));
 
   // Phase M backfill: notify HR + finance so approved attendance feeds straight
   // into the payroll cycle without a manual ping.
@@ -339,7 +352,13 @@ export async function approveAttendanceAction(formData: FormData) {
         sourceId: parsed.data.id,
         sourceTable: "attendance_records",
         title: "Attendance approved",
-      }).catch(() => null),
+      }).catch(
+        swallowOpsError({
+          module: "attendance",
+          action: "approveAttendanceAction.notify",
+          entityId: parsed.data.id,
+        }),
+      ),
     ),
   );
 
@@ -474,15 +493,21 @@ export async function updateAttendanceAction(formData: FormData) {
     attendanceError(error.message);
   }
 
-  await supabase.from("audit_events").insert({
-    actor_user_id: profile.id,
+  await recordOpsAuditEvent({
     action: "attendance.updated",
-    entity_type: "attendance_record",
-    entity_id: id,
-    module_key: "attendance",
-    source_table: "attendance_records",
-    source_id: id,
-  });
+    actorUserId: profile.id,
+    entityId: id,
+    entityType: "attendance_record",
+    metadata: {
+      amount_earned: earnings.totalAmount,
+      hours_worked: hoursWorked,
+      overtime_hours: earnings.overtimeHours,
+    },
+    moduleKey: "attendance",
+    sourceId: id,
+    sourceTable: "attendance_records",
+    summary: `${profile.full_name} corrected an attendance record`,
+  }).catch(swallowOpsError({ module: "attendance", action: "updateAttendanceAction" }));
 
   revalidatePath("/ops/attendance");
   redirect("/ops/attendance?updated=record");
@@ -538,16 +563,17 @@ export async function cancelAttendanceAction(formData: FormData) {
     attendanceError(error.message);
   }
 
-  await supabase.from("audit_events").insert({
-    actor_user_id: profile.id,
+  await recordOpsAuditEvent({
     action: "attendance.cancelled",
-    entity_type: "attendance_record",
-    entity_id: parsed.data.id,
-    module_key: "attendance",
-    source_table: "attendance_records",
-    source_id: parsed.data.id,
-    metadata: parsed.data.reason ? { reason: parsed.data.reason } : null,
-  });
+    actorUserId: profile.id,
+    entityId: parsed.data.id,
+    entityType: "attendance_record",
+    metadata: parsed.data.reason ? { reason: parsed.data.reason } : undefined,
+    moduleKey: "attendance",
+    sourceId: parsed.data.id,
+    sourceTable: "attendance_records",
+    summary: `${profile.full_name} cancelled an attendance record`,
+  }).catch(swallowOpsError({ module: "attendance", action: "cancelAttendanceAction" }));
 
   revalidatePath("/ops/attendance");
   redirect("/ops/attendance?updated=cancelled");

@@ -57,6 +57,26 @@ export function logOpsServerError(error: unknown, context: OpsLogContext = {}) {
 }
 
 /**
+ * Catch handler for side effects that must never fail their caller —
+ * notifications, audit writes, cache warms.
+ *
+ * Prefer this to a bare `.catch(() => null)`: the failure is still swallowed,
+ * but it reaches Sentry with context instead of vanishing (audit finding S1).
+ *
+ * ```ts
+ * await queueOpsNotification({ ... }).catch(
+ *   swallowOpsError({ module: "attendance", action: "notifyApproval" }),
+ * );
+ * ```
+ */
+export function swallowOpsError(context: OpsLogContext = {}) {
+  return (error: unknown) => {
+    logOpsServerError(error, context);
+    return null;
+  };
+}
+
+/**
  * Wrap an async server-side function so any throw is logged with context
  * before being re-thrown. Use sparingly — usually it's cleaner to handle
  * the catch inline in the action.
