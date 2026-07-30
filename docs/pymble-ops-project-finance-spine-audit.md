@@ -484,8 +484,47 @@ misattribute real money:
 | `ancillary_works` | Undefined scope | K31,060 |
 | `general` | The BOQ default — meaningless | — |
 
-These need a QS/Finance decision, not an engineering one. Until then they are
-visible rather than wrong.
+All five were resolved immediately afterwards — see Phase 1b.
+
+### Phase 1b — flagged codes resolved 2026-07-30
+The **budget-line and schedule-line descriptions** (not visible in the category
+strings) resolved every one, so no guessing was needed after all and the `MIG.*`
+codes are now **retired: 0 remain**.
+
+| Category | Description revealed | Resolution |
+| --- | --- | --- |
+| `phase_1_3no_culverts` | "Core Materials" ×2 | Real phase node **`P1` — Phase 1: 3no Culverts** with a `32.20 Culverts and stormwater drainage` leaf. The system's first genuine phase node. |
+| `external_and_internal_finishes` | **"Ceiling and Painting"** | `95.20 Finishes — composite`: spans 09.30 + 09.40, amount never split |
+| `genset_house` | **"Construction"** | `95.10 Building works — composite` |
+| `ancillary_works` | **"Soakaway and bollards installation"** | `95.90 Ancillary and sundry works`: spans 22.40 + external works |
+| `general` (site 001) | 3× "Steel", 500 pcs | `03.20 Reinforcement steel` — unambiguous |
+| `general` (site 0002) | "Test" | `95.00 Uncategorised — to be broken down` |
+
+The three composite cases got a **real "Composite and Packaged Works" division**
+(`95.00/95.10/95.20/95.90`) rather than keeping migration artefacts. The honest
+problem was never that the scope was unknowable — it was that the library
+lacked codes at the level the estimate was actually prepared at. Division-level
+composite codes are a legitimate construct (Sage 300 CRE and Viewpoint both
+carry them); these are not `system_locked` and their names say "not broken
+down", so they read as a prompt to improve the estimate rather than a permanent
+home.
+
+Verified after remediation: `MIG.*` codes **0**, coverage still **23/23 · 4/4 ·
+20/20**, total budgeted unchanged at **K6,532,768.28** — no money moved.
+
+> ### ⚠ Open item for Finance: a suspected K2.8m double-count
+> Site 0001 carries **two budget lines with the same description ("Core
+> Materials"), the same category, and the same amount — K2,814,048.14 each**,
+> K5,628,096.28 together. That is very likely one line entered twice, which
+> would overstate the site's budget by **K2.8m**. Both were migrated faithfully;
+> deleting a budget line on suspicion is not a migration's decision.
+>
+> A sixth leak-detector check, **"Suspected duplicate budget lines"**, now
+> surfaces this and any future pair (same budget + category + description +
+> non-zero amount). It values only the *redundant copies*, and is deliberately
+> excluded from the headline leak figure: overstating a budget is the opposite
+> problem to spend that never reached one, and adding them together would
+> describe neither.
 
 Two things worth knowing about the migrated state:
 - Every migrated leaf sits under a single **`GEN` — General / unphased** node
@@ -496,6 +535,77 @@ Two things worth knowing about the migrated state:
   `issued` schedule in the system is archived and has zero lines, so no site
   has a live issued schedule yet. The D14 fix therefore lands *before* the
   behaviour it protects is ever exercised.
+
+### Phase 2 — shipped 2026-07-30
+The cost lifecycle and budget availability control. Two migrations applied.
+
+| Item | Outcome |
+| --- | --- |
+| **Lifecycle** | `project_cost_entries.lifecycle_state` — `reserved → committed → accrued → actual → paid`, plus `released`. The coarse `status` every existing report reads is now **derived** from the station, never set independently, and a **database check constraint** (`project_cost_entries_lifecycle_status_agree`) makes an inconsistent row impossible to write. |
+| **Relief** | `releaseSupersededCostStations` marks superseded stations `released`, called **in the same operation as the advance**, never as a follow-up. Approval reserves; close advances to `actual` and relieves the reservation; cancel releases everything. |
+| **Availability control** | New `budget-availability.ts`: funds-available per cost code and the graduated band from §7.2 — pass / warn / require reason / escalate. `allowed` is typed as the literal `true`: **nothing is ever blocked**, and the type makes that survive future edits. |
+| **Approver visibility (D8)** | The check now runs **before** the reservation is written, and the position renders on the request card: *"Only ZMW 4,200 would remain — 96% of this cost code's budget used."* Previously it was computed after the approval and only decorated a notification. |
+| **Escalation** | Reason-required band notifies Finance; escalate band notifies **MD + GM** with the figures inline, via the existing role fanout. |
+| **Thresholds** | `budget_control_settings` (90 / 100 / 110 by default) — management numbers, not constants. |
+
+Two decisions worth recording:
+
+- **The backfill marked existing `committed` entries as `reserved`, not `committed`.** Under the new model a commitment means a purchase order exists, and no PO links to any of them — so they are genuinely reservations. Calling them commitments would have overstated how firm K145,415 is.
+- **The unique indexes needed a second migration to fix.** Keying on `(material_request_id, lifecycle_state)` with the goods/transport split as a partial predicate meant a request holding both a reservation *and* a commitment could not release both — relief would have failed exactly when it mattered. Corrected to `(material_request_id, cost_type, lifecycle_state)` with `released` rows excluded from uniqueness entirely.
+
+**What the availability engine says about the live data** — and it is the whole
+audit in one table:
+
+| Cost code | Budgeted | Consumed | Band |
+| --- | --- | --- | --- |
+| 0001 · Transport | 0 | 140 | **escalate (unfunded)** |
+| 0002 · Unplanned | 0 | 700 | **escalate (unfunded)** |
+| 0003 · Unplanned | 0 | 133,850 | **escalate (unfunded)** |
+| 0004 · Transport | 0 | 2,630 | **escalate (unfunded)** |
+| 0004 · Unplanned | 0 | 43,590 | **escalate (unfunded)** |
+| 0001 · Culverts | 5,628,096 | 0 | ok |
+| 0004 · 11 trade codes | 904,672 | 0 | ok |
+
+**Every kwacha of actual spend sits on Unplanned or Transport. Every kwacha of
+budget sits on planned trades with zero spend against them.** The budget
+describes work nobody has bought, and the spend is entirely work nobody
+planned. That is the 87% leak restated as a control problem, and it is now
+visible on a screen instead of in a document.
+
+### Phase 3 — foundation shipped 2026-07-30 (behaviour NOT yet enabled)
+The partial-procurement data model and decision logic. Two migrations applied.
+**Deliberately schema + pure logic only:** auto-issuing a purchase order is an
+outward-facing commitment to a supplier (audit R2), so no existing code path
+changes behaviour until the §8.8 guard rails ship with it.
+
+| Item | Outcome |
+| --- | --- |
+| **Per-item decision** | `material_request_items.procurement_decision` (`pending`/`ordered`/`declined`/`deferred`) + `decision_reason`, `decided_at/by`, `decline_count`. A **database check constraint requires a reason** for declined/deferred — information loss here is what makes site teams re-raise duplicate requests. |
+| **The missing link** | `purchase_order_items.material_request_item_id` — the join between requisition and commitment, and deliberately the *only* place ordered quantity and value live. |
+| **`partially_ordered`** | New MR status between `approved` and `ordered`, in its own migration (`ALTER TYPE ADD VALUE` cannot share a transaction — the same split the BOQ pricing flow needed). |
+| **Inheritance provenance (R1)** | `purchase_orders.approval_source` (`direct`/`inherited`/`delta`), `inherited_from_approval_id`, `procured_by`, `procured_at`. A check constraint stops a PO claiming inherited authority without naming its source. |
+| **Derivation** | New `procurement-fulfilment.ts`, pure: `deriveRequestFulfilment` computes ordered/outstanding quantity and value from live PO lines, plus the three amounts the business asked for — **committed, retained reservation, released**. Cancelled POs contribute nothing, which is what makes cancel-and-reissue safe with no compensating bookkeeping. |
+| **Inheritance guards (§8.5)** | `decideApprovalInheritance` evaluates all four value/traceability guards, plus the supplier-change void and segregation of duties. 19 tests. |
+
+Three design points worth recording:
+
+- **Partial by quantity, not just by item.** 8 t ordered against 12 t requested
+  is the common real case; a per-item tick box cannot express it. Because
+  quantities derive from PO lines, this comes free.
+- **The three amounts always reconcile.** A test asserts
+  `orderedValue + releasedValue + retainedReservation = approvedValue`. That
+  identity is what makes "the amount to reduce" well-defined: declined money
+  returns to the budget, deferred money stays reserved for round two.
+- **Segregation of duties is reported separately from the value decision.**
+  It is not a question about the PO's value — it is about who may press the
+  button, so the caller must *refuse* rather than downgrade to a delta
+  approval. Folding it into `approvalSource` would have quietly allowed the
+  approver to procure their own approval.
+
+Still to do for Phase 3: the procure-action UI and server action, PO auto-create
+as **draft** (issue stays a separate deliberate act), MR status transitions,
+lifecycle advance to `committed` on PO issue with relief of the reservation,
+RFQ repositioned ahead of pricing, and all of Phase 3b.
 
 ---
 

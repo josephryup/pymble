@@ -52,6 +52,8 @@ export type LeakBudgetRow = {
 export type LeakBudgetLineRow = {
   budget_id: string;
   budgeted_amount: number | string | null;
+  description?: string | null;
+  category?: string | null;
 };
 
 export type LeakSiteRow = {
@@ -66,7 +68,8 @@ export type OpsFinanceLeakCheck = {
     | "arrived_without_cost_entry"
     | "cost_entries_without_budget_line"
     | "spend_without_funded_budget"
-    | "multiple_open_budgets";
+    | "multiple_open_budgets"
+    | "duplicate_budget_lines";
   label: string;
   /** What a non-zero count means, in Finance's language. */
   description: string;
@@ -226,6 +229,42 @@ export function buildOpsFinanceLeakReport(input: {
     .filter(([, budgets]) => budgets.length > 1)
     .map(([siteId]) => siteId);
 
+  // ── Check 6: suspected duplicate budget lines ────────────────────────────
+  // Same budget, same category, same description, same non-zero amount. A
+  // budget cannot be trusted while it may be double-counting itself, and a
+  // real pair already exists (site 0001: "Core Materials" twice at
+  // K2,814,048.14 each). Only Finance can decide whether a pair is a genuine
+  // split or a mis-key, so this reports rather than merges.
+  const budgetSiteById = new Map(input.budgets.map((budget) => [budget.id, budget.site_id]));
+  const duplicateGroups = new Map<string, { count: number; amount: number; label: string }>();
+  for (const line of input.budgetLines) {
+    const amount = toNumber(line.budgeted_amount);
+    if (amount <= 0) continue;
+    const description = (line.description ?? "").trim().toLowerCase();
+    const category = (line.category ?? "").trim().toLowerCase();
+    if (description.length === 0) continue;
+    const key = `${line.budget_id}|${category}|${description}|${amount}`;
+    const current = duplicateGroups.get(key);
+    if (current) {
+      current.count += 1;
+    } else {
+      duplicateGroups.set(key, {
+        count: 1,
+        amount,
+        label: `${siteLabel(budgetSiteById.get(line.budget_id) ?? null)} — ${
+          line.description ?? ""
+        }`,
+      });
+    }
+  }
+  const duplicatePairs = Array.from(duplicateGroups.values()).filter(
+    (group) => group.count > 1,
+  );
+  // The exposure is the redundant copies, not the whole group.
+  const duplicateAmount = roundMoney(
+    duplicatePairs.reduce((sum, group) => sum + group.amount * (group.count - 1), 0),
+  );
+
   const checks: OpsFinanceLeakCheck[] = [
     {
       key: "requests_without_budget_line",
@@ -277,10 +316,23 @@ export function buildOpsFinanceLeakReport(input: {
       samples: ambiguousSites.slice(0, 3).map((siteId) => siteLabel(siteId)),
       href: "/ops/project-budgets",
     },
+    {
+      key: "duplicate_budget_lines",
+      label: "Suspected duplicate budget lines",
+      description:
+        "Same budget, category, description and amount more than once — the budget may be double-counting itself. Value shown is the redundant copies.",
+      count: duplicatePairs.length,
+      amount: duplicateAmount,
+      samples: duplicatePairs.slice(0, 3).map((group) => group.label),
+      href: "/ops/project-budgets",
+    },
   ];
 
   // Checks 1 and 2 can share requests; take the larger rather than summing
-  // overlap. Checks 3 and 4 are disjoint from them by construction.
+  // overlap. Checks 3 and 4 are disjoint from them by construction. Check 6
+  // is deliberately excluded: a duplicate line overstates the budget, which is
+  // the opposite problem to spend that never reached one, and adding them
+  // together would describe neither.
   const requestSideAmount = Math.max(unlinkedAmount, arrivedUntrackedAmount);
   const leakAmount = roundMoney(requestSideAmount + orphanEntriesAmount + unfundedAmount);
 
@@ -305,7 +357,9 @@ export async function fetchOpsFinanceLeakReport(): Promise<OpsFinanceLeakReport>
         .from("project_cost_entries")
         .select("material_request_id, budget_line_id, status, amount, site_id"),
       supabase.from("project_budgets").select("id, site_id, status"),
-      supabase.from("project_budget_lines").select("budget_id, budgeted_amount"),
+      supabase
+        .from("project_budget_lines")
+        .select("budget_id, budgeted_amount, description, category"),
       supabase.from("sites").select("id, code, name"),
     ]);
 

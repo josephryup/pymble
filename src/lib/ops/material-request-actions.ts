@@ -25,11 +25,18 @@ import {
 import { trackOpsEvent } from "@/lib/ops/analytics";
 import { parseCsvRows, readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
 import { collectOpsLineItems } from "@/lib/ops/line-items";
+import {
+  checkOpsBudgetAvailability,
+  type BudgetControlDecision,
+} from "@/lib/ops/budget-availability";
 import { buildScheduleLineMatcher } from "@/lib/ops/material-schedule-match";
 import { resolveMaterialRequestBudgetLine } from "@/lib/ops/material-requests";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
-import { upsertMaterialRequestCostEntries } from "@/lib/ops/project-cost-entries";
+import {
+  releaseSupersededCostStations,
+  upsertMaterialRequestCostEntries,
+} from "@/lib/ops/project-cost-entries";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsMaterialRequestScope,
@@ -38,6 +45,49 @@ import type {
 } from "@/lib/ops/types";
 
 const MATERIAL_REQUEST_ROUTE = "/ops/material-requests";
+
+/**
+ * The WBS leaf a request's goods spend belongs to, for the availability check.
+ *
+ * Prefers the cost code the request's own items carry (set from their linked
+ * schedule line), because that is the most specific truth available. Falls
+ * back to the budget line's code. A request spanning several codes checks
+ * against the one carrying the most items — a deliberate simplification for
+ * the *check* only: the ledger still books per budget line, and Phase 3 moves
+ * recognition to per-item so this fallback disappears.
+ */
+async function resolveMaterialRequestCostCode(request: {
+  id: string;
+  budget_line_id: string | null;
+}): Promise<string | null> {
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: itemRows } = await supabase
+    .from("material_request_items")
+    .select("cost_code_id")
+    .eq("request_id", request.id)
+    .not("cost_code_id", "is", null);
+
+  const counts = new Map<string, number>();
+  for (const row of (itemRows ?? []) as Array<{ cost_code_id: string }>) {
+    counts.set(row.cost_code_id, (counts.get(row.cost_code_id) ?? 0) + 1);
+  }
+  const dominant = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (dominant) {
+    return dominant;
+  }
+
+  if (request.budget_line_id) {
+    const { data: line } = await supabase
+      .from("project_budget_lines")
+      .select("cost_code_id")
+      .eq("id", request.budget_line_id)
+      .maybeSingle<{ cost_code_id: string | null }>();
+    return line?.cost_code_id ?? null;
+  }
+
+  return null;
+}
 
 const MR_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -812,6 +862,68 @@ export async function submitMaterialRequestForApprovalAction(formData: FormData)
     return { budgetLineId: null, transportBudgetLineId: null };
   });
 
+  // Stamp each item's WBS leaf from the schedule line it fulfils, so the
+  // availability check at approval and the ledger both have a cost code to
+  // work with. Items with no schedule link fall back to the budget line's
+  // code, which for ad-hoc requests is the unplanned/contingency leaf — that
+  // is what makes off-schedule spend visible rather than untracked.
+  await (async () => {
+    const linkedItems = items.filter((item) => item.boq_line_item_id);
+    if (linkedItems.length > 0) {
+      const { data: scheduleLines } = await supabase
+        .from("boq_line_items")
+        .select("id, cost_code_id")
+        .in(
+          "id",
+          linkedItems.map((item) => item.boq_line_item_id as string),
+        );
+      const codeByLine = new Map(
+        ((scheduleLines ?? []) as Array<{ id: string; cost_code_id: string | null }>).map(
+          (row) => [row.id, row.cost_code_id],
+        ),
+      );
+      for (const item of linkedItems) {
+        const costCodeId = codeByLine.get(item.boq_line_item_id as string);
+        if (costCodeId) {
+          await supabase
+            .from("material_request_items")
+            .update({ cost_code_id: costCodeId })
+            .eq("id", item.id)
+            .is("cost_code_id", null);
+        }
+      }
+    }
+
+    if (budgetLines.budgetLineId) {
+      const { data: line } = await supabase
+        .from("project_budget_lines")
+        .select("cost_code_id")
+        .eq("id", budgetLines.budgetLineId)
+        .maybeSingle<{ cost_code_id: string | null }>();
+      if (line?.cost_code_id) {
+        await supabase
+          .from("material_request_items")
+          .update({ cost_code_id: line.cost_code_id })
+          .eq("request_id", request.id)
+          .is("cost_code_id", null);
+      }
+    }
+  })().catch((costCodeError: unknown) =>
+    recordOpsAuditEvent({
+      action: "material_request.cost_code_resolution_failed",
+      actorUserId: profile.id,
+      entityId: request.id,
+      entityType: "material_request",
+      metadata: {
+        error: costCodeError instanceof Error ? costCodeError.message : String(costCodeError),
+      },
+      moduleKey: "material_requests",
+      sourceId: request.id,
+      sourceTable: "material_requests",
+      summary: `Could not resolve cost codes for ${request.request_number}`,
+    }).catch(() => null),
+  );
+
   const { data: updatedRequest, error: requestUpdateError } = await supabase
     .from("material_requests")
     .update({
@@ -1203,11 +1315,12 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
     materialRequestError(stateError.message);
   }
 
-  // Final approval is the moment the spend counts against the project
-  // budget (committed), mirroring Payment Requests' approve → committed
-  // transition. For IT requests that moment is the MD's approval, not
-  // Finance's. Best-effort: a ledger hiccup never blocks the approval.
-  let overBudget = false;
+  // Final approval RESERVES the spend against the project budget: funds are
+  // held, but nothing is ordered yet, so it is not a firm commitment until a
+  // purchase order exists (audit §4.2 / §8.4). For IT requests that moment is
+  // the MD's approval, not Finance's. Best-effort: a ledger hiccup never
+  // blocks the approval.
+  let budgetDecision: BudgetControlDecision | null = null;
   if (isFinalApproval) {
     const { data: itemRows } = await supabase
       .from("material_request_items")
@@ -1218,10 +1331,22 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
       0,
     );
 
+    // Read the budget position BEFORE writing the reservation, so the band
+    // reflects the decision being taken rather than its own consequence
+    // (audit D8 — the old check ran after the approval was already written).
+    const costCodeId = await resolveMaterialRequestCostCode(request).catch(() => null);
+    if (costCodeId) {
+      budgetDecision = await checkOpsBudgetAvailability({
+        costCodeId,
+        amount: goodsAmount,
+      }).catch(() => null);
+    }
+
     await upsertMaterialRequestCostEntries({
       actorUserId: profile.id,
       goodsAmount,
       request,
+      lifecycleState: "reserved",
       status: "committed",
     }).catch((costEntryError: unknown) =>
       recordOpsAuditEvent({
@@ -1239,25 +1364,11 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
         summary: `Could not record the budget ledger entry for ${request.request_number}`,
       }).catch(() => null),
     );
-
-    if (request.budget_line_id) {
-      const { data: budgetLine } = await supabase
-        .from("project_budget_lines")
-        .select("budgeted_amount")
-        .eq("id", request.budget_line_id)
-        .maybeSingle<{ budgeted_amount: number | string }>();
-      const { data: committedRows } = await supabase
-        .from("project_cost_entries")
-        .select("amount")
-        .eq("budget_line_id", request.budget_line_id)
-        .in("status", ["committed", "posted"]);
-      const committedTotal = ((committedRows ?? []) as Array<{ amount: number | string }>).reduce(
-        (sum, row) => sum + normalizeMoney(row.amount),
-        0,
-      );
-      overBudget = committedTotal > normalizeMoney(budgetLine?.budgeted_amount);
-    }
   }
+
+  const overBudget = budgetDecision
+    ? budgetDecision.band === "reason_required" || budgetDecision.band === "escalate"
+    : false;
 
   const stageLabel = request.status === "md_review" ? "MD" : "Finance";
   await recordOpsAuditEvent({
@@ -1274,6 +1385,9 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
       decision: decisionParsed.data.decision,
       comment: decisionParsed.data.comment,
       over_budget: overBudget,
+      budget_band: budgetDecision?.band ?? null,
+      budget_available_after: budgetDecision?.projected.available ?? null,
+      budget_used_percent_after: budgetDecision?.projected.usedPercent ?? null,
       stage: stageLabel,
     },
     moduleKey: "material_requests",
@@ -1351,6 +1465,34 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
           title: decisionIsApprove
             ? `Order: ${request.request_number}`
             : `Re-price: ${request.request_number}`,
+        }).catch(() => null),
+      ),
+    );
+  }
+
+  // Business decision §7.2: over-budget spend is never blocked, but it is
+  // never silent either. The escalate band goes to the MD and GM; the
+  // reason-required band goes to Finance. Both carry the actual figures so the
+  // recipient can act without opening anything.
+  if (budgetDecision && budgetDecision.band !== "ok" && budgetDecision.band !== "warn") {
+    const escalating = budgetDecision.escalateToLeadership;
+    const recipients = await fanoutToOpsRoles(
+      escalating ? ["managing_director", "general_manager"] : ["finance_manager"],
+      { excludeUserIds: [profile.id] },
+    );
+    await Promise.all(
+      recipients.map((recipient) =>
+        queueOpsNotification({
+          actionHref: `${MATERIAL_REQUEST_ROUTE}#mr-${request.id}`,
+          body: `${request.request_number} (${request.title}) was approved by ${profile.full_name}. ${budgetDecision.message}`,
+          idempotencyKey: `material-request-budget-${budgetDecision.band}:${request.id}:${recipient.id}`,
+          moduleKey: "material_requests",
+          recipientId: recipient.id,
+          sourceId: request.id,
+          sourceTable: "material_requests",
+          title: escalating
+            ? `Over budget — escalated: ${request.request_number}`
+            : `Over budget: ${request.request_number}`,
         }).catch(() => null),
       ),
     );
@@ -1535,10 +1677,15 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
       0,
     );
 
+    // Closing means the goods arrived and the request is done, so the cost is
+    // real: advance to `actual`, which relieves the reservation taken at
+    // approval in the same call (audit §8.4). Phase 3 inserts `committed` (PO
+    // issued) and `accrued` (goods received) between the two.
     await upsertMaterialRequestCostEntries({
       actorUserId: profile.id,
       goodsAmount,
       request,
+      lifecycleState: "actual",
       status: "posted",
     }).catch((costEntryError: unknown) =>
       recordOpsAuditEvent({
@@ -1846,28 +1993,16 @@ export async function cancelMaterialRequestAction(formData: FormData) {
     materialRequestError(error.message);
   }
 
-  // If Finance had already committed a budget-ledger entry (request was
-  // "approved" before being cancelled), release it — best-effort, only
-  // meaningful when a prior entry exists (upsert is a no-op cost-wise
-  // otherwise since goodsAmount would just write a cancelled zero-ish row,
-  // which is harmless but we only bother when there's something to release).
-  if (request.budget_line_id) {
-    const { data: itemRows } = await supabase
-      .from("material_request_items")
-      .select("actual_total")
-      .eq("request_id", request.id);
-    const goodsAmount = ((itemRows ?? []) as Array<{ actual_total: number | string }>).reduce(
-      (sum, row) => sum + normalizeMoney(row.actual_total),
-      0,
-    );
-
-    await upsertMaterialRequestCostEntries({
-      actorUserId: profile.id,
-      goodsAmount,
-      request,
-      status: "cancelled",
-    }).catch(() => null);
-  }
+  // Cancelling releases every station the request was holding, so the funds
+  // return to the budget. Terminal states must always relieve — a cancelled
+  // request that keeps holding a reservation is the "permanent ghost" failure
+  // the audit flagged as R4, and it makes a healthy budget look exhausted.
+  // Unconditional: relief must not depend on budget_line_id being set, since a
+  // request can hold a transport reservation without a goods budget line.
+  await releaseSupersededCostStations({
+    materialRequestId: request.id,
+    keepState: "released",
+  }).catch(() => null);
 
   await recordOpsAuditEvent({
     action: "material_request.cancelled",

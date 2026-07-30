@@ -12,6 +12,7 @@ import {
   Plus,
   Save,
   Send,
+  Target,
   Trash2,
   Truck,
   XCircle,
@@ -67,6 +68,10 @@ import {
   type OpsMaterialRequestSummary,
 } from "@/lib/ops/material-requests";
 import { fetchOpsBoqDocuments } from "@/lib/ops/boq";
+import {
+  fetchOpsRequestBudgetPositions,
+  type OpsRequestBudgetPosition,
+} from "@/lib/ops/budget-availability";
 import { fetchProjectBudgetLineLabels } from "@/lib/ops/finance";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { formatOpsUserName } from "@/lib/ops/roles";
@@ -419,6 +424,45 @@ function MaterialRequestItems({
         </tbody>
       </table>
     </OpsTableShell>
+  );
+}
+
+function BudgetPositionNotice({
+  position,
+}: {
+  position: OpsRequestBudgetPosition | undefined;
+}) {
+  if (!position) {
+    return null;
+  }
+
+  const { band, message, projected } = position.decision;
+  const tone =
+    band === "escalate"
+      ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+      : band === "reason_required"
+        ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+        : band === "warn"
+          ? "border-amber-200 bg-amber-50/60 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200"
+          : "border-border bg-muted/30 text-muted-foreground";
+
+  return (
+    <div className={`mt-3 rounded-md border px-3 py-2 text-xs leading-5 ${tone}`}>
+      <p className="font-bold">
+        {band === "ok" ? (
+          <Target className="mr-1.5 inline size-3.5" aria-hidden="true" />
+        ) : (
+          <AlertTriangle className="mr-1.5 inline size-3.5" aria-hidden="true" />
+        )}
+        Budget position — {position.costCodeLabel}
+      </p>
+      <p className="mt-0.5">{message}</p>
+      <p className="mt-1 opacity-80">
+        Budgeted {formatZmw(projected.budgeted)} · already committed{" "}
+        {formatZmw(projected.consumed)}
+        {projected.usedPercent !== null ? ` · ${projected.usedPercent}% used` : ""}
+      </p>
+    </div>
   );
 }
 
@@ -854,6 +898,11 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
   const budgetLineLabelById = await fetchProjectBudgetLineLabels(
     requests.flatMap((request) => [request.budget_line_id, request.transport_budget_line_id]),
   );
+  // Funds available per request, so approvers see the position at the moment
+  // of decision instead of learning about an overspend afterwards (audit D8).
+  const budgetPositions = await fetchOpsRequestBudgetPositions(
+    requests.map((request) => request.id),
+  ).catch(() => new Map<string, OpsRequestBudgetPosition>());
   const canCreate = canCreateOpsMaterialRequest(auth.profile.role);
   // Which requisition types this user may raise. Site scope needs at least one
   // active site; general and IT requests don't, so an empty site register must
@@ -1358,6 +1407,11 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       ) : null}
                     </div>
                   ) : null}
+
+                  {/* Funds available on the cost code, shown BEFORE the
+                      approval decision rather than after it (audit D8). Spend
+                      is never blocked — see business decision §7.2. */}
+                  <BudgetPositionNotice position={budgetPositions.get(request.id)} />
 
                   <div className="mt-4">
                     <OpsChainTracker steps={buildMaterialRequestChainSteps(request)} />

@@ -235,6 +235,54 @@ describe("buildOpsFinanceLeakReport", () => {
     assert.equal(found.amount, null);
   });
 
+  it("flags suspected duplicate budget lines and values only the redundant copies", () => {
+    const report = build({
+      budgets: [{ id: "bud-1", site_id: SITE.id, status: "draft" }],
+      budgetLines: [
+        {
+          budget_id: "bud-1",
+          budgeted_amount: 2814048.14,
+          description: "Core Materials",
+          category: "phase_1_3no_culverts",
+        },
+        {
+          budget_id: "bud-1",
+          budgeted_amount: 2814048.14,
+          description: "Core Materials",
+          category: "phase_1_3no_culverts",
+        },
+      ],
+    });
+
+    const found = check(report, "duplicate_budget_lines");
+    assert.equal(found.count, 1);
+    // One redundant copy, not the K5.6m pair total.
+    assert.equal(found.amount, 2814048.14);
+    // Overstatement is not unreconciled spend — it stays out of the headline.
+    assert.equal(report.leakAmount, 0);
+    assert.equal(report.clean, false);
+  });
+
+  it("does not flag same-amount lines that differ in description or budget", () => {
+    const report = build({
+      budgets: [
+        { id: "bud-1", site_id: SITE.id, status: "draft" },
+        { id: "bud-2", site_id: SITE.id, status: "locked" },
+      ],
+      budgetLines: [
+        { budget_id: "bud-1", budgeted_amount: 500, description: "Cement", category: "c" },
+        { budget_id: "bud-1", budgeted_amount: 500, description: "Rebar", category: "c" },
+        // Same description and amount, but a different budget — not a dupe.
+        { budget_id: "bud-2", budgeted_amount: 500, description: "Cement", category: "c" },
+        // Blank description carries no evidence either way — skipped.
+        { budget_id: "bud-1", budgeted_amount: 900, description: "", category: "c" },
+        { budget_id: "bud-1", budgeted_amount: 900, description: "", category: "c" },
+      ],
+    });
+
+    assert.equal(check(report, "duplicate_budget_lines").count, 0);
+  });
+
   it("takes the larger of the overlapping request-side amounts in the total", () => {
     // One closed request missing both its budget line AND its cost entry:
     // it appears in checks 1 and 2, but the total must count it once.
