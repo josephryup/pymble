@@ -439,6 +439,66 @@ per site is the natural trigger: *"K240,000 of off-schedule material on site
 
 ---
 
+## 4b. Implementation log
+
+### Phase 0 — shipped 2026-07-30
+All six items, verified against live data.
+
+| Item | Outcome |
+| --- | --- |
+| **D14** | `syncProjectBudgetFromBoq` now recomputes from **every live issued schedule** on the site (issued, not superseded/archived/deleted), so phases coexist. Resync also fires when an issued schedule is archived or restored. Aggregation extracted pure (`aggregateBoqBudgetTotals`) and tested. |
+| **D2** | `source = 'boq'` filter added to both category lookups in `resolveMaterialRequestBudgetLine`. |
+| **D7** | Partial unique index `project_budgets_one_active_per_site`; activation refuses with an instruction rather than a constraint error; both resolvers now prefer **active over draft** — which also fixed a latent bug where a newer draft could steal resolution from the live budget. |
+| **D1** | New `material-schedule-match.ts`: three conservative tiers (explicit reference → exact name → single-candidate containment, unit-aware). An unresolvable explicit reference links nothing rather than guessing. Wired into the bulk importer; "Schedule Line" added to the download template. |
+| **Leak detector** | New `finance-leaks.ts` + panel on `/ops/finance`. Five checks, pure classification core, tested including no-double-counting. |
+| **D6** | Backfilled: 7 closed requests → posted cost entries (K33,495, estimate-basis rows labelled); 4 orphaned transport entries linked. Untracked-closed and orphaned-entry counts both **0**. |
+
+Post-Phase-0 leak-detector reading: requests with no budget line **5**, delivered
+with no cost entry **0**, cost entries with no budget line **0**, sites with two
+open budgets **1** (site 0004 — left for Finance, it is their data call).
+
+### Phase 1 — shipped 2026-07-30
+The cost-code spine, live. Three migrations, all applied.
+
+| Item | Outcome |
+| --- | --- |
+| **Schema** | `cost_code_library` (54 codes) + `project_cost_codes` (per-site WBS). Two levels enforced by a check constraint, not convention: a phase carries no library code, a leaf **must** carry one — which is what stops the taxonomy drifting back to free text. RLS: broad read, service-role writes. |
+| **Document links** | Nullable `cost_code_id` on all seven costed documents. `restrict` on budget lines and cost entries (money must never silently detach), `set null` elsewhere. Plus `project_budget_lines.boq_id` (the D14 companion — makes phase ownership explicit) and `boq_documents.phase_cost_code_id` (phase as an FK, not a convention in `title`). |
+| **Library seed** | 49 standard trade codes across 13 divisions, **every one mapped to a postable COGS account** (5010–5090). That mapping *is* the GL bridge. Seeded codes are `system_locked` — deactivatable, not deletable. |
+| **Category migration** | 10 of the 15 free-text categories mapped cleanly to standard codes. The other 5 got `MIG.*` codes flagged `division = 'Migrated — needs review'` rather than being force-fitted — see below. |
+| **Permissions** | `cost-code-permissions.ts`: library = Finance Manager + MD only (deliberately **excludes** GM and Operations Manager — they own delivery, not the ledger); project WBS = QS + Projects Manager; requesting a new code = anyone who spends; reading = everyone. |
+| **Read layer** | `cost-codes.ts` with `rollUpCostCodeTree` — phase totals are *always* the sum of their leaves, never a separately-stored figure that can drift. Orphaned leaves surface at the root rather than being dropped. |
+
+Coverage after backfill: budget lines **23/23**, schedule lines **4/4**, cost
+entries **20/20** carry a cost code. Site 0004's 12 codes sum to exactly
+K904,672, reconciling to its budget.
+
+**Five categories deliberately not mapped**, because guessing would silently
+misattribute real money:
+
+| Category | Why it resists mapping | Money involved |
+| --- | --- | --- |
+| `phase_1_3no_culverts` | It is a *phase*, not a trade | **K5,628,096** |
+| `external_and_internal_finishes` | Spans plastering, tiling, painting, ceilings | K150,760 |
+| `genset_house` | A *structure* spanning several trades | K59,709 |
+| `ancillary_works` | Undefined scope | K31,060 |
+| `general` | The BOQ default — meaningless | — |
+
+These need a QS/Finance decision, not an engineering one. Until then they are
+visible rather than wrong.
+
+Two things worth knowing about the migrated state:
+- Every migrated leaf sits under a single **`GEN` — General / unphased** node
+  per site. Existing budget lines predate `boq_id`, so there is genuinely no
+  evidence of which phase any belongs to. A truthful placeholder, not a guess;
+  the QS re-parents as real phases are defined.
+- `project_budget_lines.boq_id` backfilled **0 rows** — correctly. The only
+  `issued` schedule in the system is archived and has zero lines, so no site
+  has a live issued schedule yet. The D14 fix therefore lands *before* the
+  behaviour it protects is ever exercised.
+
+---
+
 ## 5. Recommended sequencing
 
 Grouped so each phase is independently valuable and leaves the system in a
