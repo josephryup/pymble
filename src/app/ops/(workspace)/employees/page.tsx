@@ -1279,6 +1279,13 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               NAPSA Security No.
               <input className={OPS_INPUT_CLASS} maxLength={32} name="napsa_number" />
             </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              TPIN
+              <input className={OPS_INPUT_CLASS} maxLength={32} name="tpin" />
+              <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                ZRA Taxpayer Identification Number. Appears on the employee&apos;s payslip.
+              </span>
+            </label>
             <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
               Notes
               <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="notes" />
@@ -2270,6 +2277,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                   <HrMetric label="Emergency phone" value={employee.emergency_contact_phone || "Not recorded"} />
                   <HrMetric label="NRC No." value={employee.nrc_number || "Not recorded"} />
                   <HrMetric label="NAPSA Security No." value={employee.napsa_number || "Not recorded"} />
+                  <HrMetric label="TPIN" value={employee.tpin || "Not recorded"} />
                 </dl>
 
                 {canUpdateStatus ? (
@@ -2357,6 +2365,15 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                           defaultValue={employee.napsa_number}
                           maxLength={32}
                           name="napsa_number"
+                        />
+                      </label>
+                      <label className={OPS_LABEL_CLASS}>
+                        TPIN
+                        <input
+                          className={OPS_INPUT_CLASS}
+                          defaultValue={employee.tpin}
+                          maxLength={32}
+                          name="tpin"
                         />
                       </label>
                       <label className={OPS_LABEL_CLASS}>

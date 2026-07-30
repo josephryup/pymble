@@ -202,6 +202,7 @@ export type OpsEmployeeSummary = {
   nrc_number: string;
   /** NAPSA Security number shown on the staff payslip. */
   napsa_number: string;
+  tpin: string;
   onboarding_items: OpsEmployeeOnboardingItemSummary[];
   phone: string;
   site: OpsHrSiteSummary | null;
@@ -907,6 +908,7 @@ export async function fetchPaginatedOpsEmployees(
         "emergency_contact_phone",
         "nrc_number",
         "napsa_number",
+        "tpin",
         "notes",
         "created_at",
         "updated_at",
@@ -1292,6 +1294,7 @@ export async function fetchMyOpsEmployeeSelfServiceProfile(): Promise<OpsEmploye
         "emergency_contact_phone",
         "nrc_number",
         "napsa_number",
+        "tpin",
         "notes",
         "created_at",
         "updated_at",

@@ -7,6 +7,8 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { logOpsServerError, swallowOpsError } from "@/lib/ops/log";
+import { queueOpsNotification } from "@/lib/ops/notifications";
 import { canManageOpsStaffPayroll } from "@/lib/ops/staff-payroll";
 import { computeStaffPayslip } from "@/lib/ops/statutory/calculator";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
@@ -69,6 +71,7 @@ type EmployeeForPayroll = {
   department: string;
   nrc_number: string;
   napsa_number: string;
+  tpin: string;
   bank_name: string;
   bank_branch: string;
   bank_account_number: string;
@@ -142,6 +145,7 @@ export async function createStaffPayrollRunAction(formData: FormData) {
         "department",
         "nrc_number",
         "napsa_number",
+        "tpin",
         "bank_name",
         "bank_branch",
         "bank_account_number",
@@ -289,6 +293,8 @@ export async function createStaffPayrollRunAction(formData: FormData) {
       department: employee.department ?? "",
       nrc_number: employee.nrc_number ?? "",
       napsa_number: employee.napsa_number ?? "",
+      // Snapshot, not a join: the payslip keeps the TPIN it was issued with.
+      tpin: employee.tpin ?? "",
       bank_name: employee.bank_name ?? "",
       bank_branch: employee.bank_branch ?? "",
       bank_account_number: employee.bank_account_number ?? "",
@@ -461,8 +467,99 @@ export async function approveStaffPayrollRunAction(formData: FormData) {
     eventKey: "approved",
   });
 
+  await notifyStaffOfReleasedPayslips(parsed.data.id, profile.full_name);
+
   revalidatePath(STAFF_PAYROLL_ROUTE);
+  revalidatePath("/ops/profile");
   redirect(`${STAFF_PAYROLL_ROUTE}?updated=approved`);
+}
+
+/**
+ * Tell each employee in the run that their own payslip is available.
+ *
+ * One notification per employee, addressed to their own user account and
+ * deep-linked to their payslip list. Nothing about anyone else's pay is in the
+ * title, body or link — the amount is deliberately omitted, because a
+ * notification preview can appear on a lock screen.
+ *
+ * Employees with no linked login (employees.user_id is null) simply get no
+ * notification; the count is recorded on the audit event so HR can see who is
+ * missing an account rather than it failing silently.
+ */
+async function notifyStaffOfReleasedPayslips(runId: string, actorName: string) {
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data, error } = await supabase
+    .from("staff_payroll_items")
+    .select(
+      "id, employee_id, employee:employees!staff_payroll_items_employee_id_fkey(user_id)",
+    )
+    .eq("staff_payroll_run_id", runId);
+
+  if (error) {
+    logOpsServerError(error, {
+      module: "staff_payroll",
+      action: "notifyStaffOfReleasedPayslips",
+      entityId: runId,
+    });
+    return;
+  }
+
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    employee_id: string;
+    employee: { user_id: string | null } | Array<{ user_id: string | null }> | null;
+  }>;
+
+  let notified = 0;
+  let withoutLogin = 0;
+
+  await Promise.all(
+    rows.map(async (row) => {
+      const employee = Array.isArray(row.employee) ? row.employee[0] : row.employee;
+      const userId = employee?.user_id ?? null;
+      if (!userId) {
+        withoutLogin += 1;
+        return;
+      }
+
+      notified += 1;
+      await queueOpsNotification({
+        actionHref: "/ops/profile#my-payslips",
+        body: `Your payslip has been approved and is ready to download. Approved by ${actorName}.`,
+        // Keyed per payslip so re-approving cannot spam anyone.
+        idempotencyKey: `staff-payslip-released:${row.id}`,
+        moduleKey: "staff_payroll",
+        recipientId: userId,
+        sourceId: row.id,
+        sourceTable: "staff_payroll_items",
+        title: "Your payslip is ready",
+      }).catch(
+        swallowOpsError({
+          module: "staff_payroll",
+          action: "notifyStaffOfReleasedPayslips",
+          entityId: row.id,
+        }),
+      );
+    }),
+  );
+
+  await recordOpsAuditEvent({
+    action: "staff_payroll_run.payslips_released",
+    entityId: runId,
+    entityType: "staff_payroll_run",
+    metadata: {
+      payslips: rows.length,
+      notified,
+      employees_without_login: withoutLogin,
+    },
+    moduleKey: "staff_payroll",
+    sourceId: runId,
+    sourceTable: "staff_payroll_runs",
+    summary: `${notified} of ${rows.length} employees notified that their payslip is available`,
+  }).catch(
+    swallowOpsError({ module: "staff_payroll", action: "notifyStaffOfReleasedPayslips.audit" }),
+  );
 }
 
 /** Mark an approved run as paid. */

@@ -135,6 +135,7 @@ const createEmployeeSchema = z.object({
   // Payslip identity fields (PCL convention). Both shown on the staff payslip.
   nrc_number: z.string().trim().max(32).default(""),
   napsa_number: z.string().trim().max(32).default(""),
+  tpin: z.string().trim().max(32).default(""),
 });
 
 const updateEmployeeSchema = createEmployeeSchema.extend({
@@ -585,6 +586,7 @@ export async function createEmployeeAction(formData: FormData) {
     user_id: field(formData, "user_id"),
     nrc_number: field(formData, "nrc_number"),
     napsa_number: field(formData, "napsa_number"),
+    tpin: field(formData, "tpin"),
   });
 
   if (!parsed.success) {
@@ -615,6 +617,7 @@ export async function createEmployeeAction(formData: FormData) {
       user_id: normalizeOptionalUuid(parsed.data.user_id),
       nrc_number: parsed.data.nrc_number,
       napsa_number: parsed.data.napsa_number,
+      tpin: parsed.data.tpin,
     })
     .select("id, employee_number")
     .single<{ employee_number: string; id: string }>();
@@ -668,6 +671,7 @@ export async function updateEmployeeAction(formData: FormData) {
     user_id: field(formData, "user_id"),
     nrc_number: field(formData, "nrc_number"),
     napsa_number: field(formData, "napsa_number"),
+    tpin: field(formData, "tpin"),
   });
 
   if (!parsed.success) {
@@ -697,6 +701,7 @@ export async function updateEmployeeAction(formData: FormData) {
       user_id: normalizeOptionalUuid(parsed.data.user_id),
       nrc_number: parsed.data.nrc_number,
       napsa_number: parsed.data.napsa_number,
+      tpin: parsed.data.tpin,
     })
     .eq("id", parsed.data.employee_id);
 

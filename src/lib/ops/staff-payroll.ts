@@ -293,6 +293,17 @@ export type OpsStaffPayslipYtd = {
  * an empty list if the user has no linked employee record. No role check —
  * callers always get only their own data.
  */
+/**
+ * Run statuses an employee may see their own payslip for — every value of
+ * ops_payroll_status except 'draft'. Approval is the release gate: before it,
+ * the numbers are not final and must not reach the employee.
+ */
+export const SELF_SERVICE_RUN_STATUSES = new Set([
+  "approved",
+  "disbursing",
+  "completed",
+]);
+
 export async function fetchMyStaffPayslips(): Promise<
   Array<{
     id: string;
@@ -336,6 +347,7 @@ export async function fetchMyStaffPayslips(): Promise<
             period_label: string;
             period_start: string;
             period_end: string;
+            status: string;
             archived_at: string | null;
             cancelled_at: string | null;
           }
@@ -343,6 +355,7 @@ export async function fetchMyStaffPayslips(): Promise<
             period_label: string;
             period_start: string;
             period_end: string;
+            status: string;
             archived_at: string | null;
             cancelled_at: string | null;
           }>
@@ -352,6 +365,10 @@ export async function fetchMyStaffPayslips(): Promise<
     .map((row) => {
       const run = normalizeRelation(row.payroll_run);
       if (!run || run.archived_at || run.cancelled_at) return null;
+      // Only released runs. `status` was already being selected and then
+      // dropped, so a draft run's payslip was listed and downloadable before
+      // anyone approved it — figures that can still change.
+      if (!SELF_SERVICE_RUN_STATUSES.has(run.status)) return null;
       return {
         id: row.id,
         period_label: run.period_label,

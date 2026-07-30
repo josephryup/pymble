@@ -5,7 +5,11 @@ import { logOpsServerError } from "@/lib/ops/log";
 import { fetchOpsOrganizationProfile } from "@/lib/ops/organization";
 import { StaffPayslipPdf } from "@/lib/ops/pdf/StaffPayslipPdf";
 import { renderPdfDocument, pdfResponseHeaders } from "@/lib/ops/pdf/render";
-import { canViewOpsStaffPayroll, fetchOpsStaffPayslipYtd } from "@/lib/ops/staff-payroll";
+import {
+  canViewOpsStaffPayroll,
+  fetchOpsStaffPayslipYtd,
+  SELF_SERVICE_RUN_STATUSES,
+} from "@/lib/ops/staff-payroll";
 import { resolveZambianTaxYear } from "@/lib/ops/statutory/rates";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
@@ -36,6 +40,7 @@ type RawItem = {
   department: string;
   nrc_number: string;
   napsa_number: string;
+  tpin: string;
   basic_pay: number | string;
   housing_allowance: number | string;
   other_allowances: number | string;
@@ -56,12 +61,14 @@ type RawItem = {
         period_label: string;
         period_start: string;
         period_end: string;
+        status: string;
       }
     | Array<{
         id: string;
         period_label: string;
         period_start: string;
         period_end: string;
+        status: string;
       }>
     | null;
   employee:
@@ -100,6 +107,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
             "department",
             "nrc_number",
             "napsa_number",
+            "tpin",
             "basic_pay",
             "housing_allowance",
             "other_allowances",
@@ -114,7 +122,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
             "net_pay",
             "tax_year",
             "statutory_citation",
-            "payroll_run:staff_payroll_runs!staff_payroll_items_staff_payroll_run_id_fkey(id, period_label, period_start, period_end)",
+            "payroll_run:staff_payroll_runs!staff_payroll_items_staff_payroll_run_id_fkey(id, period_label, period_start, period_end, status)",
             "employee:employees!staff_payroll_items_employee_id_fkey(user_id)",
           ].join(", "),
         )
@@ -147,6 +155,17 @@ export async function GET(_request: Request, { params }: RouteContext) {
     if (!isBackOffice && !isOwner) {
       return NextResponse.json(
         { error: "Your role cannot download this payslip." },
+        { status: 403 },
+      );
+    }
+
+    // Self-service is gated on release as well as ownership. Gating only the
+    // list on /ops/profile would be security by obscurity — the item id is
+    // guessable-adjacent, so the download itself has to enforce it. Back office
+    // still needs draft access to check a run before approving it.
+    if (isOwner && !isBackOffice && !SELF_SERVICE_RUN_STATUSES.has(String(run.status))) {
+      return NextResponse.json(
+        { error: "This payslip has not been approved for release yet." },
         { status: 403 },
       );
     }
@@ -203,6 +222,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
           department: raw.department,
           nrc_number: raw.nrc_number,
           napsa_number: raw.napsa_number,
+          tpin: raw.tpin,
           basic_pay: num(raw.basic_pay),
           housing_allowance: num(raw.housing_allowance),
           other_allowances: num(raw.other_allowances),

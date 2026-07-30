@@ -58,6 +58,7 @@ export type StaffPayslipPdfProps = {
     department: string;
     nrc_number: string;
     napsa_number: string;
+    tpin: string;
     basic_pay: number;
     housing_allowance: number;
     other_allowances: number;
@@ -135,6 +136,7 @@ export function StaffPayslipPdf({
             <Field label="Job title" value={item.job_title || "—"} />
             <Field label="Department" value={item.department || "—"} />
             <Field label="NAPSA security No." value={item.napsa_number || "—"} />
+            <Field label="TPIN" value={item.tpin || "—"} />
           </Column>
           <Column>
             <SectionTitle>Period</SectionTitle>
