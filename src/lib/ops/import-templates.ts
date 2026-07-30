@@ -56,6 +56,9 @@ export const OPS_IMPORT_TEMPLATES: Record<OpsImportTemplateKind, OpsImportTempla
       { header: "Supplier", required: false, example: "Lafarge" },
       { header: "Specification", required: false, example: "50kg bags" },
       { header: "Notes", required: false, example: "For block work" },
+      // Names the planned schedule line the row draws from; rows are also
+      // auto-matched by item name when this is blank (audit D1).
+      { header: "Schedule Line", required: false, example: "Cement 42.5N" },
     ],
   },
   requisitions: {

@@ -154,10 +154,11 @@ function materialRequestNotice(params: OpsSearchParams) {
   if (firstParam(params.updated) === "items_imported") {
     const imported = firstParam(params.imported) ?? "0";
     const skipped = firstParam(params.skipped) ?? "0";
+    const linked = firstParam(params.linked) ?? "0";
     return {
       message: `Imported ${imported} item${imported === "1" ? "" : "s"}${
-        skipped !== "0" ? ` (${skipped} row${skipped === "1" ? "" : "s"} skipped)` : ""
-      }.`,
+        linked !== "0" ? `, ${linked} linked to the material schedule` : ""
+      }${skipped !== "0" ? ` (${skipped} row${skipped === "1" ? "" : "s"} skipped)` : ""}.`,
       tone: "success" as const,
     };
   }
@@ -509,8 +510,9 @@ function ImportMaterialItemsForm({ requestId }: { requestId: string }) {
         <input name="request_id" type="hidden" value={requestId} />
         <p className="text-xs leading-5 text-muted-foreground">
           Upload a needs list. Recognised columns: item / description, unit, quantity, estimate,
-          and supplier (code or name — unmatched names are kept as a typed supplier). The first
-          row must be the header.
+          supplier (code or name — unmatched names are kept as a typed supplier), and schedule
+          line (matched against the site&apos;s issued material schedule; items matching a
+          schedule line by name are linked automatically). The first row must be the header.
         </p>
         <OpsImportTemplateLinks kind="material-requests" />
         <label className={OPS_LABEL_CLASS}>

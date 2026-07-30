@@ -25,6 +25,7 @@ import {
 import { trackOpsEvent } from "@/lib/ops/analytics";
 import { parseCsvRows, readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
 import { collectOpsLineItems } from "@/lib/ops/line-items";
+import { buildScheduleLineMatcher } from "@/lib/ops/material-schedule-match";
 import { resolveMaterialRequestBudgetLine } from "@/lib/ops/material-requests";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
@@ -414,6 +415,15 @@ const MR_IMPORT_HEADER_ALIASES: Record<string, string> = {
   spec: "specification",
   note: "notes",
   notes: "notes",
+  // Optional link to the planned material schedule (audit D1): the cell
+  // names the schedule line the row draws from.
+  schedule: "schedule_ref",
+  "schedule line": "schedule_ref",
+  "schedule ref": "schedule_ref",
+  "material schedule": "schedule_ref",
+  boq: "schedule_ref",
+  "boq line": "schedule_ref",
+  "boq ref": "schedule_ref",
 };
 
 const mrImportRowSchema = z.object({
@@ -481,6 +491,7 @@ export async function importMaterialRequestItemsAction(formData: FormData) {
   const supplierIndex = columnIndex("supplier");
   const specIndex = columnIndex("specification");
   const notesIndex = columnIndex("notes");
+  const scheduleRefIndex = columnIndex("schedule_ref");
 
   if (itemIndex === -1 || quantityIndex === -1) {
     materialRequestError(
@@ -526,10 +537,43 @@ export async function importMaterialRequestItemsAction(formData: FormData) {
     }
   }
 
+  // Match imported rows to the site's issued material schedule (audit D1) so
+  // bulk-entered items keep the planned↔actual link instead of all arriving
+  // as orphans. Conservative: an unmatched row simply imports unlinked, same
+  // as before.
+  let matchScheduleLine: ReturnType<typeof buildScheduleLineMatcher> | null = null;
+  if (request.scope === "site" && request.site_id) {
+    const { data: liveDocs, error: liveDocError } = await supabase
+      .from("boq_documents")
+      .select("id")
+      .eq("site_id", request.site_id)
+      .eq("status", "issued")
+      .is("superseded_at", null)
+      .is("archived_at", null)
+      .is("deleted_at", null);
+    if (liveDocError) {
+      materialRequestError(liveDocError.message);
+    }
+    const liveDocIds = ((liveDocs ?? []) as Array<{ id: string }>).map((doc) => doc.id);
+    if (liveDocIds.length > 0) {
+      const { data: scheduleLines, error: scheduleLineError } = await supabase
+        .from("boq_line_items")
+        .select("id, description, unit")
+        .in("boq_id", liveDocIds);
+      if (scheduleLineError) {
+        materialRequestError(scheduleLineError.message);
+      }
+      matchScheduleLine = buildScheduleLineMatcher(
+        (scheduleLines ?? []) as Array<{ id: string; description: string; unit: string }>,
+      );
+    }
+  }
+
   const startLine = await nextMaterialRequestLineNumber(request.id);
   const inserts: Array<Record<string, unknown>> = [];
   const rowErrors: string[] = [];
   let unmatchedSuppliers = 0;
+  let linkedToSchedule = 0;
 
   dataRows.forEach((row, index) => {
     const parsed = mrImportRowSchema.safeParse({
@@ -562,7 +606,20 @@ export async function importMaterialRequestItemsAction(formData: FormData) {
       }
     }
 
+    const scheduleMatch = matchScheduleLine
+      ? matchScheduleLine({
+          itemName: parsed.data.item_name,
+          unit: parsed.data.unit,
+          scheduleRef:
+            scheduleRefIndex !== -1 ? (row[scheduleRefIndex] ?? "").trim() : undefined,
+        })
+      : null;
+    if (scheduleMatch) {
+      linkedToSchedule += 1;
+    }
+
     inserts.push({
+      boq_line_item_id: scheduleMatch?.lineId ?? null,
       estimated_unit_cost: parsed.data.estimated_unit_cost,
       item_name: parsed.data.item_name,
       line_number: startLine + inserts.length,
@@ -596,6 +653,7 @@ export async function importMaterialRequestItemsAction(formData: FormData) {
     entityType: "material_request",
     metadata: {
       imported: inserts.length,
+      linked_to_schedule: linkedToSchedule,
       request_number: request.request_number,
       skipped: rowErrors.length,
       unmatched_suppliers: unmatchedSuppliers,
@@ -603,12 +661,14 @@ export async function importMaterialRequestItemsAction(formData: FormData) {
     moduleKey: "material_requests",
     sourceId: request.id,
     sourceTable: "material_requests",
-    summary: `Imported ${inserts.length} item(s) into ${request.request_number}`,
+    summary: `Imported ${inserts.length} item(s) into ${request.request_number}${
+      linkedToSchedule > 0 ? ` (${linkedToSchedule} linked to the material schedule)` : ""
+    }`,
   }).catch(() => null);
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   redirect(
-    `${MATERIAL_REQUEST_ROUTE}?updated=items_imported&imported=${inserts.length}&skipped=${rowErrors.length}`,
+    `${MATERIAL_REQUEST_ROUTE}?updated=items_imported&imported=${inserts.length}&skipped=${rowErrors.length}&linked=${linkedToSchedule}`,
   );
 }
 

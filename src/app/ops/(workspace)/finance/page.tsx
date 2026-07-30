@@ -44,6 +44,7 @@ import {
   fetchOpsReceivablesAgeing,
   fetchOpsSupplierAgeing,
 } from "@/lib/ops/finance-kpis";
+import { fetchOpsFinanceLeakReport } from "@/lib/ops/finance-leaks";
 import { fetchOpsGlMonthlyTrend } from "@/lib/ops/gl-trends";
 import { fetchOpsMaterialRequestsPricedCount } from "@/lib/ops/material-requests";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -83,6 +84,7 @@ export default async function OpsFinanceOverviewPage() {
     glTrend,
     materialRequestsPricedCount,
     subcontractorPaymentsPendingCount,
+    leakReport,
   ] = await Promise.all([
     fetchOpsFinanceCashflowDashboard(),
     fetchOpsPaymentRequestStats(),
@@ -96,6 +98,7 @@ export default async function OpsFinanceOverviewPage() {
     fetchOpsGlMonthlyTrend().catch(() => []),
     fetchOpsMaterialRequestsPricedCount(),
     fetchOpsPendingSubcontractorPaymentsCount(),
+    fetchOpsFinanceLeakReport(),
   ]);
   const hasGlActivity = glTrend.some(
     (point) => point.income !== 0 || point.expenses !== 0 || point.cashBalance !== 0,
@@ -157,6 +160,77 @@ export default async function OpsFinanceOverviewPage() {
           value={String(subcontractorPaymentsPendingCount)}
         />
       </section>
+
+      {/* Leak detector: reconciliation of the request → budget → cost-ledger
+          chain. When every count is zero the chain reconciles — this panel is
+          the regression check for the project↔finance spine work (see
+          docs/pymble-ops-project-finance-spine-audit.md, Phase 0). */}
+      <OpsDashboardPanel
+        accent={!leakReport.clean}
+        density="compact"
+        eyebrow="Reconciliation"
+        title="Financial leak detector"
+        description={
+          leakReport.clean
+            ? "Every request, cost entry, and site reconciles to a budget. The chain is tight."
+            : `${formatZmw(leakReport.leakAmount)} of operational spend is not reconciled to a budget.`
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className={OPS_TABLE_CLASS}>
+            <thead className={OPS_THEAD_CLASS}>
+              <tr>
+                <th className={OPS_TH_CLASS}>Check</th>
+                <th className={OPS_TH_NUM_CLASS}>Records</th>
+                <th className={OPS_TH_NUM_CLASS}>Value</th>
+                <th className={OPS_TH_CLASS}>Examples</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leakReport.checks.map((check) => (
+                <tr className={OPS_TR_CLASS} key={check.key}>
+                  <td className={OPS_TD_CLASS}>
+                    <Link
+                      className="font-semibold text-foreground hover:text-primary-blue"
+                      href={check.href}
+                      title={check.description}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        {check.count > 0 ? (
+                          <AlertTriangle
+                            className="size-3.5 text-amber-600"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <CheckCircle2
+                            className="size-3.5 text-emerald-600"
+                            aria-hidden="true"
+                          />
+                        )}
+                        {check.label}
+                      </span>
+                    </Link>
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                      {check.description}
+                    </p>
+                  </td>
+                  <td className={OPS_TD_NUM_CLASS}>
+                    <span className={check.count > 0 ? "font-bold text-amber-700" : ""}>
+                      {check.count}
+                    </span>
+                  </td>
+                  <td className={OPS_TD_NUM_CLASS}>
+                    {check.amount === null ? "—" : formatZmw(check.amount)}
+                  </td>
+                  <td className={`${OPS_TD_CLASS} text-xs text-muted-foreground`}>
+                    {check.samples.length > 0 ? check.samples.join(", ") : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </OpsDashboardPanel>
 
       {/* Cash & liability signal */}
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

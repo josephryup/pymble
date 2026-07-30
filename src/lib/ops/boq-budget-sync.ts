@@ -1,12 +1,21 @@
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsProjectBudgetStatus } from "@/lib/ops/types";
 
-// Generates/syncs a project budget from an issued material schedule (BOQ):
+// Generates/syncs a project budget from the site's issued material schedules:
 // one project_budget_lines row per distinct line category (summed
 // budgeted_total), plus one dedicated "transport" line (summed
 // estimated_transport_cost across every line, regardless of that line's own
 // category — transport is a cross-cutting cost, not a phase). Idempotent, so
 // re-issuing a new BOQ version re-syncs cleanly.
+//
+// Scope (audit D14): a material schedule is per project *phase*, so a site
+// accumulates several live issued schedules over time. The sync therefore
+// recomputes the budget from ALL of the site's live issued schedules (issued,
+// not superseded, not archived, not deleted) — never from just the one being
+// issued. Anything narrower zeroes the earlier phases' lines every time a new
+// phase issues, which silently destroys their budgets. Categories shared by
+// two phases simply sum, and the stale sweep only zeroes a category no live
+// schedule covers any more.
 //
 // Ownership (audit B4/B3): every line this module creates is stamped
 // source = 'boq', and every lookup filters on it. Finance's own lines
@@ -25,7 +34,7 @@ type BoqDocumentForSync = {
   title: string;
 };
 
-type BoqLineForSync = {
+export type BoqLineForSync = {
   category: string;
   budgeted_total: number | string;
   estimated_transport_cost: number | string;
@@ -43,7 +52,32 @@ type BudgetLineForSync = {
 };
 
 function normalizeMoney(value: number | string | null | undefined) {
-  return Number(value ?? 0);
+  const numeric = Number(value ?? 0);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+/**
+ * Fold schedule lines — from every live issued schedule on the site — into
+ * per-category budget totals plus the single cross-cutting transport total.
+ * Pure, so the phase-coexistence rule (categories shared by two phases sum,
+ * a category no live schedule covers is absent) is testable without a
+ * database.
+ */
+export function aggregateBoqBudgetTotals(lines: BoqLineForSync[]): {
+  totalsByCategory: Map<string, number>;
+  transportTotal: number;
+} {
+  const totalsByCategory = new Map<string, number>();
+  let transportTotal = 0;
+  for (const line of lines) {
+    const category = line.category || "general";
+    totalsByCategory.set(
+      category,
+      (totalsByCategory.get(category) ?? 0) + normalizeMoney(line.budgeted_total),
+    );
+    transportTotal += normalizeMoney(line.estimated_transport_cost);
+  }
+  return { totalsByCategory, transportTotal };
 }
 
 function labelForCategory(category: string) {
@@ -65,11 +99,16 @@ async function findOrCreateSiteBudget(
 ): Promise<ProjectBudgetForSync> {
   const supabase = getOpsSupabaseServiceClient();
 
+  // Prefer the site's single active budget over any draft (audit D7): a
+  // replacement draft opened alongside the live budget must never steal
+  // resolution from it. `status` sorts by enum order (draft < active), so
+  // descending puts active first; created_at breaks ties among drafts.
   const { data: existing, error: existingError } = await supabase
     .from("project_budgets")
     .select("id, status")
     .eq("site_id", siteId)
     .in("status", ["draft", "active"])
+    .order("status", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<ProjectBudgetForSync>();
@@ -247,16 +286,37 @@ export async function syncProjectBudgetFromBoq(boqId: string, actorUserId: strin
     throw new Error("Material schedule was not found.");
   }
 
-  const { data: lineRows, error: lineError } = await supabase
-    .from("boq_line_items")
-    .select("category, budgeted_total, estimated_transport_cost")
-    .eq("boq_id", boqId);
+  // Every live issued schedule on the site — one per phase (audit D14). The
+  // just-issued schedule is already status='issued' by the time the sync runs
+  // (issueBoqAction updates status, supersedes the predecessor, then calls
+  // this), so this set is exactly the phases whose budget should stand.
+  const { data: liveDocRows, error: liveDocError } = await supabase
+    .from("boq_documents")
+    .select("id")
+    .eq("site_id", document.site_id)
+    .eq("status", "issued")
+    .is("superseded_at", null)
+    .is("archived_at", null)
+    .is("deleted_at", null);
 
-  if (lineError) {
-    throw lineError;
+  if (liveDocError) {
+    throw liveDocError;
   }
 
-  const lines = (lineRows ?? []) as BoqLineForSync[];
+  const liveDocIds = ((liveDocRows ?? []) as Array<{ id: string }>).map((row) => row.id);
+
+  const lines: BoqLineForSync[] = [];
+  if (liveDocIds.length > 0) {
+    const { data: lineRows, error: lineError } = await supabase
+      .from("boq_line_items")
+      .select("category, budgeted_total, estimated_transport_cost")
+      .in("boq_id", liveDocIds);
+
+    if (lineError) {
+      throw lineError;
+    }
+    lines.push(...((lineRows ?? []) as BoqLineForSync[]));
+  }
 
   const budget = await findOrCreateSiteBudget(document.site_id, document.title, actorUserId);
 
@@ -266,16 +326,7 @@ export async function syncProjectBudgetFromBoq(boqId: string, actorUserId: strin
     throw new LockedBudgetError(budget.id);
   }
 
-  const totalsByCategory = new Map<string, number>();
-  let transportTotal = 0;
-  for (const line of lines) {
-    const category = line.category || "general";
-    totalsByCategory.set(
-      category,
-      (totalsByCategory.get(category) ?? 0) + normalizeMoney(line.budgeted_total),
-    );
-    transportTotal += normalizeMoney(line.estimated_transport_cost);
-  }
+  const { totalsByCategory, transportTotal } = aggregateBoqBudgetTotals(lines);
 
   for (const [category, amount] of totalsByCategory) {
     await upsertBudgetLineByCategory(budget.id, category, amount, actorUserId);

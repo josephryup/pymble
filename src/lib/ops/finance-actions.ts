@@ -521,6 +521,28 @@ export async function activateProjectBudgetAction(formData: FormData) {
 
   const now = new Date().toISOString();
   const supabase = getOpsSupabaseServiceClient();
+
+  // One active budget per site (audit D7) — enforced by a partial unique
+  // index, but check first so the user gets an instruction instead of a raw
+  // constraint violation. Deliberately not auto-demoting: superseding a live
+  // budget is Finance's explicit decision, not a side effect of activation.
+  const { data: existingActive, error: existingActiveError } = await supabase
+    .from("project_budgets")
+    .select("id, budget_number, title")
+    .eq("site_id", budget.site_id)
+    .eq("status", "active")
+    .neq("id", budget.id)
+    .maybeSingle<{ id: string; budget_number: string; title: string }>();
+
+  if (existingActiveError) {
+    budgetError(existingActiveError.message);
+  }
+  if (existingActive) {
+    budgetError(
+      `This site already has an active budget (${existingActive.budget_number} — ${existingActive.title}). Lock or archive it first, then activate this one.`,
+    );
+  }
+
   const { error } = await supabase
     .from("project_budgets")
     .update({ active_at: now, active_by: profile.id, status: "active" })

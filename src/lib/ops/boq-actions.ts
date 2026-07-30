@@ -558,6 +558,57 @@ export async function deleteBoqLineItemAction(formData: FormData) {
   redirect("/ops/material-schedule?updated=line_deleted");
 }
 
+/**
+ * Archiving or restoring an *issued* schedule changes the set of live phases
+ * the site budget is computed from (audit D14), so the budget must recompute.
+ * Best-effort, same non-fatal pattern as issueBoqAction: the lifecycle change
+ * itself must never be blocked by a sync hiccup, but a failure is logged and
+ * recorded rather than swallowed.
+ */
+async function resyncSiteBudgetAfterBoqLifecycleChange(
+  boqId: string,
+  actorUserId: string,
+  action: string,
+) {
+  await syncProjectBudgetFromBoq(boqId, actorUserId).catch((syncError: unknown) => {
+    const supabase = getOpsSupabaseServiceClient();
+
+    if (syncError instanceof LockedBudgetError) {
+      return supabase.from("audit_events").insert({
+        actor_user_id: actorUserId,
+        action: `${action}_budget_locked`,
+        entity_type: "boq_document",
+        entity_id: boqId,
+        module_key: "boq",
+        source_table: "boq_documents",
+        source_id: boqId,
+        metadata: { budget_id: syncError.budgetId },
+      });
+    }
+
+    logOpsServerError(syncError, {
+      module: "boq",
+      action: `${action}.syncProjectBudget`,
+      actorUserId,
+      entityType: "boq_document",
+      entityId: boqId,
+    });
+
+    return supabase.from("audit_events").insert({
+      actor_user_id: actorUserId,
+      action: `${action}_budget_sync_failed`,
+      entity_type: "boq_document",
+      entity_id: boqId,
+      module_key: "boq",
+      source_table: "boq_documents",
+      source_id: boqId,
+      metadata: {
+        error: syncError instanceof Error ? syncError.message : String(syncError),
+      },
+    });
+  });
+}
+
 export async function archiveBoqAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
@@ -600,6 +651,12 @@ export async function archiveBoqAction(formData: FormData) {
     source_id: parsed.data.boq_id,
   });
 
+  // An archived issued schedule leaves the live set — its phase's amounts
+  // must come out of the site budget (audit D14).
+  if (target.status === "issued") {
+    await resyncSiteBudgetAfterBoqLifecycleChange(target.id, profile.id, "boq.archived");
+  }
+
   revalidatePath("/ops/material-schedule");
   redirect("/ops/material-schedule?updated=archived");
 }
@@ -614,6 +671,11 @@ export async function restoreBoqAction(formData: FormData) {
   const parsed = boqIdSchema.safeParse({ boq_id: field(formData, "boq_id") });
   if (!parsed.success) {
     boqError(parsed.error.issues[0]?.message ?? "Select a material schedule.");
+  }
+
+  const target = await fetchBoqMutationTarget(parsed.data.boq_id);
+  if (!target) {
+    boqError("material schedule was not found.");
   }
 
   const supabase = await createOpsServerSessionClient();
@@ -634,6 +696,13 @@ export async function restoreBoqAction(formData: FormData) {
     source_table: "boq_documents",
     source_id: parsed.data.boq_id,
   });
+
+  // A restored issued schedule rejoins the live set — its phase's amounts
+  // must come back into the site budget (audit D14). Superseded schedules
+  // stay out: the live-set query in the sync excludes them regardless.
+  if (target.status === "issued") {
+    await resyncSiteBudgetAfterBoqLifecycleChange(target.id, profile.id, "boq.restored");
+  }
 
   revalidatePath("/ops/material-schedule");
   redirect("/ops/material-schedule?updated=restored");

@@ -724,11 +724,15 @@ export async function resolveMaterialRequestBudgetLine(input: {
 }): Promise<{ budgetLineId: string | null; transportBudgetLineId: string | null }> {
   const supabase = getOpsSupabaseServiceClient();
 
+  // Prefer the site's single active budget over any draft (audit D7) —
+  // matches findOrCreateSiteBudget. Enum order sorts draft < active, so
+  // descending puts active first; created_at breaks ties among drafts.
   const { data: budget, error: budgetError } = await supabase
     .from("project_budgets")
     .select("id")
     .eq("site_id", input.siteId)
     .in("status", ["draft", "active"])
+    .order("status", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<{ id: string }>();
@@ -761,11 +765,16 @@ export async function resolveMaterialRequestBudgetLine(input: {
       )[0]?.[0];
 
       if (majorityCategory) {
+        // Only match schedule-generated lines (source='boq'), mirroring
+        // boq-budget-sync (audit D2). Finance's manual lines may repeat a
+        // category freely; without this filter a single manual duplicate
+        // makes maybeSingle() throw and the whole resolution silently fail.
         const { data: matchedLine, error: matchedLineError } = await supabase
           .from("project_budget_lines")
           .select("id")
           .eq("budget_id", budget.id)
           .eq("category", majorityCategory)
+          .eq("source", "boq")
           .maybeSingle<{ id: string }>();
         if (matchedLineError) {
           throw matchedLineError;
@@ -779,6 +788,7 @@ export async function resolveMaterialRequestBudgetLine(input: {
       .select("id")
       .eq("budget_id", budget.id)
       .eq("category", "transport")
+      .eq("source", "boq")
       .maybeSingle<{ id: string }>();
     if (transportLineError) {
       throw transportLineError;
