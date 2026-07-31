@@ -46,7 +46,9 @@ export type OpsEmailDeliveryRecordInput = {
 
 let resendClient: Resend | null = null;
 
-function getResendClient() {
+// Exported so other senders (payslip emails) reuse one client and one
+// from/reply-to configuration rather than re-deriving it.
+export function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey) {
@@ -60,11 +62,11 @@ function getResendClient() {
   return resendClient;
 }
 
-function getOpsEmailFrom() {
+export function getOpsEmailFrom() {
   return process.env.OPS_EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "";
 }
 
-function getOpsEmailReplyTo() {
+export function getOpsEmailReplyTo() {
   return process.env.OPS_EMAIL_REPLY_TO || OPS_BRAND.supportEmail;
 }
 

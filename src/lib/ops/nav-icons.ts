@@ -174,6 +174,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
  * hover flyout of its modules. Group ids are stable (see OPS_MODULE_GROUPS).
  */
 export const OPS_GROUP_ICONS: Record<string, LucideIcon> = {
+  workspace: LayoutDashboard,
   operations: Briefcase,
   engineering: Hammer,
   procurement: ShoppingBag,

@@ -54,7 +54,12 @@ export function OpsSubmitButton({
     >
       {pending ? (
         <>
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          {/* Honour a reduced-motion preference: the label change already
+              communicates the pending state without the spin (audit §12). */}
+          <Loader2
+            className="size-4 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
           {pendingLabel}
         </>
       ) : (

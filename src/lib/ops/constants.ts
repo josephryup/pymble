@@ -281,6 +281,19 @@ const OPS_IT_ROLES: OpsUserRole[] = [
  * only `title` / `description` / order may change.
  */
 export const OPS_MODULE_GROUPS: OpsModuleGroup[] = [
+  /**
+   * Grouped by the job someone is doing, not by which department owns the data
+   * (audit §4). "My work" comes first because it is what a person opens the
+   * workspace to deal with — their queue, their sites, their messages — and it
+   * was previously scattered across Operations and Records, where it competed
+   * with company-wide registers nobody visits daily.
+   */
+  {
+    id: "workspace",
+    title: "My Work",
+    description:
+      "Your queue: approvals waiting on you, your sites, messages, notifications, and your IT tickets.",
+  },
   {
     id: "operations",
     title: "Operations",
@@ -363,7 +376,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Your assigned construction sites, attendance capture, daily reporting, and field-support shortcuts.",
-    group: "operations",
+    group: "workspace",
     href: "/ops/my-sites",
     id: "my-sites",
     navigationRoles: ["engineering_intern"],
@@ -396,7 +409,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Review submitted records, capture decisions, and keep approval history traceable.",
-    group: "operations",
+    group: "workspace",
     href: "/ops/approvals",
     id: "approvals",
     navigationRoles: OPS_OPERATIONAL_ROLES,
@@ -407,7 +420,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Track the alerts and workflow messages that need your attention.",
-    group: "operations",
+    group: "workspace",
     href: "/ops/notifications",
     id: "notifications",
     navigationRoles: OPS_OPERATIONAL_ROLES,
@@ -418,7 +431,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Every comment where a teammate @mentioned you — reply on the record.",
-    group: "operations",
+    group: "workspace",
     href: "/ops/inbox",
     id: "inbox",
     navigationRoles: OPS_OPERATIONAL_ROLES,
@@ -454,7 +467,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Build the project material schedule: measured lines, procurement pricing, revisions, and the project budget generated from it.",
-    group: "commercial",
+    group: "procurement",
     href: "/ops/material-schedule",
     id: "boq",
     navigationRoles: [
@@ -1169,7 +1182,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Raise an IT support request and track your own tickets. Available to every staff member.",
-    group: "records",
+    group: "workspace",
     href: "/ops/it/helpdesk/mine",
     id: "it-help-request",
     navigationRoles: [...OPS_OPERATIONAL_ROLES, "engineering_intern"],
@@ -1180,7 +1193,7 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description: "Read and acknowledge company IT policies, and browse IT how-to guides. Available to every staff member.",
-    group: "records",
+    group: "it",
     href: "/ops/it/handbook",
     id: "it-handbook",
     navigationRoles: [...OPS_OPERATIONAL_ROLES, "engineering_intern"],

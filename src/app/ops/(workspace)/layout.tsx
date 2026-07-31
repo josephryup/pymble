@@ -1,3 +1,4 @@
+import { OpsActionToaster } from "@/components/ops/OpsActionToaster";
 import { OpsAutoRefresh } from "@/components/ops/OpsAutoRefresh";
 import { OpsFormSubmitGuard } from "@/components/ops/OpsFormSubmitGuard";
 import { OpsNotificationDock } from "@/components/ops/OpsNotificationDock";
@@ -38,6 +39,9 @@ export default async function OpsWorkspaceLayout({
       unreadNotifications={unreadNotifications}
     >
       <OpsServiceWorker />
+      {/* Confirms what YOU just did (audit §12). Distinct from
+          OpsNotificationToaster, which announces what happened elsewhere. */}
+      <OpsActionToaster />
       <OpsFormSubmitGuard />
       <OpsSyncIndicator />
       {auth.isLocalRolePreview ? null : (

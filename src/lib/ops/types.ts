@@ -527,6 +527,8 @@ export type OpsPayFrequency =
   | "contract_sum";
 
 export type OpsModuleGroupId =
+  /** Personal queues — what a person opens the workspace to deal with (audit §4). */
+  | "workspace"
   | "operations"
   | "commercial"
   | "records"

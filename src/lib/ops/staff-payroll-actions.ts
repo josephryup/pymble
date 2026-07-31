@@ -11,6 +11,7 @@ import { logOpsServerError, swallowOpsError } from "@/lib/ops/log";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { canManageOpsStaffPayroll } from "@/lib/ops/staff-payroll";
 import { computeStaffPayslip } from "@/lib/ops/statutory/calculator";
+import { sendStaffPayslipEmailsForRun } from "@/lib/ops/staff-payslip-email";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 const STAFF_PAYROLL_ROUTE = "/ops/staff-payroll";
@@ -600,6 +601,56 @@ export async function completeStaffPayrollRunAction(formData: FormData) {
     sourceTable: "staff_payroll_runs",
     summary: "Marked staff payroll run paid",
   }).catch(() => null);
+
+  // Email each person their own payslip (audit §10). Marked paid is the right
+  // trigger: it is the point at which the money has actually moved, so the
+  // message ("your salary has been paid") is true when it arrives.
+  //
+  // Best-effort and never awaited into a failure: payroll has already been
+  // marked paid in the database above, and an email provider outage must not
+  // roll that back or block the redirect. The outcome is recorded so HR can
+  // see who was missed.
+  const emailOutcome = await sendStaffPayslipEmailsForRun({
+    runId: parsed.data.id,
+    actorUserId: profile.id,
+  }).catch((emailError: unknown) => {
+    logOpsServerError(emailError, {
+      module: "staff_payroll",
+      action: "completeStaffPayrollRunAction.payslipEmails",
+      entityId: parsed.data.id,
+    });
+    return null;
+  });
+
+  if (emailOutcome) {
+    await recordOpsAuditEvent({
+      action: "staff_payroll_run.payslips_emailed",
+      actorUserId: profile.id,
+      entityId: parsed.data.id,
+      entityType: "staff_payroll_run",
+      metadata: {
+        sent: emailOutcome.sent,
+        skipped_no_email: emailOutcome.skippedNoEmail.length,
+        failed: emailOutcome.failed.length,
+        not_configured: emailOutcome.notConfigured,
+        // Named, because "3 people did not get their payslip" is only
+        // actionable if HR knows which three.
+        skipped_names: emailOutcome.skippedNoEmail.map(
+          (entry) => `${entry.employeeNumber} ${entry.fullName}`,
+        ),
+      },
+      moduleKey: "staff_payroll",
+      sourceId: parsed.data.id,
+      sourceTable: "staff_payroll_runs",
+      summary: emailOutcome.notConfigured
+        ? "Payslip emails skipped — email is not configured"
+        : `Emailed ${emailOutcome.sent} payslip(s)${
+            emailOutcome.skippedNoEmail.length > 0
+              ? `, ${emailOutcome.skippedNoEmail.length} skipped with no email on record`
+              : ""
+          }${emailOutcome.failed.length > 0 ? `, ${emailOutcome.failed.length} failed` : ""}`,
+    }).catch(() => null);
+  }
   await notifyOpsWorkflowEvent({
     actorId: profile.id,
     actionNeededRoles: ["finance_manager", "accountant"],
