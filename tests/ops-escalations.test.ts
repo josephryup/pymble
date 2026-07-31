@@ -49,18 +49,63 @@ describe("ops escalation helpers", () => {
     );
   });
 
-  it("uses deterministic local date keys for daily idempotency", () => {
+  it("uses deterministic local date keys for SLA windows", () => {
     assert.equal(getOpsEscalationTodayKey(now), "2026-06-08");
     assert.equal(getOpsEscalationDateDaysAgo(2, now), "2026-06-06");
-    assert.equal(
+  });
+
+  it("builds a date-free notification key so a daily sweep cannot duplicate", () => {
+    // The key used to embed the sweep date, so six daily crons minted a fresh
+    // key every morning — 88% of all notifications were copies made this way.
+    const key = buildOpsEscalationIdempotencyKey({
+      reason: "stale",
+      recipientId: "user-1",
+      sourceId: "record-1",
+      sourceTable: "material_requests",
+    });
+
+    assert.equal(key, "ops-escalation:material_requests:record-1:stale:user-1");
+    assert.doesNotMatch(
+      key,
+      /\d{4}-\d{2}-\d{2}|\d{13}|T\d{2}:\d{2}/,
+      "an escalation key must never contain a date or timestamp",
+    );
+  });
+
+  it("is stable across sweeps for the same item, reason and recipient", () => {
+    const build = () =>
       buildOpsEscalationIdempotencyKey({
-        dateKey: "2026-06-08",
-        reason: "stale",
+        reason: "overdue",
         recipientId: "user-1",
         sourceId: "record-1",
-        sourceTable: "material_requests",
+        sourceTable: "approval_requests",
+      });
+
+    // Same inputs on Monday and on Friday produce the same key, so the upsert
+    // updates one row instead of adding a second.
+    assert.equal(build(), build());
+  });
+
+  it("still raises a new notification when the situation actually changes", () => {
+    const base = {
+      recipientId: "user-1",
+      sourceId: "record-1",
+      sourceTable: "approval_requests",
+    } as const;
+
+    // Escalation now happens through meaning, not repetition: a worsening
+    // reason, or a newly-involved recipient, is a genuinely new notification.
+    assert.notEqual(
+      buildOpsEscalationIdempotencyKey({ ...base, reason: "overdue" }),
+      buildOpsEscalationIdempotencyKey({ ...base, reason: "stale" }),
+    );
+    assert.notEqual(
+      buildOpsEscalationIdempotencyKey({ ...base, reason: "overdue" }),
+      buildOpsEscalationIdempotencyKey({
+        ...base,
+        reason: "overdue",
+        recipientId: "user-2",
       }),
-      "ops-escalation:material_requests:record-1:stale:2026-06-08:user-1",
     );
   });
 });

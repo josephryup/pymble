@@ -406,15 +406,22 @@ export async function addItTicketCommentAction(formData: FormData) {
     helpdeskError(HELPDESK_ROUTE, "You can only comment on tickets you raised.");
   }
 
-  const { error } = await supabase.from("it_ticket_comments").insert({
-    author_id: profile.id,
-    body: parsed.data.body,
-    is_internal: isInternal,
-    ticket_id: parsed.data.ticket_id,
-  });
+  // The inserted row's id becomes the notification's identity below: a reply
+  // is a real event and must notify every time, but a double-submit must not
+  // notify twice (audit §9).
+  const { data: comment, error } = await supabase
+    .from("it_ticket_comments")
+    .insert({
+      author_id: profile.id,
+      body: parsed.data.body,
+      is_internal: isInternal,
+      ticket_id: parsed.data.ticket_id,
+    })
+    .select("id")
+    .single<{ id: string }>();
 
-  if (error) {
-    helpdeskError(ticketRoute, error.message);
+  if (error || !comment) {
+    helpdeskError(ticketRoute, error?.message ?? "The reply could not be saved.");
   }
 
   // First IT response on the record stamps first_response_at for SLA tracking.
@@ -431,7 +438,7 @@ export async function addItTicketCommentAction(formData: FormData) {
       await notifyItUser({
         actionHref: ticketRoute,
         body: "IT replied to your support ticket.",
-        idempotencyKey: `it-ticket-reply:${parsed.data.ticket_id}:${Date.now()}`,
+        idempotencyKey: `it-ticket-reply:${comment.id}`,
         recipientId: ticket.raised_by === profile.id ? null : ticket.raised_by,
         ticketId: parsed.data.ticket_id,
         title: "Reply on your IT ticket",
@@ -440,7 +447,7 @@ export async function addItTicketCommentAction(formData: FormData) {
       await notifyItStaff({
         actorId: profile.id,
         body: "The requester replied on their IT ticket.",
-        idempotencyKey: `it-ticket-requester-reply:${parsed.data.ticket_id}:${Date.now()}`,
+        idempotencyKey: `it-ticket-requester-reply:${comment.id}`,
         ticketId: parsed.data.ticket_id,
         title: "Requester replied on a ticket",
       });

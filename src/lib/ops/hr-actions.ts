@@ -16,6 +16,7 @@ import {
   canCancelOpsLeaveRequest,
   canCompleteOpsLeaveRequest,
   canCreateOpsEmployee,
+  canLinkOpsEmployeeAccount,
   canCreateOpsEmployeeOnboardingItem,
   canCreateOpsLeaveRequest,
   canCreateOpsPerformanceAppraisal,
@@ -698,7 +699,13 @@ export async function updateEmployeeAction(formData: FormData) {
       site_id: normalizeOptionalUuid(parsed.data.site_id),
       start_date: normalizeDate(parsed.data.start_date || today(), "Use a valid start date."),
       status: parsed.data.status,
-      user_id: normalizeOptionalUuid(parsed.data.user_id),
+      // `user_id` is DELIBERATELY not written here. This action runs under the
+      // wider HR_MANAGE_ROLES gate, and the account link decides whose payslip
+      // an account can open — so it is changed only through
+      // linkEmployeeAccountAction, which carries the narrower
+      // canLinkOpsEmployeeAccount permission (audit §2). Omitting the column
+      // leaves the existing link untouched and makes the hidden form field
+      // that used to carry it unfalsifiable.
       nrc_number: parsed.data.nrc_number,
       napsa_number: parsed.data.napsa_number,
       tpin: parsed.data.tpin,
@@ -723,6 +730,124 @@ export async function updateEmployeeAction(formData: FormData) {
 
   revalidatePath(HR_ROUTE);
   redirect(`${HR_ROUTE}?updated=employee`);
+}
+
+/**
+ * Connect an employee record to a login account, or release the link.
+ *
+ * Separate from updateEmployeeAction on purpose (audit §2). This column is the
+ * only bridge between an employee and the account that signs in, and the
+ * payslip gate reads it — so it carries the narrower
+ * `canLinkOpsEmployeeAccount` permission (HR, MD, Owner, developer) rather
+ * than the general HR edit permission, and it is audited as its own event
+ * because "who linked this person to this account" is a question that gets
+ * asked after a privacy incident, not before one.
+ */
+export async function linkEmployeeAccountAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canLinkOpsEmployeeAccount(profile.role)) {
+    hrError(
+      "Only HR, the Managing Director and the developer can link a staff account — this controls whose payslip an account can open.",
+    );
+  }
+
+  const parsed = z
+    .object({
+      employee_id: z.string().uuid("Select an employee."),
+      user_id: z.string().trim().default(""),
+    })
+    .safeParse({
+      employee_id: field(formData, "employee_id"),
+      user_id: field(formData, "user_id"),
+    });
+
+  if (!parsed.success) {
+    hrError(parsed.error.issues[0]?.message ?? "Select an employee and an account.");
+  }
+
+  const nextUserId = normalizeOptionalUuid(parsed.data.user_id);
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: employee, error: employeeError } = await supabase
+    .from("employees")
+    .select("id, employee_number, full_name, user_id")
+    .eq("id", parsed.data.employee_id)
+    .maybeSingle<{
+      id: string;
+      employee_number: string;
+      full_name: string;
+      user_id: string | null;
+    }>();
+
+  if (employeeError) {
+    hrError(employeeError.message);
+  }
+  if (!employee) {
+    hrError("Employee record was not found.");
+  }
+
+  // Report the conflict in words rather than letting the unique index throw a
+  // constraint name at someone: the person on the other end of the clash is
+  // the useful information.
+  if (nextUserId) {
+    const { data: clash } = await supabase
+      .from("employees")
+      .select("employee_number, full_name")
+      .eq("user_id", nextUserId)
+      .neq("id", employee.id)
+      .maybeSingle<{ employee_number: string; full_name: string }>();
+
+    if (clash) {
+      hrError(
+        `That account is already linked to ${clash.full_name} (${clash.employee_number}). Release that link first — one account belongs to one employee.`,
+      );
+    }
+
+    const { data: account } = await supabase
+      .from("users")
+      .select("id, is_active")
+      .eq("id", nextUserId)
+      .maybeSingle<{ id: string; is_active: boolean }>();
+
+    if (!account) {
+      hrError("That staff account no longer exists.");
+    }
+    if (!account.is_active) {
+      hrError("That staff account is deactivated. Reactivate it before linking.");
+    }
+  }
+
+  const { error } = await supabase
+    .from("employees")
+    .update({ user_id: nextUserId })
+    .eq("id", employee.id);
+
+  if (error) {
+    hrError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: nextUserId ? "employee.account_linked" : "employee.account_unlinked",
+    actorUserId: profile.id,
+    entityId: employee.id,
+    entityType: "employee",
+    metadata: {
+      employee_number: employee.employee_number,
+      previous_user_id: employee.user_id,
+      user_id: nextUserId,
+    },
+    moduleKey: "employees",
+    sourceId: employee.id,
+    sourceTable: "employees",
+    summary: nextUserId
+      ? `Linked ${employee.full_name} (${employee.employee_number}) to a staff account`
+      : `Released the staff account link for ${employee.full_name} (${employee.employee_number})`,
+  }).catch(() => null);
+
+  revalidatePath(HR_ROUTE);
+  revalidatePath("/ops/staff-payroll");
+  redirect(`${HR_ROUTE}?updated=${nextUserId ? "account_linked" : "account_unlinked"}`);
 }
 
 export async function createEmployeeOnboardingItemAction(formData: FormData) {

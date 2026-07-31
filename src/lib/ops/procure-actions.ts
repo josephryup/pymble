@@ -572,7 +572,11 @@ export async function procureMaterialRequestAction(formData: FormData) {
         queueOpsNotification({
           actionHref: `${PROCURE_ROUTE}#mr-${request.id}`,
           body: `${fulfilment.unmetNeeds.length} item(s) on ${request.request_number} were not procured and the site still needs them: ${names}.`,
-          idempotencyKey: `material-request-unmet:${request.id}:${nowIso}:${recipient.id}`,
+          // Keyed on the request and recipient only. This previously carried
+          // `nowIso`, which made every procurement round mint a unique key so
+          // it could never dedupe at all (audit §9). Re-running a procure
+          // action now updates the existing notice rather than adding another.
+          idempotencyKey: `material-request-unmet:${request.id}:${recipient.id}`,
           moduleKey: "material_requests",
           recipientId: recipient.id,
           sourceId: request.id,

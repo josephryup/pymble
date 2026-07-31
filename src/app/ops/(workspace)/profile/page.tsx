@@ -14,7 +14,7 @@ import { OpsLogoutButton } from "@/components/ops/OpsLogoutButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { uploadEmployeeDocumentAction } from "@/lib/ops/hr-actions";
 import { fetchMyOpsEmployeeSelfServiceProfile, type OpsEmployeeDocumentSummary } from "@/lib/ops/hr";
-import { fetchMyStaffPayslips } from "@/lib/ops/staff-payroll";
+import { fetchMyPayslipAccess, fetchMyStaffPayslips } from "@/lib/ops/staff-payroll";
 import {
   createMyLeaveRequestAction,
   updateMyPasswordAction,
@@ -149,11 +149,12 @@ function formatZmwShort(value: number) {
 }
 
 export default async function OpsProfilePage({ searchParams }: PageProps) {
-  const [params, auth, selfService, myPayslips] = await Promise.all([
+  const [params, auth, selfService, myPayslips, payslipAccess] = await Promise.all([
     searchParams ?? Promise.resolve({}),
     requireOpsUser(),
     fetchMyOpsEmployeeSelfServiceProfile(),
     fetchMyStaffPayslips(),
+    fetchMyPayslipAccess(),
   ]);
   const notice = profileNotice(params);
   const profileName = formatOpsProfileName(auth.profile.full_name, auth.profile.role);
@@ -430,9 +431,35 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                   </div>
                 </div>
                 {myPayslips.length === 0 ? (
-                  <p className="p-4 text-sm text-muted-foreground">
-                    No payslips yet. Once your monthly staff payroll run is created, your payslip will appear here.
-                  </p>
+                  /* An empty list has three different causes and only one of
+                     them means "wait" (audit §5). Telling someone whose account
+                     is not linked to an employee record to wait for a payslip
+                     sends them waiting for something that will never arrive. */
+                  payslipAccess.state === "no_employee_record" ? (
+                    <div className="m-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+                      <p className="font-bold text-amber-800 dark:text-amber-200">
+                        Your account is not linked to an employee record
+                      </p>
+                      <p className="mt-1 leading-6 text-amber-800/90 dark:text-amber-200/90">
+                        Payslips are matched to your employee record, and yours has not
+                        been connected to this login yet — so nothing can appear here,
+                        however many payroll runs are completed. Ask HR or the Managing
+                        Director to link your staff account, and your payslips will
+                        appear straight away.
+                      </p>
+                    </div>
+                  ) : payslipAccess.state === "inactive_employee" ? (
+                    <p className="p-4 text-sm text-muted-foreground">
+                      Your employee record ({payslipAccess.employeeNumber}) is marked as
+                      exited, so no new payslips will be issued. Contact HR if that is
+                      not right.
+                    </p>
+                  ) : (
+                    <p className="p-4 text-sm text-muted-foreground">
+                      No payslips yet. Once your monthly staff payroll run is created and
+                      approved, your payslip will appear here.
+                    </p>
+                  )
                 ) : (
                   <ul className="divide-y divide-border">
                     {myPayslips.map((slip) => (

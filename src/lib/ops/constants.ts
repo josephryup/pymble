@@ -255,6 +255,10 @@ const OPS_STAFF_ROLES: OpsUserRole[] = [
   "owner",
   "hr",
   "manager",
+  // IT provisions and offboards accounts (audit §6). Which roles the IT
+  // Manager may actually assign is bounded in canCreateStaffRole — reaching
+  // the register is not the same as being able to grant authority from it.
+  "it_manager",
 ];
 
 /**

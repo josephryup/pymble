@@ -123,7 +123,10 @@ export async function runOpsProjectOverdueSweep(
         queueOpsNotification({
           actionHref,
           body,
-          idempotencyKey: `project-task-overdue:${today}:assignee:${task.id}`,
+          // Date-free (audit §9): the overdue sweep runs daily, so a date here
+          // re-notified the assignee about the same task every morning until
+          // they closed it.
+          idempotencyKey: `project-task-overdue:assignee:${task.id}`,
           moduleKey: "project_schedule",
           recipientId: task.assigned_to as string,
           sourceId: task.id,
@@ -139,7 +142,7 @@ export async function runOpsProjectOverdueSweep(
         queueOpsNotification({
           actionHref,
           body,
-          idempotencyKey: `project-task-overdue:${today}:manager:${managerId}:${task.id}`,
+          idempotencyKey: `project-task-overdue:manager:${managerId}:${task.id}`,
           moduleKey: "project_schedule",
           recipientId: managerId,
           sourceId: task.id,

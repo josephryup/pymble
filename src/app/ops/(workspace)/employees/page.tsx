@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Link2 as LinkIcon,
   Archive,
   ArrowRight,
   BriefcaseBusiness,
@@ -40,6 +41,7 @@ import {
   completeEmployeeOnboardingItemAction,
   completeLeaveRequestAction,
   createEmployeeAction,
+  linkEmployeeAccountAction,
   createEmployeeContractAction,
   createEmployeeOnboardingItemAction,
   createHrDocumentCategoryAction,
@@ -60,12 +62,18 @@ import {
   upsertLeaveBalanceAction,
 } from "@/lib/ops/hr-actions";
 import {
+  suggestEmployeeAccountMatches,
+  summariseAccountLinkCoverage,
+  type AccountMatchSuggestion,
+} from "@/lib/ops/employee-account-matching";
+import {
   canApproveOpsLeaveRequest,
   canCancelOpsEmployeeOnboardingItem,
   canCancelOpsLeaveRequest,
   canCompleteOpsEmployeeOnboardingItem,
   canCompleteOpsLeaveRequest,
   canCreateOpsEmployee,
+  canLinkOpsEmployeeAccount,
   canCreateOpsEmployeeContract,
   canManageOpsEmployeeContract,
   canCreateOpsEmployeeOnboardingItem,
@@ -236,6 +244,10 @@ function hrNotice(params: OpsSearchParams) {
     contract: "Employee contract saved.",
     contract_status: "Employee contract status updated.",
     employee: "Employee record updated.",
+    account_linked:
+      "Staff account linked. This person can now sign in to see their own payslip, leave and documents.",
+    account_unlinked:
+      "Staff account link released. This person can no longer see their own payslip until an account is linked.",
     employee_status: "Employee status updated.",
     employee_document: "Employee document uploaded.",
     employee_document_archived: "Employee document archived.",
@@ -326,6 +338,103 @@ function requiredDocumentCoverage(
 function StatusPill({ value, tone }: { value: string; tone?: OpsStatusTone }) {
   return (
     <span className={`w-fit ${opsStatusBadgeClass(value, tone)}`}>{formatLabel(value)}</span>
+  );
+}
+
+/**
+ * The staff account link (audit §2 / §5).
+ *
+ * Shown for every employee, always — because an absent link is the thing worth
+ * seeing. `employees.user_id` is the only bridge between an employee record
+ * and the account that signs in, and the payslip gate reads it directly, so an
+ * unlinked employee silently cannot open their own payslip. Stating that on
+ * the record is the whole point; hiding it is how six people ended up
+ * unlinked without anyone noticing.
+ *
+ * Read-only for roles that can edit everything else on this page: the control
+ * decides whose pay a person can see, so it is HR / MD / developer only.
+ */
+function EmployeeAccountLink({
+  canLink,
+  employee,
+  suggestion,
+  userOptions,
+}: {
+  canLink: boolean;
+  employee: { id: string; full_name: string; user?: { id: string; full_name: string; role: string } | null };
+  suggestion: AccountMatchSuggestion | undefined;
+  userOptions: Array<{ id: string; full_name: string; role: string }>;
+}) {
+  const linked = Boolean(employee.user?.id);
+
+  return (
+    <div
+      className={`mt-3 rounded-md border px-3 py-2.5 ${
+        linked
+          ? "border-border bg-muted/30"
+          : "border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30"
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
+          Staff account
+        </p>
+        {linked ? (
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <LinkIcon className="size-3.5" aria-hidden="true" />
+            {employee.user?.full_name} · {formatLabel(employee.user?.role ?? "")}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="size-3.5" aria-hidden="true" />
+            No account linked
+          </span>
+        )}
+      </div>
+
+      {!linked ? (
+        <p className="mt-1 text-xs leading-5 text-amber-800/90 dark:text-amber-200/90">
+          This person cannot sign in to see their own payslip, leave balance or
+          documents until an account is linked.
+        </p>
+      ) : null}
+
+      {canLink ? (
+        <form action={linkEmployeeAccountAction} className="mt-2 flex flex-wrap items-end gap-2">
+          <input name="employee_id" type="hidden" value={employee.id} />
+          <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+            Linked account
+            <select
+              className={`${OPS_INPUT_CLASS} min-w-56`}
+              defaultValue={employee.user?.id ?? suggestion?.userId ?? ""}
+              name="user_id"
+            >
+              <option value="">Not linked</option>
+              {userOptions.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.full_name} / {formatLabel(user.role)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+            <LinkIcon className="size-4" aria-hidden="true" />
+            {linked ? "Update link" : "Link account"}
+          </button>
+          {/* A suggestion, pre-selected but never applied on its own. Getting
+              this wrong shows one person another's pay, so a human confirms. */}
+          {!linked && suggestion ? (
+            <p className="w-full text-xs leading-5 text-muted-foreground">
+              Suggested: {suggestion.rationale} Confirm before saving.
+            </p>
+          ) : null}
+        </form>
+      ) : !linked ? (
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          Ask HR or the Managing Director to link this record to an account.
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -1016,6 +1125,36 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
   ]);
   const notice = hrNotice(params);
   const canCreateEmployee = canCreateOpsEmployee(auth.profile.role);
+  // Narrower than editing an employee: this link decides whose payslip an
+  // account can open, so it is HR / MD / developer only (audit §2).
+  const canLinkAccount = canLinkOpsEmployeeAccount(auth.profile.role);
+
+  // Which account each unlinked employee probably belongs to, and how big the
+  // gap is in both directions. Suggestions are pre-selected but never applied
+  // automatically — a wrong link shows one person another's payslip.
+  const employeesForMatching = employeePage.items.map((employee) => ({
+    id: employee.id,
+    employeeNumber: employee.employee_number,
+    fullName: employee.full_name,
+    email: employee.email || null,
+    userId: employee.user?.id ?? null,
+  }));
+  const usersForMatching = userOptions.map((user) => ({
+    id: user.id,
+    fullName: user.full_name,
+    email: null,
+    isActive: true,
+  }));
+  const accountSuggestionByEmployeeId = new Map(
+    suggestEmployeeAccountMatches({
+      employees: employeesForMatching,
+      users: usersForMatching,
+    }).map((suggestion) => [suggestion.employeeId, suggestion]),
+  );
+  const accountCoverage = summariseAccountLinkCoverage({
+    employees: employeesForMatching,
+    users: usersForMatching,
+  });
   const canCreateLeave = canCreateOpsLeaveRequest(auth.profile.role);
   const canCreateRecruitment = canCreateOpsRecruitmentRequisition(auth.profile.role);
   const canCreateContract = canCreateOpsEmployeeContract(auth.profile.role);
@@ -1122,6 +1261,43 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           role={notice.tone === "error" ? "alert" : "status"}
         >
           {notice.message}
+        </div>
+      ) : null}
+
+      {/* Account-link coverage (audit §2 / §5). Both directions matter and
+          they are different problems: an employee with no account cannot see
+          their own payslip; an account with no employee record is a person the
+          HR module cannot see at all. Neither was visible anywhere before. */}
+      {accountCoverage.unlinked > 0 || accountCoverage.usersWithoutEmployee > 0 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
+          <p className="font-bold text-amber-800 dark:text-amber-200">
+            <AlertTriangle className="mr-1.5 inline size-4" aria-hidden="true" />
+            Staff accounts: {accountCoverage.linked} of {accountCoverage.totalEmployees}{" "}
+            employees linked ({accountCoverage.coveragePercent}%)
+          </p>
+          <ul className="mt-1 space-y-0.5 text-xs leading-5 text-amber-800/90 dark:text-amber-200/90">
+            {accountCoverage.unlinked > 0 ? (
+              <li>
+                <strong>{accountCoverage.unlinked}</strong> employee
+                {accountCoverage.unlinked === 1 ? "" : "s"} have no account — they cannot
+                sign in to see their own payslip, leave or documents.
+              </li>
+            ) : null}
+            {accountCoverage.usersWithoutEmployee > 0 ? (
+              <li>
+                <strong>{accountCoverage.usersWithoutEmployee}</strong> active account
+                {accountCoverage.usersWithoutEmployee === 1 ? " has" : "s have"} no
+                employee record — invisible to HR, payroll and leave.
+              </li>
+            ) : null}
+          </ul>
+          {canLinkAccount ? (
+            <p className="mt-1 text-xs leading-5 text-amber-800/90 dark:text-amber-200/90">
+              Use <strong>Staff account</strong> on each record below. Suggested matches
+              are pre-selected where the name or email is unambiguous — confirm before
+              saving.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -2292,7 +2468,11 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                     >
                       <input name="employee_id" type="hidden" value={employee.id} />
                       <input name="status" type="hidden" value={employee.status} />
-                      <input name="user_id" type="hidden" value={employee.user?.id ?? ""} />
+                      {/* The staff account link is NOT edited here. It used to
+                          ride along as a hidden field, which made it settable
+                          once on create and unmaintainable afterwards — and
+                          tamperable by anyone with general HR edit rights. It
+                          now has its own gated control below (audit §2). */}
                       <label className={OPS_LABEL_CLASS}>
                         Full name
                         <input
@@ -2433,6 +2613,13 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                     </form>
                   </details>
                 ) : null}
+
+                <EmployeeAccountLink
+                  canLink={canLinkAccount}
+                  employee={employee}
+                  suggestion={accountSuggestionByEmployeeId.get(employee.id)}
+                  userOptions={userOptions}
+                />
 
                 <dl className="mt-3 grid gap-3 md:grid-cols-5">
                   <HrMetric

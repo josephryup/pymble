@@ -323,6 +323,9 @@ export async function fetchMyStaffPayslips(): Promise<
     .eq("user_id", profile.id)
     .maybeSingle<{ id: string }>();
   if (!employee) {
+    // An account with no employee record behind it. The caller distinguishes
+    // this from "no payslips yet" via fetchMyPayslipAccess — see the note
+    // there on why an empty list alone is a misleading answer (audit §5).
     return [];
   }
   const { data, error } = await supabase
@@ -380,6 +383,48 @@ export async function fetchMyStaffPayslips(): Promise<
       };
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+}
+
+export type OpsMyPayslipAccess =
+  /** No employee record points at this account — nothing can ever be shown. */
+  | { state: "no_employee_record" }
+  /** Linked, but the employee record is not active. */
+  | { state: "inactive_employee"; employeeNumber: string }
+  /** Linked and active; an empty list genuinely means no payslips yet. */
+  | { state: "linked"; employeeNumber: string };
+
+/**
+ * Why a person's payslip list is empty (audit §5).
+ *
+ * `fetchMyStaffPayslips` returns `[]` both when someone has no payslips and
+ * when their account is not linked to an employee record — and those are
+ * completely different problems with completely different fixes. The second
+ * one silently affects real people: five active employees currently have no
+ * account link, so the payroll module has nothing to match them to.
+ *
+ * Rendering the same "no payslips" message for both tells the wrong person to
+ * wait for something that will never arrive. This lets the page say "your
+ * account is not linked to an employee record — ask HR", which is actionable.
+ *
+ * Deliberately reveals nothing about pay: only whether a link exists.
+ */
+export async function fetchMyPayslipAccess(): Promise<OpsMyPayslipAccess> {
+  const { profile } = await requireOpsUser();
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: employee } = await supabase
+    .from("employees")
+    .select("employee_number, status")
+    .eq("user_id", profile.id)
+    .maybeSingle<{ employee_number: string; status: string }>();
+
+  if (!employee) {
+    return { state: "no_employee_record" };
+  }
+  if (employee.status === "exited") {
+    return { state: "inactive_employee", employeeNumber: employee.employee_number };
+  }
+  return { state: "linked", employeeNumber: employee.employee_number };
 }
 
 export async function fetchOpsStaffPayslipYtd(

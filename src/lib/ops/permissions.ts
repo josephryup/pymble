@@ -4,6 +4,7 @@ import {
   isEngineeringManagerRole,
   isGeneralManagerRole,
   isHumanResourceRole,
+  isItManagerRole,
   isLeadershipRole,
   isManagingDirectorRole,
   type OpsAssignableStaffRole,
@@ -23,7 +24,12 @@ export function canManageStaff(role: OpsUserRole) {
     isDeveloperRole(role) ||
     isManagingDirectorRole(role) ||
     isGeneralManagerRole(role) ||
-    isHumanResourceRole(role)
+    isHumanResourceRole(role) ||
+    // Provisioning and deactivating accounts is IT's job (audit §6). Which
+    // ROLES the IT Manager may hand out is bounded separately in
+    // canCreateStaffRole — being able to create an account is not the same as
+    // being able to decide what that account may do.
+    isItManagerRole(role)
   );
 }
 
@@ -153,6 +159,46 @@ export function canCreateStaffRole(actorRole: OpsUserRole, targetRole: OpsAssign
     return targetRole !== "managing_director" && targetRole !== "general_manager";
   }
 
+  /**
+   * IT provisions accounts, but does not decide authority (audit §6).
+   *
+   * The distinction matters: creating a login so someone can do their job is
+   * an IT function; granting the ability to approve money or run the company
+   * is a business decision. If IT could mint a Managing Director or a Finance
+   * Manager, whoever holds the IT account would hold unlimited authority over
+   * spend by simply creating themselves a second account — a textbook
+   * segregation-of-duties failure, and one that would be invisible because IT
+   * legitimately administers the system.
+   *
+   * So IT may create the operational roles it supports, and no others. Anyone
+   * needing a leadership or finance role gets it from the MD, GM or HR.
+   *
+   * Written as an ALLOWLIST, deliberately. A denylist returns "permitted" for
+   * anything it has not heard of — including `developer`, which is excluded
+   * from OpsAssignableStaffRole at the type level but is just a string at
+   * runtime, and including every role added to the system in future. Listing
+   * what IT may grant means a new role is denied until someone decides
+   * otherwise, which is the right default for a privilege boundary.
+   */
+  if (isItManagerRole(actorRole)) {
+    const IT_ASSIGNABLE_ROLES: OpsAssignableStaffRole[] = [
+      "operations_manager",
+      "projects_manager",
+      "engineering_manager",
+      "procurement_manager",
+      "quantity_surveyor",
+      "procurement",
+      "procurement_assistant",
+      "engineer",
+      "engineering_intern",
+      "hse_officer",
+      "hse_assistant_officer",
+      "admin_receptionist",
+      "it_manager",
+    ];
+    return IT_ASSIGNABLE_ROLES.includes(targetRole);
+  }
+
   return false;
 }
 
@@ -195,6 +241,13 @@ export function canDeactivateStaffRole(actorRole: OpsUserRole, targetRole: OpsUs
 
   if (isHumanResourceRole(actorRole)) {
     return !isManagingDirectorRole(targetRole) && !isGeneralManagerRole(targetRole);
+  }
+
+  // Offboarding is core IT work — cutting access on someone's last day is the
+  // whole point of IT provisioning (audit §6). Bounded to the same roles IT may
+  // create, so IT can never disable the people who oversee it.
+  if (isItManagerRole(actorRole)) {
+    return canCreateStaffRole(actorRole, targetRole as OpsAssignableStaffRole);
   }
 
   return false;

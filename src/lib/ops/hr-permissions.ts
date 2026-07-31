@@ -92,6 +92,32 @@ export function canUpdateOpsEmployeeStatus(role: OpsUserRole) {
   return HR_MANAGE_ROLES.includes(role);
 }
 
+/**
+ * Who may connect an employee record to a login account.
+ *
+ * Deliberately NARROWER than HR_MANAGE_ROLES — it excludes the General Manager
+ * and the generic `manager` role, because this link is not an HR detail. It
+ * decides whose payslip a person can open: `employees.user_id` is the only
+ * bridge between "the person we employ" and "the account that signs in", and
+ * the payslip gate reads it directly (see the payslip self-service rules).
+ * Mis-linking two employees exposes one person's pay to another.
+ *
+ * So: HR (who own the employee record), the Managing Director and Owner (who
+ * carry the accountability), and the developer. Nobody else — including people
+ * who can otherwise edit every other field on the same form.
+ */
+const EMPLOYEE_ACCOUNT_LINK_ROLES: OpsUserRole[] = [
+  "developer",
+  "managing_director",
+  "owner",
+  "human_resource",
+  "hr",
+];
+
+export function canLinkOpsEmployeeAccount(role: OpsUserRole) {
+  return EMPLOYEE_ACCOUNT_LINK_ROLES.includes(role);
+}
+
 export function canCreateOpsLeaveRequest(role: OpsUserRole) {
   return HR_VIEW_ROLES.includes(role);
 }

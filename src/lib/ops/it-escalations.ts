@@ -89,7 +89,10 @@ export async function runOpsItEscalationsSweep(
         queueOpsNotification({
           actionHref: input.actionHref,
           body: input.body,
-          idempotencyKey: `${input.keyPrefix}:${today}:${recipientId}`,
+          // Date-free: this sweep runs daily, so a date here would mint a new
+          // key every morning and re-notify the same person about the same
+          // unresolved ticket indefinitely (audit §9).
+          idempotencyKey: `${input.keyPrefix}:${recipientId}`,
           moduleKey: "it",
           recipientId,
           sourceId: input.sourceId,

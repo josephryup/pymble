@@ -121,6 +121,13 @@ async function notifyReviewersOnSubmit({
     department: OpsDepartmentKey;
     scope: OpsDepartmentReportScope;
     title: string;
+    /**
+     * The moment this submission happened. Part of the notification key so a
+     * genuine RE-submission (after a rejection) notifies again, while a
+     * double-click on the same submission does not. Previously the key used
+     * the calendar date, which conflated the two — see audit §9.
+     */
+    submittedAt: string;
   };
   actorId: string;
   actorName: string;
@@ -132,13 +139,12 @@ async function notifyReviewersOnSubmit({
     excludeUserIds: [actorId],
   }).catch(() => []);
 
-  const today = new Date().toISOString().slice(0, 10);
   await Promise.all(
     reviewers.map((reviewer) =>
       queueOpsNotification({
         actionHref: `${ROUTE}/${report.id}`,
         body: `${actorName} submitted ${report.title} (${OPS_DEPARTMENT_LABELS[report.department]}) for your review.`,
-        idempotencyKey: `dept-report-submit:${today}:${report.id}:${reviewer.id}`,
+        idempotencyKey: `dept-report-submit:${report.id}:${report.submittedAt}:${reviewer.id}`,
         moduleKey: "department_reports",
         recipientId: reviewer.id,
         sourceId: report.id,
@@ -393,6 +399,7 @@ export async function submitDepartmentReportAction(formData: FormData) {
       department: existing.department,
       scope: existing.scope,
       title: existing.title,
+      submittedAt: now,
     },
     actorId: profile.id,
     actorName: profile.full_name,

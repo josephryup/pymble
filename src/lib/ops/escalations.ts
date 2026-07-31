@@ -338,8 +338,29 @@ export function classifyOpsEscalationAge(input: OpsEscalationAgeInput): OpsEscal
   return null;
 }
 
+/**
+ * Identity of an escalation notification: WHICH item, escalated for WHICH
+ * reason, to WHOM.
+ *
+ * Deliberately date-free. This key used to carry the sweep's date, so the six
+ * daily cron sweeps minted a fresh key every morning and one unresolved item
+ * produced a notification per recipient per day — 6,083 of the 6,935
+ * notifications in the system (88%) were redundant copies created this way.
+ *
+ * Without the date the upsert updates the existing row in place, so the
+ * notification stays current instead of multiplying. Escalation still happens,
+ * but through meaning rather than repetition:
+ *
+ *   • the `reason` is part of the key, so an item moving from `overdue` to
+ *     `stale` legitimately raises a NEW notification — the situation changed;
+ *   • widening the recipients (a more senior role) raises new notifications for
+ *     those people, because `recipientId` is part of the key.
+ *
+ * What it will no longer do is tell the same person the same thing about the
+ * same item every morning. If a recipient has read and forgotten an item, the
+ * answer is the periodic digest, not an unbounded stream of duplicates.
+ */
 export function buildOpsEscalationIdempotencyKey(input: {
-  dateKey: string;
   recipientId: string;
   reason: OpsEscalationReason;
   sourceId: string;
@@ -350,7 +371,6 @@ export function buildOpsEscalationIdempotencyKey(input: {
     input.sourceTable,
     input.sourceId,
     input.reason,
-    input.dateKey,
     input.recipientId,
   ].join(":");
 }
@@ -1051,7 +1071,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       actionHref: `/ops/approvals?status=${approval.status}`,
       body: `${approval.title} is ${reasonText(reason)}. Please review the approval path and move it forward.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: approval.id,
@@ -1085,7 +1104,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       actionHref: `/ops/material-requests?status=${request.status}`,
       body: `${request.request_number} - ${request.title} is ${reasonText(reason)}. Site, procurement, and commercial owners should confirm the next action.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: request.id,
@@ -1121,7 +1139,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
         request.requested_amount,
       )} is ${reasonText(reason)}. Finance should confirm review, approval, or payment movement.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: request.id,
@@ -1160,7 +1177,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
         reason,
       )}. Severity is ${exception.severity}; supplier follow-up should be confirmed.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: exception.id,
@@ -1197,7 +1213,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       actionHref: "/ops/rfq-po",
       body: `${rfq.rfq_number} - ${rfq.title} is ${awaiting} and ${reasonText(reason)}. Procurement should invite suppliers, capture quotes, or award.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: rfq.id,
@@ -1230,7 +1245,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       actionHref: "/ops/rfq-po",
       body: `${purchaseOrder.po_number} - ${purchaseOrder.title} is pending approval and ${reasonText(reason)}. Procurement and finance approvers should action it so the order can be issued.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: purchaseOrder.id,
@@ -1264,7 +1278,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       actionHref: "/ops/equipment?status=submitted#equipment-request-register",
       body: `${request.request_number} - ${request.title} is ${reasonText(reason)}. Operations should approve or reject it so the crew can plan.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: request.id,
@@ -1298,7 +1311,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       actionHref: "/ops/fleet-logistics?status=submitted#transport-register",
       body: `${request.request_number} - ${request.title} is ${reasonText(reason)}. Operations should approve or schedule the trip.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: request.id,
@@ -1337,7 +1349,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
         payment.amount,
       )}) is ${reasonText(reason)}. Finance should approve, pay, or reject it.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: payment.id,
@@ -1371,7 +1382,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       actionHref: "/ops/employees",
       body: `Leave request ${request.leave_number} is ${reasonText(reason)}. HR should approve or decline it before the leave start date.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: request.id,
@@ -1398,7 +1408,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
         "en-ZM",
       )} ZMW). Finance and projects leadership should confirm scope, cost, or budget revision.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason: "overdue",
         recipientId: "role",
         sourceId: variance.budget_id,
@@ -1439,7 +1448,6 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
       actionHref: `/ops/department-reports/${report.id}`,
       body: `${report.title} (${OPS_DEPARTMENT_LABELS[report.department]}) was submitted and is still awaiting review. Please acknowledge it or request revisions.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
-        dateKey,
         reason,
         recipientId: "role",
         sourceId: report.id,
