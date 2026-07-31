@@ -27,6 +27,7 @@ import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -390,6 +391,7 @@ function MaterialRequestItems({
                         action={updateMaterialRequestItemAction}
                         className="mt-2 grid gap-2 rounded-md border border-border bg-card p-3 shadow-sm"
                       >
+                        <OpsReturnToField />
                         <input name="item_id" type="hidden" value={item.id} />
                         <label className="text-xs font-bold text-muted-foreground">
                           Item
@@ -429,6 +431,7 @@ function MaterialRequestItems({
                       </form>
                     </details>
                     <form action={deleteMaterialRequestItemAction} className="inline-block">
+                      <OpsReturnToField />
                       <input name="item_id" type="hidden" value={item.id} />
                       <button
                         className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-700"
@@ -469,6 +472,7 @@ function ProcureForm({
         Record what was procured
       </summary>
       <form action={procureMaterialRequestAction} className="border-t border-border p-3">
+        <OpsReturnToField />
         <input name="request_id" type="hidden" value={request.id} />
         <p className="mb-3 text-xs leading-5 text-muted-foreground">
           Mark each line. Ordered lines are grouped by supplier into draft purchase
@@ -581,6 +585,7 @@ function AddItemForm({
         action={addMaterialRequestItemAction}
         className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
       >
+        <OpsReturnToField />
         <input name="request_id" type="hidden" value={requestId} />
         {boqLineOptions.length > 0 ? (
           <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
@@ -675,6 +680,7 @@ function ImportMaterialItemsForm({ requestId }: { requestId: string }) {
         action={importMaterialRequestItemsAction}
         className="grid gap-3 border-t border-border p-3"
       >
+        <OpsReturnToField />
         <input name="request_id" type="hidden" value={requestId} />
         <p className="text-xs leading-5 text-muted-foreground">
           Upload a needs list. Recognised columns: item / description, unit, quantity, estimate,
@@ -710,6 +716,7 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
       action={attachMaterialRequestPricingAction}
       className="rounded-md border border-primary-blue/30 bg-primary-blue/5 p-4"
     >
+      <OpsReturnToField />
       <input name="request_id" type="hidden" value={request.id} />
       <div className="mb-3 flex flex-col gap-1">
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
@@ -813,6 +820,7 @@ function FinanceCostDecisionForm({ request }: { request: OpsMaterialRequestSumma
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <form action={decideMaterialRequestCostAction}>
+          <OpsReturnToField />
           <input name="request_id" type="hidden" value={request.id} />
           <input name="decision" type="hidden" value="approve" />
           <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
@@ -829,6 +837,7 @@ function FinanceCostDecisionForm({ request }: { request: OpsMaterialRequestSumma
             action={decideMaterialRequestCostAction}
             className="grid gap-2 border-t border-red-200 p-3"
           >
+            <OpsReturnToField />
             <input name="request_id" type="hidden" value={request.id} />
             <input name="decision" type="hidden" value="reject" />
             <label className={OPS_LABEL_CLASS}>
@@ -857,6 +866,7 @@ function TransportCostForm({ request }: { request: OpsMaterialRequestSummary }) 
       action={setMaterialRequestTransportCostAction}
       className="rounded-md border border-border bg-muted/40 p-4"
     >
+      <OpsReturnToField />
       <input name="request_id" type="hidden" value={request.id} />
       <div className="mb-3 flex items-start gap-2">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
@@ -904,6 +914,7 @@ function ConfirmDeliveryForm({ request }: { request: OpsMaterialRequestSummary }
       action={confirmMaterialRequestDeliveryAction}
       className="rounded-md border border-emerald-300/50 bg-emerald-50/40 p-4"
     >
+      <OpsReturnToField />
       <input name="request_id" type="hidden" value={request.id} />
       <div className="mb-3 flex items-start gap-2">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-700">
@@ -1261,6 +1272,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
               action={createMaterialRequestAction}
               className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
+              <OpsReturnToField />
               <OpsScopeSitePicker allowedScopes={allowedScopes} sites={siteOptions} />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Request title
@@ -1470,6 +1482,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       ) : null}
                       {canSubmit ? (
                         <form action={submitMaterialRequestForApprovalAction}>
+                          <OpsReturnToField />
                           <input name="request_id" type="hidden" value={request.id} />
                           <OpsConfirmSubmitButton
                             className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
@@ -1596,6 +1609,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                         action={updateMaterialRequestHeaderAction}
                         className="grid gap-3 border-t border-border p-4 md:grid-cols-4"
                       >
+                        <OpsReturnToField />
                         <input name="request_id" type="hidden" value={request.id} />
                         <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
                           Title
@@ -1653,6 +1667,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                             action={cancelMaterialRequestAction}
                             className="grid gap-2 border-t border-red-200 p-3"
                           >
+                            <OpsReturnToField />
                             <input name="request_id" type="hidden" value={request.id} />
                             <label className={OPS_LABEL_CLASS}>
                               Reason (optional)
@@ -1669,6 +1684,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       ) : null}
                       {canArchive ? (
                         <form action={archiveMaterialRequestAction}>
+                          <OpsReturnToField />
                           <input name="request_id" type="hidden" value={request.id} />
                           <button
                             className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-bold text-foreground/70 hover:bg-muted/40"

@@ -36,7 +36,7 @@ import {
   canWaiveOpsEmployeeOnboardingItem,
 } from "@/lib/ops/hr-permissions";
 import { deleteOpsR2Object, putOpsR2Object } from "@/lib/ops/r2";
-import { safeOpsReturnTo } from "@/lib/ops/return-paths";
+import { opsReturnTo, safeOpsReturnTo } from "@/lib/ops/return-paths";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import { safeOpsFileName, validateOpsUploadFile } from "@/lib/ops/upload-validation";
 import type {
@@ -729,7 +729,13 @@ export async function updateEmployeeAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=employee`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "employee" },
+    }),
+  );
 }
 
 /**
@@ -847,7 +853,13 @@ export async function linkEmployeeAccountAction(formData: FormData) {
 
   revalidatePath(HR_ROUTE);
   revalidatePath("/ops/staff-payroll");
-  redirect(`${HR_ROUTE}?updated=${nextUserId ? "account_linked" : "account_unlinked"}`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: `${nextUserId ? "account_linked" : "account_unlinked"}` },
+    }),
+  );
 }
 
 export async function createEmployeeOnboardingItemAction(formData: FormData) {
@@ -943,7 +955,14 @@ export async function startEmployeeOnboardingItemAction(formData: FormData) {
   }
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=onboarding_started#employee-register`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "onboarding_started" },
+      hash: "employee-register",
+    }),
+  );
 }
 
 export async function completeEmployeeOnboardingItemAction(formData: FormData) {
@@ -983,7 +1002,14 @@ export async function completeEmployeeOnboardingItemAction(formData: FormData) {
   }
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=onboarding_completed#employee-register`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "onboarding_completed" },
+      hash: "employee-register",
+    }),
+  );
 }
 
 export async function waiveEmployeeOnboardingItemAction(formData: FormData) {
@@ -1021,7 +1047,14 @@ export async function waiveEmployeeOnboardingItemAction(formData: FormData) {
   }
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=onboarding_waived#employee-register`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "onboarding_waived" },
+      hash: "employee-register",
+    }),
+  );
 }
 
 export async function cancelEmployeeOnboardingItemAction(formData: FormData) {
@@ -1059,7 +1092,14 @@ export async function cancelEmployeeOnboardingItemAction(formData: FormData) {
   }
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=onboarding_cancelled#employee-register`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "onboarding_cancelled" },
+      hash: "employee-register",
+    }),
+  );
 }
 
 export async function createRecruitmentRequisitionAction(formData: FormData) {
@@ -1184,7 +1224,13 @@ export async function updateRecruitmentRequisitionStatusAction(formData: FormDat
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=recruitment_status`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "recruitment_status" },
+    }),
+  );
 }
 
 export async function createEmployeeContractAction(formData: FormData) {
@@ -1332,7 +1378,13 @@ export async function updateEmployeeContractStatusAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=contract_status`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "contract_status" },
+    }),
+  );
 }
 
 /**
@@ -1431,7 +1483,13 @@ export async function updateEmployeeContractAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=contract`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "contract" },
+    }),
+  );
 }
 
 export async function createPerformanceAppraisalAction(formData: FormData) {
@@ -1558,7 +1616,13 @@ export async function completePerformanceAppraisalAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=appraisal_completed`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "appraisal_completed" },
+    }),
+  );
 }
 
 export async function upsertLeaveBalanceAction(formData: FormData) {
@@ -1630,7 +1694,13 @@ export async function upsertLeaveBalanceAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=leave_balance`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "leave_balance" },
+    }),
+  );
 }
 
 export async function createHrDocumentCategoryAction(formData: FormData) {
@@ -2098,7 +2168,13 @@ export async function updateEmployeeStatusAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=employee_status`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "employee_status" },
+    }),
+  );
 }
 
 export async function createLeaveRequestAction(formData: FormData) {
@@ -2220,7 +2296,13 @@ export async function submitLeaveRequestAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=leave_submitted`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "leave_submitted" },
+    }),
+  );
 }
 
 export async function approveLeaveRequestAction(formData: FormData) {
@@ -2269,7 +2351,13 @@ export async function approveLeaveRequestAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=leave_approved`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "leave_approved" },
+    }),
+  );
 }
 
 export async function rejectLeaveRequestAction(formData: FormData) {
@@ -2322,7 +2410,13 @@ export async function rejectLeaveRequestAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=leave_rejected`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "leave_rejected" },
+    }),
+  );
 }
 
 export async function cancelLeaveRequestAction(formData: FormData) {
@@ -2361,7 +2455,13 @@ export async function cancelLeaveRequestAction(formData: FormData) {
   }
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=leave_cancelled`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "leave_cancelled" },
+    }),
+  );
 }
 
 export async function completeLeaveRequestAction(formData: FormData) {
@@ -2403,5 +2503,11 @@ export async function completeLeaveRequestAction(formData: FormData) {
     .eq("status", "on_leave");
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?updated=leave_completed`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: HR_ROUTE,
+      params: { updated: "leave_completed" },
+    }),
+  );
 }

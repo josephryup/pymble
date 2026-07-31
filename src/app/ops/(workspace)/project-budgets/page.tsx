@@ -21,6 +21,7 @@ import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsProjectPnlPanel } from "@/components/ops/OpsProjectPnlPanel";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   activateProjectBudgetAction,
@@ -154,6 +155,7 @@ function BudgetLineMaintenance({
       </summary>
       <div className="space-y-2 border-t border-border p-2">
         <form action={editProjectBudgetLineAction} className="grid gap-2">
+          <OpsReturnToField />
           <input name="line_id" type="hidden" value={line.id} />
           <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
             Description
@@ -207,6 +209,8 @@ function BudgetLineMaintenance({
         </form>
 
         <form action={deleteProjectBudgetLineAction}>
+
+          <OpsReturnToField />
           <input name="line_id" type="hidden" value={line.id} />
           <OpsConfirmSubmitButton
             className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
@@ -309,6 +313,7 @@ function AddBudgetLineForm({ budget }: { budget: OpsProjectBudgetSummary }) {
         action={addProjectBudgetLineAction}
         className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
       >
+        <OpsReturnToField />
         <input name="budget_id" type="hidden" value={budget.id} />
         <label className={OPS_LABEL_CLASS}>
           Cost code
@@ -630,6 +635,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
               action={createProjectBudgetAction}
               className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
             >
+              <OpsReturnToField />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
                 <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id" required>
@@ -761,6 +767,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                     <div className="grid gap-2 min-[520px]:grid-cols-3 lg:min-w-56 lg:grid-cols-1">
                       {canActivate ? (
                         <form action={activateProjectBudgetAction}>
+                          <OpsReturnToField />
                           <input name="budget_id" type="hidden" value={budget.id} />
                           <OpsConfirmSubmitButton
                             className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
@@ -773,6 +780,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                       ) : null}
                       {canLock ? (
                         <form action={lockProjectBudgetAction}>
+                          <OpsReturnToField />
                           <input name="budget_id" type="hidden" value={budget.id} />
                           <OpsConfirmSubmitButton
                             className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`}
@@ -785,6 +793,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                       ) : null}
                       {canArchive ? (
                         <form action={archiveProjectBudgetAction}>
+                          <OpsReturnToField />
                           <input name="budget_id" type="hidden" value={budget.id} />
                           <OpsConfirmSubmitButton
                             className={`${OPS_DANGER_BUTTON_CLASS} w-full`}
@@ -845,6 +854,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                           action={editProjectBudgetAction}
                           className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
                         >
+                          <OpsReturnToField />
                           <input name="budget_id" type="hidden" value={budget.id} />
                           <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                             Site

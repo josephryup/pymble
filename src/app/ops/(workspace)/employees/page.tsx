@@ -31,6 +31,7 @@ import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approveLeaveRequestAction,
@@ -401,6 +402,7 @@ function EmployeeAccountLink({
 
       {canLink ? (
         <form action={linkEmployeeAccountAction} className="mt-2 flex flex-wrap items-end gap-2">
+          <OpsReturnToField />
           <input name="employee_id" type="hidden" value={employee.id} />
           <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
             Linked account
@@ -565,6 +567,7 @@ function EmployeeDocumentReviewControls({
     <div className="mt-3 flex flex-wrap gap-2">
       {canReview ? (
         <form action={acceptEmployeeDocumentAction}>
+          <OpsReturnToField />
           <input name="employee_document_id" type="hidden" value={document.id} />
           <input name="return_to" type="hidden" value={returnTo} />
           <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
@@ -579,6 +582,7 @@ function EmployeeDocumentReviewControls({
             Reject document
           </summary>
           <form action={rejectEmployeeDocumentAction} className="grid gap-3 border-t border-border p-3">
+            <OpsReturnToField />
             <input name="employee_document_id" type="hidden" value={document.id} />
             <input name="return_to" type="hidden" value={returnTo} />
             <label className={OPS_LABEL_CLASS}>
@@ -594,6 +598,7 @@ function EmployeeDocumentReviewControls({
       ) : null}
       {canArchiveOpsEmployeeDocument(role, document) ? (
         <form action={archiveEmployeeDocumentAction}>
+          <OpsReturnToField />
           <input name="employee_document_id" type="hidden" value={document.id} />
           <input name="return_to" type="hidden" value={returnTo} />
           <OpsConfirmSubmitButton
@@ -684,6 +689,7 @@ function EmployeeContractsPanel({
                 action={updateEmployeeContractAction}
                 className="grid gap-3 border-t border-border p-3 sm:grid-cols-2"
               >
+                <OpsReturnToField />
                 <input name="contract_id" type="hidden" value={contract.id} />
                 <input name="employee_id" type="hidden" value={contract.employee_id} />
                 <input name="status" type="hidden" value={contract.status} />
@@ -816,6 +822,7 @@ function EmployeeContractsPanel({
               action={updateEmployeeContractStatusAction}
               className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
             >
+              <OpsReturnToField />
               <input name="contract_id" type="hidden" value={contract.id} />
               <label className={`${OPS_LABEL_CLASS} flex-1`}>
                 Update status
@@ -934,6 +941,7 @@ function LeaveControls({
     <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
       {canSubmit ? (
         <form action={submitLeaveRequestAction}>
+          <OpsReturnToField />
           <input name="leave_request_id" type="hidden" value={leaveRequest.id} />
           <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
             <Send className="size-4" aria-hidden="true" />
@@ -943,6 +951,7 @@ function LeaveControls({
       ) : null}
       {canApprove ? (
         <form action={approveLeaveRequestAction}>
+          <OpsReturnToField />
           <input name="leave_request_id" type="hidden" value={leaveRequest.id} />
           <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`} type="submit">
             <CheckCircle2 className="size-4" aria-hidden="true" />
@@ -952,6 +961,7 @@ function LeaveControls({
       ) : null}
       {canComplete ? (
         <form action={completeLeaveRequestAction}>
+          <OpsReturnToField />
           <input name="leave_request_id" type="hidden" value={leaveRequest.id} />
           <button className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} type="submit">
             <CalendarCheck className="size-4" aria-hidden="true" />
@@ -965,6 +975,7 @@ function LeaveControls({
             Reject request
           </summary>
           <form action={rejectLeaveRequestAction} className="grid gap-3 border-t border-border p-3">
+            <OpsReturnToField />
             <input name="leave_request_id" type="hidden" value={leaveRequest.id} />
             <label className={OPS_LABEL_CLASS}>
               Rejection reason
@@ -979,6 +990,7 @@ function LeaveControls({
       ) : null}
       {canCancel ? (
         <form action={cancelLeaveRequestAction}>
+          <OpsReturnToField />
           <input name="leave_request_id" type="hidden" value={leaveRequest.id} />
           <OpsConfirmSubmitButton
             className={`${OPS_DANGER_BUTTON_CLASS} min-h-11 w-full justify-center`}
@@ -1004,6 +1016,7 @@ function OnboardingControls({
     <div className="mt-3 flex flex-wrap gap-2">
       {canStartOpsEmployeeOnboardingItem(role, item) ? (
         <form action={startEmployeeOnboardingItemAction}>
+          <OpsReturnToField />
           <input name="onboarding_item_id" type="hidden" value={item.id} />
           <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
             Start
@@ -1016,6 +1029,7 @@ function OnboardingControls({
             Complete item
           </summary>
           <form action={completeEmployeeOnboardingItemAction} className="grid gap-3 border-t border-border p-3">
+            <OpsReturnToField />
             <input name="onboarding_item_id" type="hidden" value={item.id} />
             <label className={OPS_LABEL_CLASS}>
               Completion notes
@@ -1029,6 +1043,7 @@ function OnboardingControls({
       ) : null}
       {canWaiveOpsEmployeeOnboardingItem(role, item) ? (
         <form action={waiveEmployeeOnboardingItemAction}>
+          <OpsReturnToField />
           <input name="onboarding_item_id" type="hidden" value={item.id} />
           <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
             Waive
@@ -1037,6 +1052,7 @@ function OnboardingControls({
       ) : null}
       {canCancelOpsEmployeeOnboardingItem(role, item) ? (
         <form action={cancelEmployeeOnboardingItemAction}>
+          <OpsReturnToField />
           <input name="onboarding_item_id" type="hidden" value={item.id} />
           <OpsConfirmSubmitButton
             className={`${OPS_DANGER_BUTTON_CLASS} min-h-11 justify-center`}
@@ -1063,6 +1079,7 @@ function RecruitmentControls({
 
   return (
     <form action={updateRecruitmentRequisitionStatusAction} className="mt-3 grid gap-2 min-[520px]:grid-cols-[1fr_auto]">
+      <OpsReturnToField />
       <input name="requisition_id" type="hidden" value={requisition.id} />
       <label className="sr-only" htmlFor={`requisition-status-${requisition.id}`}>
         Recruitment status
@@ -1373,6 +1390,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
             </span>
           </summary>
           <form action={createEmployeeAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+            <OpsReturnToField />
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Full name
               <input className={OPS_INPUT_CLASS} name="full_name" required />
@@ -1506,6 +1524,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
             </div>
           ) : (
             <form action={createLeaveRequestAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+              <OpsReturnToField />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Employee
                 <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -1582,6 +1601,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               </span>
             </summary>
             <form action={createRecruitmentRequisitionAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
+              <OpsReturnToField />
               <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2`}>
                 Job title
                 <input className={OPS_INPUT_CLASS} name="job_title" required />
@@ -1686,6 +1706,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               </div>
             ) : (
               <form action={createEmployeeContractAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
+                <OpsReturnToField />
                 <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2`}>
                   Employee
                   <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -1828,6 +1849,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               </div>
             ) : (
               <form action={createPerformanceAppraisalAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
+                <OpsReturnToField />
                 <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2`}>
                   Employee
                   <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -1915,6 +1937,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               </div>
             ) : (
               <form action={upsertLeaveBalanceAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
+                <OpsReturnToField />
                 <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2`}>
                   Employee
                   <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -1991,6 +2014,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               </span>
             </summary>
             <form action={createHrDocumentCategoryAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2">
+              <OpsReturnToField />
               <label className={OPS_LABEL_CLASS}>
                 Code
                 <input className={OPS_INPUT_CLASS} name="category_code" placeholder="training" required />
@@ -2051,6 +2075,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 action={uploadEmployeeDocumentAction}
                 className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
               >
+                <OpsReturnToField />
                 <input name="return_to" type="hidden" value="/ops/employees#employee-register" />
                 <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                   Employee
@@ -2134,6 +2159,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
             </div>
           ) : (
             <form action={createEmployeeOnboardingItemAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+              <OpsReturnToField />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Employee
                 <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -2416,6 +2442,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                   </div>
                   {canUpdateStatus ? (
                     <form action={updateEmployeeStatusAction} className="grid gap-2 min-[520px]:grid-cols-[1fr_auto] lg:min-w-80">
+                      <OpsReturnToField />
                       <input name="employee_id" type="hidden" value={employee.id} />
                       <label className="sr-only" htmlFor={`status-${employee.id}`}>
                         Update employee status
@@ -2466,6 +2493,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                       action={updateEmployeeAction}
                       className="grid gap-3 border-t border-border p-3 sm:grid-cols-2 lg:grid-cols-3"
                     >
+                      <OpsReturnToField />
                       <input name="employee_id" type="hidden" value={employee.id} />
                       <input name="status" type="hidden" value={employee.status} />
                       {/* The staff account link is NOT edited here. It used to

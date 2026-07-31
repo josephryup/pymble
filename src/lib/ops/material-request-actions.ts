@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { opsReturnTo } from "@/lib/ops/return-paths";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
   canApproveMaterialRequestCost,
@@ -453,7 +454,13 @@ export async function addMaterialRequestItemAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=item_added`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "item_added" },
+    }),
+  );
 }
 
 // ===========================================================================
@@ -743,7 +750,11 @@ export async function importMaterialRequestItemsAction(formData: FormData) {
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   redirect(
-    `${MATERIAL_REQUEST_ROUTE}?updated=items_imported&imported=${inserts.length}&skipped=${rowErrors.length}&linked=${linkedToSchedule}`,
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "items_imported", imported: `${inserts.length}`, skipped: `${rowErrors.length}`, linked: `${linkedToSchedule}` },
+    }),
   );
 }
 
@@ -1173,7 +1184,14 @@ async function applyMaterialRequestPricing(formData: FormData, mode: "save" | "s
     }).catch(() => null);
 
     revalidatePath(MATERIAL_REQUEST_ROUTE);
-    redirect(`${MATERIAL_REQUEST_ROUTE}?updated=prices_saved#mr-${request.id}`);
+    redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "prices_saved" },
+      hash: `mr-${request.id}`,
+    }),
+  );
   }
 
   // Competitive tender gate (§8.6). The RFQ belongs BEFORE pricing, not after
@@ -1249,7 +1267,14 @@ async function applyMaterialRequestPricing(formData: FormData, mode: "save" | "s
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
   revalidatePath("/ops/notifications");
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=priced#mr-${request.id}`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "priced" },
+      hash: `mr-${request.id}`,
+    }),
+  );
 }
 
 /** Save draft supplier prices — request stays in `pricing_pending`. */
@@ -1547,7 +1572,14 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
         ? "cost_approved_over_budget"
         : "cost_approved"
     : "cost_rejected";
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=${updatedFlag}#mr-${request.id}`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: `${updatedFlag}` },
+      hash: `mr-${request.id}`,
+    }),
+  );
 }
 
 // =============================================================================
@@ -1624,7 +1656,14 @@ export async function setMaterialRequestTransportCostAction(formData: FormData) 
   }).catch(() => null);
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=transport_cost#mr-${request.id}`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "transport_cost" },
+      hash: `mr-${request.id}`,
+    }),
+  );
 }
 
 // =============================================================================
@@ -1812,7 +1851,12 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
   revalidatePath("/ops/notifications");
   revalidatePath("/ops/project-budgets");
   redirect(
-    `${MATERIAL_REQUEST_ROUTE}?updated=${receivedInFull ? "delivered_closed" : "delivered"}#mr-${request.id}`,
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: `${receivedInFull ? "delivered_closed" : "delivered"}` },
+      hash: `mr-${request.id}`,
+    }),
   );
 }
 
@@ -1899,7 +1943,14 @@ export async function updateMaterialRequestHeaderAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=request#mr-${parsed.data.request_id}`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "request" },
+      hash: `mr-${parsed.data.request_id}`,
+    }),
+  );
 }
 
 export async function updateMaterialRequestItemAction(formData: FormData) {
@@ -1967,7 +2018,14 @@ export async function updateMaterialRequestItemAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=item#mr-${itemRow.request_id}`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "item" },
+      hash: `mr-${itemRow.request_id}`,
+    }),
+  );
 }
 
 export async function deleteMaterialRequestItemAction(formData: FormData) {
@@ -2015,7 +2073,14 @@ export async function deleteMaterialRequestItemAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=item_deleted#mr-${itemRow.request_id}`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "item_deleted" },
+      hash: `mr-${itemRow.request_id}`,
+    }),
+  );
 }
 
 export async function cancelMaterialRequestAction(formData: FormData) {
@@ -2095,7 +2160,14 @@ export async function cancelMaterialRequestAction(formData: FormData) {
   }
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=cancelled#mr-${parsed.data.request_id}`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "cancelled" },
+      hash: `mr-${parsed.data.request_id}`,
+    }),
+  );
 }
 
 export async function archiveMaterialRequestAction(formData: FormData) {
@@ -2137,7 +2209,14 @@ export async function archiveMaterialRequestAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=archived#mr-${parsed.data.request_id}`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "archived" },
+      hash: `mr-${parsed.data.request_id}`,
+    }),
+  );
 }
 
 export async function deleteMaterialRequestAction(formData: FormData) {
@@ -2173,5 +2252,11 @@ export async function deleteMaterialRequestAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
-  redirect(`${MATERIAL_REQUEST_ROUTE}?updated=deleted`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "deleted" },
+    }),
+  );
 }

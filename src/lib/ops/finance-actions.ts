@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { opsReturnTo } from "@/lib/ops/return-paths";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
   canActivateOpsProjectBudget,
@@ -498,7 +499,13 @@ export async function addProjectBudgetLineAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(PROJECT_BUDGETS_ROUTE);
-  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=line_added`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: PROJECT_BUDGETS_ROUTE,
+      params: { updated: "line_added" },
+    }),
+  );
 }
 
 /**
@@ -631,7 +638,13 @@ export async function editProjectBudgetLineAction(formData: FormData) {
 
   revalidatePath(PROJECT_BUDGETS_ROUTE);
   revalidatePath("/ops/finance");
-  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=line_edited`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: PROJECT_BUDGETS_ROUTE,
+      params: { updated: "line_edited" },
+    }),
+  );
 }
 
 /**
@@ -741,7 +754,13 @@ export async function deleteProjectBudgetLineAction(formData: FormData) {
 
   revalidatePath(PROJECT_BUDGETS_ROUTE);
   revalidatePath("/ops/finance");
-  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=line_deleted`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: PROJECT_BUDGETS_ROUTE,
+      params: { updated: "line_deleted" },
+    }),
+  );
 }
 
 export async function activateProjectBudgetAction(formData: FormData) {
@@ -809,7 +828,13 @@ export async function activateProjectBudgetAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(PROJECT_BUDGETS_ROUTE);
-  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=activated`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: PROJECT_BUDGETS_ROUTE,
+      params: { updated: "activated" },
+    }),
+  );
 }
 
 export async function lockProjectBudgetAction(formData: FormData) {
@@ -855,7 +880,13 @@ export async function lockProjectBudgetAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(PROJECT_BUDGETS_ROUTE);
-  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=locked`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: PROJECT_BUDGETS_ROUTE,
+      params: { updated: "locked" },
+    }),
+  );
 }
 
 export async function archiveProjectBudgetAction(formData: FormData) {
@@ -901,7 +932,13 @@ export async function archiveProjectBudgetAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(PROJECT_BUDGETS_ROUTE);
-  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=archived`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: PROJECT_BUDGETS_ROUTE,
+      params: { updated: "archived" },
+    }),
+  );
 }
 
 const editProjectBudgetSchema = budgetIdSchema.extend({
@@ -983,7 +1020,13 @@ export async function editProjectBudgetAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(PROJECT_BUDGETS_ROUTE);
-  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=edited`);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: PROJECT_BUDGETS_ROUTE,
+      params: { updated: "edited" },
+    }),
+  );
 }
 
 export async function createPaymentRequestAction(formData: FormData) {
