@@ -75,6 +75,10 @@ export type OpsMaterialRequestStatus =
   | "approved"
   | "rejected"
   | "cancelled"
+  // A working state, not a terminal one: some items are on purchase orders,
+  // others are still outstanding and the request stays on Procurement's queue
+  // for a second round (audit §8.7).
+  | "partially_ordered"
   | "ordered"
   | "delivered"
   | "closed";

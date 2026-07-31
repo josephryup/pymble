@@ -246,7 +246,11 @@ export function canConfirmMaterialRequestDelivery(
   actorRole: OpsUserRole,
   request: OpsMaterialRequestMutationTarget,
 ) {
-  if (request.status !== "ordered") {
+  // Partially ordered counts: goods that WERE procured can arrive on site
+  // before the outstanding items are sourced, and making the site wait for a
+  // second procurement round before confirming the first delivery would put
+  // the request out of step with reality.
+  if (request.status !== "ordered" && request.status !== "partially_ordered") {
     return false;
   }
   if (request.requested_by === actorId && canCreateOpsMaterialRequest(actorRole)) {
@@ -270,10 +274,13 @@ export function canCancelOpsMaterialRequest(
   actorRole: OpsUserRole,
   request: OpsMaterialRequestMutationTarget,
 ) {
-  // Already closed / cancelled / ordered / delivered → no cancellation possible.
+  // Already closed / cancelled / ordered / delivered → no cancellation
+  // possible. `partially_ordered` is included: once any purchase order exists,
+  // cancelling the request would strand a live commitment to a supplier.
   if (
     request.status === "closed" ||
     request.status === "cancelled" ||
+    request.status === "partially_ordered" ||
     request.status === "ordered" ||
     request.status === "delivered"
   ) {

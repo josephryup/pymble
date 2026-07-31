@@ -165,6 +165,7 @@ export function buildMaterialRequestChainSteps(
     "priced",
     "md_review",
     "approved",
+    "partially_ordered",
     "ordered",
     "delivered",
     "closed",
@@ -174,14 +175,24 @@ export function buildMaterialRequestChainSteps(
     "priced",
     "md_review",
     "approved",
+    "partially_ordered",
     "ordered",
     "delivered",
     "closed",
   ].includes(s);
-  const pricedDone = ["priced", "md_review", "approved", "ordered", "delivered", "closed"].includes(s);
-  const financeApprovedDone = ["md_review", "approved", "ordered", "delivered", "closed"].includes(s);
-  const mdApprovedDone = ["approved", "ordered", "delivered", "closed"].includes(s);
+  const pricedDone = [
+    "priced", "md_review", "approved", "partially_ordered", "ordered", "delivered", "closed",
+  ].includes(s);
+  const financeApprovedDone = [
+    "md_review", "approved", "partially_ordered", "ordered", "delivered", "closed",
+  ].includes(s);
+  const mdApprovedDone = [
+    "approved", "partially_ordered", "ordered", "delivered", "closed",
+  ].includes(s);
+  // `partially_ordered` is deliberately NOT "done" here: some items are still
+  // outstanding, so the procurement step is in progress, not finished (§8.7).
   const orderedDone = ["ordered", "delivered", "closed"].includes(s);
+  const partiallyOrdered = s === "partially_ordered";
   const deliveredDone = ["delivered", "closed"].includes(s);
   const rejected = s === "rejected";
 
@@ -295,10 +306,20 @@ export function buildMaterialRequestChainSteps(
       : []),
     {
       key: "procured",
-      label: "Procured (RFQ / Purchase Order)",
-      state: orderedDone ? "done" : s === "approved" ? "current" : "pending",
-      caption: chainDate(request.ordered_at) ?? (s === "approved" ? "Ready to procure" : null),
-      href: orderedDone || s === "approved" ? "/ops/rfq-po" : null,
+      label: "Procured (Purchase Order)",
+      state: orderedDone
+        ? "done"
+        : s === "approved" || partiallyOrdered
+          ? "current"
+          : "pending",
+      caption:
+        chainDate(request.ordered_at) ??
+        (partiallyOrdered
+          ? "Partly procured — outstanding items awaiting a second round"
+          : s === "approved"
+            ? "Ready to procure"
+            : null),
+      href: orderedDone || s === "approved" || partiallyOrdered ? "/ops/rfq-po" : null,
     },
     {
       key: "delivered",

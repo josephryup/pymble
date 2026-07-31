@@ -142,6 +142,8 @@ export const OPS_STATUS_TONES: Record<string, OpsStatusTone> = {
   normal: "info",
   offered: "info",
   ordered: "info",
+  // A working state — some items bought, others still outstanding.
+  partially_ordered: "attention",
   quoted: "info",
   testing: "info",
   transfer: "info",

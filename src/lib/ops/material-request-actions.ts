@@ -1552,6 +1552,7 @@ export async function setMaterialRequestTransportCostAction(formData: FormData) 
     "priced",
     "md_review",
     "approved",
+    "partially_ordered",
     "ordered",
   ];
   if (!transportEditable.includes(request.status)) {
@@ -1654,7 +1655,9 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
     .from("material_requests")
     .update(update)
     .eq("id", request.id)
-    .eq("status", "ordered")
+    // Partially-ordered requests can receive their procured goods before the
+    // outstanding items are sourced — see canConfirmMaterialRequestDelivery.
+    .in("status", ["ordered", "partially_ordered"])
     .select("id")
     .maybeSingle<{ id: string }>();
   if (error || !updated) {

@@ -602,10 +602,23 @@ Three design points worth recording:
   approval. Folding it into `approvalSource` would have quietly allowed the
   approver to procure their own approval.
 
-Still to do for Phase 3: the procure-action UI and server action, PO auto-create
-as **draft** (issue stays a separate deliberate act), MR status transitions,
-lifecycle advance to `committed` on PO issue with relief of the reservation,
-RFQ repositioned ahead of pricing, and all of Phase 3b.
+### Phase 3 — procure action shipped 2026-07-30
+The behaviour, with its guard rails, in the same change.
+
+| Item | Outcome |
+| --- | --- |
+| **Procure action** | `procure-actions.ts` — Procurement marks each line ordered / declined / deferred (reason required for the latter two, enforced in the database), and lines marked ordered are grouped **by supplier** into purchase orders. |
+| **R2: draft, never issued** | The action creates POs as `draft`. Issuing — the outward-facing act that commits Pymble to a supplier — stays a separate deliberate step with its own confirmation. This one decision is what makes removing the redundant PO approval survivable. |
+| **R1: segregation of duties** | The approver cannot procure their own approval. Read from `approval_steps.decision_by` (the header has no approver), and the action **refuses** rather than downgrading to a delta approval — it is a question about who may act, not about value. |
+| **R1: provenance** | Every PO records `approval_source`, `inherited_from_approval_id`, `procured_by`, `procured_at`, and the audit row names the inheritance reasons when it is a delta. |
+| **R2: idempotency** | Items already covered by a live PO line are skipped, so a double submit cannot commit twice. |
+| **§8.4 relief** | Commitment recognised for what was actually ordered; the reservation is rewritten to the retained amount (pending + deferred) in the same operation, so **declined money returns to the budget**. |
+| **Status** | `partially_ordered` as a working state: the request stays on Procurement's queue, can still receive its procured goods, and cannot be cancelled (a live supplier commitment exists). |
+| **R3 / R4 controls** | `procurement-controls.ts`: unmet-need queue (declined/deferred with outstanding quantity, escalating on **age** not decline-count alone, chronic flag at 2+ declines, feeding a notification to Procurement Manager + PM) and the stale-reservation report, now a panel on `/ops/finance`. Reservations are reported, **never auto-released** — handing funds back on a timer is its own hazard. |
+
+Still to do for Phase 3: RFQ repositioned ahead of pricing and made
+threshold-conditional (§8.6), the inherited-approval weekly digest, and the
+DB-level PO value assertion.
 
 ---
 

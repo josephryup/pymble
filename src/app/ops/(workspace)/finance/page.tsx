@@ -46,6 +46,10 @@ import {
 } from "@/lib/ops/finance-kpis";
 import { fetchOpsFinanceLeakReport } from "@/lib/ops/finance-leaks";
 import { fetchOpsGlMonthlyTrend } from "@/lib/ops/gl-trends";
+import {
+  fetchOpsStaleReservations,
+  STALE_RESERVATION_DAYS,
+} from "@/lib/ops/procurement-controls";
 import { fetchOpsMaterialRequestsPricedCount } from "@/lib/ops/material-requests";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchOpsProjectPnl } from "@/lib/ops/project-pnl";
@@ -85,6 +89,7 @@ export default async function OpsFinanceOverviewPage() {
     materialRequestsPricedCount,
     subcontractorPaymentsPendingCount,
     leakReport,
+    reservations,
   ] = await Promise.all([
     fetchOpsFinanceCashflowDashboard(),
     fetchOpsPaymentRequestStats(),
@@ -99,7 +104,13 @@ export default async function OpsFinanceOverviewPage() {
     fetchOpsMaterialRequestsPricedCount(),
     fetchOpsPendingSubcontractorPaymentsCount(),
     fetchOpsFinanceLeakReport(),
+    fetchOpsStaleReservations().catch(() => ({
+      rows: [],
+      staleAmount: 0,
+      totalReservedAmount: 0,
+    })),
   ]);
+  const staleReservations = reservations.rows.filter((row) => row.isStale);
   const hasGlActivity = glTrend.some(
     (point) => point.income !== 0 || point.expenses !== 0 || point.cashBalance !== 0,
   );
@@ -231,6 +242,63 @@ export default async function OpsFinanceOverviewPage() {
           </table>
         </div>
       </OpsDashboardPanel>
+
+      {/* Reservations still standing. Approved-but-not-procured spend holds
+          budget: left unwatched it makes a healthy budget look exhausted
+          (audit R4). Reported, never released automatically — handing funds
+          back on a timer is its own hazard. */}
+      {reservations.rows.length > 0 ? (
+        <OpsDashboardPanel
+          accent={staleReservations.length > 0}
+          density="compact"
+          eyebrow="Commitment control"
+          title="Reservations awaiting procurement"
+          description={
+            staleReservations.length > 0
+              ? `${formatZmw(reservations.staleAmount)} has been held for over ${STALE_RESERVATION_DAYS} days without being ordered.`
+              : `${formatZmw(reservations.totalReservedAmount)} approved and awaiting purchase orders — all current.`
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className={OPS_TABLE_CLASS}>
+              <thead className={OPS_THEAD_CLASS}>
+                <tr>
+                  <th className={OPS_TH_CLASS}>Request</th>
+                  <th className={OPS_TH_CLASS}>Site</th>
+                  <th className={OPS_TH_CLASS}>Cost code</th>
+                  <th className={OPS_TH_NUM_CLASS}>Reserved</th>
+                  <th className={OPS_TH_NUM_CLASS}>Age</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reservations.rows.slice(0, 8).map((row) => (
+                  <tr className={OPS_TR_CLASS} key={`${row.requestId}-${row.reservedOn}`}>
+                    <td className={OPS_TD_CLASS}>
+                      <Link
+                        className="font-semibold text-foreground hover:text-primary-blue"
+                        href={`/ops/material-requests#mr-${row.requestId}`}
+                      >
+                        {row.requestNumber}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">{row.requestTitle}</p>
+                    </td>
+                    <td className={OPS_TD_CLASS}>{row.siteCode}</td>
+                    <td className={`${OPS_TD_CLASS} text-xs text-muted-foreground`}>
+                      {row.costCodeLabel ?? "—"}
+                    </td>
+                    <td className={OPS_TD_NUM_CLASS}>{formatZmw(row.amount)}</td>
+                    <td className={OPS_TD_NUM_CLASS}>
+                      <span className={row.isStale ? "font-bold text-amber-700" : ""}>
+                        {row.ageDays}d{row.isStale ? " ⚠" : ""}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </OpsDashboardPanel>
+      ) : null}
 
       {/* Cash & liability signal */}
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

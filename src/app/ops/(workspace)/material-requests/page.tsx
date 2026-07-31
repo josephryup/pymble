@@ -47,6 +47,7 @@ import {
   updateMaterialRequestHeaderAction,
   updateMaterialRequestItemAction,
 } from "@/lib/ops/material-request-actions";
+import { procureMaterialRequestAction } from "@/lib/ops/procure-actions";
 import {
   canApproveMaterialRequestCost,
   canApproveMaterialRequestMdReview,
@@ -152,6 +153,16 @@ function materialRequestNotice(params: OpsSearchParams) {
   if (firstParam(params.updated) === "item_added") {
     return {
       message: "Material request item added.",
+      tone: "success" as const,
+    };
+  }
+
+  if (firstParam(params.updated) === "procured") {
+    const pos = firstParam(params.pos) ?? "0";
+    return {
+      message: `Procurement recorded. ${pos} draft purchase order${
+        pos === "1" ? "" : "s"
+      } raised — review and issue when ready. Nothing has been sent to a supplier yet.`,
       tone: "success" as const,
     };
   }
@@ -424,6 +435,80 @@ function MaterialRequestItems({
         </tbody>
       </table>
     </OpsTableShell>
+  );
+}
+
+/**
+ * The procure screen (audit §8.4). Procurement marks what was actually bought;
+ * declines and deferrals need a reason, because an item that vanishes without
+ * one is how sites end up raising duplicate requests.
+ *
+ * This raises DRAFT purchase orders. Issuing them — the outward-facing act that
+ * commits Pymble to a supplier — stays separate and deliberate (audit R2).
+ */
+function ProcureForm({
+  request,
+}: {
+  request: OpsMaterialRequestSummary;
+}) {
+  return (
+    <details className="rounded-md border border-primary-blue/30 bg-primary-blue/5">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-blue transition hover:text-primary-blue/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+        <PackageCheck className="size-4" aria-hidden="true" />
+        Record what was procured
+      </summary>
+      <form action={procureMaterialRequestAction} className="border-t border-border p-3">
+        <input name="request_id" type="hidden" value={request.id} />
+        <p className="mb-3 text-xs leading-5 text-muted-foreground">
+          Mark each line. Ordered lines are grouped by supplier into draft purchase
+          orders — nothing is sent to a supplier until you issue it. Declined lines
+          release their funds back to the budget; deferred lines keep theirs reserved
+          for a later round.
+        </p>
+        <div className="space-y-2">
+          {request.items.map((item) => (
+            <div
+              className="grid gap-2 rounded-md border border-border bg-background p-2 min-[640px]:grid-cols-[1fr_auto_1fr] min-[640px]:items-center"
+              key={item.id}
+            >
+              <div>
+                <p className="text-sm font-semibold text-foreground">{item.item_name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {item.quantity} {item.unit}
+                  {item.actual_total > 0 ? ` · ${formatZmw(item.actual_total)}` : ""}
+                </p>
+              </div>
+              <select
+                aria-label={`Procurement decision for ${item.item_name}`}
+                className={OPS_INPUT_CLASS}
+                defaultValue=""
+                name={`decision::${item.id}`}
+              >
+                <option value="">No change</option>
+                <option value="ordered">Procured</option>
+                <option value="declined">Not procured</option>
+                <option value="deferred">Defer to next round</option>
+              </select>
+              <input
+                aria-label={`Reason for ${item.item_name}`}
+                className={OPS_INPUT_CLASS}
+                name={`reason::${item.id}`}
+                placeholder="Reason (required if not procured)"
+              />
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex justify-end">
+          <OpsConfirmSubmitButton
+            className={OPS_SECONDARY_BUTTON_CLASS}
+            confirmText="Confirm — raise draft POs"
+          >
+            <PackageCheck className="size-4" aria-hidden="true" />
+            Raise draft purchase orders
+          </OpsConfirmSubmitButton>
+        </div>
+      </form>
+    </details>
   );
 }
 
@@ -918,6 +1003,8 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
       ? scopeChoices.filter((value) => value !== "site")
       : scopeChoices;
   const canManageActivity = canCreate || canManageOpsMaterialRequest(auth.profile.role);
+  // Same gate as pricing — recording what was procured is procurement-owned.
+  const canProcure = canAttachMaterialRequestPricing(auth.profile.role);
   const notice = materialRequestNotice(params);
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const draftCount = requests.filter((request) => request.status === "draft").length;
@@ -1412,6 +1499,14 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       approval decision rather than after it (audit D8). Spend
                       is never blocked — see business decision §7.2. */}
                   <BudgetPositionNotice position={budgetPositions.get(request.id)} />
+
+                  {canProcure &&
+                  (request.status === "approved" ||
+                    request.status === "partially_ordered") ? (
+                    <div className="mt-3">
+                      <ProcureForm request={request} />
+                    </div>
+                  ) : null}
 
                   <div className="mt-4">
                     <OpsChainTracker steps={buildMaterialRequestChainSteps(request)} />
