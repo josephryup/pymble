@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   FileCheck2,
+  FileSignature,
   FileSpreadsheet,
   Flag,
   Gavel,
@@ -160,6 +161,10 @@ import {
   type OpsCommercialValuationSummary,
   type OpsCommercialVariationSummary,
 } from "@/lib/ops/commercial";
+import {
+  fetchOpsVariationCandidates,
+  type VariationCandidate,
+} from "@/lib/ops/variation-candidates";
 import type {
   OpsCommercialForecastReport,
   OpsCommercialMarginReport,
@@ -189,7 +194,14 @@ import {
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
+  OPS_TABLE_CLASS,
   OPS_TABLE_SCROLL_CLASS,
+  OPS_TD_CLASS,
+  OPS_TD_NUM_CLASS,
+  OPS_TH_CLASS,
+  OPS_TH_NUM_CLASS,
+  OPS_THEAD_CLASS,
+  OPS_TR_CLASS,
   type OpsSearchParams,
   opsStatusBadgeClass,
   type OpsStatusTone,
@@ -348,6 +360,68 @@ function commercialNotice(params: OpsSearchParams) {
         tone: "success" as const,
       }
     : null;
+}
+
+/**
+ * Turn an off-schedule flag into a draft variation.
+ *
+ * Business decision §7.6, as recommended: the system SUGGESTS, it does not
+ * auto-draft. Crossing the threshold surfaces the prompt and pre-fills the
+ * form from the claimable total, but a person still reviews the figure and
+ * submits — the reason-tagging discipline has to earn trust before it drives
+ * a client-facing document on its own.
+ */
+function VariationFromOffScheduleForm({ row }: { row: VariationCandidate }) {
+  return (
+    <details className="mt-2">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-primary-blue transition hover:underline [&::-webkit-details-marker]:hidden">
+        <FileSignature className="size-3.5" aria-hidden="true" />
+        Draft a variation from this
+      </summary>
+      <form
+        action={createCommercialVariationAction}
+        className="mt-2 grid gap-2 rounded-md border border-border bg-background p-2"
+      >
+        <input name="site_id" type="hidden" value={row.siteId} />
+        <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+          Title
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={`Off-schedule works — ${row.siteCode}`}
+            name="title"
+            required
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+          Amount to claim
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={row.claimableValue}
+            min="0"
+            name="submitted_amount"
+            step="0.01"
+            type="number"
+          />
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+          Reason
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue="Materials requested outside the issued schedule and tagged as client scope (client instruction, design change, or site condition)."
+            name="reason"
+          />
+        </label>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Check the figure before submitting — it is the total tagged as claimable, not
+          an agreed valuation.
+        </p>
+        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+          <FileSignature className="size-4" aria-hidden="true" />
+          Create draft variation
+        </button>
+      </form>
+    </details>
+  );
 }
 
 function StatusBadge({ value, tone }: { value: string; tone?: OpsStatusTone }) {
@@ -1469,6 +1543,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     claims,
     commercialKpis,
     commercialCharts,
+    variationCandidates,
   ] = await Promise.all([
     fetchActiveSiteOptions(),
     fetchCommercialBoqOptions(),
@@ -1493,7 +1568,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     fetchRecentCommercialClaims(),
     fetchOpsCommercialKpis(),
     fetchOpsCommercialChartData().catch(() => null),
+    fetchOpsVariationCandidates().catch(() => []),
   ]);
+  const flaggedVariationCandidates = variationCandidates.filter((row) => row.isCandidate);
   const notice = commercialNotice(params);
   const canCreate = canCreateOpsCommercialRecord(auth.profile.role);
   const openContractPanel = firstParam(params.create) === "contract";
@@ -1664,6 +1741,83 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
       </section>
 
       <OpsCommercialKpiPanel kpis={commercialKpis} />
+
+      {/* Off-schedule spend that may be recoverable from the client (audit
+          §7.6). Material requested that was never in the schedule is either our
+          estimating error or client-added scope — and until it is tagged,
+          case two gets silently absorbed as if it were case one. This is a
+          suggestion, not an automatic variation: the tagging discipline has to
+          earn trust before it drives a client-facing document. */}
+      {variationCandidates.length > 0 ? (
+        <OpsDashboardPanel
+          accent={flaggedVariationCandidates.length > 0}
+          eyebrow="Recovery"
+          title="Off-schedule spend — possible variations"
+          description={
+            flaggedVariationCandidates.length > 0
+              ? `${formatZmw(
+                  flaggedVariationCandidates.reduce((sum, row) => sum + row.claimableValue, 0),
+                )} of off-schedule material is tagged as client scope. Consider raising a variation.`
+              : "Off-schedule material by site, split between what the client may owe and what we absorb."
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className={OPS_TABLE_CLASS}>
+              <thead className={OPS_THEAD_CLASS}>
+                <tr>
+                  <th className={OPS_TH_CLASS}>Project</th>
+                  <th className={OPS_TH_NUM_CLASS}>Claimable</th>
+                  <th className={OPS_TH_NUM_CLASS}>Absorbed</th>
+                  <th className={OPS_TH_NUM_CLASS}>Untagged</th>
+                  <th className={OPS_TH_NUM_CLASS}>% of contract</th>
+                </tr>
+              </thead>
+              <tbody>
+                {variationCandidates.map((row) => (
+                  <tr className={OPS_TR_CLASS} key={row.siteId}>
+                    <td className={OPS_TD_CLASS}>
+                      <span className="font-semibold text-foreground">{row.siteCode}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {row.siteName}
+                      </span>
+                      {row.isCandidate ? (
+                        <span className="ml-2 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+                          Raise a variation?
+                        </span>
+                      ) : null}
+                      {/* One click from acting, still human-initiated (§7.6):
+                          the form is pre-filled from the claimable total but
+                          nothing is created until someone reviews and submits. */}
+                      {row.isCandidate && canCreate ? (
+                        <VariationFromOffScheduleForm row={row} />
+                      ) : null}
+                    </td>
+                    <td className={OPS_TD_NUM_CLASS}>
+                      <span className={row.claimableValue > 0 ? "font-bold" : ""}>
+                        {formatZmw(row.claimableValue)}
+                      </span>
+                    </td>
+                    <td className={OPS_TD_NUM_CLASS}>{formatZmw(row.absorbedValue)}</td>
+                    <td className={OPS_TD_NUM_CLASS}>
+                      <span
+                        className={row.untaggedValue > 0 ? "text-amber-700" : ""}
+                        title="Nobody has said whether this is client scope or our own cost."
+                      >
+                        {formatZmw(row.untaggedValue)}
+                      </span>
+                    </td>
+                    <td className={OPS_TD_NUM_CLASS}>
+                      {row.claimablePercentOfContract === null
+                        ? "—"
+                        : `${row.claimablePercentOfContract}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </OpsDashboardPanel>
+      ) : null}
 
       {commercialCharts?.hasActivity ? (
         <div className="grid gap-4 xl:grid-cols-2">

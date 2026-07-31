@@ -62,6 +62,8 @@ import {
   type OpsStockLevelSummary,
   type OpsStockMovementSummary,
 } from "@/lib/ops/stores-inventory";
+import { fetchOpsGrnMatches } from "@/lib/ops/procurement-controls";
+import type { MatchSummary } from "@/lib/ops/three-way-match";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import type {
   OpsGrnStatus,
@@ -210,6 +212,69 @@ function InventoryFlowStep({
         </div>
       </div>
       <p className="mt-3 text-sm leading-6 text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+/**
+ * The three-way match (audit D12): requested → ordered → received.
+ *
+ * The control that decides whether a supplier invoice can safely be paid.
+ * Only OVER-receipt blocks payment — the supplier can bill for it, so it is
+ * real money committed to something nobody authorised. Short delivery passes:
+ * you pay for what arrived.
+ */
+function ThreeWayMatchPanel({ match }: { match: MatchSummary | undefined }) {
+  if (!match || match.lines.length === 0) {
+    return null;
+  }
+
+  const tone = !match.readyToPay
+    ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+    : match.exceptionCount > 0
+      ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+      : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200";
+
+  return (
+    <div className={`mt-3 rounded-md border px-3 py-2 text-xs leading-5 ${tone}`}>
+      <p className="font-bold">
+        Three-way match — {match.cleanCount} of {match.lines.length} line
+        {match.lines.length === 1 ? "" : "s"} reconcile
+      </p>
+      {!match.readyToPay ? (
+        <p className="mt-0.5">
+          Over-received by {formatZmw(match.overReceivedValue)}. Resolve before paying
+          the supplier invoice — this is value nobody authorised.
+        </p>
+      ) : match.shortDeliveredQuantity > 0 ? (
+        <p className="mt-0.5">
+          Short delivered by {match.shortDeliveredQuantity} unit
+          {match.shortDeliveredQuantity === 1 ? "" : "s"}. Safe to pay for what arrived;
+          the balance stays outstanding on the order.
+        </p>
+      ) : (
+        <p className="mt-0.5">
+          Requested, ordered and received agree. Safe to pay the supplier invoice.
+        </p>
+      )}
+      {match.exceptionCount > 0 ? (
+        <ul className="mt-1 space-y-0.5">
+          {match.lines
+            .filter((line) => !line.isClean)
+            .slice(0, 4)
+            .map((line) => (
+              <li key={line.requestItemId}>
+                <span className="font-semibold">{line.itemName}</span> — requested{" "}
+                {line.requestedQuantity}, ordered {line.orderedQuantity}, received{" "}
+                {line.receivedQuantity}
+                {line.rejectedQuantity > 0 ? ` (${line.rejectedQuantity} rejected)` : ""}
+                {line.overReceived ? " · over-received" : ""}
+                {line.shortDelivered ? " · short" : ""}
+                {line.overOrdered ? " · ordered above request" : ""}
+              </li>
+            ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -627,6 +692,13 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
     fetchOpsDeliveryTracker(),
   ]);
   const notice = storesNotice(params);
+
+  // Reconcile requested vs ordered vs received for the notes on screen, so the
+  // control lands where the receipt is reviewed rather than in a report
+  // somebody has to go looking for (audit D12).
+  const grnMatches = await fetchOpsGrnMatches(
+    grnPage.items.map((grn) => grn.id),
+  ).catch(() => new Map<string, MatchSummary>());
 
   // Estimated on-hand value per category from the levels already fetched.
   // Items with no recorded last unit cost contribute nothing rather than a
@@ -1099,6 +1171,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
 
                     <div className="mt-4">
                       <GoodsReceivedItems grn={grn} />
+                      <ThreeWayMatchPanel match={grnMatches.get(grn.id)} />
                     </div>
 
                     <OpsRecordActivityPanel

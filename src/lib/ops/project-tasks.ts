@@ -31,6 +31,10 @@ export type OpsProjectTask = {
   status: OpsProjectTaskStatus;
   planned_start_date: string;
   planned_end_date: string;
+  /** The approved dates, frozen at baselining. Null until baselined (D11). */
+  baseline_start_date: string | null;
+  baseline_end_date: string | null;
+  baseline_set_at: string | null;
   actual_start_date: string | null;
   actual_end_date: string | null;
   completion_percent: number;
@@ -102,6 +106,11 @@ const TASK_SELECT = [
   "status",
   "planned_start_date",
   "planned_end_date",
+  // The approved dates, frozen. planned_* drift with reality; without these
+  // the plan always agrees with itself and slippage is unmeasurable (D11).
+  "baseline_start_date",
+  "baseline_end_date",
+  "baseline_set_at",
   "actual_start_date",
   "actual_end_date",
   "completion_percent",

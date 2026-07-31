@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   FileSignature,
   FileText,
+  HardHat,
   Plus,
   Send,
   Trash2,
@@ -24,6 +25,7 @@ import {
   deleteQuotationLineAction,
   setQuotationStatusAction,
 } from "@/lib/ops/quotation-actions";
+import { convertQuotationToProjectAction } from "@/lib/ops/quotation-conversion-actions";
 import {
   canArchiveOpsQuotation,
   canEditOpsQuotation,
@@ -187,6 +189,55 @@ function QuotationCard({
             </OpsConfirmSubmitButton>
           </form>
         ))}
+        {/* Win the job → create the project (audit D10). Until this existed,
+            an accepted quotation was a dead end: no customer record, no site,
+            and therefore nothing for an invoice to point at, which is why every
+            project reports revenue = 0. */}
+        {canManage && quotation.status === "accepted" && !quotation.site_id ? (
+          <details className="w-full rounded-md border border-emerald-300 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200 [&::-webkit-details-marker]:hidden">
+              <HardHat className="size-4" aria-hidden="true" />
+              Convert to a project
+            </summary>
+            <form
+              action={convertQuotationToProjectAction}
+              className="grid gap-3 border-t border-emerald-200 p-3 min-[640px]:grid-cols-3 dark:border-emerald-900/50"
+            >
+              <input name="quotation_id" type="hidden" value={quotation.id} />
+              <label className={OPS_LABEL_CLASS}>
+                Project code
+                <input className={OPS_INPUT_CLASS} name="site_code" required />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Project name
+                <input
+                  className={OPS_INPUT_CLASS}
+                  defaultValue={quotation.title}
+                  name="site_name"
+                  required
+                />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Location
+                <input className={OPS_INPUT_CLASS} name="location" />
+              </label>
+              <p className="text-xs leading-5 text-muted-foreground min-[640px]:col-span-3">
+                Creates the project and the customer record (reusing{" "}
+                {quotation.client_name || "the client"} if they already exist), and links
+                quotation, customer and project together.
+              </p>
+              <div className="min-[640px]:col-span-3">
+                <OpsConfirmSubmitButton
+                  className={OPS_PRIMARY_BUTTON_CLASS}
+                  confirmText="Confirm — create the project"
+                >
+                  <HardHat className="size-4" aria-hidden="true" />
+                  Create project
+                </OpsConfirmSubmitButton>
+              </div>
+            </form>
+          </details>
+        ) : null}
         {canArchiveOpsQuotation(role) && !quotation.archived_at ? (
           <form action={archiveQuotationAction}>
             <input name="quotation_id" type="hidden" value={quotation.id} />

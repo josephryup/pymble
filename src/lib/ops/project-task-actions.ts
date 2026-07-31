@@ -263,6 +263,84 @@ export async function updateProjectTaskProgressAction(formData: FormData) {
   );
 }
 
+/**
+ * Freeze the programme's approved dates (audit D11).
+ *
+ * `planned_start_date` / `planned_end_date` are mutable and drift with
+ * reality, so without a frozen copy the plan always agrees with itself and
+ * slippage is unmeasurable. Baselining copies today's planned dates into the
+ * baseline columns for every un-baselined task on the site.
+ *
+ * Deliberately only fills EMPTY baselines. Re-baselining an already-baselined
+ * task would erase the evidence of slip, which is the one thing the baseline
+ * exists to preserve — a genuine re-baseline is a management decision that
+ * should leave a trail, not a side effect of pressing this again.
+ */
+export async function baselineProjectScheduleAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  if (!canCreateProjectTask(profile.role)) {
+    taskError("Your role cannot baseline the programme.");
+  }
+
+  const siteId = field(formData, "site_id");
+  if (!siteId) {
+    taskError("Select a project to baseline.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const nowIso = new Date().toISOString();
+
+  // Only un-baselined tasks. Copy planned → baseline per row: an UPDATE
+  // cannot reference another column through PostgREST, so the copy is explicit.
+  const { data: rows, error } = await supabase
+    .from("project_tasks")
+    .select("id, planned_start_date, planned_end_date")
+    .eq("site_id", siteId)
+    .is("archived_at", null)
+    .is("baseline_end_date", null);
+
+  if (error) {
+    taskError(error.message);
+  }
+
+  const pending = (rows ?? []) as Array<{
+    id: string;
+    planned_start_date: string;
+    planned_end_date: string;
+  }>;
+
+  if (pending.length === 0) {
+    taskError("Every task on this programme is already baselined.");
+  }
+
+  for (const row of pending) {
+    await supabase
+      .from("project_tasks")
+      .update({
+        baseline_start_date: row.planned_start_date,
+        baseline_end_date: row.planned_end_date,
+        baseline_set_at: nowIso,
+        baseline_set_by: profile.id,
+      })
+      .eq("id", row.id);
+  }
+
+  await recordOpsAuditEvent({
+    action: "project_schedule.baselined",
+    actorUserId: profile.id,
+    entityId: siteId,
+    entityType: "site",
+    metadata: { tasks_baselined: pending.length },
+    moduleKey: "project_schedule",
+    sourceId: siteId,
+    sourceTable: "sites",
+    summary: `Baselined ${pending.length} programme task(s)`,
+  }).catch(() => null);
+
+  revalidatePath(`${SCHEDULE_ROUTE}/${siteId}`);
+  redirect(`${SCHEDULE_ROUTE}/${siteId}?updated=baselined`);
+}
+
 export async function archiveProjectTaskAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   if (!canArchiveProjectTask(profile.role)) {

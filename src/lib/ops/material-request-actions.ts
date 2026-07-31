@@ -29,7 +29,9 @@ import {
   checkOpsBudgetAvailability,
   type BudgetControlDecision,
 } from "@/lib/ops/budget-availability";
+import { postCostEntryToGlSafe } from "@/lib/ops/gl-cost-bridge";
 import { buildScheduleLineMatcher } from "@/lib/ops/material-schedule-match";
+import { fetchOpsTenderRequirement } from "@/lib/ops/tender-policy";
 import { resolveMaterialRequestBudgetLine } from "@/lib/ops/material-requests";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
@@ -137,6 +139,21 @@ const itemSchema = z.object({
     .refine((value) => value === null || MR_UUID_PATTERN.test(value), {
       message: "Select a valid schedule line.",
     }),
+  // Why an item is NOT on the schedule. The first three reasons are client
+  // scope and therefore billable; the rest are ours to absorb. Without this
+  // the system cannot tell a recoverable variation from a genuine overrun
+  // (audit §7.6).
+  off_schedule_reason: z
+    .enum([
+      "client_instruction",
+      "design_change",
+      "site_condition",
+      "schedule_omission",
+      "wastage_rework",
+      "other",
+    ])
+    .optional(),
+  off_schedule_note: z.string().trim().max(400).default(""),
 });
 
 
@@ -375,6 +392,8 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     supplier_name_freeform: field(formData, "supplier_name_freeform"),
     unit: field(formData, "unit") || "each",
     boq_line_item_id: field(formData, "boq_line_item_id"),
+    off_schedule_reason: field(formData, "off_schedule_reason") || undefined,
+    off_schedule_note: field(formData, "off_schedule_note"),
   });
 
   if (!parsed.success) {
@@ -405,6 +424,12 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     supplier_name_freeform: parsed.data.supplier_name_freeform || null,
     unit: parsed.data.unit,
     boq_line_item_id: parsed.data.boq_line_item_id,
+    // Only meaningful when the item is off-schedule; a linked item is by
+    // definition planned, so never carries a reason.
+    off_schedule_reason: parsed.data.boq_line_item_id
+      ? null
+      : (parsed.data.off_schedule_reason ?? null),
+    off_schedule_note: parsed.data.boq_line_item_id ? "" : parsed.data.off_schedule_note,
   });
 
   if (error) {
@@ -1151,6 +1176,19 @@ async function applyMaterialRequestPricing(formData: FormData, mode: "save" | "s
     redirect(`${MATERIAL_REQUEST_ROUTE}?updated=prices_saved#mr-${request.id}`);
   }
 
+  // Competitive tender gate (§8.6). The RFQ belongs BEFORE pricing, not after
+  // approval — running it afterwards proves nothing, since Finance has already
+  // authorised the money. Because suppliers are never invited externally
+  // (audit §9), recording comparison prices costs no round-trip, so this gate
+  // adds governance without adding delay. Best-effort: a policy lookup failure
+  // must not strand a priced request.
+  const tender = await fetchOpsTenderRequirement(request.id).catch(() => null);
+  if (tender && tender.required && !tender.satisfied) {
+    materialRequestError(
+      `${tender.reason} Raise an RFQ against this request and record the prices you compared, then send it to Finance.`,
+    );
+  }
+
   // "Send" mode: move the request to `priced` so Finance can approve the cost.
   const nowIso = new Date().toISOString();
   const { error: stateError } = await supabase
@@ -1684,7 +1722,7 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
     // real: advance to `actual`, which relieves the reservation taken at
     // approval in the same call (audit §8.4). Phase 3 inserts `committed` (PO
     // issued) and `accrued` (goods received) between the two.
-    await upsertMaterialRequestCostEntries({
+    const closeEntries = await upsertMaterialRequestCostEntries({
       actorUserId: profile.id,
       goodsAmount,
       request,
@@ -1705,6 +1743,25 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
         sourceTable: "material_requests",
         summary: `Could not post the budget ledger entry for ${request.request_number}`,
       }).catch(() => null),
+    );
+
+    // Push the actual cost through to the general ledger (audit §4.5). This is
+    // the first operational flow ever to feed the GL — until now it was fed
+    // only by invoices, payment requests and payroll, none of which are in
+    // use, which is why 68 accounts hold zero journals. Best-effort: an
+    // unposted entry keeps journal_entry_id null and shows in the
+    // reconciliation report rather than failing silently.
+    const entryIds = [
+      closeEntries && "goodsEntryId" in closeEntries ? closeEntries.goodsEntryId : null,
+      closeEntries && "transportEntryId" in closeEntries
+        ? closeEntries.transportEntryId
+        : null,
+    ].filter((id): id is string => Boolean(id));
+
+    await Promise.all(
+      entryIds.map((costEntryId) =>
+        postCostEntryToGlSafe({ actorUserId: profile.id, costEntryId }).catch(() => null),
+      ),
     );
   }
 

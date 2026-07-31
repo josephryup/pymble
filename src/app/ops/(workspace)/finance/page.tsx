@@ -45,6 +45,7 @@ import {
   fetchOpsSupplierAgeing,
 } from "@/lib/ops/finance-kpis";
 import { fetchOpsFinanceLeakReport } from "@/lib/ops/finance-leaks";
+import { fetchOpsGlReconciliation } from "@/lib/ops/gl-cost-bridge";
 import { fetchOpsGlMonthlyTrend } from "@/lib/ops/gl-trends";
 import {
   fetchOpsStaleReservations,
@@ -90,6 +91,7 @@ export default async function OpsFinanceOverviewPage() {
     subcontractorPaymentsPendingCount,
     leakReport,
     reservations,
+    glReconciliation,
   ] = await Promise.all([
     fetchOpsFinanceCashflowDashboard(),
     fetchOpsPaymentRequestStats(),
@@ -109,6 +111,7 @@ export default async function OpsFinanceOverviewPage() {
       staleAmount: 0,
       totalReservedAmount: 0,
     })),
+    fetchOpsGlReconciliation().catch(() => null),
   ]);
   const staleReservations = reservations.rows.filter((row) => row.isStale);
   const hasGlActivity = glTrend.some(
@@ -242,6 +245,73 @@ export default async function OpsFinanceOverviewPage() {
           </table>
         </div>
       </OpsDashboardPanel>
+
+      {/* Subledger ⇄ general ledger reconciliation (audit §4.5). The audit's own
+          test for whether the bridge works: if this is empty, nothing is
+          leaking between operations and the accounts. */}
+      {glReconciliation ? (
+        <OpsDashboardPanel
+          accent={!glReconciliation.clean}
+          density="compact"
+          eyebrow="Ledger integrity"
+          title="Cost subledger ⇄ general ledger"
+          description={
+            glReconciliation.clean
+              ? "Every actual cost has posted to the general ledger, and every cost code has an account mapped."
+              : `${formatZmw(glReconciliation.variance)} of actual cost has not reached the general ledger.`
+          }
+        >
+          <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Cost subledger (actual)
+              </dt>
+              <dd className="mt-1 text-lg font-bold text-foreground">
+                {formatZmw(glReconciliation.subledgerTotal)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Posted to the ledger
+              </dt>
+              <dd className="mt-1 text-lg font-bold text-foreground">
+                {formatZmw(glReconciliation.postedTotal)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Unposted
+              </dt>
+              <dd
+                className={`mt-1 text-lg font-bold ${
+                  glReconciliation.unpostedCount > 0 ? "text-amber-700" : "text-foreground"
+                }`}
+              >
+                {glReconciliation.unpostedCount} · {formatZmw(glReconciliation.unpostedAmount)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Cost codes with no GL account
+              </dt>
+              <dd
+                className={`mt-1 text-lg font-bold ${
+                  glReconciliation.unmappedCostCodeCount > 0
+                    ? "text-amber-700"
+                    : "text-foreground"
+                }`}
+              >
+                {glReconciliation.unmappedCostCodeCount}
+              </dd>
+            </div>
+          </dl>
+          {glReconciliation.unmappedCostCodeLabels.length > 0 ? (
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">
+              Unmapped: {glReconciliation.unmappedCostCodeLabels.join(", ")}
+            </p>
+          ) : null}
+        </OpsDashboardPanel>
+      ) : null}
 
       {/* Reservations still standing. Approved-but-not-procured spend holds
           budget: left unwatched it makes a healthy budget look exhausted

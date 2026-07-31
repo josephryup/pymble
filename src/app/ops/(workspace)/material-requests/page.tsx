@@ -157,6 +157,17 @@ function materialRequestNotice(params: OpsSearchParams) {
     };
   }
 
+  if (firstParam(params.updated) === "called_off") {
+    const lines = firstParam(params.lines) ?? "0";
+    const over = firstParam(params.over) ?? "0";
+    return {
+      message: `Called off ${lines} schedule line${lines === "1" ? "" : "s"} into a draft request — each one stays linked to the plan.${
+        over !== "0" ? ` ${over} line(s) are over the planned quantity.` : ""
+      }`,
+      tone: over === "0" ? ("success" as const) : ("warning" as const),
+    };
+  }
+
   if (firstParam(params.updated) === "procured") {
     const pos = firstParam(params.pos) ?? "0";
     return {
@@ -613,6 +624,34 @@ function AddItemForm({
         <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-2`}>
           Notes
           <input className={OPS_INPUT_CLASS} name="notes" />
+        </label>
+        {/* Off-schedule classification (audit §7.6). If this item was never in
+            the schedule, the reason decides whether it is money we can bill the
+            client for or money we absorb. Ignored when a schedule line is
+            linked, since a linked item is by definition planned. */}
+        <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-3`}>
+          If not on the schedule, why?
+          <select className={OPS_INPUT_CLASS} defaultValue="" name="off_schedule_reason">
+            <option value="">Not applicable / on the schedule</option>
+            <optgroup label="Client scope — may be claimable">
+              <option value="client_instruction">Client instruction</option>
+              <option value="design_change">Design change</option>
+              <option value="site_condition">Unforeseen site condition</option>
+            </optgroup>
+            <optgroup label="Our cost — absorbed">
+              <option value="schedule_omission">Missed in the schedule</option>
+              <option value="wastage_rework">Wastage or rework</option>
+              <option value="other">Other</option>
+            </optgroup>
+          </select>
+        </label>
+        <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-3`}>
+          Off-schedule detail
+          <input
+            className={OPS_INPUT_CLASS}
+            name="off_schedule_note"
+            placeholder="What was instructed or what changed on site"
+          />
         </label>
         <div className="flex items-end lg:col-span-1">
           <button className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} type="submit">

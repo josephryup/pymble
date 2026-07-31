@@ -3,6 +3,7 @@ import {
   CalendarRange,
   CheckCircle2,
   ClipboardList,
+  Lock,
   Package,
   Pencil,
   Plus,
@@ -23,10 +24,12 @@ import {
 } from "@/lib/ops/boq";
 import {
   archiveProjectTaskAction,
+  baselineProjectScheduleAction,
   createProjectTaskAction,
   updateProjectTaskAction,
   updateProjectTaskProgressAction,
 } from "@/lib/ops/project-task-actions";
+import { computeProgrammeVariance } from "@/lib/ops/schedule-variance";
 import {
   canArchiveProjectTask,
   canCreateProjectTask,
@@ -100,6 +103,21 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
   const canArchive = canArchiveProjectTask(profile.role);
   const rollup = computeOpsSiteProgress(tasks);
   const plannedCurve = buildOpsPlannedProgressCurve(tasks);
+  // Schedule variance against the frozen baseline (audit D11). Without a
+  // baseline the plan always agrees with reality and slippage is invisible.
+  const variance = computeProgrammeVariance(
+    tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      baselineStartDate: task.baseline_start_date,
+      baselineEndDate: task.baseline_end_date,
+      plannedStartDate: task.planned_start_date,
+      plannedEndDate: task.planned_end_date,
+      actualStartDate: task.actual_start_date,
+      actualEndDate: task.actual_end_date,
+      completionPercent: task.completion_percent,
+    })),
+  );
   const notice = noticeFromParams(search, "task", "Project task created.");
   const errorMessage = firstParam(search.error);
   const assignableStaff = staff.filter(
@@ -135,10 +153,25 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
         title={`Schedule — ${site.name}`}
         description="Plan tasks, assign them to engineers, and track progress to flag overdue work."
         actions={
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/project-schedule">
-            <CalendarRange className="size-4" aria-hidden="true" />
-            All sites
-          </Link>
+          <>
+            {canCreate && variance.unbaselinedCount > 0 && tasks.length > 0 ? (
+              <form action={baselineProjectScheduleAction}>
+                <input name="site_id" type="hidden" value={site.id} />
+                <OpsConfirmSubmitButton
+                  className={OPS_SECONDARY_BUTTON_CLASS}
+                  confirmText="Confirm — freeze the baseline"
+                >
+                  <Lock className="size-4" aria-hidden="true" />
+                  Baseline {variance.unbaselinedCount} task
+                  {variance.unbaselinedCount === 1 ? "" : "s"}
+                </OpsConfirmSubmitButton>
+              </form>
+            ) : null}
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/project-schedule">
+              <CalendarRange className="size-4" aria-hidden="true" />
+              All sites
+            </Link>
+          </>
         }
       />
 
@@ -154,6 +187,52 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
         <div className={OPS_NOTICE_SUCCESS_CLASS}>
           {notice.message}
         </div>
+      ) : null}
+
+      {/* Slippage against the frozen baseline (audit D11). Three separate
+          slips deliberately: a programme where nothing has finished late but
+          everything has been re-planned forward is in trouble, and only the
+          planned slip shows it. */}
+      {variance.baselinedCount > 0 ? (
+        <section
+          className={`rounded-md border px-4 py-3 ${
+            variance.worstSlipDays > 0
+              ? "border-amber-200 bg-amber-50/60 dark:border-amber-900/50 dark:bg-amber-950/20"
+              : "border-border bg-card"
+          }`}
+        >
+          <p className="text-sm font-bold text-foreground">
+            Baseline: {variance.baselinedCount} task
+            {variance.baselinedCount === 1 ? "" : "s"} frozen
+            {variance.unbaselinedCount > 0
+              ? ` · ${variance.unbaselinedCount} not yet baselined`
+              : ""}
+            {variance.worstSlipDays > 0
+              ? ` · worst slip ${variance.worstSlipDays} day${variance.worstSlipDays === 1 ? "" : "s"}`
+              : " · on plan"}
+          </p>
+          {variance.tasks.filter((task) => task.isSlipping).length > 0 ? (
+            <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+              {variance.tasks
+                .filter((task) => task.isSlipping)
+                .slice(0, 5)
+                .map((task) => (
+                  <li key={task.taskId}>
+                    <span className="font-semibold text-foreground">{task.title}</span>
+                    {task.plannedSlipDays && task.plannedSlipDays > 0
+                      ? ` — re-planned ${task.plannedSlipDays}d later than baseline`
+                      : ""}
+                    {task.forecastSlipDays && task.forecastSlipDays > 0
+                      ? `${task.plannedSlipDays && task.plannedSlipDays > 0 ? "," : " —"} ${task.forecastSlipDays}d past baseline finish and still open`
+                      : ""}
+                    {task.actualSlipDays && task.actualSlipDays > 0
+                      ? ` — finished ${task.actualSlipDays}d late`
+                      : ""}
+                  </li>
+                ))}
+            </ul>
+          ) : null}
+        </section>
       ) : null}
 
       <section className="grid gap-3 md:grid-cols-5">

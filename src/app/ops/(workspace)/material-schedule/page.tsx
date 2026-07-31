@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   FileText,
   GitBranch,
+  PackagePlus,
   Pencil,
   Plus,
   ReceiptText,
@@ -54,6 +55,8 @@ import {
   type OpsMaterialTriggerAlert,
 } from "@/lib/ops/boq";
 import { boqLineVariance } from "@/lib/ops/boq-actuals";
+import { createCallOffFromScheduleAction } from "@/lib/ops/call-off-actions";
+import { canCreateOpsMaterialRequest } from "@/lib/ops/material-request-permissions";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import {
@@ -484,6 +487,115 @@ function BoqPricingWorkflowPanel({
   return null;
 }
 
+/**
+ * "Draw from schedule" (audit §4.4) — the call-off.
+ *
+ * Shown on every live issued schedule. Ticking lines and pressing the button
+ * creates a material request already carrying description, unit, rate,
+ * supplier, cost code and the schedule link, so the planned↔actual connection
+ * populates itself instead of depending on someone remembering an optional
+ * dropdown. Quantities default to what REMAINS, not the full planned figure,
+ * so a second call-off cannot silently double-order.
+ */
+function CallOffPanel({ document }: { document: OpsBoqDocument }) {
+  const lines = document.items
+    .map((item) => {
+      const planned = Number(item.quantity ?? 0);
+      const variance = boqLineVariance({
+        plannedQuantity: planned,
+        plannedValue: Number(item.budgeted_total ?? 0),
+        actuals: item.actuals,
+      });
+      return { item, planned, variance };
+    })
+    .filter((row) => row.planned > 0);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  return (
+    <details className="mt-4 rounded-md border border-primary-blue/30 bg-primary-blue/5">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-primary-blue transition hover:text-primary-blue/80 [&::-webkit-details-marker]:hidden">
+        <PackagePlus className="size-4" aria-hidden="true" />
+        Draw materials from this schedule
+      </summary>
+      <form action={createCallOffFromScheduleAction} className="border-t border-border p-3">
+        <input name="site_id" type="hidden" value={document.site_id} />
+        <div className="grid gap-3 min-[640px]:grid-cols-3">
+          <label className={OPS_LABEL_CLASS}>
+            Call-off title
+            <input
+              className={OPS_INPUT_CLASS}
+              defaultValue={`Call-off — ${document.title}`}
+              name="title"
+              required
+            />
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Needed by
+            <input className={OPS_INPUT_CLASS} name="needed_by" type="date" />
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Priority
+            <select className={OPS_INPUT_CLASS} defaultValue="normal" name="priority">
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </label>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">
+          Quantities default to what is still outstanding on each line. Leave a line
+          at zero to skip it. Anything you order beyond the plan is allowed but recorded.
+        </p>
+        <div className="mt-2 space-y-1.5">
+          {lines.map(({ item, planned, variance }) => (
+            <div
+              className="grid gap-2 rounded-md border border-border bg-background p-2 min-[640px]:grid-cols-[1fr_auto]"
+              key={item.id}
+            >
+              <div>
+                <p className="text-sm font-semibold text-foreground">{item.description}</p>
+                <p className="text-xs text-muted-foreground">
+                  Planned {formatNumber(planned)} {item.unit} · requested{" "}
+                  {formatNumber(item.actuals.requestedQuantity)} · remaining{" "}
+                  <span
+                    className={variance.isOverRequested ? "font-bold text-amber-700" : ""}
+                  >
+                    {formatNumber(variance.remainingQuantity)}
+                  </span>
+                  {variance.isOverRequested ? " (already over plan)" : ""}
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                Order
+                <input
+                  aria-label={`Quantity to call off for ${item.description}`}
+                  className={`${OPS_INPUT_CLASS} w-28`}
+                  defaultValue={variance.remainingQuantity || ""}
+                  min="0"
+                  name={`line::${item.id}`}
+                  step="0.01"
+                  type="number"
+                />
+                <span>{item.unit}</span>
+              </label>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex justify-end">
+          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+            <PackagePlus className="size-4" aria-hidden="true" />
+            Create material request
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
 export default async function OpsBoqPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
     searchParams ?? Promise.resolve({} as OpsSearchParams),
@@ -517,6 +629,9 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
   // canCreate as a stand-in for that — anyone who can create a material schedule can manage
   // its comments / attachments.
   const canManage = canCreate;
+  // Drawing from the schedule creates a material request, so it follows the
+  // material-request permission, not the schedule's.
+  const canCallOff = canCreateOpsMaterialRequest(auth.profile.role);
   const notice = boqNotice(params);
   const totalBudgeted = boqDocuments.reduce((sum, document) => sum + document.budgeted_total, 0);
   const totalActual = boqDocuments.reduce((sum, document) => sum + document.actual_total, 0);
@@ -902,17 +1017,23 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                         ))}
                       </ul>
                       {canManage ? (
-                        <Link
-                          className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-blue hover:underline"
-                          href="/ops/material-requests?create=material_request"
-                        >
-                          <Send className="size-3.5" aria-hidden="true" />
-                          Raise material request(s)
-                        </Link>
+                        <p className="mt-2 text-sm text-orange-800/90">
+                          Use <span className="font-semibold">Draw materials from this
+                          schedule</span> below — it pre-fills the request from these lines
+                          and keeps them linked to the plan.
+                        </p>
                       ) : null}
                     </div>
                   );
                 })()}
+
+                {/* The call-off: the primary path from plan to request, so the
+                    planned↔actual link populates itself (audit §4.4 / D1). */}
+                {canCallOff &&
+                document.status === "issued" &&
+                !document.superseded_at ? (
+                  <CallOffPanel document={document} />
+                ) : null}
 
                 {canEditDoc ? (
                   <>

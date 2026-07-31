@@ -501,6 +501,249 @@ export async function addProjectBudgetLineAction(formData: FormData) {
   redirect(`${PROJECT_BUDGETS_ROUTE}?updated=line_added`);
 }
 
+/**
+ * Fetch a budget line together with its parent budget, for edit/delete.
+ * Permission is a property of the BUDGET (its status decides whether lines may
+ * change at all), so the line alone is never enough to authorise a mutation.
+ */
+async function fetchBudgetLineForMutation(lineId: string) {
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("project_budget_lines")
+    .select(
+      "id, budget_id, line_number, description, category, cost_code, budgeted_amount, notes, source, budget:project_budgets!project_budget_lines_budget_id_fkey(id, site_id, title, status, created_by)",
+    )
+    .eq("id", lineId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    return null;
+  }
+
+  const row = data as unknown as {
+    id: string;
+    budget_id: string;
+    line_number: number;
+    description: string;
+    category: string;
+    cost_code: string;
+    budgeted_amount: number | string;
+    notes: string;
+    source: string;
+    budget: ProjectBudgetForMutation | ProjectBudgetForMutation[] | null;
+  };
+
+  const budget = Array.isArray(row.budget) ? (row.budget[0] ?? null) : row.budget;
+  return budget ? { ...row, budget } : null;
+}
+
+const budgetLineEditSchema = z.object({
+  line_id: z.string().uuid("Select a budget line."),
+  budgeted_amount: z.coerce
+    .number()
+    .min(0, "Budgeted amount cannot be negative.")
+    .max(1_000_000_000_000, "That budgeted amount looks unrealistic."),
+  category: z.string().trim().max(80).default("general"),
+  cost_code: z.string().trim().max(20).default(""),
+  description: z.string().trim().min(2, "Describe the budget line.").max(200),
+  notes: z.string().trim().max(400).default(""),
+});
+
+/**
+ * Edit a budget line in place.
+ *
+ * Deliberately does NOT touch `cost_code_id` — the WBS link is maintained on
+ * /ops/cost-codes, where the two-level structure and the GL mapping are
+ * visible. Letting it be re-pointed from a free-text form here would reopen
+ * exactly the drift the spine exists to close.
+ *
+ * Schedule-generated lines (`source = 'boq'`) are editable but warned about:
+ * the next schedule issue overwrites their amount, so an edit here is
+ * temporary unless the schedule is corrected too.
+ */
+export async function editProjectBudgetLineAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = budgetLineEditSchema.safeParse({
+    line_id: field(formData, "line_id"),
+    budgeted_amount: field(formData, "budgeted_amount") || "0",
+    category: field(formData, "category") || "general",
+    cost_code: field(formData, "cost_code"),
+    description: field(formData, "description"),
+    notes: field(formData, "notes"),
+  });
+  if (!parsed.success) {
+    budgetError(parsed.error.issues[0]?.message ?? "Check the budget line.");
+  }
+
+  const line = await fetchBudgetLineForMutation(parsed.data.line_id);
+  if (!line) {
+    budgetError("Budget line was not found.");
+  }
+  if (!canEditOpsProjectBudgetLine(profile.role, line.budget)) {
+    budgetError("Your role cannot change lines on this budget.");
+  }
+
+  const category = normalizeCategory(parsed.data.category);
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("project_budget_lines")
+    .update({
+      budgeted_amount: parsed.data.budgeted_amount,
+      category,
+      cost_code: parsed.data.cost_code.toUpperCase(),
+      description: parsed.data.description,
+      notes: parsed.data.notes,
+    })
+    .eq("id", line.id);
+
+  if (error) {
+    budgetError(error.message);
+  }
+
+  // Record the before-and-after amount explicitly: a budget line's value is
+  // the thing people later ask questions about, and "it was edited" without
+  // the figures answers none of them.
+  await recordOpsAuditEvent({
+    action: "project_budget.line_edited",
+    actorUserId: profile.id,
+    entityId: line.id,
+    entityType: "project_budget_line",
+    metadata: {
+      budget_id: line.budget_id,
+      line_number: line.line_number,
+      amount_from: Number(line.budgeted_amount),
+      amount_to: parsed.data.budgeted_amount,
+      description_from: line.description,
+      description_to: parsed.data.description,
+      source: line.source,
+    },
+    moduleKey: "project_budgets",
+    sourceId: line.budget_id,
+    sourceTable: "project_budgets",
+    summary: `Edited line ${line.line_number} on ${line.budget.title} (${Number(
+      line.budgeted_amount,
+    ).toLocaleString("en-ZM")} → ${parsed.data.budgeted_amount.toLocaleString("en-ZM")})`,
+  }).catch(() => null);
+
+  revalidatePath(PROJECT_BUDGETS_ROUTE);
+  revalidatePath("/ops/finance");
+  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=line_edited`);
+}
+
+/**
+ * Delete a budget line.
+ *
+ * Refuses when anything is charged to the line — a cost entry, a material
+ * request, or a payment request. Deleting a line that carries spend would
+ * orphan real money and silently change every variance figure that ever
+ * included it, so the guard reports what is attached rather than cascading.
+ *
+ * This exists so Finance can resolve a mis-keyed duplicate themselves. A
+ * duplicate is the one case where deletion is genuinely right, and it is
+ * always a judgement about the business, never one a migration should make.
+ */
+export async function deleteProjectBudgetLineAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const lineId = field(formData, "line_id");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lineId)) {
+    budgetError("Select a budget line to delete.");
+  }
+
+  const line = await fetchBudgetLineForMutation(lineId);
+  if (!line) {
+    budgetError("Budget line was not found.");
+  }
+  if (!canEditOpsProjectBudgetLine(profile.role, line.budget)) {
+    budgetError("Your role cannot delete lines from this budget.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  const [costEntries, requests, transportRequests, payments, paymentItems] =
+    await Promise.all([
+      supabase
+        .from("project_cost_entries")
+        .select("id", { count: "exact", head: true })
+        .eq("budget_line_id", line.id),
+      supabase
+        .from("material_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("budget_line_id", line.id),
+      supabase
+        .from("material_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("transport_budget_line_id", line.id),
+      supabase
+        .from("payment_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("budget_line_id", line.id),
+      supabase
+        .from("payment_request_items")
+        .select("id", { count: "exact", head: true })
+        .eq("budget_line_id", line.id),
+    ]);
+
+  const attachments: string[] = [];
+  if ((costEntries.count ?? 0) > 0) {
+    attachments.push(`${costEntries.count} cost ledger entr${costEntries.count === 1 ? "y" : "ies"}`);
+  }
+  const requestCount = (requests.count ?? 0) + (transportRequests.count ?? 0);
+  if (requestCount > 0) {
+    attachments.push(`${requestCount} material request${requestCount === 1 ? "" : "s"}`);
+  }
+  const paymentCount = (payments.count ?? 0) + (paymentItems.count ?? 0);
+  if (paymentCount > 0) {
+    attachments.push(`${paymentCount} payment request${paymentCount === 1 ? "" : "s"}`);
+  }
+
+  if (attachments.length > 0) {
+    budgetError(
+      `This line cannot be deleted — ${attachments.join(", ")} charge against it. Set its amount to zero instead, which keeps the history and removes it from the budget total.`,
+    );
+  }
+
+  const { error } = await supabase
+    .from("project_budget_lines")
+    .delete()
+    .eq("id", line.id);
+
+  if (error) {
+    budgetError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "project_budget.line_deleted",
+    actorUserId: profile.id,
+    entityId: line.id,
+    entityType: "project_budget_line",
+    metadata: {
+      budget_id: line.budget_id,
+      line_number: line.line_number,
+      description: line.description,
+      category: line.category,
+      // The amount is the point of the record: this is how a later reviewer
+      // reconstructs why the budget total changed.
+      budgeted_amount: Number(line.budgeted_amount),
+      source: line.source,
+    },
+    moduleKey: "project_budgets",
+    sourceId: line.budget_id,
+    sourceTable: "project_budgets",
+    summary: `Deleted line ${line.line_number} "${line.description}" (${Number(
+      line.budgeted_amount,
+    ).toLocaleString("en-ZM")}) from ${line.budget.title}`,
+  }).catch(() => null);
+
+  revalidatePath(PROJECT_BUDGETS_ROUTE);
+  revalidatePath("/ops/finance");
+  redirect(`${PROJECT_BUDGETS_ROUTE}?updated=line_deleted`);
+}
+
 export async function activateProjectBudgetAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   const parsed = budgetIdSchema.safeParse({ budget_id: field(formData, "budget_id") });

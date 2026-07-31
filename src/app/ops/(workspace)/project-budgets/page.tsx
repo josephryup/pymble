@@ -9,6 +9,8 @@ import {
   Lock,
   Pencil,
   Plus,
+  Save,
+  Trash2,
   Truck,
 } from "lucide-react";
 import Link from "next/link";
@@ -23,6 +25,8 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import {
   activateProjectBudgetAction,
   addProjectBudgetLineAction,
+  deleteProjectBudgetLineAction,
+  editProjectBudgetLineAction,
   archiveProjectBudgetAction,
   createProjectBudgetAction,
   editProjectBudgetAction,
@@ -104,6 +108,8 @@ function projectBudgetNotice(params: OpsSearchParams) {
     comment: "Project budget comment added.",
     edited: "Project budget updated.",
     line_added: "Project budget line added.",
+    line_edited: "Budget line updated. The change is recorded in the audit trail with the before and after amounts.",
+    line_deleted: "Budget line deleted. The line and its amount are recorded in the audit trail.",
     locked: "Project budget locked.",
   };
 
@@ -123,6 +129,102 @@ function projectBudgetNotice(params: OpsSearchParams) {
  * not two hundred — so traceability is a look-through rather than an explosion
  * of the budget itself. Renders nothing for lines Finance entered by hand.
  */
+/**
+ * Edit or delete a single budget line.
+ *
+ * Deletion is guarded server-side: a line carrying cost entries, material
+ * requests or payment requests cannot be removed, because doing so would
+ * orphan real money and silently change every variance figure that included
+ * it. The action names what is attached and suggests zeroing instead.
+ *
+ * `cost_code_id` is deliberately absent — the WBS link is maintained on
+ * /ops/cost-codes where the structure and GL mapping are visible. Re-pointing
+ * it from a free-text form here would reopen the drift the spine closed.
+ */
+function BudgetLineMaintenance({
+  line,
+}: {
+  line: OpsProjectBudgetSummary["lines"][number];
+}) {
+  return (
+    <details className="rounded-md border border-border">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2 py-1 text-xs font-semibold text-muted-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+        <Pencil className="size-3.5" aria-hidden="true" />
+        Edit
+      </summary>
+      <div className="space-y-2 border-t border-border p-2">
+        <form action={editProjectBudgetLineAction} className="grid gap-2">
+          <input name="line_id" type="hidden" value={line.id} />
+          <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+            Description
+            <input
+              className={OPS_INPUT_CLASS}
+              defaultValue={line.description}
+              name="description"
+              required
+            />
+          </label>
+          <div className="grid gap-2 min-[520px]:grid-cols-3">
+            <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+              Cost code
+              <input
+                className={OPS_INPUT_CLASS}
+                defaultValue={line.cost_code}
+                name="cost_code"
+              />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+              Classification
+              <input
+                className={OPS_INPUT_CLASS}
+                defaultValue={line.category}
+                name="category"
+              />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+              Budgeted
+              <input
+                className={OPS_INPUT_CLASS}
+                defaultValue={line.budgeted_amount}
+                min="0"
+                name="budgeted_amount"
+                step="0.01"
+                type="number"
+              />
+            </label>
+          </div>
+          {line.source === "boq" ? (
+            <p className="text-xs leading-5 text-amber-700">
+              This line is generated from the material schedule. Re-issuing the schedule
+              will overwrite the amount — correct the schedule too, or the change is
+              temporary.
+            </p>
+          ) : null}
+          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+            <Save className="size-4" aria-hidden="true" />
+            Save line
+          </button>
+        </form>
+
+        <form action={deleteProjectBudgetLineAction}>
+          <input name="line_id" type="hidden" value={line.id} />
+          <OpsConfirmSubmitButton
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+            confirmText="Confirm — delete this line"
+          >
+            <Trash2 className="size-3.5" aria-hidden="true" />
+            Delete line
+          </OpsConfirmSubmitButton>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Only possible while nothing is charged to the line. If spend exists, set the
+            amount to zero instead — that keeps the history.
+          </p>
+        </form>
+      </div>
+    </details>
+  );
+}
+
 function BudgetLineComposition({
   currencyCode,
   lines,
@@ -620,6 +722,9 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           <div className="divide-y divide-border">
             {budgetPage.items.map((budget) => {
               const canAddLine = canEditOpsProjectBudgetLine(auth.profile.role, budget);
+              // Same gate as adding: whoever may add a line may correct or
+              // remove one, subject to the server-side referential guards.
+              const canEditLines = canAddLine;
               const canEdit = canEditOpsProjectBudget(auth.profile.role, budget);
               const canActivate = canActivateOpsProjectBudget(auth.profile.role, budget);
               const canLock = canLockOpsProjectBudget(auth.profile.role, budget);
@@ -812,6 +917,9 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                               <th className="px-3 py-3" scope="col">Budgeted</th>
                               <th className="px-3 py-3" scope="col">Committed</th>
                               <th className="px-3 py-3" scope="col">Posted</th>
+                              {canEditLines ? (
+                                <th className="px-3 py-3" scope="col">Maintain</th>
+                              ) : null}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
@@ -861,6 +969,11 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                                 <td className="px-3 py-3 text-muted-foreground">
                                   {formatMoney(line.posted_amount, budget.currency_code)}
                                 </td>
+                                {canEditLines ? (
+                                  <td className="px-3 py-3 align-top">
+                                    <BudgetLineMaintenance line={line} />
+                                  </td>
+                                ) : null}
                               </tr>
                             ))}
                           </tbody>

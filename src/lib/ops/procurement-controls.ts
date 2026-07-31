@@ -6,6 +6,7 @@ import {
   type RequestFulfilment,
   type RequestItemForFulfilment,
 } from "@/lib/ops/procurement-fulfilment";
+import { summariseMatch, type MatchLine, type MatchSummary } from "@/lib/ops/three-way-match";
 
 /**
  * Phase 3b detective controls — docs/pymble-ops-project-finance-spine-audit.md §8.8.
@@ -322,6 +323,125 @@ export async function fetchOpsStaleReservations(): Promise<{
     staleAmount: Math.round((staleAmount + Number.EPSILON) * 100) / 100,
     totalReservedAmount: Math.round((totalReservedAmount + Number.EPSILON) * 100) / 100,
   };
+}
+
+/**
+ * Three-way match per goods received note (audit D12).
+ *
+ * The GRN already stores `quantity_ordered` and `quantity_received`, so
+ * two of the three legs were always there. The missing leg was **requested** —
+ * what the site actually asked for — which only became reachable once
+ * `goods_received_items.material_request_item_id` and
+ * `purchase_order_items.material_request_item_id` existed.
+ *
+ * Lines with no request behind them (a PO raised directly, with no
+ * requisition) still match ordered-vs-received; their requested quantity is
+ * reported as the ordered quantity so the line is not flagged as a phantom
+ * over-order.
+ */
+export async function fetchOpsGrnMatches(
+  grnIds: string[],
+): Promise<Map<string, MatchSummary>> {
+  const out = new Map<string, MatchSummary>();
+  if (grnIds.length === 0) {
+    return out;
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data, error } = await supabase
+    .from("goods_received_items")
+    .select(
+      "grn_id, item_name, unit, quantity_ordered, quantity_received, quantity_rejected, unit_cost, material_request_item_id, purchase_order_item:purchase_order_items!goods_received_items_purchase_order_item_id_fkey(material_request_item_id)",
+    )
+    .in("grn_id", grnIds);
+
+  if (error) {
+    throw error;
+  }
+
+  type Row = {
+    grn_id: string;
+    item_name: string;
+    unit: string;
+    quantity_ordered: number | string;
+    quantity_received: number | string;
+    quantity_rejected: number | string;
+    unit_cost: number | string;
+    material_request_item_id: string | null;
+    purchase_order_item:
+      | { material_request_item_id: string | null }
+      | { material_request_item_id: string | null }[]
+      | null;
+  };
+
+  const rows = (data ?? []) as unknown as Row[];
+
+  // Resolve the request-item link, preferring the direct column and falling
+  // back through the purchase order line.
+  const resolved = rows.map((row) => {
+    const poItem = Array.isArray(row.purchase_order_item)
+      ? (row.purchase_order_item[0] ?? null)
+      : row.purchase_order_item;
+    return {
+      row,
+      requestItemId: row.material_request_item_id ?? poItem?.material_request_item_id ?? null,
+    };
+  });
+
+  const requestItemIds = Array.from(
+    new Set(resolved.map((entry) => entry.requestItemId).filter((id): id is string => Boolean(id))),
+  );
+
+  const requestedById = new Map<string, number>();
+  if (requestItemIds.length > 0) {
+    const { data: requestItems, error: requestError } = await supabase
+      .from("material_request_items")
+      .select("id, quantity")
+      .in("id", requestItemIds);
+    if (requestError) {
+      throw requestError;
+    }
+    for (const item of (requestItems ?? []) as Array<{
+      id: string;
+      quantity: number | string;
+    }>) {
+      requestedById.set(item.id, toNumber(item.quantity));
+    }
+  }
+
+  const linesByGrn = new Map<string, MatchLine[]>();
+  for (const { row, requestItemId } of resolved) {
+    const ordered = toNumber(row.quantity_ordered);
+    const received = toNumber(row.quantity_received);
+    const unitCost = toNumber(row.unit_cost);
+    const requested =
+      requestItemId !== null && requestedById.has(requestItemId)
+        ? (requestedById.get(requestItemId) as number)
+        : // No requisition behind this line — treat ordered as the ask so the
+          // line is judged on delivery, not on a comparison that has no basis.
+          ordered;
+
+    const list = linesByGrn.get(row.grn_id) ?? [];
+    list.push({
+      requestItemId: requestItemId ?? `grn-line:${row.grn_id}:${row.item_name}`,
+      itemName: row.item_name,
+      unit: row.unit,
+      requestedQuantity: requested,
+      orderedQuantity: ordered,
+      receivedQuantity: received,
+      rejectedQuantity: toNumber(row.quantity_rejected),
+      orderedValue: ordered * unitCost,
+      receivedValue: received * unitCost,
+    });
+    linesByGrn.set(row.grn_id, list);
+  }
+
+  for (const [grnId, lines] of linesByGrn) {
+    out.set(grnId, summariseMatch(lines));
+  }
+
+  return out;
 }
 
 /** Full fulfilment position for one request, for the procure screen. */

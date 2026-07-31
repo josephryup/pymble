@@ -38,6 +38,10 @@ export type OpsQuotation = {
   accepted_at: string | null;
   declined_at: string | null;
   archived_at: string | null;
+  /** The project this quotation was converted into, once won (audit D10). */
+  site_id: string | null;
+  customer_id: string | null;
+  converted_at: string | null;
   created_at: string;
   updated_at: string;
   items: OpsQuotationItem[];
@@ -82,7 +86,7 @@ export type OpsQuotationFilters = {
 };
 
 const QUOTATION_COLUMNS =
-  "id, quotation_number, title, client_name, client_contact, client_email, client_phone, client_address, client_tpin, status, currency_code, vat_rate, issued_on, valid_until, scope_summary, terms, notes, sent_at, accepted_at, declined_at, archived_at, created_at, updated_at";
+  "id, quotation_number, title, client_name, client_contact, client_email, client_phone, client_address, client_tpin, status, currency_code, vat_rate, issued_on, valid_until, scope_summary, terms, notes, sent_at, accepted_at, declined_at, archived_at, site_id, customer_id, converted_at, created_at, updated_at";
 
 const ITEM_COLUMNS =
   "id, quotation_id, line_number, description, specification, unit, quantity, unit_rate, line_total";

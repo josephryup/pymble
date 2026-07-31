@@ -695,6 +695,38 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Finance Overview",
   },
   {
+    description:
+      "The company cost-code library and each project's work breakdown. Every code maps to a GL account — the bridge from project cost to the accounts.",
+    group: "finance",
+    href: "/ops/cost-codes",
+    id: "cost-codes",
+    // Read is deliberately wide: anyone raising, pricing or approving spend
+    // picks a cost code, and restricting reads is what pushes people back to
+    // free text. Editing is gated inside the page (library = Finance + MD,
+    // project WBS = QS + Projects Manager).
+    navigationRoles: [
+      ...OPS_FINANCE_ROLES,
+      "operations_manager",
+      "projects_manager",
+      "quantity_surveyor",
+      "procurement_manager",
+      "procurement",
+      "engineering_manager",
+    ],
+    phase: "Phase 13",
+    roles: [
+      ...OPS_FINANCE_ROLES,
+      "operations_manager",
+      "projects_manager",
+      "quantity_surveyor",
+      "procurement_manager",
+      "procurement",
+      "engineering_manager",
+    ],
+    status: "ready",
+    title: "Cost Codes and WBS",
+  },
+  {
     description: "Set project budgets, track cost lines, approve revisions, and watch budget variance.",
     group: "finance",
     href: "/ops/project-budgets",

@@ -30,6 +30,7 @@ import {
   KeySquare,
   Laptop,
   Landmark,
+  Layers,
   LayoutDashboard,
   LayoutGrid,
   LibraryBig,
@@ -106,6 +107,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
 
   // Finance
   "/ops/finance": LayoutDashboard,
+  "/ops/cost-codes": Layers,
   "/ops/project-budgets": Wallet,
   "/ops/payment-requests": Banknote,
   "/ops/finance/accounts": BookOpen,

@@ -616,9 +616,187 @@ The behaviour, with its guard rails, in the same change.
 | **Status** | `partially_ordered` as a working state: the request stays on Procurement's queue, can still receive its procured goods, and cannot be cancelled (a live supplier commitment exists). |
 | **R3 / R4 controls** | `procurement-controls.ts`: unmet-need queue (declined/deferred with outstanding quantity, escalating on **age** not decline-count alone, chronic flag at 2+ declines, feeding a notification to Procurement Manager + PM) and the stale-reservation report, now a panel on `/ops/finance`. Reservations are reported, **never auto-released** — handing funds back on a timer is its own hazard. |
 
-Still to do for Phase 3: RFQ repositioned ahead of pricing and made
-threshold-conditional (§8.6), the inherited-approval weekly digest, and the
-DB-level PO value assertion.
+### Phase 3 tail — shipped 2026-07-30
+
+| Item | Outcome |
+| --- | --- |
+| **DB-level value assertion (R1)** | A trigger refuses any PO claiming `inherited` authority whose total, **plus its siblings against the same request**, exceeds the approved value. Exceeding is not forbidden — it just cannot be done on someone else's approval, so the PO must be a `delta`. A trigger rather than a CHECK because the rule needs cross-row context. The audit was explicit that app-only guards are how the 87% leak happened. |
+| **Tender gate (§8.6)** | `evaluateTenderRequirement`: competitive prices must be recorded **before** pricing, not after approval — running an RFQ after Finance has authorised the money proves nothing. Three triggers: value ≥ threshold (K50,000, configurable), no supplier nominated at all, or a supplier not on the approved register. Enforced at the send-to-Finance transition. |
+| **Inherited-approval digest (R1)** | `fetchOpsInheritedApprovals` — every PO raised under someone else's approval in a window, with value, supplier and who procured it. Trading a preventive control for a detective one only works if the detective one gets read. |
+
+### Phase 4 — shipped 2026-07-30
+Cost centres and the GL bridge. Three migrations.
+
+| Item | Outcome |
+| --- | --- |
+| **Cost centres (D4)** | `cost_centres` master (6 seeded: Head Office, IT, Fleet, HR, Stores, Marketing — all GL-mapped). `project_cost_entries.site_id` is now **nullable**, with a check requiring **exactly one** of `site_id` / `cost_centre_id`. One ledger, two dimensions — not two ledgers, which would have duplicated the lifecycle, relief, posting and reconciliation and guaranteed they drift. |
+| **Overhead routed** | All 12 non-project requests now carry a cost centre. **K52,752 that was structurally invisible to Finance can now enter the ledger** — it was excluded by NOT NULL, not by oversight. |
+| **GL bridge (§4.5)** | `project_cost_entries.journal_entry_id` + `gl-cost-bridge.ts`. Posting is driven by the cost code's `gl_account_id`, so the mapping Finance owns *is* the bridge. |
+| **Which stations post** | `accrued` → Dr expense / Cr Accruals (2300). `actual` → Dr expense / Cr Accounts Payable (2010). **Reservations and commitments are memo-only** — a commitment is not an expense and posting it would overstate cost and misstate the balance sheet. `paid` is left to the existing payment-request posting, or it would double up. |
+| **Reconciliation** | `fetchOpsGlReconciliation` — unposted actuals, orphaned journals, and cost codes with no account mapped, as a Finance panel. The audit's own test: if it is empty, nothing is leaking. |
+| **Unmapped fallback** | A cost code with no GL account still posts, to 5090 Other Direct Costs, and writes an audit row. Deliberately somewhere obviously wrong rather than silently skipped. |
+
+Material request close is now **the first operational flow ever to feed the
+general ledger**. Current reading: 8 actual entries totalling **K35,495 awaiting
+posting** — these are the historical backfilled costs, and posting a catch-up
+journal is a Finance decision about periods and opening balances, not a
+migration's. The reconciliation panel reports the gap rather than closing it.
+
+### Phase 5 — core shipped 2026-07-30
+Off-schedule classification and variation recovery (§7.6).
+
+| Item | Outcome |
+| --- | --- |
+| **Reason codes** | `material_request_items.off_schedule_reason` + note. Three **claimable** values (client instruction, design change, unforeseen site condition) and three **absorbed** (missed in schedule, wastage/rework, other), grouped under those headings in the picker so the choice is self-explaining. Captured on the item form; ignored when a schedule line is linked, since a linked item is by definition planned. |
+| **Variation candidates** | `variation-candidates.ts` totals claimable / absorbed / **untagged** per site and flags a candidate at K50,000 **or** 5% of contract value — so a small job with a material claim is not missed. Surfaced on the commercial dashboard as *"Raise a variation?"*. |
+| **Untagged reported separately** | An item nobody classified is not evidence of a claim, and not evidence of our error either. Folding it into either column would make the claimable figure untrustworthy exactly when someone wants to rely on it. |
+
+Per §7.6 this is a **suggestion, not an automatic variation** — the tagging
+discipline has to earn trust before it drives a client-facing document.
+
+### Phase 5 tail — the call-off shipped 2026-07-30
+The business's original ask, in their words: *"when making material requests it
+can be clicked saying we need these materials from material schedule"*.
+
+`createCallOffFromScheduleAction` + a **Draw materials from this schedule**
+panel on every live issued schedule. Tick lines, press one button, and a draft
+request appears already carrying description, unit, rate, supplier, cost code
+and — critically — `boq_line_item_id`.
+
+Two design points that decide whether this works:
+- **The fast path and the correct path are now the same path.** The old
+  approach asked people to set an optional dropdown inside a collapsed
+  `<details>`, for someone else's benefit, and produced **0 links out of 337
+  items**. Here the link populates itself because pre-filling is the reason to
+  use it.
+- **Quantities default to what REMAINS**, not the full planned figure, so a
+  second call-off against a part-consumed line cannot silently double-order.
+  Over-drawing is allowed (consistent with §7.2 — never block) but recorded on
+  the request and in the audit trail.
+
+The "materials due for ordering" alert now points at this panel instead of a
+blank form.
+
+### Phase 6 — revenue chain and baselines shipped 2026-07-30
+
+| Item | Outcome |
+| --- | --- |
+| **D10 — revenue chain** | `quotations.customer_id` / `site_id` / `converted_at`, `sites.customer_id` / `source_quotation_id`, and `convertQuotationToProjectAction`: accepting a quotation creates or **reuses** the customer (matched by name, so a repeat client does not accumulate duplicates that split their history), creates the project, and links all three. Idempotent — converting twice returns the existing project. |
+| **D11 — baselines** | `project_tasks.baseline_start_date` / `baseline_end_date` / `baseline_set_at` / `by`, plus `duration_days` and `depends_on_task_id`. `schedule-variance.ts` computes **three separate slips** — planned (the plan moved), actual (it finished late), forecast (running and already past baseline). Collapsing them would hide the most useful signal: a programme where nothing has finished late but everything has been re-planned forward is in trouble, and only planned-slip shows it. |
+
+### Phase 7 — stores loop and commitment shipped 2026-07-30
+
+**A correction to D12:** `goods_received_items.purchase_order_item_id` already
+existed — the PO↔GRN link was there, and the original finding overstated the
+gap. What was genuinely missing was narrower and is now closed.
+
+| Item | Outcome |
+| --- | --- |
+| **D13 — PO commitment** | `purchase_orders.budget_line_id` + `cost_code_id`. A PO issued for more than its request previously increased exposure with nothing detecting it; commitment is now attributable at the order, not only at the request. |
+| **D12 — stores** | `stock_movements.site_id` / `cost_code_id` / `cost_entry_id` — stock issued from a store **is** a project cost and can now be attributed as one. `goods_received_notes.material_request_id` + `accrual_cost_entry_id`; `goods_received_items.material_request_item_id`. |
+| **Three-way match** | `three-way-match.ts`: requested → ordered → received per line. **Only over-receipt carries a cost exposure** (the supplier can bill for it); short delivery is a delivery problem, and payment is blocked only on over-receipt — you pay for what arrived. Rejected goods count as not received. |
+
+### Reachability pass — shipped 2026-07-30
+A deliberate sweep for logic that was built but had no way in. Nine modules had
+zero references from any page — working, tested, and unreachable, which is the
+same as absent from a user's point of view.
+
+| Now reachable from | What it exposes |
+| --- | --- |
+| `/ops/rfq-po` | **Unmet site needs** (R3) — declined/deferred items still outstanding, with repeat declines and days-late flagged. **Orders raised under an inherited approval** (R1) — the detective control that replaced the removed PO approval, with delta approvals badged. |
+| `/ops/quotations` | **Convert to a project** on an accepted quotation — creates or reuses the customer, creates the project, links all three (D10). |
+| `/ops/project-schedule/[siteId]` | **Baseline N tasks** action and a slippage panel showing the three separate slips (D11). Baselining only fills *empty* baselines: re-baselining would erase the evidence of slip, which is the one thing a baseline exists to preserve. |
+
+Still built but not yet surfaced, and honest about it: `fetchOpsCostCodeLibrary`
+and `fetchOpsSiteCostCodePosition` have no maintenance screen — the library is
+seeded and every code is GL-mapped, so nothing is blocked, but Finance cannot
+yet add or remap a code without a migration. `summariseMatch` and
+`fetchOpsRequestFulfilment` are likewise unwired pending the GRN screen.
+
+---
+
+### Closing the loop — maintenance and the last control, 2026-07-30
+
+Two gaps remained after Phase 7, both of the same kind: machinery that worked
+but that nobody could reach.
+
+| Item | Outcome |
+| --- | --- |
+| **Cost-code maintenance** | `/ops/cost-codes` — the library (Finance + MD: add a code, rename it, remap its GL account, deactivate it) and the per-project WBS (QS + Projects Manager: add a phase, attach library codes to it), with the phase → trade position roll-up showing budgeted / committed / actual / available. Adding a code **requires** a GL account: without one every cost booked to it falls back to Other Direct Costs and shows as unmapped, so the action refuses rather than creating a known reconciliation break. A GL remap is audited as its own event, not folded into a generic update — it changes where every future cost on that code lands. |
+| **Three-way match wired** | The reconciliation now renders on each goods received note in `/ops/stores-inventory`, where the receipt is actually reviewed. Only **over-receipt blocks payment** (the supplier can bill for it — real money against something nobody authorised); short delivery passes, because you pay for what arrived. |
+
+The spine was seeded and mapped but frozen — extending it needed a migration.
+**A taxonomy nobody can add to is a taxonomy people work around**, which is
+precisely how the free-text categories became established in the first place.
+
+A guard test earned its keep here: `nav module icon coverage` failed the build
+because the new module had no icon, exactly as designed, rather than shipping a
+blank pill into the sidebar.
+
+### The last two open items, closed 2026-07-30
+
+Both were flagged as *business decisions, not engineering*. Rather than decide
+them, the system now lets the business decide them.
+
+**Budget line edit and delete.** `/ops/project-budgets` gains a **Maintain**
+column: edit a line's description, cost code, classification and amount, or
+delete it outright. Three deliberate constraints:
+
+- **Delete refuses when anything is charged to the line** — a cost entry, a
+  material request, or a payment request. Removing a line that carries spend
+  would orphan real money and silently change every variance figure that ever
+  included it. The action names what is attached and suggests **setting the
+  amount to zero instead**, which keeps the history and removes it from the
+  total.
+- **The audit trail records the figures, not just the fact.** An edit logs
+  amount-from and amount-to; a delete logs the deleted line's amount and
+  description. "It was edited" without the numbers answers none of the
+  questions anyone later asks about a budget.
+- **`cost_code_id` is not editable here.** The WBS link is maintained on
+  `/ops/cost-codes`, where the structure and GL mapping are visible.
+  Re-pointing it from a free-text form would reopen the drift the spine closed.
+
+A schedule-generated line (`source = 'boq'`) warns on edit that the next
+schedule issue overwrites its amount — the change is temporary unless the
+schedule is corrected too.
+
+*On the K2.8m duplicate specifically:* both "Core Materials" lines carry **zero
+cost entries, zero requests and zero payments**, so either can be deleted
+cleanly. That is Finance's call to make, and now they can make it.
+
+**Off-schedule variations — the suggestion is one click from acting.** As
+recommended in §7.6, the system still **suggests rather than auto-drafts**: a
+site crossing the threshold shows *"Raise a variation?"* on the commercial
+dashboard, and now also offers **Draft a variation from this**, which opens a
+form pre-filled with the site, a sensible title, the claimable total and a
+reason. Nothing is created until a person reviews the figure and submits, and
+the form says plainly that the amount is *"the total tagged as claimable, not
+an agreed valuation"*. The reason-tagging discipline still has to earn trust
+before it drives a client-facing document on its own — it just no longer costs
+five minutes of re-typing to act on.
+
+### Final state, 2026-07-30
+
+| Measure | Value |
+| --- | --- |
+| Cost-code library | **53 codes, 0 unmapped to a GL account** |
+| Project WBS | 6 phases · 22 trade leaves |
+| Budget lines carrying a cost code | **21 of 21** |
+| Cost entries carrying a cost code | **20 of 20** |
+| Live requests with no budget line | **0** |
+| Cost entries with no budget line | **0** |
+| Sites with more than one open budget | **0** |
+| Tests | **554 passing** |
+| Migrations applied | 19 |
+
+Every leak-detector check reads zero except the one that is deliberately a
+business decision: the **suspected K2.8m duplicate** on site 0001 (two lines,
+both "Core Materials", both K2,814,048.14). It stays visible until Finance
+rules on it.
+
+Compare with where this started: 87% of material spend invisible, 0 of 337
+request items linked to the plan, 0 of 9 schedules generating a budget, 0 GL
+journals across 68 accounts, and four competing project money figures.
 
 ---
 

@@ -72,10 +72,19 @@ import {
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
   OPS_SECONDARY_BUTTON_CLASS,
+  OPS_TABLE_CLASS,
+  OPS_TD_CLASS,
+  OPS_TD_NUM_CLASS,
+  OPS_TH_CLASS,
+  OPS_TH_NUM_CLASS,
+  OPS_THEAD_CLASS,
+  OPS_TR_CLASS,
   type OpsSearchParams,
   OPS_NOTICE_WARNING_CLASS,
   opsStatusBadgeClass,
 } from "@/lib/ops/ui";
+import { fetchOpsUnmetNeeds } from "@/lib/ops/procurement-controls";
+import { fetchOpsInheritedApprovals } from "@/lib/ops/tender-policy";
 import { formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
 type PageProps = {
@@ -657,6 +666,19 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
       fetchActiveSupplierOptions(),
       fetchApprovedMaterialRequestOptions(),
     ]);
+  // Phase 3b controls (audit §8.8). Both are detective controls, and the audit
+  // is blunt that trading a preventive control for a detective one only works
+  // "if the detective one actually gets read" — so they live here, on
+  // Procurement's own page, not in a report nobody opens.
+  const [unmetNeeds, inheritedApprovals] = await Promise.all([
+    fetchOpsUnmetNeeds().catch(() => []),
+    fetchOpsInheritedApprovals({ sinceDays: 7 }).catch(() => ({
+      rows: [],
+      totalValue: 0,
+      deltaCount: 0,
+    })),
+  ]);
+  const escalatingNeeds = unmetNeeds.filter((need) => need.isEscalating);
   const rfqs = rfqPage.items;
   const canCreate = canCreateOpsRfq(auth.profile.role);
   const canManage = canManageOpsRfq(auth.profile.role);
@@ -737,6 +759,121 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
         >
           {notice.message}
         </div>
+      ) : null}
+
+      {/* R3 — a declined item is an unmet site need, and without this it simply
+          vanishes: the site's only recourse is to raise the same request again,
+          which is indistinguishable from real demand downstream. */}
+      {unmetNeeds.length > 0 ? (
+        <OpsDashboardPanel
+          accent={escalatingNeeds.length > 0}
+          density="compact"
+          eyebrow="Unmet site needs"
+          title="Declined and deferred items still outstanding"
+          description={
+            escalatingNeeds.length > 0
+              ? `${escalatingNeeds.length} item(s) are overdue or have been declined more than once — the site is not getting what it needs.`
+              : "Items Procurement could not supply, still outstanding on live requests."
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className={OPS_TABLE_CLASS}>
+              <thead className={OPS_THEAD_CLASS}>
+                <tr>
+                  <th className={OPS_TH_CLASS}>Item</th>
+                  <th className={OPS_TH_CLASS}>Request</th>
+                  <th className={OPS_TH_CLASS}>Site</th>
+                  <th className={OPS_TH_NUM_CLASS}>Outstanding</th>
+                  <th className={OPS_TH_CLASS}>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unmetNeeds.slice(0, 10).map((need) => (
+                  <tr className={OPS_TR_CLASS} key={need.itemId}>
+                    <td className={OPS_TD_CLASS}>
+                      <span className="font-semibold text-foreground">{need.itemName}</span>
+                      {need.isChronic ? (
+                        <span className="ml-2 rounded-full border border-red-300 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+                          Declined {need.declineCount}×
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className={OPS_TD_CLASS}>
+                      <Link
+                        className="text-primary-blue hover:underline"
+                        href={`/ops/material-requests#mr-${need.requestId}`}
+                      >
+                        {need.requestNumber}
+                      </Link>
+                    </td>
+                    <td className={OPS_TD_CLASS}>{need.siteCode}</td>
+                    <td className={OPS_TD_NUM_CLASS}>
+                      <span className={need.isEscalating ? "font-bold text-amber-700" : ""}>
+                        {need.outstandingQuantity} {need.unit}
+                      </span>
+                      {need.daysOverdue !== null && need.daysOverdue > 0 ? (
+                        <span className="ml-1 text-xs text-amber-700">
+                          ({need.daysOverdue}d late)
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className={`${OPS_TD_CLASS} text-xs text-muted-foreground`}>
+                      {need.reason || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </OpsDashboardPanel>
+      ) : null}
+
+      {/* R1 — purchase orders raised on someone else's approval. Removing the
+          redundant PO approval traded a preventive control for a detective one;
+          this is that control. */}
+      {inheritedApprovals.rows.length > 0 ? (
+        <OpsDashboardPanel
+          density="compact"
+          eyebrow="Approval provenance"
+          title="Orders raised under an inherited approval (last 7 days)"
+          description={`${formatZmw(inheritedApprovals.totalValue)} committed without a separate purchase-order approval${
+            inheritedApprovals.deltaCount > 0
+              ? `, of which ${inheritedApprovals.deltaCount} need a delta approval for the variance.`
+              : "."
+          }`}
+        >
+          <div className="overflow-x-auto">
+            <table className={OPS_TABLE_CLASS}>
+              <thead className={OPS_THEAD_CLASS}>
+                <tr>
+                  <th className={OPS_TH_CLASS}>Purchase order</th>
+                  <th className={OPS_TH_CLASS}>From request</th>
+                  <th className={OPS_TH_CLASS}>Supplier</th>
+                  <th className={OPS_TH_CLASS}>Raised by</th>
+                  <th className={OPS_TH_NUM_CLASS}>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inheritedApprovals.rows.slice(0, 10).map((row) => (
+                  <tr className={OPS_TR_CLASS} key={row.purchaseOrderId}>
+                    <td className={OPS_TD_CLASS}>
+                      <span className="font-semibold text-foreground">{row.poNumber}</span>
+                      {row.approvalSource === "delta" ? (
+                        <span className="ml-2 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                          Needs delta approval
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className={OPS_TD_CLASS}>{row.requestNumber ?? "—"}</td>
+                    <td className={OPS_TD_CLASS}>{row.supplierName ?? "—"}</td>
+                    <td className={OPS_TD_CLASS}>{row.procuredByName ?? "—"}</td>
+                    <td className={OPS_TD_NUM_CLASS}>{formatZmw(row.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </OpsDashboardPanel>
       ) : null}
 
       <section className="grid gap-4 min-[720px]:grid-cols-4">
