@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsChartOfAccounts } from "@/lib/ops/chart-of-accounts";
 import {
@@ -210,10 +211,10 @@ export default async function OpsCostCodesPage({ searchParams }: PageProps) {
                           <option value="true">Active</option>
                           <option value="false">Inactive</option>
                         </select>
-                        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                        <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                           <Save className="size-4" aria-hidden="true" />
                           Save
-                        </button>
+                        </OpsSubmitButton>
                       </form>
                     </td>
                   ) : null}
@@ -278,10 +279,10 @@ export default async function OpsCostCodesPage({ searchParams }: PageProps) {
                 <input className={OPS_INPUT_CLASS} name="description" />
               </label>
               <div className="min-[640px]:col-span-3">
-                <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                   <BookOpen className="size-4" aria-hidden="true" />
                   Add to library
-                </button>
+                </OpsSubmitButton>
               </div>
             </form>
           </details>
@@ -310,9 +311,9 @@ export default async function OpsCostCodesPage({ searchParams }: PageProps) {
                   ))}
                 </select>
               </label>
-              <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+              <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                 View
-              </button>
+              </OpsSubmitButton>
             </form>
           ) : null
         }
@@ -389,10 +390,10 @@ export default async function OpsCostCodesPage({ searchParams }: PageProps) {
                   required
                 />
               </label>
-              <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+              <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                 <Plus className="size-4" aria-hidden="true" />
                 Add phase
-              </button>
+              </OpsSubmitButton>
             </form>
 
             {phases.length > 0 ? (
@@ -426,10 +427,10 @@ export default async function OpsCostCodesPage({ searchParams }: PageProps) {
                       ))}
                   </select>
                 </label>
-                <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                   <Layers className="size-4" aria-hidden="true" />
                   Attach code
-                </button>
+                </OpsSubmitButton>
               </form>
             ) : null}
           </div>

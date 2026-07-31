@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { OPS_GROUP_ICONS, OPS_NAV_ICONS } from "@/lib/ops/nav-icons";
 import { OpsNavLink } from "@/components/ops/OpsNavLink";
+import { OpsAvatar } from "@/components/ops/OpsAvatar";
 import { OpsBrandMark } from "@/components/ops/OpsBrandMark";
 import { OpsLocalRolePreviewGuard } from "@/components/ops/OpsLocalRolePreviewGuard";
 import { OpsLocalRolePreviewPanel } from "@/components/ops/OpsLocalRolePreviewPanel";
@@ -274,19 +275,25 @@ function NavRail({
 }
 
 function ProfilePanel({
+  avatarUpdatedAt,
   collapsed = false,
   displayName,
+  hasAvatar,
   onNavigate,
   profileEmail,
   profileRole,
   unreadNotifications,
+  userId,
 }: {
+  avatarUpdatedAt?: string | null;
   collapsed?: boolean;
   displayName: string;
+  hasAvatar?: boolean;
   onNavigate?: () => void;
   profileEmail?: string | null;
   profileRole?: OpsUserRole;
   unreadNotifications?: number;
+  userId?: string | null;
 }) {
   if (collapsed) {
     return (
@@ -356,9 +363,16 @@ function ProfilePanel({
         href="/ops/profile"
         onClick={onNavigate}
       >
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-black text-primary-foreground">
-          {initials(displayName)}
-        </span>
+        {/* The person's photo where their name and role appear (audit §3).
+            Falls back to initials, which is why the shared component owns both
+            cases rather than each surface deciding. */}
+        <OpsAvatar
+          avatarUpdatedAt={avatarUpdatedAt}
+          hasAvatar={hasAvatar}
+          name={displayName}
+          size="lg"
+          userId={userId}
+        />
         <span className="min-w-0">
           <span className="block truncate text-sm font-bold text-foreground">{displayName}</span>
           <span className="mt-0.5 block truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -465,8 +479,11 @@ export function OpsShell({
   defaultNavCollapsed = false,
   isLocalRolePreview = false,
   profileEmail,
+  avatarUpdatedAt,
+  hasAvatar,
   profileName,
   profileRole,
+  userId,
   unreadInbox,
   unreadNotifications,
 }: {
@@ -474,8 +491,11 @@ export function OpsShell({
   defaultNavCollapsed?: boolean;
   isLocalRolePreview?: boolean;
   profileEmail?: string | null;
+  avatarUpdatedAt?: string | null;
+  hasAvatar?: boolean;
   profileName?: string;
   profileRole?: OpsUserRole;
+  userId?: string | null;
   unreadInbox?: number;
   unreadNotifications?: number;
 }) {
@@ -676,7 +696,10 @@ export function OpsShell({
               />
             </nav>
             <ProfilePanel
+              avatarUpdatedAt={avatarUpdatedAt}
               displayName={displayName}
+              hasAvatar={hasAvatar}
+              userId={userId}
               onNavigate={closeMobileNav}
               profileEmail={profileEmail}
               profileRole={profileRole}
@@ -749,8 +772,11 @@ export function OpsShell({
                 )}
               </nav>
               <ProfilePanel
+                avatarUpdatedAt={avatarUpdatedAt}
                 collapsed={isNavCollapsed}
                 displayName={displayName}
+                hasAvatar={hasAvatar}
+                userId={userId}
                 profileEmail={profileEmail}
                 profileRole={profileRole}
                 unreadNotifications={unreadNotifications}

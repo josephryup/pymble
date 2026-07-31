@@ -26,6 +26,10 @@ export type OpsUserProfile = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  /** R2 key of the profile photo, or null for initials (audit §3). */
+  avatar_key: string | null;
+  /** Cache-buster so a replaced photo appears immediately. */
+  avatar_updated_at: string | null;
 };
 
 export type OpsUserContext = {
@@ -132,7 +136,9 @@ export const getOpsUserProfile = cache(async (userId: string) => {
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, role, phone, email, is_active, created_at, updated_at")
+    .select(
+      "id, full_name, role, phone, email, is_active, created_at, updated_at, avatar_key, avatar_updated_at",
+    )
     .eq("id", userId)
     .eq("is_active", true)
     .single<OpsUserProfile>();

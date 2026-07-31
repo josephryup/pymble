@@ -8,7 +8,9 @@ import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { canCreateOpsSelfServiceLeaveRequest } from "@/lib/ops/hr-permissions";
 import { queueOpsNotification } from "@/lib/ops/notifications";
+import { logOpsServerError } from "@/lib/ops/log";
 import { opsPasswordSchema } from "@/lib/ops/password-policy";
+import { deleteOpsR2Object, putOpsR2Object } from "@/lib/ops/r2";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsEmployeeStatus, OpsLeaveType, OpsUserRole } from "@/lib/ops/types";
 
@@ -172,6 +174,120 @@ export async function updateMyProfileAction(formData: FormData) {
   revalidatePath("/ops");
   revalidatePath("/ops/profile");
   redirect("/ops/profile?updated=profile");
+}
+
+/** Image types accepted for a profile photo. */
+const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/** 5 MB — generous for a photo, far below the 25 MB document limit. */
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Upload or replace your own profile photo (audit §3).
+ *
+ * Scoped to the signed-in user by construction: the key is derived from
+ * `profile.id`, and there is no parameter for whose photo to change. Nobody can
+ * set someone else's picture, which matters more than it sounds — an avatar is
+ * how colleagues recognise who approved something.
+ *
+ * The previous object is deleted after the new one is written, so replacing a
+ * photo does not quietly accumulate storage. Deletion is best-effort: an
+ * orphaned object costs pennies, a failed upload costs the user their change.
+ */
+export async function updateMyAvatarAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) {
+    profileError("Choose an image to upload.");
+  }
+  if (!AVATAR_TYPES.has(file.type)) {
+    profileError("Profile photos must be a JPEG, PNG or WebP image.");
+  }
+  if (file.size > AVATAR_MAX_BYTES) {
+    profileError("Profile photos must be 5 MB or smaller.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: existing } = await supabase
+    .from("users")
+    .select("avatar_key")
+    .eq("id", profile.id)
+    .maybeSingle<{ avatar_key: string | null }>();
+
+  const extension =
+    file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  // Timestamped key so a replacement never collides with a cached copy of the
+  // old object at the same path.
+  const key = `ops/avatars/${profile.id}/${Date.now()}.${extension}`;
+
+  try {
+    await putOpsR2Object({
+      body: new Uint8Array(await file.arrayBuffer()),
+      contentType: file.type,
+      key,
+    });
+  } catch (uploadError) {
+    logOpsServerError(uploadError, { module: "profile", action: "avatar.upload" });
+    profileError("The photo could not be uploaded. Try again.");
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update({ avatar_key: key, avatar_updated_at: new Date().toISOString() })
+    .eq("id", profile.id);
+
+  if (error) {
+    profileError(error.message);
+  }
+
+  if (existing?.avatar_key && existing.avatar_key !== key) {
+    await deleteOpsR2Object(existing.avatar_key).catch(() => null);
+  }
+
+  await recordOpsAuditEvent({
+    action: "profile.avatar_updated",
+    actorUserId: profile.id,
+    entityId: profile.id,
+    entityType: "user",
+    moduleKey: "profile",
+    sourceId: profile.id,
+    sourceTable: "users",
+    summary: "Updated profile photo",
+  }).catch(() => null);
+
+  revalidatePath("/ops");
+  revalidatePath("/ops/profile");
+  redirect("/ops/profile?updated=avatar");
+}
+
+/** Remove your profile photo and fall back to initials. */
+export async function removeMyAvatarAction() {
+  const { profile } = await requireOpsUser();
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: existing } = await supabase
+    .from("users")
+    .select("avatar_key")
+    .eq("id", profile.id)
+    .maybeSingle<{ avatar_key: string | null }>();
+
+  const { error } = await supabase
+    .from("users")
+    .update({ avatar_key: null, avatar_updated_at: new Date().toISOString() })
+    .eq("id", profile.id);
+
+  if (error) {
+    profileError(error.message);
+  }
+
+  if (existing?.avatar_key) {
+    await deleteOpsR2Object(existing.avatar_key).catch(() => null);
+  }
+
+  revalidatePath("/ops");
+  revalidatePath("/ops/profile");
+  redirect("/ops/profile?updated=avatar_removed");
 }
 
 export async function updateMyPasswordAction(formData: FormData) {

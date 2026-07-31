@@ -22,6 +22,7 @@ import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel"
 import { OpsLineItemsEditor } from "@/components/ops/OpsLineItemsEditor";
 import { OpsScopeSitePicker } from "@/components/ops/OpsScopeSitePicker";
 import { OpsImportTemplateLinks } from "@/components/ops/OpsImportTemplateLinks";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -981,10 +982,10 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                 ))}
               </select>
             </label>
-            <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+            <OpsSubmitButton className={OPS_PRIMARY_BUTTON_CLASS}>
               <FilePlus2 className="size-4" aria-hidden="true" />
               Build requisition
-            </button>
+            </OpsSubmitButton>
           </form>
         </section>
       ) : null}

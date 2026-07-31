@@ -30,6 +30,7 @@ import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import {
@@ -767,13 +768,10 @@ function ProcurementPricingForm({ request }: { request: OpsMaterialRequestSummar
           Priced total so far: <span className="text-foreground">{formatZmw(request.actual_total)}</span>
         </p>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <button
-            className={OPS_SECONDARY_BUTTON_CLASS}
-            type="submit"
-          >
+          <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
             <Save className="size-4" aria-hidden="true" />
             Save prices
-          </button>
+          </OpsSubmitButton>
           <button
             className={OPS_PRIMARY_BUTTON_CLASS}
             formAction={sendMaterialRequestToFinanceAction}
@@ -895,10 +893,10 @@ function TransportCostForm({ request }: { request: OpsMaterialRequestSummary }) 
             type="number"
           />
         </label>
-        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+        <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
           <Banknote className="size-4" aria-hidden="true" />
           Save transport cost
-        </button>
+        </OpsSubmitButton>
       </div>
     </form>
   );
@@ -1646,10 +1644,10 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                           />
                         </label>
                         <div className="md:col-span-4">
-                          <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+                          <OpsSubmitButton className={OPS_PRIMARY_BUTTON_CLASS}>
                             <Pencil className="size-4" aria-hidden="true" />
                             Save changes
-                          </button>
+                          </OpsSubmitButton>
                         </div>
                       </form>
                     </details>

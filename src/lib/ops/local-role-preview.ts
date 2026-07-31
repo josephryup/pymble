@@ -56,6 +56,9 @@ export function buildOpsLocalRolePreviewProfile(role: OpsUserRole) {
   const label = formatOpsRole(role);
 
   return {
+    // The preview user has no photo — initials are the fallback (audit §3).
+    avatar_key: null,
+    avatar_updated_at: null,
     created_at: "2026-01-01T00:00:00.000Z",
     email: "local-role-preview@pymbleconstruction.test",
     full_name: `Local Preview - ${label}`,

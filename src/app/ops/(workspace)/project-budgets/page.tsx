@@ -22,6 +22,7 @@ import { OpsProjectPnlPanel } from "@/components/ops/OpsProjectPnlPanel";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   activateProjectBudgetAction,
@@ -202,10 +203,10 @@ function BudgetLineMaintenance({
               temporary.
             </p>
           ) : null}
-          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+          <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
             <Save className="size-4" aria-hidden="true" />
             Save line
-          </button>
+          </OpsSubmitButton>
         </form>
 
         <form action={deleteProjectBudgetLineAction}>

@@ -32,6 +32,7 @@ import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approveLeaveRequestAction,
@@ -419,10 +420,10 @@ function EmployeeAccountLink({
               ))}
             </select>
           </label>
-          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+          <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
             <LinkIcon className="size-4" aria-hidden="true" />
             {linked ? "Update link" : "Link account"}
-          </button>
+          </OpsSubmitButton>
           {/* A suggestion, pre-selected but never applied on its own. Getting
               this wrong shows one person another's pay, so a human confirms. */}
           {!linked && suggestion ? (
@@ -567,13 +568,12 @@ function EmployeeDocumentReviewControls({
     <div className="mt-3 flex flex-wrap gap-2">
       {canReview ? (
         <form action={acceptEmployeeDocumentAction}>
-          <OpsReturnToField />
           <input name="employee_document_id" type="hidden" value={document.id} />
           <input name="return_to" type="hidden" value={returnTo} />
-          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+          <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
             <FileCheck2 className="size-4" aria-hidden="true" />
             Accept
-          </button>
+          </OpsSubmitButton>
         </form>
       ) : null}
       {canReview ? (
@@ -582,7 +582,6 @@ function EmployeeDocumentReviewControls({
             Reject document
           </summary>
           <form action={rejectEmployeeDocumentAction} className="grid gap-3 border-t border-border p-3">
-            <OpsReturnToField />
             <input name="employee_document_id" type="hidden" value={document.id} />
             <input name="return_to" type="hidden" value={returnTo} />
             <label className={OPS_LABEL_CLASS}>
@@ -598,7 +597,6 @@ function EmployeeDocumentReviewControls({
       ) : null}
       {canArchiveOpsEmployeeDocument(role, document) ? (
         <form action={archiveEmployeeDocumentAction}>
-          <OpsReturnToField />
           <input name="employee_document_id" type="hidden" value={document.id} />
           <input name="return_to" type="hidden" value={returnTo} />
           <OpsConfirmSubmitButton
@@ -809,10 +807,10 @@ function EmployeeContractsPanel({
                   />
                 </label>
                 <div className="sm:col-span-2">
-                  <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                  <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                     <Pencil className="size-4" aria-hidden="true" />
                     Save contract
-                  </button>
+                  </OpsSubmitButton>
                 </div>
               </form>
             </details>
@@ -842,9 +840,9 @@ function EmployeeContractsPanel({
                   placeholder="Required when terminating"
                 />
               </label>
-              <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+              <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                 Save
-              </button>
+              </OpsSubmitButton>
             </form>
           ) : null}
         </article>
@@ -1018,9 +1016,9 @@ function OnboardingControls({
         <form action={startEmployeeOnboardingItemAction}>
           <OpsReturnToField />
           <input name="onboarding_item_id" type="hidden" value={item.id} />
-          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+          <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
             Start
-          </button>
+          </OpsSubmitButton>
         </form>
       ) : null}
       {canCompleteOpsEmployeeOnboardingItem(role, item) ? (
@@ -1035,9 +1033,9 @@ function OnboardingControls({
               Completion notes
               <textarea className={`${OPS_INPUT_CLASS} min-h-20`} name="completion_notes" />
             </label>
-            <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+            <OpsSubmitButton className={OPS_PRIMARY_BUTTON_CLASS}>
               Complete
-            </button>
+            </OpsSubmitButton>
           </form>
         </details>
       ) : null}
@@ -1045,9 +1043,9 @@ function OnboardingControls({
         <form action={waiveEmployeeOnboardingItemAction}>
           <OpsReturnToField />
           <input name="onboarding_item_id" type="hidden" value={item.id} />
-          <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+          <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
             Waive
-          </button>
+          </OpsSubmitButton>
         </form>
       ) : null}
       {canCancelOpsEmployeeOnboardingItem(role, item) ? (
@@ -1096,9 +1094,9 @@ function RecruitmentControls({
           </option>
         ))}
       </select>
-      <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+      <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
         Save
-      </button>
+      </OpsSubmitButton>
     </form>
   );
 }
@@ -2075,7 +2073,6 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 action={uploadEmployeeDocumentAction}
                 className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
               >
-                <OpsReturnToField />
                 <input name="return_to" type="hidden" value="/ops/employees#employee-register" />
                 <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                   Employee
@@ -2459,9 +2456,9 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                           </option>
                         ))}
                       </select>
-                      <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                      <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                         Save
-                      </button>
+                      </OpsSubmitButton>
                     </form>
                   ) : null}
                 </div>
@@ -2633,10 +2630,10 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                         />
                       </label>
                       <div className="sm:col-span-2 lg:col-span-3">
-                        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                        <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                           <Pencil className="size-4" aria-hidden="true" />
                           Save employee
-                        </button>
+                        </OpsSubmitButton>
                       </div>
                     </form>
                   </details>

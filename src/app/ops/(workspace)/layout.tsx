@@ -30,7 +30,10 @@ export default async function OpsWorkspaceLayout({
 
   return (
     <OpsShell
+      avatarUpdatedAt={profile.avatar_updated_at}
       defaultNavCollapsed={defaultNavCollapsed}
+      hasAvatar={Boolean(profile.avatar_key)}
+      userId={profile.id}
       isLocalRolePreview={auth.isLocalRolePreview}
       profileEmail={profile.email}
       profileName={profile.full_name}

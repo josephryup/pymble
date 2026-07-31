@@ -10,13 +10,17 @@ import {
   Upload,
   UserCircle,
 } from "lucide-react";
+import { OpsAvatar } from "@/components/ops/OpsAvatar";
 import { OpsLogoutButton } from "@/components/ops/OpsLogoutButton";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { uploadEmployeeDocumentAction } from "@/lib/ops/hr-actions";
 import { fetchMyOpsEmployeeSelfServiceProfile, type OpsEmployeeDocumentSummary } from "@/lib/ops/hr";
 import { fetchMyPayslipAccess, fetchMyStaffPayslips } from "@/lib/ops/staff-payroll";
 import {
   createMyLeaveRequestAction,
+  removeMyAvatarAction,
+  updateMyAvatarAction,
   updateMyPasswordAction,
   updateMyProfileAction,
 } from "@/lib/ops/profile-actions";
@@ -27,6 +31,7 @@ import {
   OPS_INPUT_CLASS,
   OPS_LABEL_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
+  OPS_SECONDARY_BUTTON_CLASS,
   type OpsSearchParams,
   OPS_NOTICE_WARNING_CLASS,
   opsStatusBadgeClass,
@@ -617,6 +622,59 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Profile photo (audit §3). Kept as its own form rather than a field on
+          personal details, because a file upload and a text save have
+          different failure modes — a rejected image should not discard a name
+          change the user made at the same time. */}
+      <section className="rounded-lg border border-border bg-card p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <OpsAvatar
+            avatarUpdatedAt={auth.profile.avatar_updated_at}
+            hasAvatar={Boolean(auth.profile.avatar_key)}
+            name={profileName}
+            size="lg"
+            userId={auth.profile.id}
+          />
+          <div className="min-w-0 flex-1">
+            <h2 className="font-heading text-xl font-bold text-foreground">
+              Profile photo
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Shown beside your name across the workspace and on everything you
+              record. Without one, your initials are used.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <form action={updateMyAvatarAction} className="flex flex-wrap items-end gap-3">
+            <label className={OPS_LABEL_CLASS}>
+              Choose an image
+              <input
+                accept="image/jpeg,image/png,image/webp"
+                className={OPS_INPUT_CLASS}
+                name="avatar"
+                required
+                type="file"
+              />
+            </label>
+            <OpsSubmitButton className={OPS_PRIMARY_BUTTON_CLASS} pendingLabel="Uploading...">
+              <Upload className="size-4" aria-hidden="true" />
+              Save photo
+            </OpsSubmitButton>
+          </form>
+          {auth.profile.avatar_key ? (
+            <form action={removeMyAvatarAction}>
+              <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS} pendingLabel="Removing...">
+                Remove photo
+              </OpsSubmitButton>
+            </form>
+          ) : null}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          JPEG, PNG or WebP, up to 5 MB.
+        </p>
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
