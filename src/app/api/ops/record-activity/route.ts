@@ -21,6 +21,7 @@ const SOURCE_ROUTE: Record<
   | "/ops/rfq-po"
   | "/ops/stores-inventory"
   | "/ops/daily-site-reports"
+  | "/ops/department-reports"
   | "/ops/engineering-controls"
   | "/ops/delivery-exceptions"
   | "/ops/project-budgets"
@@ -45,6 +46,7 @@ const SOURCE_ROUTE: Record<
   commercial_variations: "/ops/commercial",
   corrective_actions: "/ops/hse",
   daily_site_reports: "/ops/daily-site-reports",
+  department_reports: "/ops/department-reports",
   delivery_exceptions: "/ops/delivery-exceptions",
   drawing_register: "/ops/engineering-controls",
   employee_contracts: "/ops/employees",
@@ -89,6 +91,7 @@ const SOURCE_MODULE: Record<
   | "boq"
   | "commercial"
   | "daily_site_reports"
+  | "department_reports"
   | "delivery_exceptions"
   | "employees"
   | "engineering_controls"
@@ -118,6 +121,7 @@ const SOURCE_MODULE: Record<
   commercial_variations: "commercial",
   corrective_actions: "hse",
   daily_site_reports: "daily_site_reports",
+  department_reports: "department_reports",
   delivery_exceptions: "delivery_exceptions",
   drawing_register: "engineering_controls",
   employee_contracts: "employees",

@@ -1,6 +1,7 @@
 import { CheckCircle2, FileDown, RotateCcw, Send } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
@@ -509,6 +510,18 @@ export default async function OpsDepartmentReportDetailPage({
           </OpsConfirmSubmitButton>
         </form>
       ) : null}
+
+      {/* Supporting evidence: the narrative says what happened, the
+          attachments prove it — site photos, a signed minute, a supplier
+          quote, a spreadsheet the figures came from. Reuses the shared record
+          activity panel so reports get the same upload, versioning, download
+          gating and comment thread as every other record, rather than a
+          second bespoke attachment mechanism. */}
+      <OpsRecordActivityPanel
+        canManage={canWrite || viewerCanReviewRecord}
+        sourceId={report.id}
+        sourceTable="department_reports"
+      />
     </div>
   );
 }

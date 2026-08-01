@@ -49,6 +49,7 @@ export const OPS_RECORD_ACTIVITY_SOURCE_TABLES = [
   "performance_appraisals",
   "leave_balances",
   "employee_onboarding_items",
+  "department_reports",
 ] as const;
 
 export type OpsRecordActivitySourceTable = (typeof OPS_RECORD_ACTIVITY_SOURCE_TABLES)[number];
@@ -67,6 +68,7 @@ export const OPS_RECORD_ACTIVITY_SOURCE_LABELS: Record<OpsRecordActivitySourceTa
   commercial_variations: "variation",
   corrective_actions: "corrective action",
   daily_site_reports: "daily site report",
+  department_reports: "department report",
   delivery_exceptions: "delivery exception",
   drawing_register: "drawing record",
   employee_contracts: "employee contract",
