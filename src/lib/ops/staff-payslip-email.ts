@@ -31,10 +31,55 @@ import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 export type PayslipEmailOutcome = {
   sent: number;
   skippedNoEmail: Array<{ employeeNumber: string; fullName: string }>;
+  /**
+   * People whose only known address looks like a shared mailbox. Skipped
+   * deliberately — see isLikelySharedMailbox.
+   */
+  skippedSharedMailbox: Array<{
+    employeeNumber: string;
+    fullName: string;
+    address: string;
+  }>;
   failed: Array<{ employeeNumber: string; fullName: string; reason: string }>;
   /** True when email is not configured at all — nothing was attempted. */
   notConfigured: boolean;
 };
+
+/**
+ * Addresses that are probably read by more than one person.
+ *
+ * Found in production: after the first real run, 9 of 13 people were skipped
+ * for having no address on their employee record — but 6 of them had one on
+ * their linked login account. Falling back to that account address is the fix,
+ * except that some of those accounts are role mailboxes
+ * (`procurement@`, `it@`). Sending someone's payslip to a shared inbox is a
+ * privacy breach dressed up as a delivery success, so those are skipped and
+ * reported instead, asking HR for a personal address.
+ *
+ * A heuristic, deliberately: there is no reliable way to know who reads a
+ * mailbox, and the safe failure here is "not delivered and reported" rather
+ * than "delivered to the wrong people".
+ */
+const SHARED_MAILBOX_LOCAL_PARTS = new Set([
+  "accounts",
+  "admin",
+  "hr",
+  "info",
+  "it",
+  "finance",
+  "office",
+  "operations",
+  "ops",
+  "payroll",
+  "procurement",
+  "sales",
+  "support",
+]);
+
+export function isLikelySharedMailbox(address: string): boolean {
+  const local = address.split("@")[0]?.trim().toLowerCase() ?? "";
+  return SHARED_MAILBOX_LOCAL_PARTS.has(local);
+}
 
 type PayslipRow = {
   id: string;
@@ -73,6 +118,14 @@ function formatZmw(value: number) {
     maximumFractionDigits: 2,
   })}`;
 }
+
+/**
+ * Brand logo for transactional email. An absolute https URL because email
+ * clients cannot resolve relative paths, and a plain <img> because most
+ * clients block background images by default.
+ */
+const OPS_EMAIL_LOGO_URL =
+  "https://www.pymbleconstruction.com/_next/image?url=%2Flogo.png&w=1920&q=75";
 
 function escapeHtml(value: string) {
   return value
@@ -113,15 +166,37 @@ export function buildPayslipEmailContent(input: {
     input.companyName,
   ].join("\n");
 
+  // Matches the account-confirmation email so the two read as one system.
+  // Table-free layout with inline styles throughout: Outlook and Gmail both
+  // strip <style> blocks, and this has to render on whatever phone the person
+  // opens it on.
   const html = `
-    <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111">
-      <p>Hello ${escapeHtml(firstName)},</p>
-      <p>Your payslip for <strong>${escapeHtml(input.periodLabel)}</strong> has been issued and your salary has been paid.</p>
-      <p style="font-size:18px"><strong>Net pay: ${formatZmw(input.netPay)}</strong></p>
-      <p>Your full payslip is attached to this email as a PDF.</p>
-      <p style="color:#555">If anything looks wrong, please contact HR.</p>
-      <p style="color:#555">${escapeHtml(input.companyName)}</p>
+<div style="margin:0;padding:32px;background:#f4f6fb;font-family:Arial,sans-serif;color:#101828;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e4e7ec;border-radius:12px;padding:32px;">
+    <img src="${OPS_EMAIL_LOGO_URL}" alt="${escapeHtml(input.companyName)}" style="height:48px;margin-bottom:28px;" />
+
+    <h1 style="font-size:24px;line-height:32px;margin:0 0 12px;color:#0b1220;">Your payslip for ${escapeHtml(input.periodLabel)}</h1>
+    <p style="font-size:15px;line-height:24px;margin:0 0 24px;color:#475467;">
+      Hello ${escapeHtml(firstName)}, your salary for ${escapeHtml(input.periodLabel)} has been paid. Your payslip is attached to this email as a PDF.
+    </p>
+
+    <div style="background:#f9fafb;border:1px solid #e4e7ec;border-radius:8px;padding:16px 20px;margin:0 0 24px;">
+      <p style="font-size:13px;line-height:20px;margin:0 0 4px;color:#667085;text-transform:uppercase;letter-spacing:0.06em;">Net pay</p>
+      <p style="font-size:24px;line-height:32px;margin:0;color:#0b1220;font-weight:700;">${formatZmw(input.netPay)}</p>
     </div>
+
+    <p style="font-size:13px;line-height:20px;margin:0 0 4px;color:#667085;">
+      The attached PDF is your full payslip, including gross pay, deductions and statutory contributions.
+    </p>
+    <p style="font-size:13px;line-height:20px;margin:0;color:#667085;">
+      If anything looks wrong, please contact HR.
+    </p>
+
+    <p style="font-size:13px;line-height:20px;margin:28px 0 0;padding-top:20px;border-top:1px solid #e4e7ec;color:#98a2b3;">
+      ${escapeHtml(input.companyName)}
+    </p>
+  </div>
+</div>
   `.trim();
 
   return { subject, text, html };
@@ -135,6 +210,7 @@ export async function sendStaffPayslipEmailsForRun(input: {
   const outcome: PayslipEmailOutcome = {
     sent: 0,
     skippedNoEmail: [],
+    skippedSharedMailbox: [],
     failed: [],
     notConfigured: false,
   };
@@ -185,14 +261,30 @@ export async function sendStaffPayslipEmailsForRun(input: {
     .map((item) => item.employee_id)
     .filter((id): id is string => Boolean(id));
 
+  // Prefer the employee record's address, then fall back to the address on
+  // their linked login account. The first real run skipped 9 of 13 people for
+  // having no employee-record address — but 6 of them had one on their
+  // account, which is an address the company already uses to reach them.
+  // Requiring HR to re-key it into a second field was never the intent.
   const emailByEmployeeId = new Map<string, string>();
   if (employeeIds.length > 0) {
     const { data: employees } = await supabase
       .from("employees")
-      .select("id, email")
+      .select("id, email, account:users!employees_user_id_fkey(email)")
       .in("id", employeeIds);
-    for (const employee of (employees ?? []) as Array<{ id: string; email: string | null }>) {
-      const address = (employee.email ?? "").trim();
+
+    for (const employee of (employees ?? []) as unknown as Array<{
+      id: string;
+      email: string | null;
+      account: { email: string | null } | { email: string | null }[] | null;
+    }>) {
+      const account = Array.isArray(employee.account)
+        ? (employee.account[0] ?? null)
+        : employee.account;
+
+      const address =
+        (employee.email ?? "").trim() || (account?.email ?? "").trim();
+
       if (address) {
         emailByEmployeeId.set(employee.id, address);
       }
@@ -218,6 +310,28 @@ export async function sendStaffPayslipEmailsForRun(input: {
         reason: "missing_recipient",
         recipientEmail: null,
         recipientId: null,
+        recipientName: item.full_name,
+        sourceId: input.runId,
+        sourceTable: "staff_payroll_runs",
+        status: "skipped",
+      }).catch(() => null);
+      continue;
+    }
+
+    // A payslip must not land in an inbox other people read. Skipped and
+    // named, so HR can add a personal address rather than discovering the
+    // problem from a colleague.
+    if (isLikelySharedMailbox(recipient)) {
+      outcome.skippedSharedMailbox.push({
+        employeeNumber: item.employee_number,
+        fullName: item.full_name,
+        address: recipient,
+      });
+      await recordOpsEmailDeliveryEvent({
+        deliveryType: "staff_payslip",
+        moduleKey: "staff_payroll",
+        reason: "shared_mailbox",
+        recipientEmail: recipient,
         recipientName: item.full_name,
         sourceId: input.runId,
         sourceTable: "staff_payroll_runs",

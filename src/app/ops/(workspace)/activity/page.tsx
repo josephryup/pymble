@@ -1,4 +1,5 @@
-import { Activity as ActivityIcon, Clock3, UserCircle2 } from "lucide-react";
+import { Activity as ActivityIcon, Clock3 } from "lucide-react";
+import { OpsAvatar } from "@/components/ops/OpsAvatar";
 import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
@@ -94,10 +95,20 @@ export default async function OpsActivityLogPage({ searchParams }: PageProps) {
           <ul className="divide-y divide-border">
             {result.items.map((entry) => (
               <li className="flex items-start gap-3 p-4" key={entry.id}>
+                {/* The person who did it, not a generic activity glyph. A
+                    feed of identical icons carries no information; a face (or
+                    initials) makes it scannable. The tone ring is kept as a
+                    thin border so severity is still readable. */}
                 <span
-                  className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border ${toneClass(entry.tone)}`}
+                  className={`mt-0.5 shrink-0 rounded-full border-2 ${toneClass(entry.tone)}`}
                 >
-                  <ActivityIcon className="size-4" aria-hidden="true" />
+                  <OpsAvatar
+                    avatarUpdatedAt={entry.actor_avatar_updated_at}
+                    hasAvatar={entry.actor_has_avatar}
+                    name={entry.actor_name ?? "Automated task"}
+                    size="sm"
+                    userId={entry.actor_user_id}
+                  />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -115,7 +126,6 @@ export default async function OpsActivityLogPage({ searchParams }: PageProps) {
                     </span>
                     <span aria-hidden="true">·</span>
                     <span className="inline-flex items-center gap-1.5 font-semibold text-foreground/70">
-                      <UserCircle2 className="size-3.5" aria-hidden="true" />
                       {entry.actor_name ?? "Automated task"}
                       {entry.actor_role ? (
                         <span className="font-medium text-muted-foreground">

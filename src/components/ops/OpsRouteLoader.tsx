@@ -1,4 +1,5 @@
 import { OpsBrandMark } from "@/components/ops/OpsBrandMark";
+import { OpsLoadingMark } from "@/components/ops/OpsLoadingMark";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -21,6 +22,16 @@ export function OpsRouteLoader({
         role="status"
       >
         <span className="sr-only">{label}</span>
+        {/* The animated mark sits ABOVE the skeleton, not inside it: the
+            skeleton says "this is the shape of what's coming", the mark says
+            "we're fetching it". Pinned so it stays visible however tall the
+            skeleton grows. */}
+        <div className="pointer-events-none sticky top-4 z-10 mb-4 flex justify-center">
+          <span className="flex items-center gap-3 rounded-full border border-border bg-card/95 px-4 py-2 shadow-sm shadow-foreground/5 backdrop-blur">
+            <OpsLoadingMark label={label} size="sm" />
+            <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+          </span>
+        </div>
         <div className="w-full max-w-none space-y-5">
           <Card className="py-0">
             <CardContent className="p-5 md:p-7">
@@ -66,9 +77,7 @@ export function OpsRouteLoader({
     >
       <Card className="w-full max-w-xs py-0 text-center shadow-sm shadow-foreground/5">
         <CardContent className="flex flex-col items-center gap-4 px-8 py-7">
-        <span className="flex size-20 items-center justify-center rounded-lg border border-border bg-card">
-          <OpsBrandMark decorative className="h-16 w-16" sizes="64px" />
-        </span>
+        <OpsLoadingMark label={label} size="lg" />
         <span className="block">
           <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
             Pymble Operations

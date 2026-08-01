@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildPayslipEmailContent } from "../src/lib/ops/staff-payslip-email";
+import {
+  buildPayslipEmailContent,
+  isLikelySharedMailbox,
+} from "../src/lib/ops/staff-payslip-email";
 
 /**
  * Payslip email content (audit §10).
@@ -77,5 +80,38 @@ describe("buildPayslipEmailContent", () => {
     const content = buildPayslipEmailContent(base);
     assert.match(content.text, /attached/i);
     assert.match(content.text, /contact HR/i);
+  });
+});
+
+describe("isLikelySharedMailbox", () => {
+  it("flags role mailboxes that more than one person reads", () => {
+    // Real cause of a near-miss: two people's only known address was their
+    // linked account, and those accounts were procurement@ and it@.
+    for (const address of [
+      "procurement@pymbleconstruction.com",
+      "it@pymbleconstruction.com",
+      "hr@pymbleconstruction.com",
+      "INFO@pymbleconstruction.com",
+      "  payroll@pymbleconstruction.com ",
+    ]) {
+      assert.equal(isLikelySharedMailbox(address), true, `${address} should be flagged`);
+    }
+  });
+
+  it("leaves personal addresses alone", () => {
+    for (const address of [
+      "jmulilo@pymbleconstruction.com",
+      "mcassim@pymbleconstruction.com",
+      "rose@pymbleconstruction.com",
+      "hmatimba@pymbleconstruction.com",
+    ]) {
+      assert.equal(isLikelySharedMailbox(address), false, `${address} should pass`);
+    }
+  });
+
+  it("does not match a role word merely contained in a name", () => {
+    // "admin" is shared; "admina" and "itumeleng" are people.
+    assert.equal(isLikelySharedMailbox("admina@pymbleconstruction.com"), false);
+    assert.equal(isLikelySharedMailbox("itumeleng@pymbleconstruction.com"), false);
   });
 });

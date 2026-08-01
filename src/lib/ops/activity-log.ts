@@ -21,6 +21,9 @@ export type OpsActivityLogEntry = {
   tone: "info" | "good" | "warn";
   actor_name: string | null;
   actor_role: OpsUserRole | null;
+  actor_user_id: string | null;
+  actor_has_avatar: boolean;
+  actor_avatar_updated_at: string | null;
 };
 
 export type FetchOpsActivityLogOptions = {
@@ -80,24 +83,39 @@ function deriveTone(action: string): OpsActivityLogEntry["tone"] {
  * Resolve actor names/roles via the service client (bypassing the per-row
  * `users` RLS — same rationale as the dashboard timeline), keyed by id.
  */
+type ResolvedActor = {
+  name: string | null;
+  role: OpsUserRole | null;
+  /** Presence only — the image is served by /api/ops/avatar (audit §3). */
+  hasAvatar: boolean;
+  avatarUpdatedAt: string | null;
+};
+
 async function resolveActors(
   actorIds: string[],
-): Promise<Map<string, { name: string | null; role: OpsUserRole | null }>> {
-  const map = new Map<string, { name: string | null; role: OpsUserRole | null }>();
+): Promise<Map<string, ResolvedActor>> {
+  const map = new Map<string, ResolvedActor>();
   if (actorIds.length === 0) {
     return map;
   }
   const supabase = getOpsSupabaseServiceClient();
   const { data } = await supabase
     .from("users")
-    .select("id, full_name, role")
+    .select("id, full_name, role, avatar_key, avatar_updated_at")
     .in("id", actorIds);
   for (const row of (data ?? []) as Array<{
     id: string;
     full_name: string | null;
     role: OpsUserRole | null;
+    avatar_key: string | null;
+    avatar_updated_at: string | null;
   }>) {
-    map.set(row.id, { name: row.full_name?.trim() || null, role: row.role ?? null });
+    map.set(row.id, {
+      name: row.full_name?.trim() || null,
+      role: row.role ?? null,
+      hasAvatar: Boolean(row.avatar_key),
+      avatarUpdatedAt: row.avatar_updated_at,
+    });
   }
   return map;
 }
@@ -163,6 +181,9 @@ export async function fetchOpsActivityLog(
       tone: deriveTone(row.action),
       actor_name: actor?.name ?? null,
       actor_role: actor?.role ?? null,
+      actor_user_id: row.actor_user_id,
+      actor_has_avatar: actor?.hasAvatar ?? false,
+      actor_avatar_updated_at: actor?.avatarUpdatedAt ?? null,
     };
   });
 

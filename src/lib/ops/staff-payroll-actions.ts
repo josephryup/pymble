@@ -631,6 +631,10 @@ export async function completeStaffPayrollRunAction(formData: FormData) {
       metadata: {
         sent: emailOutcome.sent,
         skipped_no_email: emailOutcome.skippedNoEmail.length,
+        skipped_shared_mailbox: emailOutcome.skippedSharedMailbox.length,
+        shared_mailbox_names: emailOutcome.skippedSharedMailbox.map(
+          (entry) => `${entry.employeeNumber} ${entry.fullName} (${entry.address})`,
+        ),
         failed: emailOutcome.failed.length,
         not_configured: emailOutcome.notConfigured,
         // Named, because "3 people did not get their payslip" is only
@@ -647,6 +651,10 @@ export async function completeStaffPayrollRunAction(formData: FormData) {
         : `Emailed ${emailOutcome.sent} payslip(s)${
             emailOutcome.skippedNoEmail.length > 0
               ? `, ${emailOutcome.skippedNoEmail.length} skipped with no email on record`
+              : ""
+          }${
+            emailOutcome.skippedSharedMailbox.length > 0
+              ? `, ${emailOutcome.skippedSharedMailbox.length} skipped (shared mailbox — needs a personal address)`
               : ""
           }${emailOutcome.failed.length > 0 ? `, ${emailOutcome.failed.length} failed` : ""}`,
     }).catch(() => null);

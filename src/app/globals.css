@@ -286,6 +286,30 @@
       transform: translateX(0);
     }
   }
+
+  /*
+   * Loading halo behind the animated Pymble mark (OpsLoadingMark).
+   *
+   * Deliberately slow and low-contrast: this sits behind almost every ops
+   * navigation, and a loading state that pulses urgently makes a fast page
+   * feel slower than it is. The logo SVG carries its own crane animation; this
+   * only signals "working".
+   */
+  .animate-ops-breathe {
+    animation: ops-breathe 2s ease-in-out infinite;
+  }
+
+  @keyframes ops-breathe {
+    0%,
+    100% {
+      opacity: 0.35;
+      transform: scale(0.92);
+    }
+    50% {
+      opacity: 0.9;
+      transform: scale(1.06);
+    }
+  }
 }
 
 :root {
