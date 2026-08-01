@@ -30,9 +30,20 @@ export default function OpsOfflinePage() {
           {OPS_BRAND.shortName} can&rsquo;t reach the server right now. Pages you&rsquo;ve already
           opened may still work from your device&rsquo;s cache.
         </p>
+        {/* Naming the four flows exactly (audit §7). The previous copy listed
+            three and omitted site checklists, which quietly under-promised a
+            flow that does work — and said nothing about what does not, which
+            is how people end up trusting the app with work it cannot hold. */}
         <p className="text-sm leading-6 text-muted-foreground">
-          Attendance, daily site reports, and site photos you submit while offline are saved on
-          this device and will sync automatically once you&rsquo;re back online.
+          <strong className="text-foreground">Keeps working offline:</strong> attendance,
+          daily site reports, site photos, and site checklists. Anything you submit is
+          saved on this device and syncs automatically once you&rsquo;re back on a
+          connection — you can close the app in between.
+        </p>
+        <p className="text-sm leading-6 text-muted-foreground">
+          <strong className="text-foreground">Needs a connection:</strong> approvals,
+          material requests, purchase orders, payroll and reports. These will be waiting
+          when you reconnect.
         </p>
       </div>
       <a

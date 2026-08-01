@@ -68,9 +68,22 @@ export function OpsSyncIndicator() {
     // not directly in the effect body, to comply with no-state-in-effect.
     const onReconnect = () => flush();
     window.addEventListener("online", onReconnect);
+
+    // The service worker asks us to flush when Background Sync fires (audit
+    // §7). The worker cannot replay intents itself — the outbox sits behind
+    // app code it has no access to — so it wakes whichever window is open and
+    // that window does the work.
+    const onServiceWorkerMessage = (event: MessageEvent) => {
+      if ((event.data as { type?: string } | null)?.type === "ops:flush-outbox") {
+        flush();
+      }
+    };
+    navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
+
     return () => {
       unsubOutbox();
       window.removeEventListener("online", onReconnect);
+      navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
     };
   }, [flush, refresh]);
 

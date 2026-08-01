@@ -126,6 +126,49 @@ export function newOutboxId(): string {
   });
 }
 
+/**
+ * Background Sync tag. The service worker listens for this and drains the
+ * outbox when connectivity returns.
+ */
+export const OPS_OUTBOX_SYNC_TAG = "ops-outbox-sync";
+
+/**
+ * Ask the browser to wake the service worker when the device is back online
+ * (audit §7).
+ *
+ * Without this the outbox only drains while the app is OPEN and the `online`
+ * event fires in that tab — which is not how the app is used on site. Someone
+ * records attendance in a dead spot, locks the phone, and drives back; the
+ * queue sits there until they happen to reopen the workspace. Background Sync
+ * lets the browser replay it in the background instead.
+ *
+ * Best-effort and silent: Background Sync is not available everywhere (notably
+ * iOS Safari). Where it is missing the existing `online` listener in
+ * OpsSyncIndicator still drains the queue when the app is next opened, so
+ * behaviour degrades to today's rather than breaking. That is why registration
+ * failure is swallowed rather than surfaced.
+ */
+export async function requestOutboxBackgroundSync(): Promise<boolean> {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+    return false;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const sync = (
+      registration as ServiceWorkerRegistration & {
+        sync?: { register: (tag: string) => Promise<void> };
+      }
+    ).sync;
+
+    if (!sync) return false;
+    await sync.register(OPS_OUTBOX_SYNC_TAG);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function enqueueOutboxIntent(
   intent: Omit<OpsOutboxIntent, "enqueued_at" | "attempts" | "status"> &
     Partial<Pick<OpsOutboxIntent, "attempts" | "status">>,
@@ -139,6 +182,12 @@ export async function enqueueOutboxIntent(
   };
   await db.put(STORE_NAME, { ...full, payload: serializeOutboxPayload(full.payload) });
   notifyOutboxChanged();
+
+  // Registered on every enqueue, not just the first: the browser coalesces
+  // repeat registrations of the same tag, and a queue that grew while a
+  // previous sync was pending still needs a wake-up.
+  void requestOutboxBackgroundSync();
+
   return full;
 }
 

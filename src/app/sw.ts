@@ -145,3 +145,55 @@ self.addEventListener("notificationclick", (event) => {
     })(),
   );
 });
+
+/**
+ * Background Sync — drain the offline outbox when connectivity returns
+ * (audit §7, Option A).
+ *
+ * Why this exists: the outbox previously only drained while the app was OPEN
+ * and the `online` event fired in that tab. On site that is the wrong
+ * assumption — someone records attendance in a dead spot, locks the phone, and
+ * the queue sits untouched until they happen to reopen the workspace. This
+ * lets the browser wake the worker instead.
+ *
+ * The worker cannot replay the intents itself: the outbox lives in IndexedDB
+ * behind app code (auth, Supabase clients, server actions) that a service
+ * worker has no access to. So the strategy is:
+ *
+ *   1. if a window is open, tell it to flush — it has everything it needs;
+ *   2. if none is open, keep the sync registration alive by rejecting, so the
+ *      browser retries later with its own backoff rather than dropping the
+ *      work silently.
+ *
+ * Rejecting is deliberate. A resolved sync event means "handled"; resolving
+ * without having flushed anything would quietly discard the retry, which is
+ * exactly the failure mode this is meant to remove.
+ */
+const OPS_OUTBOX_SYNC_TAG = "ops-outbox-sync";
+
+self.addEventListener("sync", (event) => {
+  const syncEvent = event as ExtendableEvent & { tag?: string };
+  if (syncEvent.tag !== OPS_OUTBOX_SYNC_TAG) {
+    return;
+  }
+
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({
+        includeUncontrolled: true,
+        type: "window",
+      });
+
+      const opsWindows = windows.filter((client) => client.url.includes("/ops"));
+      if (opsWindows.length === 0) {
+        // No client to do the work. Throwing keeps the registration pending so
+        // the browser tries again — silently succeeding would strand the queue.
+        throw new Error("ops-outbox-sync: no ops client available to flush");
+      }
+
+      for (const client of opsWindows) {
+        client.postMessage({ type: "ops:flush-outbox" });
+      }
+    })(),
+  );
+});

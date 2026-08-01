@@ -4,6 +4,9 @@ import type { OpsUserRole } from "@/lib/ops/types";
 
 export type OpsRecordComment = {
   author: {
+    /** R2 key presence only — the image itself is served by route (audit §3). */
+    avatar_key: string | null;
+    avatar_updated_at: string | null;
     full_name: string;
     id: string;
     role: OpsUserRole;
@@ -47,7 +50,7 @@ export async function fetchOpsRecordComments(input: FetchOpsRecordCommentsInput)
   let query = supabase
     .from("record_comments")
     .select(
-      "id, module_key, source_table, source_id, site_id, author_id, body, is_internal, created_at, updated_at, author:users!record_comments_author_id_fkey(id, full_name, role)",
+      "id, module_key, source_table, source_id, site_id, author_id, body, is_internal, created_at, updated_at, author:users!record_comments_author_id_fkey(id, full_name, role, avatar_key, avatar_updated_at)",
     )
     .eq("source_table", input.sourceTable)
     .eq("source_id", input.sourceId)
@@ -83,7 +86,7 @@ export async function fetchOpsRecordCommentsForRecords(
   let query = supabase
     .from("record_comments")
     .select(
-      "id, module_key, source_table, source_id, site_id, author_id, body, is_internal, created_at, updated_at, author:users!record_comments_author_id_fkey(id, full_name, role)",
+      "id, module_key, source_table, source_id, site_id, author_id, body, is_internal, created_at, updated_at, author:users!record_comments_author_id_fkey(id, full_name, role, avatar_key, avatar_updated_at)",
     )
     .eq("source_table", input.sourceTable)
     .in("source_id", input.sourceIds)

@@ -1,3 +1,4 @@
+import { OpsAvatar } from "@/components/ops/OpsAvatar";
 import { MessageSquare } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatOpsRole, formatOpsUserName } from "@/lib/ops/roles";
@@ -33,9 +34,16 @@ export function OpsCommentTimeline({ comments }: { comments: OpsRecordComment[] 
         <li key={comment.id}>
           <Card className="py-0">
             <CardContent className="flex items-start gap-3 p-4">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <MessageSquare className="size-4" aria-hidden="true" />
-              </div>
+              {/* The person, not a generic speech bubble (audit §3) — a
+                  timeline is easier to scan when you can recognise who said
+                  what without reading every name. */}
+              <OpsAvatar
+                avatarUpdatedAt={comment.author?.avatar_updated_at}
+                hasAvatar={Boolean(comment.author?.avatar_key)}
+                name={comment.author?.full_name}
+                size="md"
+                userId={comment.author?.id}
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-col gap-1 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between">
                   <p className="font-bold text-foreground">
