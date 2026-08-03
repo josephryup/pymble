@@ -84,6 +84,10 @@ export type OpsOverviewActivity = {
   message: string;
   actor_name: string | null;
   actor_role: string | null;
+  /** Who acted, so the timeline can show their face rather than a generic icon. */
+  actor_user_id: string | null;
+  actor_avatar_key: string | null;
+  actor_avatar_updated_at: string | null;
   tone: "info" | "warn" | "good";
   created_at: string;
 };
@@ -263,21 +267,33 @@ async function normalizeActivity(
     ),
   ];
 
-  const actorMap = new Map<string, { name: string | null; role: string | null }>();
+  const actorMap = new Map<
+    string,
+    {
+      name: string | null;
+      role: string | null;
+      avatarKey: string | null;
+      avatarUpdatedAt: string | null;
+    }
+  >();
   if (actorIds.length > 0) {
     const service = getOpsSupabaseServiceClient();
     const { data } = await service
       .from("users")
-      .select("id, full_name, role")
+      .select("id, full_name, role, avatar_key, avatar_updated_at")
       .in("id", actorIds);
     for (const row of (data ?? []) as Array<{
       id: string;
       full_name: string | null;
       role: string | null;
+      avatar_key: string | null;
+      avatar_updated_at: string | null;
     }>) {
       actorMap.set(row.id, {
         name: row.full_name?.trim() || null,
         role: row.role || null,
+        avatarKey: row.avatar_key,
+        avatarUpdatedAt: row.avatar_updated_at,
       });
     }
   }
@@ -291,6 +307,9 @@ async function normalizeActivity(
       message: formatAction(item.action, item.entity_type),
       actor_name: resolved?.name ?? fallback.name,
       actor_role: resolved?.role ?? fallback.role,
+      actor_user_id: item.actor_user_id ?? null,
+      actor_avatar_key: resolved?.avatarKey ?? null,
+      actor_avatar_updated_at: resolved?.avatarUpdatedAt ?? null,
       tone: activityTone(item.action),
       created_at: item.created_at,
     };

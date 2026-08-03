@@ -31,15 +31,6 @@ import { formatOpsProfileName, formatOpsRole } from "@/lib/ops/roles";
 import { OPS_FOCUS_CLASS } from "@/lib/ops/ui";
 import type { OpsReadyModule, OpsUserRole } from "@/lib/ops/types";
 
-function initials(name?: string) {
-  return (name ?? "Pymble User")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
-
 function currentModuleTitle(pathname: string, modules: OpsReadyModule[]) {
   if (pathname.startsWith("/ops/profile")) {
     return "Profile";
@@ -308,9 +299,15 @@ function ProfilePanel({
               />
             }
           >
-            <span className="flex size-8 items-center justify-center rounded-md bg-primary text-xs font-black text-primary-foreground">
-              {initials(displayName)}
-            </span>
+            {/* Collapsed rail: the same avatar as the expanded card, so
+                collapsing the nav does not change who you appear to be. */}
+            <OpsAvatar
+              avatarUpdatedAt={avatarUpdatedAt}
+              hasAvatar={hasAvatar}
+              name={displayName}
+              size="sm"
+              userId={userId}
+            />
           </TooltipTrigger>
           <TooltipContent side="right">
             {displayName} · {formatOpsRole(profileRole)}

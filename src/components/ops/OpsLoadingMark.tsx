@@ -23,12 +23,15 @@ export function OpsLoadingMark({
 }: {
   className?: string;
   label?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }) {
   const dimensions = {
     sm: { box: "size-10", mark: "h-7 w-7" },
     md: { box: "size-16", mark: "h-11 w-11" },
     lg: { box: "size-24", mark: "h-16 w-16" },
+    // The full-screen loading state. Large enough that the crane animation in
+    // the mark actually reads as motion rather than a shimmer.
+    xl: { box: "size-40", mark: "h-28 w-28" },
   }[size];
 
   return (
@@ -37,13 +40,25 @@ export function OpsLoadingMark({
       className={`relative inline-flex items-center justify-center ${dimensions.box} ${className}`}
       role="status"
     >
-      {/* The halo. `motion-reduce:animate-none` rather than hiding it, so the
-          layout does not shift for people who disable motion. */}
+      {/* Two halos, offset in time. One alone reads as a pulse; two staggered
+          read as something radiating outward, which is the difference between
+          "blinking" and "working". `motion-reduce:animate-none` rather than
+          hiding them, so the layout does not shift for people who disable
+          motion. */}
       <span
         aria-hidden="true"
-        className="absolute inset-0 rounded-full bg-primary/10 motion-safe:animate-ops-breathe motion-reduce:animate-none"
+        className="absolute inset-0 rounded-full bg-primary/5 motion-safe:animate-ops-breathe-slow motion-reduce:animate-none"
       />
-      <OpsBrandMark className={`relative ${dimensions.mark}`} decorative sizes="64px" />
+      <span
+        aria-hidden="true"
+        className="absolute inset-[12%] rounded-full bg-primary/10 motion-safe:animate-ops-breathe motion-reduce:animate-none"
+      />
+      <OpsBrandMark
+        className={`relative ${dimensions.mark}`}
+        decorative
+        priority
+        sizes="160px"
+      />
       <span className="sr-only">{label}</span>
     </span>
   );

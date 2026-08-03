@@ -20,7 +20,6 @@ import {
   ShieldPlus,
   ShoppingCart,
   Truck,
-  UserCircle2,
   Users,
   Warehouse,
   type LucideIcon,
@@ -30,6 +29,7 @@ import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsOverviewMapPanel } from "@/components/ops/OpsOverviewMapPanel";
 import { OpsReportShortcutGrid } from "@/components/ops/OpsReportShortcutGrid";
+import { OpsAvatar } from "@/components/ops/OpsAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { OpsUserProfile } from "@/lib/ops/auth";
@@ -1567,10 +1567,35 @@ function ActivityPanel({ activity }: { activity: OpsOverviewActivity[] }) {
                 className="relative grid grid-cols-[2.25rem_1fr] gap-3 rounded-lg border border-border bg-card p-3 shadow-sm shadow-foreground/[0.02]"
                 key={item.id}
               >
-                <span
-                  className={`relative z-10 flex size-9 items-center justify-center rounded-md ring-1 ${meta.iconClass}`}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
+                {/* The person who did it, not a generic status glyph — a
+                    timeline is far easier to scan when you can recognise who
+                    acted. The activity tone survives as a small corner badge,
+                    so no information is lost. Automated tasks keep the icon,
+                    because there is no face to show. */}
+                <span className="relative z-10 flex size-9 items-center justify-center">
+                  {item.actor_user_id ? (
+                    <>
+                      <OpsAvatar
+                        avatarUpdatedAt={item.actor_avatar_updated_at}
+                        hasAvatar={Boolean(item.actor_avatar_key)}
+                        name={item.actor_name}
+                        size="md"
+                        userId={item.actor_user_id}
+                      />
+                      <span
+                        aria-hidden="true"
+                        className={`absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full ring-2 ring-card ${meta.iconClass}`}
+                      >
+                        <Icon className="size-2.5" aria-hidden="true" />
+                      </span>
+                    </>
+                  ) : (
+                    <span
+                      className={`flex size-9 items-center justify-center rounded-md ring-1 ${meta.iconClass}`}
+                    >
+                      <Icon className="size-4" aria-hidden="true" />
+                    </span>
+                  )}
                 </span>
                 <div className="min-w-0">
                   <div className="flex flex-col gap-2 min-[560px]:flex-row min-[560px]:items-start min-[560px]:justify-between">
@@ -1591,7 +1616,6 @@ function ActivityPanel({ activity }: { activity: OpsOverviewActivity[] }) {
                     </span>
                     <span aria-hidden="true">·</span>
                     <span className="inline-flex items-center gap-1.5 font-semibold text-foreground/80">
-                      <UserCircle2 className="size-3.5" aria-hidden="true" />
                       {item.actor_name ?? "Automated task"}
                       {item.actor_role ? (
                         <span className="text-muted-foreground">

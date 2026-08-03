@@ -299,6 +299,13 @@
     animation: ops-breathe 2s ease-in-out infinite;
   }
 
+  /* Outer halo: slower and offset, so the two rings radiate rather than blink
+     in unison. */
+  .animate-ops-breathe-slow {
+    animation: ops-breathe 2.8s ease-in-out infinite;
+    animation-delay: -0.7s;
+  }
+
   @keyframes ops-breathe {
     0%,
     100% {

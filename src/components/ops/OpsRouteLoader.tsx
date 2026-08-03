@@ -18,21 +18,36 @@ export function OpsRouteLoader({
     return (
       <div
         aria-live="polite"
-        className="ops-ui min-h-[50vh] bg-muted p-4 text-foreground md:p-6"
+        className="ops-ui relative min-h-[70vh] bg-muted p-4 text-foreground md:p-6"
         role="status"
       >
         <span className="sr-only">{label}</span>
-        {/* The animated mark sits ABOVE the skeleton, not inside it: the
-            skeleton says "this is the shape of what's coming", the mark says
-            "we're fetching it". Pinned so it stays visible however tall the
-            skeleton grows. */}
-        <div className="pointer-events-none sticky top-4 z-10 mb-4 flex justify-center">
-          <span className="flex items-center gap-3 rounded-full border border-border bg-card/95 px-4 py-2 shadow-sm shadow-foreground/5 backdrop-blur">
-            <OpsLoadingMark label={label} size="sm" />
-            <span className="text-xs font-semibold text-muted-foreground">{label}</span>
-          </span>
+
+        {/* The mark is the focus: large, centred, floating over a dimmed
+            skeleton. The skeleton still shows the shape of what is coming, so
+            the page does not appear to jump when content lands — but it is
+            pushed back behind a scrim so the eye rests on the logo rather than
+            on grey bars pretending to be data. */}
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-5 rounded-2xl bg-background/70 px-10 py-9 backdrop-blur-md">
+            <OpsLoadingMark label={label} size="xl" />
+            <div className="space-y-1.5 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-blue">
+                Pymble Operations
+              </p>
+              <p className="text-sm font-semibold text-foreground/70">{label}</p>
+            </div>
+          </div>
         </div>
-        <div className="w-full max-w-none space-y-5">
+
+        {/* Scrim: keeps the skeleton legible as structure without competing
+            with the mark for attention. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 bg-muted/50"
+        />
+
+        <div className="w-full max-w-none space-y-5 opacity-70">
           <Card className="py-0">
             <CardContent className="p-5 md:p-7">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -75,19 +90,17 @@ export function OpsRouteLoader({
       className="ops-ui flex min-h-dvh items-center justify-center bg-muted p-6 text-foreground"
       role="status"
     >
-      <Card className="w-full max-w-xs py-0 text-center shadow-sm shadow-foreground/5">
-        <CardContent className="flex flex-col items-center gap-4 px-8 py-7">
-        <OpsLoadingMark label={label} size="lg" />
-        <span className="block">
-          <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
+      {/* No card: at full-screen the mark IS the interface. A bordered box
+          around it just draws a rectangle nobody needs to look at. */}
+      <div className="flex flex-col items-center gap-6">
+        <OpsLoadingMark label={label} size="xl" />
+        <div className="space-y-1.5 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-blue">
             Pymble Operations
-          </span>
-          <span className="mt-2 block text-sm font-semibold leading-6 text-muted-foreground">
-            {label}
-          </span>
-        </span>
-        </CardContent>
-      </Card>
+          </p>
+          <p className="text-sm font-semibold leading-6 text-foreground/70">{label}</p>
+        </div>
+      </div>
     </div>
   );
 }
