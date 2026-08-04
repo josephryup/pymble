@@ -15,6 +15,8 @@ import {
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
@@ -278,14 +280,6 @@ function DetailItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EmptyState({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="rounded-md border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
-      {children}
-    </p>
-  );
-}
-
 function QaCategoryPressurePanel({
   rows,
 }: {
@@ -312,7 +306,7 @@ function QaCategoryPressurePanel({
           ))}
         </ul>
       ) : (
-        <EmptyState>No categorized QA findings requiring attention.</EmptyState>
+        <OpsInlineEmpty>No categorized QA findings requiring attention.</OpsInlineEmpty>
       )}
     </OpsDashboardPanel>
   );
@@ -360,7 +354,7 @@ function ProgrammePressurePanel({
             ))}
           </ul>
         ) : (
-          <EmptyState>No programme milestones available for pressure reporting.</EmptyState>
+          <OpsInlineEmpty>No programme milestones available for pressure reporting.</OpsInlineEmpty>
         )}
       </div>
     </OpsDashboardPanel>
@@ -402,7 +396,7 @@ function ActiveFollowUpsPanel({
           ))}
         </ul>
       ) : (
-        <EmptyState>No active site instruction follow-up tasks.</EmptyState>
+        <OpsInlineEmpty>No active site instruction follow-up tasks.</OpsInlineEmpty>
       )}
     </OpsDashboardPanel>
   );
@@ -503,7 +497,7 @@ function CreateSiteInstructionForm({
   }
 
   return (
-    <details className="rounded-lg border border-border bg-card">
+    <details className="rounded-lg border border-border bg-card" id="instruction-create">
       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <Plus className="size-4" aria-hidden="true" />
@@ -579,7 +573,7 @@ function CreateQaInspectionForm({
   }
 
   return (
-    <details className="rounded-lg border border-border bg-card">
+    <details className="rounded-lg border border-border bg-card" id="qa-inspection-create">
       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <ClipboardCheck className="size-4" aria-hidden="true" />
@@ -642,7 +636,7 @@ function CreateLinkedRecordsForm({
 
   return (
     <div className="grid gap-4">
-      <details className="rounded-lg border border-border bg-card">
+      <details className="rounded-lg border border-border bg-card" id="material-test-create">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <AlertTriangle className="size-4" aria-hidden="true" />
@@ -704,7 +698,7 @@ function CreateLinkedRecordsForm({
         </form>
       </details>
 
-      <details className="rounded-lg border border-border bg-card">
+      <details className="rounded-lg border border-border bg-card" id="snag-create">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <ListChecks className="size-4" aria-hidden="true" />
@@ -766,7 +760,7 @@ function CreateLinkedRecordsForm({
         </form>
       </details>
 
-      <details className="rounded-lg border border-border bg-card">
+      <details className="rounded-lg border border-border bg-card" id="drawing-create">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <FileText className="size-4" aria-hidden="true" />
@@ -824,7 +818,7 @@ function CreateLinkedRecordsForm({
         </form>
       </details>
 
-      <details className="rounded-lg border border-border bg-card">
+      <details className="rounded-lg border border-border bg-card" id="programme-milestone-create">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
           <span className="inline-flex items-center gap-2">
             <ClipboardList className="size-4" aria-hidden="true" />
@@ -1204,7 +1198,7 @@ function QaInspectionItems({
           ))}
         </ul>
       ) : (
-        <EmptyState>No checklist items added yet.</EmptyState>
+        <OpsInlineEmpty>No checklist items added yet.</OpsInlineEmpty>
       )}
       {canCreate && !["closed", "cancelled"].includes(inspection.status) ? (
         <details className="rounded-md border border-border">
@@ -1615,7 +1609,30 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
         />
         <div className="grid gap-4 p-5">
           {instructionPage.items.length === 0 ? (
-            <EmptyState>No site instructions found.</EmptyState>
+            listState.query || status ? (
+              <OpsEmptyState
+                actions={[{ href: ROUTE, label: "Clear search and filters" }]}
+                description="No site instructions match the current search and status filter. Widen them, or clear them to see the whole register."
+                icon={ClipboardList}
+                title="No matching instructions"
+              />
+            ) : (
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#instruction-create", label: "Issue a site instruction" }]
+                    : []
+                }
+                description="Site instructions record a formal direction to the site team and the response to it — the paper trail that supports a variation or claim later."
+                icon={ClipboardList}
+                title="No site instructions yet"
+                tip={
+                  canCreate
+                    ? undefined
+                    : "Instructions are issued by the Engineer or Projects Manager."
+                }
+              />
+            )
           ) : (
             instructionPage.items.map((instruction) => (
               <article className="rounded-lg border border-border bg-card" key={instruction.id}>
@@ -1686,7 +1703,16 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
         >
           <div className="grid gap-4">
             {inspections.length === 0 ? (
-              <EmptyState>No QA inspections found.</EmptyState>
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#qa-inspection-create", label: "Raise a QA inspection" }]
+                    : []
+                }
+                description="Inspections and their hold points are recorded here, including the client sign-off captured on the engineer's device at the point of check."
+                icon={ClipboardCheck}
+                title="No QA inspections yet"
+              />
             ) : (
               inspections.map((inspection) => (
                 <article className="rounded-lg border border-border bg-card" key={inspection.id}>
@@ -1737,7 +1763,16 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
         >
           <div className="grid gap-4" id="material-tests">
             {materialTests.length === 0 ? (
-              <EmptyState>No material tests found.</EmptyState>
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#material-test-create", label: "Record a material test" }]
+                    : []
+                }
+                description="Cube crushes, slump tests and compaction results are logged here so quality evidence sits with the project rather than in a lab email."
+                icon={AlertTriangle}
+                title="No material tests yet"
+              />
             ) : (
               materialTests.map((test) => (
                 <article className="rounded-lg border border-border bg-card" key={test.id}>
@@ -1781,7 +1816,14 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
         >
           <div className="grid gap-4" id="snags">
             {snags.length === 0 ? (
-              <EmptyState>No snag items found.</EmptyState>
+              <OpsEmptyState
+                actions={
+                  canCreate ? [{ href: "#snag-create", label: "Add a snag item" }] : []
+                }
+                description="Defects raised at inspection or handover are tracked to close-out here, so nothing outstanding is discovered at final account."
+                icon={ListChecks}
+                title="No snag items yet"
+              />
             ) : (
               snags.map((snag) => (
                 <article className="rounded-lg border border-border bg-card" key={snag.id}>
@@ -1834,7 +1876,14 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
         >
           <div className="grid gap-4" id="drawings">
             {drawings.length === 0 ? (
-              <EmptyState>No drawing records found.</EmptyState>
+              <OpsEmptyState
+                actions={
+                  canCreate ? [{ href: "#drawing-create", label: "Register a drawing" }] : []
+                }
+                description="The drawing register records which revision is current on site, so work is never built to a superseded sheet."
+                icon={FileText}
+                title="No drawings registered yet"
+              />
             ) : (
               drawings.map((drawing) => (
                 <article className="rounded-lg border border-border bg-card" key={drawing.id}>
@@ -1893,7 +1942,16 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
         >
           <div className="grid gap-4" id="programme">
             {milestones.length === 0 ? (
-              <EmptyState>No programme milestones found.</EmptyState>
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#programme-milestone-create", label: "Add a programme milestone" }]
+                    : []
+                }
+                description="Programme milestones are the dates the project is measured against — they drive the delay and pressure reporting at the top of this page."
+                icon={ClipboardList}
+                title="No programme milestones yet"
+              />
             ) : (
               milestones.map((milestone) => (
                 <article className="rounded-lg border border-border bg-card" key={milestone.id}>

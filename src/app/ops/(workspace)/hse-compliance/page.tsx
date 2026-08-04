@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
@@ -1676,13 +1677,17 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <ShieldPlus className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No risk assessments yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create risk assessments for high-risk site activities and keep review dates visible.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreateRisk
+                    ? [{ href: "#risk-create-panel", label: "Create a risk assessment" }]
+                    : []
+                }
+                description="High-risk activities are assessed before work starts, and the review date keeps the assessment from going stale while the activity is still live."
+                icon={ShieldPlus}
+                title="No risk assessments yet"
+                tip={canCreateRisk ? undefined : "Risk assessments are raised by the HSE Officer."}
+              />
             )}
           </div>
         </div>
@@ -1741,13 +1746,16 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <ClipboardList className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No compliance audits yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Schedule site and internal compliance audits, then track findings and action closure.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreateAudit
+                    ? [{ href: "#audit-create-panel", label: "Schedule an audit" }]
+                    : []
+                }
+                description="Site and internal audits are scheduled here, and their findings tracked through to closure rather than ending at the report."
+                icon={ClipboardList}
+                title="No compliance audits yet"
+              />
             )}
           </div>
         </div>
@@ -2035,13 +2043,16 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <ClipboardList className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No toolbox talks yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create planned talks for site safety briefings and complete them after attendance is confirmed.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreateTalk
+                    ? [{ href: "#toolbox-create-panel", label: "Plan a toolbox talk" }]
+                    : []
+                }
+                description="Plan the briefing here, then mark it complete once attendance is confirmed — the attendance record is the evidence the talk actually happened."
+                icon={ClipboardList}
+                title="No toolbox talks yet"
+              />
             )}
           </div>
         </div>
@@ -2189,13 +2200,16 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <ShieldPlus className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No inspections yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Schedule site inspections, complete scoring, and mark action requirements when needed.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreateInspection
+                    ? [{ href: "#inspection-create-panel", label: "Schedule an inspection" }]
+                    : []
+                }
+                description="Scheduled site inspections are scored here, and anything that fails is flagged as action-required so it cannot quietly close."
+                icon={ShieldPlus}
+                title="No inspections yet"
+              />
             )}
           </div>
         </div>
@@ -2252,12 +2266,17 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
               </article>
             ))
           ) : (
-            <div className="p-8 text-center md:col-span-2">
-              <GraduationCap className="mx-auto size-10 text-muted-foreground" aria-hidden="true" />
-              <h3 className="mt-3 text-lg font-bold text-foreground">No safety training records yet</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Create planned training for site inductions, HSE refreshers, and certification renewals.
-              </p>
+            <div className="md:col-span-2">
+              <OpsEmptyState
+                actions={
+                  canCreateTraining
+                    ? [{ href: "#training-create-panel", label: "Plan a training session" }]
+                    : []
+                }
+                description="Site inductions, HSE refreshers and certification renewals are planned and recorded here, so expiring certificates surface before they lapse."
+                icon={GraduationCap}
+                title="No safety training records yet"
+              />
             </div>
           )}
         </div>

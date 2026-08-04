@@ -18,6 +18,7 @@ import { notFound } from "next/navigation";
 import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
@@ -1751,13 +1752,16 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <BedDouble className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No accommodation bookings yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create accommodation when staff or site labour need coordinated stays.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreateAccommodation
+                    ? [{ href: "#accommodation-create-panel", label: "Book accommodation" }]
+                    : []
+                }
+                description="Coordinated stays for staff and site labour are booked here, so cost and occupancy sit against the site rather than in a WhatsApp thread."
+                icon={BedDouble}
+                title="No accommodation bookings yet"
+              />
             )}
           </div>
         </div>
@@ -1809,13 +1813,16 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <Users className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No labour allocations yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create allocations when people are assigned to a site or work package.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreateLabour
+                    ? [{ href: "#labour-create-panel", label: "Allocate labour" }]
+                    : []
+                }
+                description="Allocating people to a site or work package is what lets labour cost reach the project cost ledger instead of sitting as an unattributed payroll total."
+                icon={Users}
+                title="No labour allocations yet"
+              />
             )}
           </div>
         </div>

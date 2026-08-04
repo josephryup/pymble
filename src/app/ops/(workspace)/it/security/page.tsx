@@ -1,5 +1,6 @@
 import { DatabaseBackup, Plus, ShieldAlert } from "lucide-react";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
@@ -120,7 +121,7 @@ export default async function OpsItSecurityPage({ searchParams }: PageProps) {
           </form>
         ) : null}
         {incidents.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">No security incidents logged. Good.</p>
+          <OpsInlineEmpty>No security incidents logged — nothing to act on.</OpsInlineEmpty>
         ) : (
           <ul className="space-y-2">
             {incidents.map((incident) => (
@@ -169,7 +170,7 @@ export default async function OpsItSecurityPage({ searchParams }: PageProps) {
           </form>
         ) : null}
         {backups.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">No backup jobs recorded yet.</p>
+          <OpsInlineEmpty>No backup jobs recorded yet. Add one so restore status is visible.</OpsInlineEmpty>
         ) : (
           <ul className="space-y-2">
             {backups.map((backup) => (

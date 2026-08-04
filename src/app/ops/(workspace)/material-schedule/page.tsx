@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsImportTemplateLinks } from "@/components/ops/OpsImportTemplateLinks";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -409,7 +410,7 @@ function BoqPricingWorkflowPanel({
           >
             <input name="boq_id" type="hidden" value={document.id} />
             {document.items.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No line items to price yet.</p>
+              <OpsInlineEmpty>No line items to price yet.</OpsInlineEmpty>
             ) : (
               document.items.map((item) => (
                 <div

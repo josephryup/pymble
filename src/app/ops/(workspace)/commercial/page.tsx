@@ -26,6 +26,7 @@ import {
 import { OpsCommercialKpiPanel } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
@@ -2632,13 +2633,21 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <Briefcase className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No contracts yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create contracts before linking valuations and certified IPC invoices.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#contract-create-panel", label: "Create the first contract" }]
+                    : []
+                }
+                description="A contract is the root record for this module — valuations, IPCs, variations and retention all hang off one. Create a contract first and the rest of Commercial opens up."
+                icon={Briefcase}
+                title="No contracts yet"
+                tip={
+                  canCreate
+                    ? undefined
+                    : "Contracts are created by the Quantity Surveyor or Commercial lead."
+                }
+              />
             )}
           </div>
         </div>
@@ -2691,13 +2700,17 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <FileSpreadsheet className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No valuations yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create valuations when measured progress needs line evidence before IPC certification.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#valuation-create-panel", label: "Create a valuation" }]
+                    : []
+                }
+                description="Valuations record measured progress line by line, so an IPC can be certified against evidence rather than an estimate."
+                icon={FileSpreadsheet}
+                title="No valuations yet"
+                tip="A valuation needs a contract, and a BOQ if you want line-level measurement."
+              />
             )}
           </div>
         </div>
@@ -2750,13 +2763,14 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <AlertTriangle className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No commercial risks yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Add risks when cost, payment, scope, or contract exposure needs management.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreate ? [{ href: "#risk-create-panel", label: "Log a risk" }] : []
+                }
+                description="Track cost, payment, scope or contract exposure here so it stays visible to leadership instead of living in someone's notebook."
+                icon={AlertTriangle}
+                title="No commercial risks yet"
+              />
             )}
           </div>
         </div>
@@ -2808,13 +2822,17 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <Banknote className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No retention releases yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create a release when retention becomes recoverable under a contract.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#retention-create-panel", label: "Raise a retention release" }]
+                    : []
+                }
+                description="Retention held under a contract is recovered here — raise a release when it becomes due so the money is claimed rather than forgotten."
+                icon={Banknote}
+                title="No retention releases yet"
+                tip="Releases are raised against a contract and approved before payment."
+              />
             )}
           </div>
         </div>
@@ -2862,13 +2880,16 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <TrendingUp className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No cashflow forecasts yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Add forecast periods to expose near-term cash pressure.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#cashflow-create-panel", label: "Add a forecast period" }]
+                    : []
+                }
+                description="Forecast periods show near-term cash pressure before it arrives, so payment timing can be planned rather than reacted to."
+                icon={TrendingUp}
+                title="No cashflow forecasts yet"
+              />
             )}
           </div>
         </div>
@@ -2926,13 +2947,16 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <Flag className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No milestones yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Add contract milestones to forecast delivery, billing, and retention events.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#milestone-create-panel", label: "Add a milestone" }]
+                    : []
+                }
+                description="Milestones forecast delivery, billing and retention events against a contract, and drive the dates the rest of Commercial reports on."
+                icon={Flag}
+                title="No milestones yet"
+              />
             )}
           </div>
         </div>
@@ -3089,13 +3113,16 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <Gavel className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No variations yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create variations when instructed changes need pricing and approval control.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreate
+                    ? [{ href: "#variation-create-panel", label: "Raise a variation" }]
+                    : []
+                }
+                description="Instructed changes are priced and approved here, which keeps scope creep on the contract value instead of absorbed into cost."
+                icon={Gavel}
+                title="No variations yet"
+              />
             )}
           </div>
         </div>
@@ -3150,13 +3177,14 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
                 </article>
               ))
             ) : (
-              <div className="p-6 text-center">
-                <Scale className="mx-auto size-9 text-muted-foreground" aria-hidden="true" />
-                <h3 className="mt-3 font-bold text-foreground">No claims yet</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Create claims when commercial entitlement needs formal tracking.
-                </p>
-              </div>
+              <OpsEmptyState
+                actions={
+                  canCreate ? [{ href: "#claim-create-panel", label: "Open a claim" }] : []
+                }
+                description="Formal entitlement — extensions of time, loss and expense, disruption — is tracked here so it can be substantiated later."
+                icon={Scale}
+                title="No claims yet"
+              />
             )}
           </div>
         </div>
