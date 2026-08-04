@@ -17,6 +17,7 @@ import { notFound } from "next/navigation";
 import { OpsBreakdownBar } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import {
@@ -337,9 +338,12 @@ function GoodsReceivedItems({ grn }: { grn: OpsGoodsReceivedNoteSummary }) {
 function StockLevels({ levels }: { levels: OpsStockLevelSummary[] }) {
   if (levels.length === 0) {
     return (
-      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
-        No positive stock balances yet. Post the first GRN to populate this view.
-      </p>
+      <OpsEmptyState
+        actions={[{ href: "#grn-receive-panel", label: "Receive goods against a PO" }]}
+        description="Stock balances are derived from goods received and issued — nothing appears here until the first GRN is posted against an issued purchase order."
+        icon={Boxes}
+        title="No stock on hand yet"
+      />
     );
   }
 
@@ -375,9 +379,11 @@ function StockLevels({ levels }: { levels: OpsStockLevelSummary[] }) {
 function StockMovements({ movements }: { movements: OpsStockMovementSummary[] }) {
   if (movements.length === 0) {
     return (
-      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
-        No stock movement history yet.
-      </p>
+      <OpsEmptyState
+        description="Every receipt, issue, transfer and adjustment is recorded here, so a stock balance can always be traced back to the movements that produced it."
+        icon={ArrowRightLeft}
+        title="No stock movements yet"
+      />
     );
   }
 

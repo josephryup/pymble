@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkOpsPublicFormRateLimit } from "@/lib/ops/rate-limit";
 import { escapeHtml, isEmailConfigured, sendWebsiteEmail } from "@/lib/email";
 
 type ContactPayload = {
@@ -31,6 +32,20 @@ const FIELD_LIMITS: Record<string, number> = {
 };
 
 export async function POST(request: Request) {
+    // Unauthenticated endpoint — throttle by IP before doing any work
+    // (audit finding S4). Fails open on a database blip.
+    const rateLimit = await checkOpsPublicFormRateLimit("contact", request.headers);
+
+    if (!rateLimit.allowed) {
+        return NextResponse.json(
+            { error: "Too many submissions. Please try again shortly." },
+            {
+                status: 429,
+                headers: { "Retry-After": String(Math.max(rateLimit.retryAfterSeconds, 1)) },
+            }
+        );
+    }
+
     if (!isEmailConfigured()) {
         return NextResponse.json(
             { error: "Email delivery is not configured on the server." },

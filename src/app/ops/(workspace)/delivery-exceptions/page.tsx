@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -470,9 +471,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
                   ))}
                 </ul>
               ) : (
-                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No overdue, due-soon, stale, or high-risk exceptions.
-                </p>
+                <OpsInlineEmpty>No overdue, due-soon, stale, or high-risk exceptions.</OpsInlineEmpty>
               )}
             </div>
           </div>

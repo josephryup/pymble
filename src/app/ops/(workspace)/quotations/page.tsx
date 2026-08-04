@@ -10,6 +10,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -308,9 +309,7 @@ function QuotationCard({
           </table>
         </div>
       ) : (
-        <p className="px-5 py-4 text-sm text-muted-foreground">
-          No priced lines yet — the PDF will show an empty table until you add some.
-        </p>
+        <OpsInlineEmpty>No priced lines yet — the PDF will show an empty table until you add some.</OpsInlineEmpty>
       )}
 
       {canEdit ? (

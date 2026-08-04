@@ -23,6 +23,7 @@ import {
   OpsCertifiedScurveChart,
   OpsCommercialFunnel,
 } from "@/components/ops/OpsCommercialCharts";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsCommercialKpiPanel } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
@@ -1167,9 +1168,7 @@ function ValuationLineEditor({
             </details>
           ))
         ) : (
-          <p className="rounded-md border border-dashed border-border p-3 text-sm font-semibold text-muted-foreground">
-            No lines have been captured for this valuation yet.
-          </p>
+          <OpsInlineEmpty>No lines have been captured for this valuation yet.</OpsInlineEmpty>
         )}
         {canEditLines ? (
           <details className="rounded-md border border-primary-blue/20 bg-card p-3">

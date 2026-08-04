@@ -1,4 +1,5 @@
 import { BookOpen, CheckCircle2, ScrollText } from "lucide-react";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
@@ -32,9 +33,7 @@ export default async function OpsItHandbookPage() {
           <ScrollText className="size-4" aria-hidden="true" /> Policies
         </h2>
         {policies.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
-            No published IT policies yet.
-          </p>
+          <OpsInlineEmpty>No published IT policies yet.</OpsInlineEmpty>
         ) : (
           <ul className="space-y-3">
             {policies.map((policy) => (

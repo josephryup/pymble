@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { fetchPurchaseOrderApprovalSettings } from "@/lib/ops/approval-settings";
 import { updatePurchaseOrderApprovalSettingsAction } from "@/lib/ops/approval-settings-actions";
+import { OpsSystemHealthPanel } from "@/components/ops/OpsSystemHealthPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { formatCoordinateValue } from "@/lib/ops/coordinates";
 import { fetchOpsOrganizationProfile } from "@/lib/ops/organization";
+import { fetchOpsSystemHealth } from "@/lib/ops/system-health";
 import { updateOrganizationProfileAction } from "@/lib/ops/organization-actions";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import { formatOpsRole } from "@/lib/ops/roles";
@@ -64,9 +66,10 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
     notFound();
   }
 
-  const [profile, purchaseOrderApprovalSettings] = await Promise.all([
+  const [profile, purchaseOrderApprovalSettings, systemHealth] = await Promise.all([
     fetchOpsOrganizationProfile(),
     fetchPurchaseOrderApprovalSettings(),
+    fetchOpsSystemHealth(),
   ]);
   const canManage = canManageOps(auth.profile.role);
   const notice = settingsNotice(params);
@@ -427,6 +430,8 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
           </OpsSubmitButton>
         ) : null}
       </form>
+
+      <OpsSystemHealthPanel health={systemHealth} />
     </div>
   );
 }

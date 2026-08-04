@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle2, Download, FileText, MessageSquare, ShieldCheck, XCircle } from "lucide-react";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
@@ -430,7 +431,7 @@ export default async function OpsApprovalDetailPage({ params, searchParams }: Pa
                 ))}
               </ol>
             ) : (
-              <div className="p-5 text-sm text-muted-foreground">No comments yet.</div>
+              <OpsInlineEmpty>No comments yet.</OpsInlineEmpty>
             )}
             <form action={addOpsApprovalCommentAction} className="border-t border-border p-5">
               <input name="approval_request_id" type="hidden" value={request.id} />

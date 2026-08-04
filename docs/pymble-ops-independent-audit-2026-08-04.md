@@ -1,5 +1,24 @@
 # Pymble Operations — Independent Verification Audit
 
+> **Correction, 2026-08-05.** §0 below originally listed **11** tables as having
+> RLS write policies wider than their TypeScript gate. On implementing the fix I
+> checked each predicate directly and **6 of the 11 were wrong**. The genuinely
+> over-wide set is **5 tables**: `invoices`, `boq_documents`, `boq_line_items`,
+> `sites`, `workers`.
+>
+> On `payroll_runs`, `payroll_run_items`, `cash_advances`, `organization_profile`
+> and `attendance_records` the relationship is **inverted** — the RLS list (20
+> roles) is *tighter* than the code gate, because those modules are guarded only
+> by `canManageOps` / `canRecordAttendance`, which both evaluate to
+> `role !== "crew"` (25 of 26 roles). The weak door on those tables is the
+> application, not the database. That is a separate and arguably worse finding,
+> tracked below as **S7**. `site_photos` is intentionally broad — field crews
+> upload through the offline replay route — so only its deletion path is
+> restricted, by ownership rather than role.
+>
+> The §0 table is left as originally written for the record; read it with this
+> correction applied.
+
 **Date:** 2026-08-04
 **Auditor:** second pass, independent of `pymble-ops-system-audit-2026-08.md`
 **Method:** live database inspection (`zuezxgyhhrhklrhqsvvs`), Supabase security +
@@ -107,6 +126,36 @@ Also independently verified as **genuinely good**:
 - The local role-preview backdoor is triple-gated exactly as described.
 - **All 6 cron endpoints** use `timingSafeEqualString` bearer comparison and
   return 503 when `CRON_SECRET` is unset. (The first audit did not check these.)
+
+---
+
+### S7 — Payroll and cash advances are gated only by "not crew" (High)
+
+Found while implementing the §0 fix. These write paths:
+
+| Module | Guard | Effective roles |
+| --- | --- | --- |
+| `payroll_runs`, `payroll_run_items` | `canManageOps` | 25 of 26 |
+| `cash_advances` | `canManageOps` | 25 of 26 |
+| `organization_profile` | `canManageOps` | 25 of 26 |
+| `attendance_records` | `canRecordAttendance` | 25 of 26 |
+
+`canManageOps` is `role !== "crew"` (`src/lib/ops/permissions.ts:18`). So an
+`admin_receptionist`, `hse_assistant_officer` or `engineering_intern` can create,
+cancel, archive and delete payroll runs and cash advances **through the normal
+UI** — no REST trickery needed.
+
+Two mitigating facts, neither of which resolves it: the *live* payroll module is
+`staff_payroll_*`, which is correctly gated by `canManageOpsStaffPayroll`
+(leadership + HR + Finance Manager); and `payroll_runs` holds only 2 rows against
+`staff_payroll_runs`' 17. This looks like a legacy module that never had its
+permissions tightened when the staff-payroll spine replaced it.
+
+**Recommendation.** Decide whether the legacy payroll module is still needed. If
+it is, gate it with the same predicate as staff payroll. If it is not, retire the
+write paths — that is a smaller change than it sounds, since almost nothing uses
+them. Either way, `canManageOps` should not be the guard on anything that moves
+money.
 
 ---
 

@@ -1,6 +1,7 @@
 import { ArrowLeft, Lock, Send } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -142,9 +143,7 @@ export default async function OpsItTicketDetailPage({ params }: PageProps) {
       <section className="space-y-3">
         <h2 className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-muted-foreground">Conversation</h2>
         {comments.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
-            No replies yet.
-          </p>
+          <OpsInlineEmpty>No replies yet.</OpsInlineEmpty>
         ) : (
           <ul className="space-y-3">
             {comments.map((comment) => (

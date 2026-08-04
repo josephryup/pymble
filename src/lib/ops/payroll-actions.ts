@@ -6,7 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { postPayrollRunJournalSafe } from "@/lib/ops/gl-posting";
-import { canManageOps } from "@/lib/ops/permissions";
+import { canManagePayrollRun } from "@/lib/ops/permissions";
 import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import { computePayslip } from "@/lib/ops/statutory/calculator";
 
@@ -82,7 +82,7 @@ function payoutWorkerCode(worker: PayrollItemForPayout["worker"], fallback: stri
 export async function createCashAdvanceAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
+  if (!canManagePayrollRun(profile.role)) {
     payrollError("Your role cannot record cash advances yet.");
   }
 
@@ -132,7 +132,7 @@ export async function createCashAdvanceAction(formData: FormData) {
 export async function createPayrollRunAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
+  if (!canManagePayrollRun(profile.role)) {
     payrollError("Your role cannot create payroll runs yet.");
   }
 
@@ -346,7 +346,7 @@ export async function createPayrollRunAction(formData: FormData) {
 export async function approvePayrollRunAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
+  if (!canManagePayrollRun(profile.role)) {
     payrollError("Your role cannot approve payroll runs yet.");
   }
 
@@ -399,7 +399,7 @@ export async function approvePayrollRunAction(formData: FormData) {
 export async function completePayrollRunAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
+  if (!canManagePayrollRun(profile.role)) {
     payrollError("Your role cannot mark payroll as paid yet.");
   }
 
@@ -666,7 +666,7 @@ const cashAdvanceIdSchema = z.object({
 export async function archiveCashAdvanceAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
+  if (!canManagePayrollRun(profile.role)) {
     payrollError("Your role cannot archive cash advances.");
   }
 
@@ -719,7 +719,7 @@ const updateCashAdvanceSchema = cashAdvanceIdSchema.merge(cashAdvanceSchema);
 export async function updateCashAdvanceAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
+  if (!canManagePayrollRun(profile.role)) {
     payrollError("Your role cannot edit cash advances.");
   }
 
@@ -791,7 +791,7 @@ const updatePayrollRunSchema = payrollRunIdSchema.extend({
 export async function updatePayrollRunAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
+  if (!canManagePayrollRun(profile.role)) {
     payrollError("Your role cannot edit payroll runs.");
   }
 

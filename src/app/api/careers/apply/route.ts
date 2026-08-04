@@ -4,7 +4,8 @@ import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { putOpsR2Object } from "@/lib/ops/r2";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
-import { safeOpsFileName } from "@/lib/ops/upload-validation";
+import { checkOpsPublicFormRateLimit } from "@/lib/ops/rate-limit";
+import { opsLooksLikeDocument, safeOpsFileName } from "@/lib/ops/upload-validation";
 
 const MAX_CV_BYTES = 10 * 1024 * 1024;
 
@@ -22,6 +23,20 @@ function str(value: FormDataEntryValue | null, max = 2000) {
 }
 
 export async function POST(request: NextRequest) {
+  // Public endpoint that writes an uploaded CV to R2. The size cap and MIME
+  // allowlist bound one request; this bounds how many (audit finding S4).
+  const rateLimit = await checkOpsPublicFormRateLimit("apply", request.headers);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many applications from this connection. Please try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.max(rateLimit.retryAfterSeconds, 1)) },
+      },
+    );
+  }
+
   let formData: FormData;
 
   try {
@@ -84,6 +99,17 @@ export async function POST(request: NextRequest) {
 
     try {
       const bytes = new Uint8Array(await cv.arrayBuffer());
+
+      // cv.type is client-supplied, so the allowlist above proves nothing on
+      // its own. Confirm the bytes really are a PDF or Word container before
+      // anything reaches R2.
+      if (!opsLooksLikeDocument(bytes)) {
+        return NextResponse.json(
+          { error: "That file does not look like a PDF or Word document." },
+          { status: 400 },
+        );
+      }
+
       const safeName = safeOpsFileName(cv.name || "cv");
       cvR2Key = `careers/applications/${crypto.randomUUID()}-${safeName}`;
       await putOpsR2Object({ body: bytes, contentType: cv.type, key: cvR2Key });

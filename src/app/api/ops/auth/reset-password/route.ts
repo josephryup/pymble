@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { rejectMismatchedOpsOrigin } from "@/lib/ops/api-security";
 import { getOpsAuthCallbackUrlFromRequest } from "@/lib/ops/auth-redirect";
+import { checkOpsPublicFormRateLimit } from "@/lib/ops/rate-limit";
 import { getOpsSupabaseAnonServerClient } from "@/lib/ops/supabase-server";
 
 const resetPasswordSchema = z.object({
@@ -17,6 +18,22 @@ export async function POST(request: NextRequest) {
 
   if (originError) {
     return originError;
+  }
+
+  // Keyed by IP, not by email, so throttling cannot become an account-existence
+  // oracle — the constant RESET_PASSWORD_RESPONSE below exists for exactly that
+  // reason. Unthrottled, this route lets anyone email-bomb a known address
+  // through our own domain (audit finding S4).
+  const rateLimit = await checkOpsPublicFormRateLimit("reset", request.headers);
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many reset attempts. Please try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.max(rateLimit.retryAfterSeconds, 1)) },
+      },
+    );
   }
 
   const payload = await request.json().catch(() => null);

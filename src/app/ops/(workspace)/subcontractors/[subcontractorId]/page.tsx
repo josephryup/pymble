@@ -1,6 +1,7 @@
 import { Banknote, Briefcase, CheckCircle2, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
@@ -329,9 +330,7 @@ export default async function OpsSubcontractorDetailPage({
         ) : null}
 
         {assignments.length === 0 ? (
-          <p className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
-            No assignments yet.
-          </p>
+          <OpsInlineEmpty>No assignments yet.</OpsInlineEmpty>
         ) : (
           <ul className="space-y-3">
             {assignments.map((assignment) => {

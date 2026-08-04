@@ -10,6 +10,7 @@ import {
   Upload,
   UserCircle,
 } from "lucide-react";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsAvatar } from "@/components/ops/OpsAvatar";
 import { OpsLogoutButton } from "@/components/ops/OpsLogoutButton";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
@@ -414,9 +415,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                       </article>
                     ))
                   ) : (
-                    <div className="rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
-                      No safety training records linked yet.
-                    </div>
+                    <OpsInlineEmpty>No safety training records linked yet.</OpsInlineEmpty>
                   )}
                 </div>
               </section>
@@ -607,9 +606,7 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
                       })}
                     </div>
                   ) : (
-                    <div className="rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
-                      No HR documents linked to your employee record yet.
-                    </div>
+                    <OpsInlineEmpty>No HR documents linked to your employee record yet.</OpsInlineEmpty>
                   )}
                 </div>
               </section>

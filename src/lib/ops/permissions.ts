@@ -33,6 +33,29 @@ export function canManageStaff(role: OpsUserRole) {
   );
 }
 
+/**
+ * Who may create, approve and complete a payroll run or a cash advance.
+ *
+ * These paths used to be gated by `canManageOps`, which is `role !== "crew"` —
+ * so 25 of 26 roles, including `admin_receptionist` and `engineering_intern`,
+ * could approve and complete a payroll run through the normal UI (independent
+ * audit 2026-08-04, finding S7). Destructive operations were already correctly
+ * restricted to MD / Owner / Developer; it was the money-moving middle of the
+ * lifecycle that was open.
+ *
+ * The role set here is deliberately identical to `canManageOpsStaffPayroll` in
+ * staff-payroll.ts — leadership, HR, and the Finance Manager. Two payroll
+ * modules disagreeing about who may run payroll is precisely how the gap
+ * appeared, so they now answer the same question the same way.
+ */
+export function canManagePayrollRun(role: OpsUserRole) {
+  return (
+    isLeadershipRole(role) ||
+    isHumanResourceRole(role) ||
+    role === "finance_manager"
+  );
+}
+
 export function canRecordAttendance(role: OpsUserRole) {
   return role !== "crew";
 }

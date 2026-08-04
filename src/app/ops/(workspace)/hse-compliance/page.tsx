@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -1008,9 +1009,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
               </article>
             ))
           ) : (
-            <div className="rounded-md border border-border p-4 text-sm font-semibold text-muted-foreground lg:col-span-2">
-              No open incident ageing alerts.
-            </div>
+            <div className="col-span-2"><OpsInlineEmpty>No open incident ageing alerts.</OpsInlineEmpty></div>
           )}
         </div>
       </section>
@@ -1136,9 +1135,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="rounded-md border border-border p-4 text-sm font-semibold text-muted-foreground">
-                No audit escalations in the current register.
-              </div>
+              <OpsInlineEmpty>No audit escalations in the current register.</OpsInlineEmpty>
             )}
           </div>
         </div>

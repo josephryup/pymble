@@ -16,6 +16,8 @@ import { notFound } from "next/navigation";
 import { OPS_CHART_COLORS, OpsStatusDonut } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
@@ -271,9 +273,7 @@ function EquipmentUtilizationPanel({
 
       <div className="mt-4">
         {dashboard.allocationRows.length === 0 ? (
-          <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
-            No active or scheduled equipment allocations yet.
-          </p>
+          <OpsInlineEmpty>No active or scheduled equipment allocations yet.</OpsInlineEmpty>
         ) : (
           <ul className="divide-y divide-border rounded-md border border-border">
             {dashboard.allocationRows.map((allocation) => (
@@ -334,9 +334,9 @@ function EquipmentMaintenancePressurePanel({
 
       <div className="mt-4">
         {dashboard.maintenanceRows.length === 0 ? (
-          <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
-            No open maintenance jobs. Scheduled and in-progress jobs will appear here.
-          </p>
+          <OpsInlineEmpty>
+            No open maintenance jobs. Scheduled and in-progress jobs appear here.
+          </OpsInlineEmpty>
         ) : (
           <ul className="divide-y divide-border rounded-md border border-border">
             {dashboard.maintenanceRows.map((job) => (
@@ -386,9 +386,13 @@ function EquipmentRegister({
 }) {
   if (equipment.length === 0) {
     return (
-      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
-        No equipment records yet. Add equipment master data before scheduling allocations.
-      </p>
+      <OpsEmptyState
+        actions={canManage ? [{ href: "#equipment-create-panel", label: "Add equipment" }] : []}
+        description="Equipment master data is the base record every allocation, fuel log and maintenance job hangs off. Add the plant you own or hire before scheduling anything against it."
+        icon={Truck}
+        title="No equipment records yet"
+        tip={canManage ? undefined : "Equipment master data is maintained by the Fleet or Operations Manager."}
+      />
     );
   }
 
@@ -440,9 +444,11 @@ function EquipmentRegister({
 function AllocationList({ allocations }: { allocations: OpsEquipmentAllocationSummary[] }) {
   if (allocations.length === 0) {
     return (
-      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
-        No equipment allocations yet.
-      </p>
+      <OpsEmptyState
+        description="Allocations put a piece of equipment on a site for a period, which is what drives the utilisation and availability figures above."
+        icon={CalendarCheck}
+        title="No equipment allocations yet"
+      />
     );
   }
 
@@ -537,9 +543,12 @@ function FuelLogList({
 }) {
   if (fuelLogs.length === 0) {
     return (
-      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
-        No fuel logs yet.
-      </p>
+      <OpsEmptyState
+        actions={canManage ? [{ href: "#fuel-log-create-panel", label: "Record a fuel log" }] : []}
+        description="Fuel issues are logged per machine so consumption can be compared against hours run — the usual first signal of a fault or of fuel going missing."
+        icon={Fuel}
+        title="No fuel logs yet"
+      />
     );
   }
 
@@ -678,9 +687,16 @@ function MaintenanceJobList({
 }) {
   if (jobs.length === 0) {
     return (
-      <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
-        No maintenance jobs yet.
-      </p>
+      <OpsEmptyState
+        actions={
+          canCreateOpsMaintenanceJob(role)
+            ? [{ href: "#maintenance-job-create-panel", label: "Schedule a maintenance job" }]
+            : []
+        }
+        description="Servicing and repairs are scheduled and costed here, so downtime is planned rather than discovered on the morning a machine is needed."
+        icon={Wrench}
+        title="No maintenance jobs yet"
+      />
     );
   }
 

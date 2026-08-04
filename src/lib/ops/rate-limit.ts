@@ -27,6 +27,25 @@ export const OPS_OFFLINE_REPLAY_RATE_LIMIT = {
   ip: { maxHits: 300, windowSeconds: 5 * 60 },
 } as const;
 
+/**
+ * Unauthenticated public endpoints, keyed by IP (audit finding S4).
+ *
+ * Limits are set from what a real person plausibly does in an hour, not from
+ * what a script can do in a second. Someone submitting the contact form twice
+ * because the first felt slow is normal; twenty times is not.
+ *
+ * `apply` is the tightest because each request writes a CV to R2 — that is a
+ * storage-cost vector, not just spam. `reset` is tight because the abuse is
+ * email-bombing a known address through our domain.
+ */
+export const OPS_PUBLIC_FORM_RATE_LIMIT = {
+  apply: { maxHits: 5, windowSeconds: 60 * 60 },
+  contact: { maxHits: 8, windowSeconds: 60 * 60 },
+  newsletter: { maxHits: 5, windowSeconds: 60 * 60 },
+  quote: { maxHits: 8, windowSeconds: 60 * 60 },
+  reset: { maxHits: 5, windowSeconds: 15 * 60 },
+} as const;
+
 type RateLimitDecision = {
   allowed: boolean;
   retryAfterSeconds: number;
@@ -136,6 +155,44 @@ export async function checkOpsOfflineReplayRateLimit(
     allowed: false,
     retryAfterSeconds: Math.max(...blocked.map((decision) => decision.retryAfterSeconds)),
   };
+}
+
+export function opsPublicFormIpRateLimitKey(form: string, ip: string) {
+  return `public:${form}:ip:${ip}`;
+}
+
+/**
+ * Throttle an unauthenticated public endpoint, keyed by IP and by form.
+ *
+ * These are the marketing-site forms and the ops password reset — the only
+ * routes on the origin that accept a POST from someone with no session. Login
+ * has had a limiter since the June audit; these did not (audit finding S4).
+ *
+ * `careers/apply` matters most: it writes an uploaded CV to R2. The 10MB cap
+ * and MIME allowlist bound a single request, but nothing bounded the number of
+ * requests, so the ceiling was storage cost rather than abuse. `reset-password`
+ * matters for a different reason — unthrottled, it lets anyone email-bomb a
+ * known address through our own domain.
+ *
+ * Fails OPEN, like the login limiter: a database blip must not take the public
+ * contact form offline.
+ */
+export async function checkOpsPublicFormRateLimit(
+  form: keyof typeof OPS_PUBLIC_FORM_RATE_LIMIT,
+  headers: Headers,
+): Promise<RateLimitDecision> {
+  const ip = opsClientIp(headers);
+
+  // No usable client address — nothing to key on. Allowing is the same
+  // decision the login limiter makes when the IP bucket is unavailable.
+  if (!ip) {
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  return hitRateLimit(
+    opsPublicFormIpRateLimitKey(form, ip),
+    OPS_PUBLIC_FORM_RATE_LIMIT[form],
+  );
 }
 
 /** After a successful login the email bucket is forgiven; the IP bucket is

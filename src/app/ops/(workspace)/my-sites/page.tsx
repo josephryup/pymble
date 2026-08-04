@@ -1,6 +1,7 @@
 import { ClipboardCheck, FileText, LifeBuoy, MapPin, PackageCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -55,7 +56,7 @@ export default async function OpsMySitesPage() {
           <FileText className="size-5 text-primary-blue" aria-hidden="true" />
         </div>
         {instructions.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">No open instructions for your assigned sites.</p>
+          <div className="mt-4"><OpsInlineEmpty>No open instructions for your assigned sites.</OpsInlineEmpty></div>
         ) : (
           <div className="mt-4 divide-y divide-border rounded-md border border-border">
             {instructions.map((instruction) => (
@@ -83,7 +84,7 @@ export default async function OpsMySitesPage() {
           <PackageCheck className="size-5 text-primary-blue" aria-hidden="true" />
         </div>
         {deliveredMaterials.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">No supervisor-requested material deliveries for your assigned sites yet.</p>
+          <div className="mt-4"><OpsInlineEmpty>No supervisor-requested material deliveries for your assigned sites yet.</OpsInlineEmpty></div>
         ) : (
           <div className="mt-4 divide-y divide-border rounded-md border border-border">
             {deliveredMaterials.map((request) => (

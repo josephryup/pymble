@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import {
   OpsAgeingPanel,
@@ -558,9 +559,7 @@ export default async function OpsFinanceOverviewPage() {
             </table>
           </OpsTableShell>
         ) : (
-          <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            No active or locked budgets with cost exposure yet.
-          </p>
+          <OpsInlineEmpty>No active or locked budgets with cost exposure yet.</OpsInlineEmpty>
         )}
       </OpsDashboardPanel>
 

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
@@ -209,9 +210,7 @@ export default async function OpsSite360Page({ params }: PageProps) {
               />
             </div>
           ) : (
-            <p className="rounded-md border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-              No active budget for this site yet.
-            </p>
+            <OpsInlineEmpty>No active budget for this site yet.</OpsInlineEmpty>
           )}
         </OpsDashboardPanel>
 

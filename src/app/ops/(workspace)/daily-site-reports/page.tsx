@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -163,9 +164,7 @@ function ReportMetric({ label, value }: { label: string; value: string }) {
 function EntryList({ entries }: { entries: OpsDailySiteReportEntry[] }) {
   if (entries.length === 0) {
     return (
-      <p className="rounded-md border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
-        No structured entries added yet.
-      </p>
+      <OpsInlineEmpty>No structured entries added yet.</OpsInlineEmpty>
     );
   }
 

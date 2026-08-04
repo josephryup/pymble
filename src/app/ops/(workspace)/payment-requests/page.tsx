@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import {
@@ -463,9 +464,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                   ))}
                 </ul>
               ) : (
-                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No due-soon or overdue payment requests.
-                </p>
+                <OpsInlineEmpty>No due-soon or overdue payment requests.</OpsInlineEmpty>
               )}
             </div>
           </div>

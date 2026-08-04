@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, Clock, FileText, Plus } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
@@ -118,7 +119,7 @@ function DeptCard({ stat, canReview }: { stat: OpsDeptReportStat; canReview: boo
           </div>
         </div>
       ) : (
-        <p className="mt-3 text-xs text-muted-foreground">No reports submitted yet.</p>
+        <div className="mt-3"><OpsInlineEmpty>No reports submitted yet.</OpsInlineEmpty></div>
       )}
 
       <Link

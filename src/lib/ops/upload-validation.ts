@@ -29,6 +29,36 @@ export type OpsUploadValidationResult =
       ok: false;
     };
 
+/**
+ * Does the file's leading bytes actually match a PDF or Word document?
+ *
+ * `File.type` comes from the browser's multipart Content-Type header, which is
+ * entirely client-supplied — a caller can label a script `application/pdf` and
+ * the MIME allowlist waves it through. That mattered less while uploads were
+ * authenticated, but `careers/apply` accepts files from the public internet and
+ * writes them to R2 (audit finding S4).
+ *
+ * This is a signature check, not virus scanning: it confirms the bytes are the
+ * container they claim to be, which is what stops the allowlist from being
+ * purely decorative. It does not attempt to validate the document's contents.
+ */
+export function opsLooksLikeDocument(bytes: Uint8Array) {
+  const startsWith = (...signature: number[]) =>
+    signature.length <= bytes.length &&
+    signature.every((byte, index) => bytes[index] === byte);
+
+  return (
+    // "%PDF"
+    startsWith(0x25, 0x50, 0x44, 0x46) ||
+    // OLE2 compound file — legacy .doc
+    startsWith(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1) ||
+    // ZIP container — .docx (and the empty/spanned archive variants)
+    startsWith(0x50, 0x4b, 0x03, 0x04) ||
+    startsWith(0x50, 0x4b, 0x05, 0x06) ||
+    startsWith(0x50, 0x4b, 0x07, 0x08)
+  );
+}
+
 export function safeOpsFileName(name: string) {
   const fileName = name.split(/[\\/]/).pop() ?? "";
 

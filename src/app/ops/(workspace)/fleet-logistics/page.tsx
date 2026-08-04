@@ -19,6 +19,7 @@ import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCh
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
@@ -489,9 +490,9 @@ function FleetTripPlanningPanel({
 
       <div className="mt-4">
         {dashboard.tripRows.length === 0 ? (
-          <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
+          <OpsInlineEmpty>
             No submitted, approved, or scheduled transport requests need planning.
-          </p>
+          </OpsInlineEmpty>
         ) : (
           <ul className="divide-y divide-border rounded-md border border-border">
             {dashboard.tripRows.map((trip) => (
@@ -544,9 +545,9 @@ function FleetMobilizationPanel({
 
       <div className="mt-4">
         {dashboard.mobilizationRows.length === 0 ? (
-          <p className="rounded-md border border-border px-3 py-3 text-sm text-muted-foreground">
+          <OpsInlineEmpty>
             No active movement, accommodation, or labour demand is currently grouped by site.
-          </p>
+          </OpsInlineEmpty>
         ) : (
           <ul className="divide-y divide-border rounded-md border border-border">
             {dashboard.mobilizationRows.map((site) => (

@@ -9,6 +9,7 @@ import {
   Send,
 } from "lucide-react";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
@@ -166,7 +167,7 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
                   </label>
                 ))}
                 {employees.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No active staff are available.</p>
+                  <OpsInlineEmpty>No active staff are available.</OpsInlineEmpty>
                 ) : null}
               </div>
             </fieldset>
@@ -336,9 +337,7 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
               </div>
             ))
           ) : (
-            <div className="p-5 text-sm text-muted-foreground">
-              No open staff advances. Record one above when needed.
-            </div>
+            <OpsInlineEmpty>No open staff advances. Record one above when needed.</OpsInlineEmpty>
           )}
         </div>
       </section>

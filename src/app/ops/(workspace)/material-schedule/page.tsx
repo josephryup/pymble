@@ -1528,9 +1528,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                   </div>
                 </>
               ) : (
-                <div className="flex min-h-32 items-center justify-center p-8 text-center text-sm text-muted-foreground">
-                  No line items added to this material schedule yet.
-                </div>
+                <OpsInlineEmpty>No line items added to this material schedule yet.</OpsInlineEmpty>
               )}
               <OpsRecordActivityPanel
                 canManage={canManage}

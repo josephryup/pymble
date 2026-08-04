@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -621,8 +622,8 @@ function EmployeeContractsPanel({
 }) {
   if (contracts.length === 0) {
     return (
-      <div className="mt-4 rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
-        No employment contracts recorded yet.
+      <div className="mt-4">
+        <OpsInlineEmpty>No employment contracts recorded yet.</OpsInlineEmpty>
       </div>
     );
   }
@@ -862,8 +863,8 @@ function EmployeeDocumentsPanel({
 }) {
   if (documents.length === 0) {
     return (
-      <div className="mt-4 rounded-md border border-border px-4 py-3 text-sm text-muted-foreground">
-        No HR documents linked yet.
+      <div className="mt-4">
+        <OpsInlineEmpty>No HR documents linked yet.</OpsInlineEmpty>
       </div>
     );
   }
@@ -2278,9 +2279,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               );
             })
           ) : (
-            <div className="rounded-md border border-border p-5 text-sm text-muted-foreground lg:col-span-2">
-              No training renewal alerts at the moment.
-            </div>
+            <div className="col-span-2"><OpsInlineEmpty>No training renewal alerts at the moment.</OpsInlineEmpty></div>
           )}
         </div>
       </section>
@@ -2333,9 +2332,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="rounded-md border border-border p-5 text-sm text-muted-foreground">
-                No recruitment requisitions yet.
-              </div>
+              <OpsInlineEmpty>No recruitment requisitions yet.</OpsInlineEmpty>
             )}
           </div>
         </div>
@@ -2380,9 +2377,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 </article>
               ))
             ) : (
-              <div className="rounded-md border border-border p-5 text-sm text-muted-foreground">
-                No HR document categories yet.
-              </div>
+              <OpsInlineEmpty>No HR document categories yet.</OpsInlineEmpty>
             )}
           </div>
         </div>
