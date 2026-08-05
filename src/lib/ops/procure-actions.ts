@@ -299,30 +299,22 @@ export async function procureMaterialRequestAction(formData: FormData) {
       );
     }
 
-    const { data: purchaseOrder, error: poError } = await supabase
-      .from("purchase_orders")
-      .insert({
-        material_request_id: request.id,
-        site_id: request.site_id,
-        supplier_id: group.supplierId,
-        title: `${request.request_number} — ${request.title}`.slice(0, 160),
-        description: `Raised from material request ${request.request_number}.`,
-        // R2: DRAFT, never issued here. Issuing is a separate deliberate act.
-        status: "draft",
-        scope: request.scope,
-        total_amount: groupValue,
-        created_by: profile.id,
-        procured_by: profile.id,
-        procured_at: nowIso,
-        approval_source: inheritance.approvalSource,
-        inherited_from_approval_id: request.approval_request_id,
-      })
-      .select("id, po_number")
-      .single<{ id: string; po_number: string }>();
-
-    if (poError || !purchaseOrder) {
-      procureError(poError?.message ?? "Could not raise the purchase order.");
-    }
+    const orderPayload = {
+      material_request_id: request.id,
+      site_id: request.site_id,
+      supplier_id: group.supplierId,
+      title: `${request.request_number} — ${request.title}`.slice(0, 160),
+      description: `Raised from material request ${request.request_number}.`,
+      // R2: DRAFT, never issued here. Issuing is a separate deliberate act.
+      status: "draft",
+      scope: request.scope,
+      total_amount: groupValue,
+      created_by: profile.id,
+      procured_by: profile.id,
+      procured_at: nowIso,
+      approval_source: inheritance.approvalSource,
+      inherited_from_approval_id: request.approval_request_id,
+    };
 
     const lines = group.items.map((item, index) => {
       const quantity = toNumber(item.quantity);
@@ -331,7 +323,8 @@ export async function procureMaterialRequestAction(formData: FormData) {
         toNumber(item.actual_unit_cost) ||
         (quantity > 0 ? (priced > 0 ? priced : toNumber(item.estimated_total)) / quantity : 0);
       return {
-        purchase_order_id: purchaseOrder.id,
+        // purchase_order_id is stamped inside the RPC — the id does not exist
+        // until the header row is written, and both happen in one transaction.
         material_request_item_id: item.id,
         line_number: index + 1,
         item_name: item.item_name,
@@ -339,16 +332,27 @@ export async function procureMaterialRequestAction(formData: FormData) {
         unit: item.unit,
         quantity,
         unit_cost: roundMoney(unitCost),
-        line_total: roundMoney(quantity * unitCost),
+        // line_total is GENERATED ALWAYS AS (quantity * unit_cost) in the
+        // database, so it is deliberately not sent.
         supplier_id: item.supplier_id,
         supplier_name_freeform: item.supplier_name_freeform,
         cost_code_id: item.cost_code_id,
       };
     });
 
-    const { error: lineError } = await supabase.from("purchase_order_items").insert(lines);
-    if (lineError) {
-      procureError(lineError.message);
+    // The header and its lines go in as one transaction (audit finding R1).
+    // Previously these were two calls, and a failure on the second left an
+    // orphaned draft PO that had already consumed a number from the sequence
+    // and showed in the register with no lines.
+    const { data: purchaseOrder, error: poError } = await supabase
+      .rpc("ops_insert_purchase_order_with_lines", {
+        p_order: orderPayload,
+        p_lines: lines,
+      })
+      .single<{ id: string; po_number: string }>();
+
+    if (poError || !purchaseOrder) {
+      procureError(poError?.message ?? "Could not raise the purchase order.");
     }
 
     createdPoIds.push(purchaseOrder.id);

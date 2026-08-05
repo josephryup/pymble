@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   AlertTriangle,
   BadgeDollarSign,
@@ -28,6 +29,7 @@ import { OpsCommercialKpiPanel } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
+import { OpsPanelSkeleton } from "@/components/ops/OpsPanelSkeleton";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
@@ -1512,6 +1514,57 @@ function MilestoneActions({
   );
 }
 
+/**
+ * Suspense-streamed sections (audit finding U1).
+ *
+ * These three panels are aggregate roll-ups — the slowest queries on the page —
+ * and each is read in exactly one place below the fold. Pulling them out of the
+ * page's blocking `Promise.all` means the register, the filters and the create
+ * forms paint as soon as their own data is ready, instead of every visitor
+ * waiting on a margin calculation they may never scroll to.
+ *
+ * Each fetches its own data behind its own boundary, so a slow chart delays
+ * only the chart.
+ */
+async function CommercialKpiSection() {
+  const kpis = await fetchOpsCommercialKpis();
+  return <OpsCommercialKpiPanel kpis={kpis} />;
+}
+
+async function CommercialChartsSection() {
+  // Charts are decoration over the registers below; if the aggregate fails the
+  // page is still fully usable without them.
+  const charts = await fetchOpsCommercialChartData().catch(() => null);
+
+  if (!charts?.hasActivity) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <OpsDashboardPanel
+        eyebrow="Revenue funnel"
+        title="Claimed → certified → invoiced → paid"
+        description="Where value is held up in the certification and payment chain."
+      >
+        <OpsCommercialFunnel stages={charts.funnel} />
+      </OpsDashboardPanel>
+      <OpsDashboardPanel
+        eyebrow="Certified value"
+        title="Cumulative certified (S-curve)"
+        description="Certified value to date by month, from certified IPCs."
+      >
+        <OpsCertifiedScurveChart points={charts.scurve} />
+      </OpsDashboardPanel>
+    </div>
+  );
+}
+
+async function CommercialMarginSection() {
+  const report = await fetchOpsCommercialMarginReport();
+  return <CommercialMarginPanel report={report} />;
+}
+
 export default async function CommercialControlsPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const auth = await requireOpsUser();
@@ -1530,7 +1583,6 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     valuationOptions,
     variationOptions,
     stats,
-    marginReport,
     forecastReport,
     ipcs,
     contracts,
@@ -1541,8 +1593,6 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     milestones,
     variations,
     claims,
-    commercialKpis,
-    commercialCharts,
     variationCandidates,
   ] = await Promise.all([
     fetchActiveSiteOptions(),
@@ -1551,7 +1601,6 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     fetchCommercialValuationOptions(),
     fetchCommercialVariationOptions(),
     fetchOpsCommercialStats(),
-    fetchOpsCommercialMarginReport(),
     fetchOpsCommercialForecastReport(today),
     fetchPaginatedOpsCommercialIpcs({
       listState,
@@ -1566,8 +1615,6 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     fetchRecentCommercialMilestones(),
     fetchRecentCommercialVariations(),
     fetchRecentCommercialClaims(),
-    fetchOpsCommercialKpis(),
-    fetchOpsCommercialChartData().catch(() => null),
     fetchOpsVariationCandidates().catch(() => []),
   ]);
   const flaggedVariationCandidates = variationCandidates.filter((row) => row.isCandidate);
@@ -1740,7 +1787,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
         />
       </section>
 
-      <OpsCommercialKpiPanel kpis={commercialKpis} />
+      <Suspense fallback={<OpsPanelSkeleton lines={3} title="commercial KPIs" />}>
+        <CommercialKpiSection />
+      </Suspense>
 
       {/* Off-schedule spend that may be recoverable from the client (audit
           §7.6). Material requested that was never in the schedule is either our
@@ -1819,26 +1868,13 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
         </OpsDashboardPanel>
       ) : null}
 
-      {commercialCharts?.hasActivity ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <OpsDashboardPanel
-            eyebrow="Revenue funnel"
-            title="Claimed → certified → invoiced → paid"
-            description="Where value is held up in the certification and payment chain."
-          >
-            <OpsCommercialFunnel stages={commercialCharts.funnel} />
-          </OpsDashboardPanel>
-          <OpsDashboardPanel
-            eyebrow="Certified value"
-            title="Cumulative certified (S-curve)"
-            description="Certified value to date by month, from certified IPCs."
-          >
-            <OpsCertifiedScurveChart points={commercialCharts.scurve} />
-          </OpsDashboardPanel>
-        </div>
-      ) : null}
+      <Suspense fallback={<OpsPanelSkeleton lines={6} title="commercial charts" />}>
+        <CommercialChartsSection />
+      </Suspense>
 
-      <CommercialMarginPanel report={marginReport} />
+      <Suspense fallback={<OpsPanelSkeleton lines={5} title="margin report" />}>
+        <CommercialMarginSection />
+      </Suspense>
       <CommercialForecastPanel report={forecastReport} />
 
       {canCreate ? (

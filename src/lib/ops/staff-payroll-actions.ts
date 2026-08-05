@@ -574,33 +574,39 @@ export async function completeStaffPayrollRunAction(formData: FormData) {
     staffPayrollError("Select a staff payroll run.");
   }
   const supabase = getOpsSupabaseServiceClient();
-  const { error } = await supabase
-    .from("staff_payroll_runs")
-    .update({
-      status: "completed",
-      disbursed_at: new Date().toISOString(),
-      disbursed_by: profile.id,
+
+  // One transaction for the run status, every line item's payout status, and
+  // the audit row (audit finding R1). Previously these were three separate
+  // PostgREST calls: a failure or timeout between them left the run marked
+  // paid while its items were not, with nothing recording which half landed.
+  //
+  // It also closes a quieter bug. The old code guarded with
+  // `.eq("status", "approved")`, but PostgREST does not error when an UPDATE
+  // matches zero rows — so completing a draft or an already-completed run did
+  // nothing to the run and then marked every item 'sent' anyway. The status
+  // check now happens in SQL, against a locked row.
+  const { data: completion, error } = await supabase
+    .rpc("ops_complete_staff_payroll_run", {
+      p_run_id: parsed.data.id,
+      p_actor_id: profile.id,
     })
-    .eq("id", parsed.data.id)
-    .eq("status", "approved");
+    .single<{ status: string; items_marked: number }>();
+
   if (error) {
     staffPayrollError(error.message);
   }
-  // Mark every line item paid in one go.
-  await supabase
-    .from("staff_payroll_items")
-    .update({ payout_status: "sent" })
-    .eq("staff_payroll_run_id", parsed.data.id);
-  await recordOpsAuditEvent({
-    action: "staff_payroll_run.completed",
-    actorUserId: profile.id,
-    entityId: parsed.data.id,
-    entityType: "staff_payroll_run",
-    moduleKey: "staff_payroll",
-    sourceId: parsed.data.id,
-    sourceTable: "staff_payroll_runs",
-    summary: "Marked staff payroll run paid",
-  }).catch(() => null);
+
+  if (completion?.status === "not_found") {
+    staffPayrollError("That staff payroll run no longer exists.");
+  }
+
+  if (completion?.status === "not_approved") {
+    staffPayrollError("Only an approved staff payroll run can be marked paid.");
+  }
+
+  // `already_completed` is not an error — it is what a retry after a timeout
+  // looks like. Fall through so the payslip emails below still go out; they
+  // are idempotent, so a genuine duplicate press costs nothing.
 
   // Email each person their own payslip (audit §10). Marked paid is the right
   // trigger: it is the point at which the money has actually moved, so the

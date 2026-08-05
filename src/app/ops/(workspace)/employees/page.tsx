@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { OpsPanelSkeleton } from "@/components/ops/OpsPanelSkeleton";
 import {
   AlertTriangle,
   Link2 as LinkIcon,
@@ -1102,6 +1104,100 @@ function RecruitmentControls({
   );
 }
 
+/**
+ * Suspense-streamed (audit finding U1). The renewal watch scans every training
+ * record for expiry and is read only here, near the bottom of a 2,800-line
+ * page — no reason for the employee register above it to wait on it.
+ */
+async function HrTrainingRenewalSection({
+  canOpenHseTraining,
+  today,
+}: {
+  canOpenHseTraining: boolean;
+  today: string;
+}) {
+  const trainingRenewals = await fetchRecentHrTrainingRenewals();
+
+  return (
+        <section className="scroll-mt-24 rounded-lg border border-border bg-card" id="training-renewals">
+          <div className="flex items-center justify-between gap-3 border-b border-border p-5">
+            <div>
+              <h2 className="font-heading text-xl font-bold text-foreground">
+                Training renewal watch
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                HSE training records due within 45 days or already expired.
+              </p>
+            </div>
+            <GraduationCap className="size-5 text-primary-blue" aria-hidden="true" />
+          </div>
+          <div className="grid gap-3 p-5 lg:grid-cols-2">
+            {trainingRenewals.length > 0 ? (
+              trainingRenewals.map((training: OpsHrTrainingRenewalSummary) => {
+                const isExpired =
+                  training.status === "expired" ||
+                  (training.expiry_date !== null && training.expiry_date < today);
+
+                return (
+                  <article className="rounded-md border border-border p-4" key={training.id}>
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                          {training.training_number}
+                        </p>
+                        <h3 className="mt-1 font-bold text-foreground">
+                          {training.training_title || formatLabel(training.training_type)}
+                        </h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {training.employee
+                            ? `${training.employee.employee_number} - ${training.employee.full_name}`
+                            : training.trainee_name || "No trainee recorded"}
+                        </p>
+                      </div>
+                      <span className={`w-fit ${opsStatusBadgeClass(training.status, trainingStatusTone(training.status, training.expiry_date))}`}>
+                        {isExpired ? "Expired" : "Due soon"}
+                      </span>
+                    </div>
+                    <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <HrMetric label="Type" value={formatLabel(training.training_type)} />
+                      <HrMetric label="Completed" value={formatDate(training.completed_date)} />
+                      <HrMetric label="Expiry" value={formatDate(training.expiry_date)} />
+                    </dl>
+                    <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <HrMetric label="Provider" value={training.provider || "Not recorded"} />
+                      <HrMetric
+                        label="Site"
+                        value={training.site ? `${training.site.code} - ${training.site.name}` : "No site"}
+                      />
+                    </dl>
+                    {canOpenHseTraining ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Link
+                          className={OPS_SECONDARY_BUTTON_CLASS}
+                          href="/ops/hse-compliance?create=training#training-create-panel"
+                        >
+                          <GraduationCap className="size-4" aria-hidden="true" />
+                          Create renewal
+                        </Link>
+                        <Link
+                          className={OPS_SECONDARY_BUTTON_CLASS}
+                          href="/ops/hse-compliance#training-panel"
+                        >
+                          Training register
+                        </Link>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })
+            ) : (
+              <div className="col-span-2"><OpsInlineEmpty>No training renewal alerts at the moment.</OpsInlineEmpty></div>
+            )}
+          </div>
+        </section>
+  );
+}
+
 export default async function OpsEmployeesPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
     searchParams ?? Promise.resolve({} as OpsSearchParams),
@@ -1123,7 +1219,6 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
     recruitmentRequisitions,
     hrDocumentCategories,
     hrDocumentCoverage,
-    trainingRenewals,
   ] = await Promise.all([
     fetchPaginatedOpsEmployees({
       listState,
@@ -1137,7 +1232,6 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
     fetchRecentRecruitmentRequisitions(),
     fetchHrDocumentCategories(),
     fetchOpsHrDocumentCoverageReport(),
-    fetchRecentHrTrainingRenewals(),
   ]);
   const notice = hrNotice(params);
   const canCreateEmployee = canCreateOpsEmployee(auth.profile.role);
@@ -2207,82 +2301,9 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
         </details>
       ) : null}
 
-      <section className="scroll-mt-24 rounded-lg border border-border bg-card" id="training-renewals">
-        <div className="flex items-center justify-between gap-3 border-b border-border p-5">
-          <div>
-            <h2 className="font-heading text-xl font-bold text-foreground">
-              Training renewal watch
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              HSE training records due within 45 days or already expired.
-            </p>
-          </div>
-          <GraduationCap className="size-5 text-primary-blue" aria-hidden="true" />
-        </div>
-        <div className="grid gap-3 p-5 lg:grid-cols-2">
-          {trainingRenewals.length > 0 ? (
-            trainingRenewals.map((training: OpsHrTrainingRenewalSummary) => {
-              const isExpired =
-                training.status === "expired" ||
-                (training.expiry_date !== null && training.expiry_date < today);
-
-              return (
-                <article className="rounded-md border border-border p-4" key={training.id}>
-                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
-                        {training.training_number}
-                      </p>
-                      <h3 className="mt-1 font-bold text-foreground">
-                        {training.training_title || formatLabel(training.training_type)}
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {training.employee
-                          ? `${training.employee.employee_number} - ${training.employee.full_name}`
-                          : training.trainee_name || "No trainee recorded"}
-                      </p>
-                    </div>
-                    <span className={`w-fit ${opsStatusBadgeClass(training.status, trainingStatusTone(training.status, training.expiry_date))}`}>
-                      {isExpired ? "Expired" : "Due soon"}
-                    </span>
-                  </div>
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <HrMetric label="Type" value={formatLabel(training.training_type)} />
-                    <HrMetric label="Completed" value={formatDate(training.completed_date)} />
-                    <HrMetric label="Expiry" value={formatDate(training.expiry_date)} />
-                  </dl>
-                  <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <HrMetric label="Provider" value={training.provider || "Not recorded"} />
-                    <HrMetric
-                      label="Site"
-                      value={training.site ? `${training.site.code} - ${training.site.name}` : "No site"}
-                    />
-                  </dl>
-                  {canOpenHseTraining ? (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Link
-                        className={OPS_SECONDARY_BUTTON_CLASS}
-                        href="/ops/hse-compliance?create=training#training-create-panel"
-                      >
-                        <GraduationCap className="size-4" aria-hidden="true" />
-                        Create renewal
-                      </Link>
-                      <Link
-                        className={OPS_SECONDARY_BUTTON_CLASS}
-                        href="/ops/hse-compliance#training-panel"
-                      >
-                        Training register
-                      </Link>
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })
-          ) : (
-            <div className="col-span-2"><OpsInlineEmpty>No training renewal alerts at the moment.</OpsInlineEmpty></div>
-          )}
-        </div>
-      </section>
+      <Suspense fallback={<OpsPanelSkeleton lines={4} title="training renewal watch" />}>
+        <HrTrainingRenewalSection canOpenHseTraining={canOpenHseTraining} today={today} />
+      </Suspense>
 
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-lg border border-border bg-card">

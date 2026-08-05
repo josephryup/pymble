@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   Boxes,
   CalendarCheck,
@@ -17,6 +18,7 @@ import { notFound } from "next/navigation";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
+import { OpsPanelSkeleton } from "@/components/ops/OpsPanelSkeleton";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
@@ -804,6 +806,55 @@ function ComplianceAuditActions({
   );
 }
 
+/**
+ * Suspense-streamed (audit finding U1). The ageing sweep aggregates the whole
+ * incident register and is read only here, so it should not hold up the PPE,
+ * toolbox and inspection registers that people actually act on.
+ */
+async function HseAgeingSection() {
+  const ageingAlerts = await fetchOpsHseAgeingAlerts();
+
+  return (
+        <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-foreground">Incident ageing watch</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Oldest open incident records from the incident register.
+              </p>
+            </div>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse#incident-register">
+              Open HSE
+            </Link>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {ageingAlerts.length > 0 ? (
+              ageingAlerts.map((alert) => (
+                <article className="rounded-md border border-border p-3" key={alert.id}>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                        {alert.incident_number}
+                      </p>
+                      <h3 className="mt-1 font-bold text-foreground">{alert.title}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {alert.site ? `${alert.site.code} - ${alert.site.name}` : "No site"} / {formatLabel(alert.status)}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-orange-700">
+                      {alert.days_open} days
+                    </span>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="col-span-2"><OpsInlineEmpty>No open incident ageing alerts.</OpsInlineEmpty></div>
+            )}
+          </div>
+        </section>
+  );
+}
+
 export default async function HseCompliancePage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const auth = await requireOpsUser();
@@ -827,7 +878,6 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
     trainingRecords,
     riskAssessments,
     complianceAudits,
-    ageingAlerts,
   ] = await Promise.all([
     fetchActiveSiteOptions(),
     fetchHseUserOptions(),
@@ -845,7 +895,6 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
     fetchRecentOpsSafetyTrainingRecords(),
     fetchRecentOpsHseRiskAssessments(),
     fetchRecentOpsHseComplianceAudits(),
-    fetchOpsHseAgeingAlerts(),
   ]);
   const canCreatePpe = canCreateOpsPpeIssue(auth.profile.role);
   const canCreatePpeItem = canCreateOpsPpeItem(auth.profile.role);
@@ -976,43 +1025,9 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         />
       </section>
 
-      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-bold text-foreground">Incident ageing watch</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Oldest open incident records from the incident register.
-            </p>
-          </div>
-          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/hse#incident-register">
-            Open HSE
-          </Link>
-        </div>
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          {ageingAlerts.length > 0 ? (
-            ageingAlerts.map((alert) => (
-              <article className="rounded-md border border-border p-3" key={alert.id}>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
-                      {alert.incident_number}
-                    </p>
-                    <h3 className="mt-1 font-bold text-foreground">{alert.title}</h3>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {alert.site ? `${alert.site.code} - ${alert.site.name}` : "No site"} / {formatLabel(alert.status)}
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-orange-700">
-                    {alert.days_open} days
-                  </span>
-                </div>
-              </article>
-            ))
-          ) : (
-            <div className="col-span-2"><OpsInlineEmpty>No open incident ageing alerts.</OpsInlineEmpty></div>
-          )}
-        </div>
-      </section>
+      <Suspense fallback={<OpsPanelSkeleton lines={4} title="incident ageing watch" />}>
+        <HseAgeingSection />
+      </Suspense>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
         <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
