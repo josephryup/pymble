@@ -32,6 +32,14 @@ export function OpsNavLink({
       }`}
       href={href}
       onClick={onNavigate}
+      // The sidebar renders one of these per module the user can reach — up to
+      // 76 of them (OPS_MODULES). Default prefetch fires as each enters the
+      // viewport, and because most ops pages are force-dynamic with no
+      // loading.tsx there is no static shell to hand back: Next answers the
+      // prefetch by running the page's FULL server render, queries and all.
+      // Opening /ops therefore rendered dozens of pages nobody asked for.
+      // Navigation still feels instant — these are same-shell route changes.
+      prefetch={false}
     >
       {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
       <span className="min-w-0 flex-1 truncate">{title}</span>

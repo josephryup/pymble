@@ -179,12 +179,24 @@ async function refreshOpsSession(request: NextRequest) {
     },
   });
 
-  await Promise.race([
-    supabase.auth.getClaims(),
-    new Promise((resolve) => {
-      setTimeout(resolve, OPS_SESSION_REFRESH_TIMEOUT_MS);
-    }),
-  ]).catch(() => undefined);
+  // The timeout handle is kept so it can be cleared once the race settles.
+  // Promise.race resolves on the FIRST settle, but it does not cancel the
+  // loser: an uncleared timer stayed pending on the event loop for up to
+  // 2.5s after every ops request had already been answered, keeping the
+  // Fluid instance from going idle. Clearing it costs nothing and lets the
+  // instance settle as soon as the work is actually done.
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    await Promise.race([
+      supabase.auth.getClaims(),
+      new Promise((resolve) => {
+        timeoutHandle = setTimeout(resolve, OPS_SESSION_REFRESH_TIMEOUT_MS);
+      }),
+    ]).catch(() => undefined);
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
 
   return response;
 }
