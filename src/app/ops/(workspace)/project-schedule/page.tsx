@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { canViewProjectTasks } from "@/lib/ops/project-task-permissions";
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function OpsProjectSchedulePage() {
   const { profile } = await requireOpsUser();
 
-  if (!canAccessOpsHref(profile.role, "/ops/project-schedule")) {
+  if (!canAccessOpsHref(profile.role, "/ops/project-schedule", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

@@ -1,6 +1,7 @@
 import { Building2, MapPin, Save, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { fetchPurchaseOrderApprovalSettings } from "@/lib/ops/approval-settings";
 import { updatePurchaseOrderApprovalSettingsAction } from "@/lib/ops/approval-settings-actions";
 import { OpsSystemHealthPanel } from "@/components/ops/OpsSystemHealthPanel";
@@ -62,7 +63,7 @@ function vatPercent(value: number) {
 export default async function OpsSettingsPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({}), requireOpsUser()]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/settings")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/settings", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

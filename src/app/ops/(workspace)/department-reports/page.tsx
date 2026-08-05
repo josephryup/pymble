@@ -5,6 +5,7 @@ import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   canReviewDepartmentReport,
@@ -135,7 +136,7 @@ function DeptCard({ stat, canReview }: { stat: OpsDeptReportStat; canReview: boo
 export default async function OpsDepartmentReportsPage({ searchParams }: PageProps) {
   const search = (await (searchParams ?? Promise.resolve({} as OpsSearchParams))) ?? {};
   const { profile } = await requireOpsUser();
-  if (!canAccessOpsHref(profile.role, "/ops/department-reports")) {
+  if (!canAccessOpsHref(profile.role, "/ops/department-reports", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

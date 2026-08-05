@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsTableShell } from "@/components/ops/OpsTableShell";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   fetchOpsChartOfAccounts,
@@ -40,7 +41,7 @@ function StatTile({ label, value }: { label: string; value: number }) {
 export default async function OpsChartOfAccountsPage() {
   const { profile } = await requireOpsUser();
 
-  if (!canAccessOpsHref(profile.role, "/ops/finance/accounts")) {
+  if (!canAccessOpsHref(profile.role, "/ops/finance/accounts", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

@@ -9,6 +9,7 @@ import {
 } from "@/components/ops/OpsMobileRecord";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { formatCoordinateValue } from "@/lib/ops/coordinates";
 import { parseOpsListState } from "@/lib/ops/listing";
@@ -326,7 +327,7 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/sites")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/sites", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

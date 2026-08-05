@@ -15,6 +15,7 @@ import {
   OpsMobileRecordList,
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approvePayrollRunAction,
@@ -105,7 +106,7 @@ function payrollNotice(params: OpsSearchParams) {
 export default async function OpsPayrollPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({}), requireOpsUser()]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/payroll")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/payroll", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

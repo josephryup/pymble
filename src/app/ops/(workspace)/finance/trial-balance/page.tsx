@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsTableShell } from "@/components/ops/OpsTableShell";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { opsGlAccountTypeLabel } from "@/lib/ops/chart-of-accounts";
 import { fetchOpsTrialBalance } from "@/lib/ops/gl";
@@ -25,7 +26,7 @@ export const dynamic = "force-dynamic";
 export default async function OpsTrialBalancePage() {
   const { profile } = await requireOpsUser();
 
-  if (!canAccessOpsHref(profile.role, "/ops/finance/trial-balance")) {
+  if (!canAccessOpsHref(profile.role, "/ops/finance/trial-balance", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

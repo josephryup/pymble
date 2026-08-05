@@ -24,6 +24,7 @@ import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsList
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   activateProjectBudgetAction,
@@ -361,7 +362,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/project-budgets")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/project-budgets", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { ComponentType } from "react";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   fetchOpsNotifications,
@@ -91,7 +92,7 @@ export default async function OpsNotificationsPage({ searchParams }: PageProps) 
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/notifications")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/notifications", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

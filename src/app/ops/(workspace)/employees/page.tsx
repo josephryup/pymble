@@ -36,6 +36,7 @@ import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsList
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approveLeaveRequestAction,
@@ -1204,7 +1205,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/employees")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/employees", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 
@@ -1274,7 +1275,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
   const canManageLeaveBalance = canManageOpsLeaveBalance(auth.profile.role);
   const canManageHrCategory = canManageOpsHrDocumentCategory(auth.profile.role);
   const canUpdateStatus = canUpdateOpsEmployeeStatus(auth.profile.role);
-  const canOpenHseTraining = canAccessOpsHref(auth.profile.role, "/ops/hse-compliance");
+  const canOpenHseTraining = canAccessOpsHref(auth.profile.role, "/ops/hse-compliance", await fetchOpsModuleAccessOverrides());
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const createPanel = firstParam(params.create);
   const openEmployeePanel = createPanel === "employee";

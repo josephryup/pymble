@@ -1,5 +1,11 @@
 import { OPS_MODULES } from "@/lib/ops/constants";
 import {
+  OPS_NO_MODULE_OVERRIDES,
+  resolveOpsModuleAccess,
+  resolveOpsModuleNavAccess,
+  type OpsModuleAccessMap,
+} from "@/lib/ops/module-access-core";
+import {
   isDeveloperRole,
   isEngineeringManagerRole,
   isGeneralManagerRole,
@@ -276,31 +282,53 @@ export function canDeactivateStaffRole(actorRole: OpsUserRole, targetRole: OpsUs
   return false;
 }
 
-export function canAccessOpsHref(role: OpsUserRole, href: string) {
+/**
+ * Can `role` reach `href`?
+ *
+ * `overrides` is optional and defaults to "none", so every existing call site
+ * keeps the pre-matrix behaviour. Route guards and the navigation pass the
+ * request-scoped map from `fetchOpsModuleAccessOverrides()`; pure contexts
+ * (tests, pages that only render a link) can omit it.
+ */
+export function canAccessOpsHref(
+  role: OpsUserRole,
+  href: string,
+  overrides: OpsModuleAccessMap = OPS_NO_MODULE_OVERRIDES,
+) {
   const opsModule = OPS_MODULES.find(
     (item) => isReadyOpsModule(item) && item.href === href,
   );
-  return Boolean(opsModule && (isDeveloperRole(role) || opsModule.roles.includes(role)));
+
+  return Boolean(opsModule && resolveOpsModuleAccess(role, opsModule, overrides));
 }
 
-export function visibleOpsModules(role: OpsUserRole) {
+export function visibleOpsModules(
+  role: OpsUserRole,
+  overrides: OpsModuleAccessMap = OPS_NO_MODULE_OVERRIDES,
+) {
   return OPS_MODULES.filter(
     (item): item is OpsReadyModule =>
       isReadyOpsModule(item) &&
       item.showInNavigation !== false &&
-      (isDeveloperRole(role) || (item.navigationRoles ?? item.roles).includes(role)),
+      resolveOpsModuleNavAccess(role, item, overrides),
   );
 }
 
-export function visibleOpsRouteModules(role: OpsUserRole) {
+export function visibleOpsRouteModules(
+  role: OpsUserRole,
+  overrides: OpsModuleAccessMap = OPS_NO_MODULE_OVERRIDES,
+) {
   return OPS_MODULES.filter(
     (item): item is OpsReadyModule =>
-      isReadyOpsModule(item) && (isDeveloperRole(role) || item.roles.includes(role)),
+      isReadyOpsModule(item) && resolveOpsModuleAccess(role, item, overrides),
   );
 }
 
-export function visibleOpsModuleRegistry(role: OpsUserRole) {
-  return OPS_MODULES.filter((item) => isDeveloperRole(role) || item.roles.includes(role));
+export function visibleOpsModuleRegistry(
+  role: OpsUserRole,
+  overrides: OpsModuleAccessMap = OPS_NO_MODULE_OVERRIDES,
+) {
+  return OPS_MODULES.filter((item) => resolveOpsModuleAccess(role, item, overrides));
 }
 
 // ---------------------------------------------------------------------------

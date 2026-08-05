@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { canManageOpsJobPosting, canReviewOpsJobApplication } from "@/lib/ops/hr-permissions";
@@ -107,7 +108,7 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/recruitment")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/recruitment", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

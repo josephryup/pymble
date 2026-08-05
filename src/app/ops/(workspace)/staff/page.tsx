@@ -7,6 +7,7 @@ import {
   OpsMobileRecordList,
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   canAccessOpsHref,
@@ -120,7 +121,7 @@ function roleClass(role: string) {
 export default async function OpsStaffPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({}), requireOpsUser()]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/staff")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/staff", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

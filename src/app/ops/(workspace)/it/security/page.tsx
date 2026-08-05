@@ -4,6 +4,7 @@ import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canManageIT } from "@/lib/ops/it-permissions";
 import {
@@ -73,7 +74,7 @@ export default async function OpsItSecurityPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/security")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/security", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsOfflineForm } from "@/components/ops/OpsOfflineForm";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { deleteSitePhotoAction, uploadSitePhotoAction } from "@/lib/ops/photo-actions";
 import { fetchOpsSitePhotos, type OpsSitePhoto } from "@/lib/ops/photos";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -43,7 +44,7 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/photos")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/photos", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

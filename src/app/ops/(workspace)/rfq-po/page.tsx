@@ -23,6 +23,7 @@ import { OpsLineItemsEditor } from "@/components/ops/OpsLineItemsEditor";
 import { OpsScopeSitePicker } from "@/components/ops/OpsScopeSitePicker";
 import { OpsImportTemplateLinks } from "@/components/ops/OpsImportTemplateLinks";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -646,7 +647,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/rfq-po")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/rfq-po", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

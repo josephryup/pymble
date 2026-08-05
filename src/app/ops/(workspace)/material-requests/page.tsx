@@ -31,6 +31,7 @@ import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import {
@@ -991,7 +992,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/material-requests")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/material-requests", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

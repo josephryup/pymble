@@ -5,6 +5,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItPolicies, IT_POLICY_CATEGORY_LABELS } from "@/lib/ops/it-policies";
 import { createItPolicyAction } from "@/lib/ops/it-policy-actions";
@@ -28,7 +29,7 @@ export default async function OpsItPoliciesPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/policies")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/policies", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

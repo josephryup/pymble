@@ -10,6 +10,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { notFound } from "next/navigation";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   archiveHseWeeklyReportAction,
@@ -75,7 +76,7 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/hse-weekly")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/hse-weekly", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

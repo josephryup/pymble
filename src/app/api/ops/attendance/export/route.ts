@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
   try {
     const { profile } = await requireOpsUser();
 
-    if (!canAccessOpsHref(profile.role, "/ops/attendance")) {
+    if (!canAccessOpsHref(profile.role, "/ops/attendance", await fetchOpsModuleAccessOverrides())) {
       return NextResponse.json(
         { error: "Your role cannot export attendance." },
         { status: 403 },

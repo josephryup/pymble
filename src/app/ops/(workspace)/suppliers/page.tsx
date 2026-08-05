@@ -23,6 +23,7 @@ import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsList
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsSupplierScorecardPanel } from "@/components/ops/OpsProcurementKpiPanels";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -446,7 +447,7 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/suppliers")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/suppliers", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

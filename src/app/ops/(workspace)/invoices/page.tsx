@@ -40,6 +40,7 @@ import {
   fetchPaginatedOpsInvoices,
   type OpsInvoice,
 } from "@/lib/ops/invoices";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsBoqOptions } from "@/lib/ops/boq";
 import { fetchActiveCustomerOptions } from "@/lib/ops/customers";
@@ -144,7 +145,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/invoices")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/invoices", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

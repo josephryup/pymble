@@ -7,6 +7,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   archiveCustomerAction,
@@ -78,7 +79,7 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/customers")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/customers", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

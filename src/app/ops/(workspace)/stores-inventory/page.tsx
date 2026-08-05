@@ -25,6 +25,7 @@ import {
   OpsStockAlertsPanel,
 } from "@/components/ops/OpsProcurementKpiPanels";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canCreateOpsDeliveryException } from "@/lib/ops/delivery-exception-permissions";
 import {
@@ -664,7 +665,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/stores-inventory")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/stores-inventory", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 
@@ -731,7 +732,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
   const canManageActivity = canManageMasterData || canReceiveGoods;
   const canUseStockControl = canIssueStock || canTransferStock || canAdjustStock;
   const canRaiseDeliveryException =
-    canAccessOpsHref(auth.profile.role, "/ops/delivery-exceptions") &&
+    canAccessOpsHref(auth.profile.role, "/ops/delivery-exceptions", await fetchOpsModuleAccessOverrides()) &&
     canCreateOpsDeliveryException(auth.profile.role);
   // Anyone who can record a GRN can archive completed/cancelled ones.
   const canArchiveGrn = canReceiveGoods;

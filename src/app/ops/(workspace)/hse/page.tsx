@@ -22,6 +22,7 @@ import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsList
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   OPS_CHART_COLORS,
@@ -548,7 +549,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/hse")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/hse", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

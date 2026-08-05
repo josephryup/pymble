@@ -19,6 +19,7 @@ import {
 } from "@/components/ops/OpsGlTrendCharts";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsReportShortcutGrid } from "@/components/ops/OpsReportShortcutGrid";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { OPS_BRAND } from "@/lib/ops/constants";
 import { OPS_DEPARTMENT_LABELS } from "@/lib/ops/department-report-permissions";
@@ -142,7 +143,7 @@ function ProjectSnapshotCard({ project }: { project: OpsExecutiveProjectSnapshot
 export default async function OpsExecutivePage() {
   const auth = await requireOpsUser();
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/executive")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/executive", await fetchOpsModuleAccessOverrides())) {
     redirect("/ops/profile");
   }
 

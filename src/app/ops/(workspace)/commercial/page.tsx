@@ -33,6 +33,7 @@ import { OpsPanelSkeleton } from "@/components/ops/OpsPanelSkeleton";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   activateCommercialContractAction,
@@ -1569,7 +1570,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
   const params = (await searchParams) ?? {};
   const auth = await requireOpsUser();
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/commercial")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/commercial", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

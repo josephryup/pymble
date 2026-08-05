@@ -23,6 +23,7 @@ import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approveTransportRequestAction,
@@ -1039,7 +1040,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const auth = await requireOpsUser();
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/fleet-logistics")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/fleet-logistics", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

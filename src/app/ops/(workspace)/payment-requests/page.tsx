@@ -28,6 +28,7 @@ import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsList
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approvePaymentRequestAction,
@@ -240,7 +241,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/payment-requests")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/payment-requests", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

@@ -55,6 +55,7 @@ import {
   type OpsBoqLineItem,
   type OpsMaterialTriggerAlert,
 } from "@/lib/ops/boq";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { boqLineVariance } from "@/lib/ops/boq-actuals";
 import { createCallOffFromScheduleAction } from "@/lib/ops/call-off-actions";
 import { canCreateOpsMaterialRequest } from "@/lib/ops/material-request-permissions";
@@ -603,7 +604,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/material-schedule")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/material-schedule", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

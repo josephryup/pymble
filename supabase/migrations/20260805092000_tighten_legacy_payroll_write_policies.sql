@@ -44,7 +44,11 @@ as $$
     )
 $$;
 
-revoke all on function private.can_manage_payroll_run() from public, anon, authenticated;
+-- EXECUTE stays granted to `authenticated`: RLS policies are evaluated as the
+-- calling role. The `private` schema is not exposed by PostgREST, so this is
+-- not a reachable RPC. See 20260805090100 for the full reasoning.
+revoke all on function private.can_manage_payroll_run() from public, anon;
+grant execute on function private.can_manage_payroll_run() to authenticated;
 
 drop policy if exists payroll_runs_write_admin on public.payroll_runs;
 create policy payroll_runs_write_admin on public.payroll_runs

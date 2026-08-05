@@ -4,6 +4,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   archiveItAssetAction,
@@ -79,7 +80,7 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/assets")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/assets", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

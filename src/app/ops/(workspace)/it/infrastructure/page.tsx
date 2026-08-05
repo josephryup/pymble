@@ -4,6 +4,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItNetworkDevices, fetchOpsItNetworkStats } from "@/lib/ops/it-infrastructure";
 import {
@@ -59,7 +60,7 @@ export default async function OpsItInfrastructurePage({ searchParams }: PageProp
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/infrastructure")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/infrastructure", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

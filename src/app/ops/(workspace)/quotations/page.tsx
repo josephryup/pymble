@@ -16,6 +16,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -380,7 +381,7 @@ export default async function OpsQuotationsPage({ searchParams }: PageProps) {
   ]);
 
   if (
-    !canAccessOpsHref(auth.profile.role, "/ops/quotations") ||
+    !canAccessOpsHref(auth.profile.role, "/ops/quotations", await fetchOpsModuleAccessOverrides()) ||
     !canViewOpsQuotations(auth.profile.role)
   ) {
     notFound();

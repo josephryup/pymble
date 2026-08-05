@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItPolicy, IT_POLICY_CATEGORY_LABELS } from "@/lib/ops/it-policies";
 import {
@@ -35,7 +36,7 @@ export default async function OpsItPolicyDetailPage({ params, searchParams }: Pa
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/policies")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/policies", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

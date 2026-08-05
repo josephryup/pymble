@@ -4,6 +4,7 @@ import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsChartOfAccounts } from "@/lib/ops/chart-of-accounts";
 import {
@@ -68,7 +69,7 @@ export default async function OpsCostCodesPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/cost-codes")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/cost-codes", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

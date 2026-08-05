@@ -15,6 +15,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   addOpsDocumentAttachmentAction,
@@ -142,7 +143,7 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/documents")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/documents", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

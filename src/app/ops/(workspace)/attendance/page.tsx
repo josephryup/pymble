@@ -24,6 +24,7 @@ import {
 import { OpsAttendanceEntryFields } from "@/components/ops/OpsAttendanceEntryFields";
 import { OpsOfflineForm } from "@/components/ops/OpsOfflineForm";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approveAttendanceAction,
@@ -308,7 +309,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/attendance")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/attendance", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsTableShell } from "@/components/ops/OpsTableShell";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsBalanceSheet } from "@/lib/ops/gl";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -67,7 +68,7 @@ export default async function OpsBalanceSheetPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/finance/balance-sheet")) {
+  if (!canAccessOpsHref(profile.role, "/ops/finance/balance-sheet", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

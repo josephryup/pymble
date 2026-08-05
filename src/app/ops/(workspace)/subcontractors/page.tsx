@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { formatOpsDate } from "@/lib/ops/format";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -43,7 +44,7 @@ type PageProps = {
 export default async function OpsSubcontractorsPage({ searchParams }: PageProps) {
   const search = (await (searchParams ?? Promise.resolve({} as OpsSearchParams))) ?? {};
   const { profile } = await requireOpsUser();
-  if (!canAccessOpsHref(profile.role, "/ops/subcontractors")) notFound();
+  if (!canAccessOpsHref(profile.role, "/ops/subcontractors", await fetchOpsModuleAccessOverrides())) notFound();
   if (!canViewSubcontractors(profile.role)) notFound();
 
   const canDecidePayments = canApproveSubcontractorPayment(profile.role);

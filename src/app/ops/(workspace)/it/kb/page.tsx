@@ -5,6 +5,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItKbArticles } from "@/lib/ops/it-kb";
 import { createItKbArticleAction } from "@/lib/ops/it-kb-actions";
@@ -28,7 +29,7 @@ export default async function OpsItKbPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/kb")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/kb", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

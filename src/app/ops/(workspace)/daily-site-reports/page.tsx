@@ -39,6 +39,7 @@ import {
   fetchPaginatedOpsDailySiteReports,
   type OpsDailySiteReportEntry,
 } from "@/lib/ops/daily-site-reports";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -267,7 +268,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/daily-site-reports")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/daily-site-reports", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

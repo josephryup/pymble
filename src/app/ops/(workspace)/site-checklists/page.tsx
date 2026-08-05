@@ -16,6 +16,7 @@ import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsOfflineForm } from "@/components/ops/OpsOfflineForm";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   canCreateOpsEngineeringControl,
@@ -405,7 +406,7 @@ export default async function OpsSiteChecklistsPage({ searchParams }: PageProps)
   ]);
 
   if (
-    !canAccessOpsHref(auth.profile.role, "/ops/site-checklists") ||
+    !canAccessOpsHref(auth.profile.role, "/ops/site-checklists", await fetchOpsModuleAccessOverrides()) ||
     !canViewOpsEngineeringControls(auth.profile.role)
   ) {
     notFound();

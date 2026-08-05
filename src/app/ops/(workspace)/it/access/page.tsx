@@ -4,6 +4,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItAccessGrants, fetchOpsItAccessStats } from "@/lib/ops/it-access";
 import {
@@ -34,7 +35,7 @@ export default async function OpsItAccessPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/access")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/access", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

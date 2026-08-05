@@ -20,6 +20,7 @@ import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   cancelDeliveryExceptionAction,
@@ -238,7 +239,7 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/delivery-exceptions")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/delivery-exceptions", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

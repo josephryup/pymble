@@ -23,6 +23,7 @@ import {
   OpsMobileRecordList,
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { decideOpsApprovalAction } from "@/lib/ops/approval-actions";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
@@ -203,7 +204,7 @@ export default async function OpsApprovalsPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/approvals")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/approvals", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

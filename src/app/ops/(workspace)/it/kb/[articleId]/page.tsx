@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItKbArticle } from "@/lib/ops/it-kb";
 import { archiveItKbArticleAction, publishItKbArticleAction } from "@/lib/ops/it-kb-actions";
@@ -31,7 +32,7 @@ export default async function OpsItKbArticlePage({ params, searchParams }: PageP
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/kb")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/kb", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

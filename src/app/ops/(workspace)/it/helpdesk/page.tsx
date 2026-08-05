@@ -5,6 +5,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   IT_TICKET_CATEGORY_LABELS,
@@ -46,7 +47,7 @@ export default async function OpsItHelpdeskPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/helpdesk")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/helpdesk", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

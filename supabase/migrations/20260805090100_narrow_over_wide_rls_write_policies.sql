@@ -136,10 +136,23 @@ as $$
     )
 $$;
 
-revoke all on function private.can_manage_invoices() from public, anon, authenticated;
-revoke all on function private.can_manage_boq() from public, anon, authenticated;
-revoke all on function private.can_manage_sites() from public, anon, authenticated;
-revoke all on function private.can_manage_workers() from public, anon, authenticated;
+-- EXECUTE must be granted to `authenticated`. An RLS policy is evaluated as
+-- the CALLING role, not as the function owner, so revoking this breaks every
+-- policy below with "permission denied for function".
+--
+-- This does NOT expose them: the `private` schema is not served by PostgREST
+-- and `anon` has no USAGE on it, so there is no /rest/v1/rpc/ path to these.
+-- That is why all 29 pre-existing private.* helpers grant EXECUTE the same way.
+-- (Contrast finding S5, ops_next_invoice_number, which is in `public` and
+-- genuinely was reachable — the two cases are not analogous.)
+revoke all on function private.can_manage_invoices() from public, anon;
+revoke all on function private.can_manage_boq() from public, anon;
+revoke all on function private.can_manage_sites() from public, anon;
+revoke all on function private.can_manage_workers() from public, anon;
+grant execute on function private.can_manage_invoices() to authenticated;
+grant execute on function private.can_manage_boq() to authenticated;
+grant execute on function private.can_manage_sites() to authenticated;
+grant execute on function private.can_manage_workers() to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Repoint the write policies. Each table keeps its existing SELECT policy;

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItChecklistRun } from "@/lib/ops/it-checklists";
 import {
@@ -36,7 +37,7 @@ export default async function OpsItChecklistDetailPage({ params, searchParams }:
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/checklists")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/checklists", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

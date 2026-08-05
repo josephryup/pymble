@@ -478,6 +478,7 @@ export function OpsShell({
   profileEmail,
   avatarUpdatedAt,
   hasAvatar,
+  moduleAccessOverrides,
   profileName,
   profileRole,
   userId,
@@ -490,6 +491,8 @@ export function OpsShell({
   profileEmail?: string | null;
   avatarUpdatedAt?: string | null;
   hasAvatar?: boolean;
+  /** Serialised role → module overrides, resolved server-side in the layout. */
+  moduleAccessOverrides?: { allowed: boolean; key: string }[];
   profileName?: string;
   profileRole?: OpsUserRole;
   userId?: string | null;
@@ -510,13 +513,24 @@ export function OpsShell({
   };
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileNavRef = useRef<HTMLElement>(null);
+  // The role → module matrix is editable at runtime, so the layout resolves the
+  // overrides server-side and passes them down as plain pairs. Recomputing here
+  // rather than shipping a prebuilt list keeps `visibleOpsModules` the single
+  // definition of what the sidebar shows.
+  const overrides = useMemo(
+    () =>
+      new Map<string, boolean>(
+        (moduleAccessOverrides ?? []).map((entry) => [entry.key, entry.allowed]),
+      ),
+    [moduleAccessOverrides],
+  );
   const modules = useMemo(
-    () => (profileRole ? visibleOpsModules(profileRole) : []),
-    [profileRole],
+    () => (profileRole ? visibleOpsModules(profileRole, overrides) : []),
+    [overrides, profileRole],
   );
   const routeModules = useMemo(
-    () => (profileRole ? visibleOpsRouteModules(profileRole) : []),
-    [profileRole],
+    () => (profileRole ? visibleOpsRouteModules(profileRole, overrides) : []),
+    [overrides, profileRole],
   );
   const displayName = formatOpsProfileName(profileName, profileRole);
   const currentTitle = currentModuleTitle(pathname, routeModules);

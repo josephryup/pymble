@@ -1148,6 +1148,17 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Network & Infrastructure",
   },
   {
+    description: "Decide which roles reach which modules, without a code change. Finance, HR, commercial and executive modules can only be widened by the Managing Director.",
+    group: "it",
+    href: "/ops/it/module-access",
+    id: "it-module-access",
+    navigationRoles: OPS_IT_ROLES,
+    phase: "Phase IT-3",
+    roles: OPS_IT_ROLES,
+    status: "ready",
+    title: "Module Access",
+  },
+  {
     description: "Log cybersecurity incidents and track backup job status so data protection and security posture stay visible.",
     group: "it",
     href: "/ops/it/security",

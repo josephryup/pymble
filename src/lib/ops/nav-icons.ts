@@ -151,6 +151,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   "/ops/it/credentials": KeySquare,
   "/ops/it/infrastructure": Network,
   "/ops/it/security": ShieldAlert,
+  "/ops/it/module-access": ShieldCheck,
   "/ops/it/kb": LibraryBig,
   "/ops/department-reports/d/it": MonitorCog,
 

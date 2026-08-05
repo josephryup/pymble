@@ -13,6 +13,7 @@ import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import {
@@ -82,7 +83,7 @@ function pageNotice(params: OpsSearchParams) {
 export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
   const params = (await (searchParams ?? Promise.resolve({} as OpsSearchParams))) ?? {};
   const { profile } = await requireOpsUser();
-  if (!canAccessOpsHref(profile.role, "/ops/staff-payroll") || !canViewOpsStaffPayroll(profile.role)) {
+  if (!canAccessOpsHref(profile.role, "/ops/staff-payroll", await fetchOpsModuleAccessOverrides()) || !canViewOpsStaffPayroll(profile.role)) {
     notFound();
   }
 

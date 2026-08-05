@@ -10,6 +10,7 @@ import { OpsShell } from "@/components/ops/OpsShell";
 import { OpsSyncIndicator } from "@/components/ops/OpsSyncIndicator";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsInboxUnreadCountForCurrentUser } from "@/lib/ops/inbox";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { fetchOpsUnreadNotificationCount } from "@/lib/ops/notifications";
 
 export default async function OpsWorkspaceLayout({
@@ -20,6 +21,12 @@ export default async function OpsWorkspaceLayout({
   const auth = await requireOpsUser();
   const { profile } = auth;
   const cookieStore = await cookies();
+  // Resolved here rather than in the shell because OpsShell is a client
+  // component and the matrix lives in the database. Serialised to plain pairs
+  // so it crosses the server/client boundary.
+  const moduleAccessOverrides = [...(await fetchOpsModuleAccessOverrides())].map(
+    ([key, allowed]) => ({ allowed, key }),
+  );
   const defaultNavCollapsed = cookieStore.get("ops-nav-collapsed")?.value === "1";
   const [unreadNotifications, unreadInbox] = auth.isLocalRolePreview
     ? [0, 0]
@@ -35,6 +42,7 @@ export default async function OpsWorkspaceLayout({
       hasAvatar={Boolean(profile.avatar_key)}
       userId={profile.id}
       isLocalRolePreview={auth.isLocalRolePreview}
+      moduleAccessOverrides={moduleAccessOverrides}
       profileEmail={profile.email}
       profileName={profile.full_name}
       profileRole={profile.role}

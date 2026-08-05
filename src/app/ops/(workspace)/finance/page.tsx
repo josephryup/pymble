@@ -31,6 +31,7 @@ import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsProjectPnlPanel } from "@/components/ops/OpsProjectPnlPanel";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsTableShell } from "@/components/ops/OpsTableShell";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canViewOpsChartOfAccounts } from "@/lib/ops/chart-of-accounts-permissions";
 import {
@@ -73,7 +74,7 @@ export const dynamic = "force-dynamic";
 export default async function OpsFinanceOverviewPage() {
   const { profile } = await requireOpsUser();
 
-  if (!canAccessOpsHref(profile.role, "/ops/finance")) {
+  if (!canAccessOpsHref(profile.role, "/ops/finance", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

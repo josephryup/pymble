@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   fetchEngineeringInternDeliveredMaterials,
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 export default async function OpsMySitesPage() {
   const { profile } = await requireOpsUser();
-  if (!canAccessOpsHref(profile.role, "/ops/my-sites")) notFound();
+  if (!canAccessOpsHref(profile.role, "/ops/my-sites", await fetchOpsModuleAccessOverrides())) notFound();
   const [sites, instructions, deliveredMaterials] = await Promise.all([
     fetchMyActiveOpsAssignedSites(profile.id),
     fetchEngineeringInternInstructions(profile.id),

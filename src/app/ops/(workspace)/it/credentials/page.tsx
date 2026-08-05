@@ -4,6 +4,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItCredentials, fetchOpsItCredentialStats } from "@/lib/ops/it-credentials";
 import {
@@ -35,7 +36,7 @@ export default async function OpsItCredentialsPage({ searchParams }: PageProps) 
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/credentials")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/credentials", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

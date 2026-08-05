@@ -1,6 +1,7 @@
 import { ArrowRight, CheckCircle2, Clock3, Layers3 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { OPS_MODULE_GROUPS } from "@/lib/ops/constants";
 import {
@@ -62,7 +63,7 @@ function ModuleCard({ module }: { module: OpsModule }) {
 export default async function OpsModulesPage() {
   const { profile } = await requireOpsUser();
 
-  if (!canAccessOpsHref(profile.role, "/ops/modules")) {
+  if (!canAccessOpsHref(profile.role, "/ops/modules", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

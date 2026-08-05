@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItAssetStats } from "@/lib/ops/it-assets";
 import { fetchOpsItTicketStats } from "@/lib/ops/it-tickets";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function OpsItOverviewPage() {
   const { profile } = await requireOpsUser();
 
-  if (!canAccessOpsHref(profile.role, "/ops/it")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

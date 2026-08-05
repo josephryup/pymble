@@ -23,6 +23,7 @@ import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   adjustPpeItemStockAction,
@@ -859,7 +860,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const auth = await requireOpsUser();
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/hse-compliance")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/hse-compliance", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

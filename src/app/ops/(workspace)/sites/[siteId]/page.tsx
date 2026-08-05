@@ -20,6 +20,7 @@ import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchOpsSite360 } from "@/lib/ops/site-360";
@@ -75,7 +76,7 @@ export default async function OpsSite360Page({ params }: PageProps) {
   if (!UUID_PATTERN.test(siteId)) notFound();
 
   const { profile } = await requireOpsUser();
-  if (!canAccessOpsHref(profile.role, "/ops/sites")) {
+  if (!canAccessOpsHref(profile.role, "/ops/sites", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

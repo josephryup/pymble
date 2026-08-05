@@ -7,6 +7,7 @@ import {
   OpsMobileRecordRow,
 } from "@/components/ops/OpsMobileRecord";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { DEFAULT_WORKER_DAILY_RATE } from "@/lib/ops/attendance-earnings";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
@@ -33,7 +34,7 @@ type PageProps = {
 export default async function OpsWorkersPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({} as OpsSearchParams), requireOpsUser()]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/workers")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/workers", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OpsMyQueue } from "@/components/ops/OpsMyQueue";
 import { OpsRoleOverviewDashboard } from "@/components/ops/OpsRoleOverviewDashboard";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsHseExecutiveSafetyRollup } from "@/lib/ops/hse-executive";
 import { fetchOpsNotifications } from "@/lib/ops/notifications";
@@ -14,11 +15,11 @@ import { canAccessOpsHref } from "@/lib/ops/permissions";
 export default async function OpsHomePage() {
   const auth = await requireOpsUser();
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops", await fetchOpsModuleAccessOverrides())) {
     redirect("/ops/profile");
   }
 
-  const canViewHseSafety = canAccessOpsHref(auth.profile.role, "/ops/hse");
+  const canViewHseSafety = canAccessOpsHref(auth.profile.role, "/ops/hse", await fetchOpsModuleAccessOverrides());
   const [overview, metrics, hseSafetyRollup, queue, unreadAlerts] = await Promise.all([
     fetchOpsOverview(),
     fetchOpsOverviewRoleMetrics(),

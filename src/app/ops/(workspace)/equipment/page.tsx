@@ -21,6 +21,7 @@ import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   allocateEquipmentAction,
@@ -1095,7 +1096,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(auth.profile.role, "/ops/equipment")) {
+  if (!canAccessOpsHref(auth.profile.role, "/ops/equipment", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 

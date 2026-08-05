@@ -5,6 +5,7 @@ import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
+import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { fetchOpsItChecklistRuns } from "@/lib/ops/it-checklists";
 import { createItChecklistRunAction } from "@/lib/ops/it-checklist-actions";
@@ -28,7 +29,7 @@ export default async function OpsItChecklistsPage({ searchParams }: PageProps) {
     requireOpsUser(),
   ]);
 
-  if (!canAccessOpsHref(profile.role, "/ops/it/checklists")) {
+  if (!canAccessOpsHref(profile.role, "/ops/it/checklists", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 
