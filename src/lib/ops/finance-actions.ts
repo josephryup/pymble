@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import {
+  resolveOpsChargeTarget,
+  type OpsLegacyCostTreatment,
+  type OpsPaymentChargeTarget,
+} from "@/lib/ops/payables-core";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { opsReturnTo } from "@/lib/ops/return-paths";
@@ -82,7 +87,14 @@ const paymentRequestSchema = z.object({
   payment_type: z.enum(paymentRequestTypes),
   purchase_order_id: z.string().trim().default(""),
   requested_amount: z.coerce.number().positive("Payment amount must be greater than zero."),
-  site_id: z.string().uuid("Select a site."),
+  // Attribution is validated by resolveOpsChargeTarget rather than here: the
+  // rule is "exactly one of three", which zod can express only clumsily and
+  // which must match the database CHECK exactly.
+  charge_target: z.string().trim().default("site"),
+  cost_centre_id: z.string().trim().default(""),
+  cost_treatment: z.string().trim().default(""),
+  legacy_project_id: z.string().trim().default(""),
+  site_id: z.string().trim().default(""),
   supplier_id: z.string().trim().default(""),
   title: z.string().trim().min(2, "Payment title is required.").max(180),
 });
@@ -149,7 +161,11 @@ type PaymentRequestForMutation = {
   request_number: string;
   requested_amount: number | string;
   requested_by: string | null;
-  site_id: string;
+  site_id: string | null;
+  charge_target: OpsPaymentChargeTarget;
+  cost_centre_id: string | null;
+  cost_treatment: OpsLegacyCostTreatment | null;
+  legacy_project_id: string | null;
   status: OpsPaymentRequestStatus;
   supplier_id: string | null;
   title: string;
@@ -205,6 +221,43 @@ function normalizeDateInput(
   }
 
   return value;
+}
+
+/**
+ * A non-site charge target must exist and be open for posting.
+ *
+ * The foreign key already guarantees the row exists; this adds the part a FK
+ * cannot express — that an archived legacy project or a retired cost centre
+ * should not accept new payables.
+ */
+async function assertChargeTargetExists(
+  charge: { charge_target: OpsPaymentChargeTarget; cost_centre_id: string | null; legacy_project_id: string | null },
+  error: (message: string) => never,
+) {
+  const supabase = getOpsSupabaseServiceClient();
+
+  if (charge.charge_target === "legacy_project") {
+    const { data } = await supabase
+      .from("legacy_projects")
+      .select("id, is_active")
+      .eq("id", charge.legacy_project_id)
+      .maybeSingle<{ id: string; is_active: boolean }>();
+
+    if (!data || !data.is_active) {
+      error("That completed project is not open for new payables.");
+    }
+    return;
+  }
+
+  const { data } = await supabase
+    .from("cost_centres")
+    .select("id, is_active")
+    .eq("id", charge.cost_centre_id)
+    .maybeSingle<{ id: string; is_active: boolean }>();
+
+  if (!data || !data.is_active) {
+    error("That cost centre is not active.");
+  }
 }
 
 async function assertActiveSite(siteId: string, error: (message: string) => never) {
@@ -314,7 +367,7 @@ async function fetchPaymentRequestForMutation(paymentRequestId: string) {
   const { data, error } = await supabase
     .from("payment_requests")
     .select(
-      "id, request_number, site_id, supplier_id, purchase_order_id, budget_id, budget_line_id, payment_type, status, title, description, requested_amount, currency_code, requested_by, created_by",
+      "id, request_number, site_id, charge_target, legacy_project_id, cost_centre_id, cost_treatment, supplier_id, purchase_order_id, budget_id, budget_line_id, payment_type, status, title, description, requested_amount, currency_code, requested_by, created_by",
     )
     .eq("id", paymentRequestId)
     .maybeSingle<PaymentRequestForMutation>();
@@ -363,6 +416,8 @@ async function upsertPaymentCostEntry(input: {
         : input.paymentRequest.title,
       payment_request_id: input.paymentRequest.id,
       purchase_order_id: input.paymentRequest.purchase_order_id,
+      cost_centre_id: input.paymentRequest.cost_centre_id,
+      legacy_project_id: input.paymentRequest.legacy_project_id,
       site_id: input.paymentRequest.site_id,
       source_id: input.paymentRequest.id,
       source_table: "payment_requests",
@@ -1081,14 +1136,35 @@ export async function createPaymentRequestAction(formData: FormData) {
     paymentError("Payments can only be linked to active or locked budgets.");
   }
 
-  const siteId = purchaseOrder?.site_id ?? parsed.data.site_id;
   const supplierId = purchaseOrder?.supplier_id ?? parsed.data.supplier_id;
 
-  if (budgetLine?.budget && budgetLine.budget.site_id !== siteId) {
-    paymentError("Selected budget line belongs to a different site.");
+  // A purchase order is always site work, so it pins the attribution — you
+  // cannot raise a PO against a completed project.
+  const charge = resolveOpsChargeTarget({
+    budgetLineId: parsed.data.budget_line_id,
+    chargeTarget: purchaseOrder ? "site" : parsed.data.charge_target,
+    costCentreId: parsed.data.cost_centre_id,
+    costTreatment: parsed.data.cost_treatment,
+    legacyProjectId: parsed.data.legacy_project_id,
+    siteId: purchaseOrder?.site_id ?? parsed.data.site_id,
+  });
+
+  if (!charge.ok) {
+    paymentError(charge.message);
   }
 
-  await assertActiveSite(siteId, paymentError);
+  if (charge.value.charge_target === "site") {
+    if (budgetLine?.budget && budgetLine.budget.site_id !== charge.value.site_id) {
+      paymentError("Selected budget line belongs to a different site.");
+    }
+
+    // Only live site work has to point at an ACTIVE site. A completed project
+    // deliberately never becomes a site at all, which is the whole reason this
+    // charge target exists.
+    await assertActiveSite(charge.value.site_id!, paymentError);
+  } else {
+    await assertChargeTargetExists(charge.value, paymentError);
+  }
   const supplier = await fetchSupplierForFinance(supplierId);
 
   if (supplierId && (!supplier || supplier.status === "archived")) {
@@ -1110,7 +1186,11 @@ export async function createPaymentRequestAction(formData: FormData) {
       purchase_order_id: normalizeOptionalUuid(purchaseOrder?.id ?? ""),
       requested_amount: parsed.data.requested_amount,
       requested_by: profile.id,
-      site_id: siteId,
+      charge_target: charge.value.charge_target,
+      cost_centre_id: charge.value.cost_centre_id,
+      cost_treatment: charge.value.cost_treatment,
+      legacy_project_id: charge.value.legacy_project_id,
+      site_id: charge.value.site_id,
       status: "draft",
       supplier_id: normalizeOptionalUuid(supplierId),
       title: parsed.data.title,
@@ -1313,6 +1393,7 @@ export async function approvePaymentRequestAction(formData: FormData) {
       site_id: paymentRequest.site_id,
       payment_type: paymentRequest.payment_type,
       requested_amount: paymentRequest.requested_amount,
+      cost_treatment: paymentRequest.cost_treatment,
     },
     "accrued",
     profile.id,
@@ -1443,6 +1524,7 @@ export async function markPaymentRequestPaidAction(formData: FormData) {
       site_id: paymentRequest.site_id,
       payment_type: paymentRequest.payment_type,
       requested_amount: paymentRequest.requested_amount,
+      cost_treatment: paymentRequest.cost_treatment,
       payment_reference: parsed.data.payment_reference,
     },
     "paid",
@@ -1534,6 +1616,14 @@ const updatePaymentRequestSchema = z.object({
   description: z.string().trim().max(800).default(""),
   requested_amount: z.coerce.number().min(0, "Amount cannot be negative."),
   due_date: z.string().trim().default(""),
+  // Attribution is editable while the payable is still a draft. Charging a bill
+  // to the wrong thing is the most likely mistake to need correcting, and
+  // before approval nothing has posted, so there is nothing to unwind.
+  charge_target: z.string().trim().default(""),
+  cost_centre_id: z.string().trim().default(""),
+  cost_treatment: z.string().trim().default(""),
+  legacy_project_id: z.string().trim().default(""),
+  site_id: z.string().trim().default(""),
 });
 
 export async function updatePaymentRequestAction(formData: FormData) {
@@ -1545,6 +1635,11 @@ export async function updatePaymentRequestAction(formData: FormData) {
     description: field(formData, "description"),
     requested_amount: field(formData, "requested_amount"),
     due_date: field(formData, "due_date"),
+    charge_target: field(formData, "charge_target"),
+    cost_centre_id: field(formData, "cost_centre_id"),
+    cost_treatment: field(formData, "cost_treatment"),
+    legacy_project_id: field(formData, "legacy_project_id"),
+    site_id: field(formData, "site_id"),
   });
   if (!parsed.success) {
     paymentError(parsed.error.issues[0]?.message ?? "Check the payment request details.");
@@ -1563,6 +1658,51 @@ export async function updatePaymentRequestAction(formData: FormData) {
     parsed.data.due_date && /^\d{4}-\d{2}-\d{2}$/.test(parsed.data.due_date)
       ? parsed.data.due_date
       : null;
+
+  // Attribution is only rewritten when the form actually submitted one, so an
+  // older edit form that predates the charge-target selector still works and
+  // leaves the existing attribution alone.
+  let attribution: Record<string, unknown> = {};
+
+  if (parsed.data.charge_target) {
+    const charge = resolveOpsChargeTarget({
+      // Only a site payable keeps its budget line. Re-charging a bill to a
+      // completed project or an overhead means the budget link no longer
+      // applies, so it is dropped below rather than reported as a conflict the
+      // edit form gives you no way to resolve.
+      budgetLineId:
+        parsed.data.charge_target === "site" ? paymentRequest.budget_line_id : null,
+      chargeTarget: parsed.data.charge_target,
+      costCentreId: parsed.data.cost_centre_id,
+      costTreatment: parsed.data.cost_treatment,
+      legacyProjectId: parsed.data.legacy_project_id,
+      siteId: parsed.data.site_id,
+    });
+
+    if (!charge.ok) {
+      paymentError(charge.message);
+    }
+
+    if (charge.value.charge_target === "site") {
+      await assertActiveSite(charge.value.site_id!, paymentError);
+    } else {
+      await assertChargeTargetExists(charge.value, paymentError);
+    }
+
+    attribution = {
+      charge_target: charge.value.charge_target,
+      cost_centre_id: charge.value.cost_centre_id,
+      cost_treatment: charge.value.cost_treatment,
+      legacy_project_id: charge.value.legacy_project_id,
+      site_id: charge.value.site_id,
+      // The CHECK constraint requires this anyway; doing it here means the user
+      // gets a working save rather than a constraint violation.
+      ...(charge.value.charge_target === "site"
+        ? {}
+        : { budget_id: null, budget_line_id: null }),
+    };
+  }
+
   const { error } = await supabase
     .from("payment_requests")
     .update({
@@ -1570,6 +1710,7 @@ export async function updatePaymentRequestAction(formData: FormData) {
       description: parsed.data.description,
       requested_amount: parsed.data.requested_amount,
       due_date: dueDate,
+      ...attribution,
     })
     .eq("id", parsed.data.payment_request_id);
   if (error) {
@@ -1641,10 +1782,6 @@ export async function archivePaymentRequestAction(formData: FormData) {
 export async function deletePaymentRequestAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canDeleteOpsPaymentRequest(profile.role)) {
-    paymentError("Only the Developer can permanently delete a payment request.");
-  }
-
   const parsed = paymentRequestIdOnlySchema.safeParse({
     payment_request_id: field(formData, "payment_request_id"),
   });
@@ -1652,11 +1789,41 @@ export async function deletePaymentRequestAction(formData: FormData) {
     paymentError(parsed.error.issues[0]?.message ?? "Select a payment request.");
   }
 
+  const paymentRequest = await fetchPaymentRequestForMutation(parsed.data.payment_request_id);
+  if (!paymentRequest) {
+    paymentError("Payment request was not found.");
+  }
+
+  if (!canDeleteOpsPaymentRequest(profile.id, profile.role, paymentRequest)) {
+    paymentError(
+      "Only a draft or rejected payable can be deleted. Cancel it instead — an approved payable has already been posted to the ledger.",
+    );
+  }
+
   const supabase = getOpsSupabaseServiceClient();
+
+  // Belt and braces. The status check above is the real guard, but if the
+  // lifecycle ever changes so that something posts earlier, this stops a
+  // delete from orphaning a journal entry rather than discovering it later in
+  // an unbalanced trial balance.
+  const { count: postedCosts } = await supabase
+    .from("project_cost_entries")
+    .select("id", { count: "exact", head: true })
+    .eq("payment_request_id", parsed.data.payment_request_id);
+
+  if ((postedCosts ?? 0) > 0) {
+    paymentError(
+      "This payable has already reached the cost ledger and cannot be deleted. Cancel it instead.",
+    );
+  }
+
   const { error } = await supabase
     .from("payment_requests")
     .delete()
-    .eq("id", parsed.data.payment_request_id);
+    .eq("id", parsed.data.payment_request_id)
+    // Re-assert the state in the delete itself, so a concurrent approval
+    // between the check above and this line cannot be deleted out from under.
+    .in("status", ["draft", "rejected"]);
   if (error) {
     paymentError(error.message);
   }
@@ -1666,9 +1833,16 @@ export async function deletePaymentRequestAction(formData: FormData) {
     action: "payment_request.deleted",
     entity_type: "payment_request",
     entity_id: parsed.data.payment_request_id,
+    metadata: {
+      charge_target: paymentRequest.charge_target,
+      request_number: paymentRequest.request_number,
+      requested_amount: paymentRequest.requested_amount,
+      status_when_deleted: paymentRequest.status,
+    },
     module_key: "payment_requests",
     source_table: "payment_requests",
     source_id: parsed.data.payment_request_id,
+    summary: `Deleted ${paymentRequest.status} payable ${paymentRequest.request_number}`,
   });
 
   revalidatePath(PAYMENT_REQUESTS_ROUTE);

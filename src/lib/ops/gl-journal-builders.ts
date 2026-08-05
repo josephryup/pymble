@@ -14,6 +14,8 @@ export const OPS_GL_ACCOUNTS = {
   staffAdvances: "1300",
   inputVat: "1250",
   accountsPayable: "2010",
+  subcontractorPayable: "2050",
+  retainedEarnings: "3020",
   outputVat: "2100",
   payePayable: "2200",
   napsaPayable: "2210",
@@ -156,14 +158,36 @@ export function opsPaymentExpenseAccount(type: OpsPaymentRequestType) {
   return PAYMENT_TYPE_ACCOUNT[type] ?? OPS_GL_ACCOUNTS.otherDirectCosts;
 }
 
+/**
+ * Which liability account a payable sits in.
+ *
+ * Subcontractor balances have their own account (2050) because they behave
+ * differently from trade payables — they carry retention, they are certified
+ * rather than invoiced, and they are the balance a director is most often asked
+ * to quote. Collapsing them into 2010 makes that number unobtainable without
+ * re-deriving it from source documents.
+ */
+export function opsPaymentPayableAccount(type: OpsPaymentRequestType) {
+  return type === "subcontractor"
+    ? OPS_GL_ACCOUNTS.subcontractorPayable
+    : OPS_GL_ACCOUNTS.accountsPayable;
+}
+
 export type OpsPaymentRequestForPosting = {
   id: string;
   request_number: string;
   title: string;
-  site_id: string;
+  /** Null for a legacy-project or overhead payable — journal_lines allows it. */
+  site_id: string | null;
   payment_type: OpsPaymentRequestType;
   amount: number;
   payment_reference?: string;
+  /**
+   * Only set for a legacy-project payable. `opening_balance` means the cost was
+   * already recognised in closed accounts and only the unpaid liability is
+   * being brought onto the books.
+   */
+  cost_treatment?: "opening_balance" | "current_period" | null;
 };
 
 /**
@@ -183,13 +207,26 @@ export function buildPaymentRequestAccrualJournal(
     sourceEvent: "payment_accrued",
     lines: [
       {
-        account_code: opsPaymentExpenseAccount(bill.payment_type),
+        // A payable for a COMPLETED project is last year's cost. Debiting an
+        // expense account today would drop a prior period's cost into this
+        // year's P&L and understate current-year profit by the size of the
+        // backlog — a real misstatement, not a presentational one. Under
+        // `opening_balance` the debit goes to equity instead, so the entry
+        // touches the balance sheet only: the liability appears, profit does
+        // not move.
+        account_code:
+          bill.cost_treatment === "opening_balance"
+            ? OPS_GL_ACCOUNTS.retainedEarnings
+            : opsPaymentExpenseAccount(bill.payment_type),
         debit: bill.amount,
         site_id: bill.site_id,
-        description: `Cost ${bill.request_number}`,
+        description:
+          bill.cost_treatment === "opening_balance"
+            ? `Opening balance ${bill.request_number}`
+            : `Cost ${bill.request_number}`,
       },
       {
-        account_code: OPS_GL_ACCOUNTS.accountsPayable,
+        account_code: opsPaymentPayableAccount(bill.payment_type),
         credit: bill.amount,
         description: `Payable ${bill.request_number}`,
       },
@@ -214,7 +251,9 @@ export function buildPaymentRequestSettlementJournal(
     sourceEvent: "payment_paid",
     lines: [
       {
-        account_code: OPS_GL_ACCOUNTS.accountsPayable,
+        // Settlement is identical whichever way the payable was accrued — the
+        // liability is cleared from the same account it was raised in.
+        account_code: opsPaymentPayableAccount(bill.payment_type),
         debit: bill.amount,
         description: `Settle ${bill.request_number}`,
       },

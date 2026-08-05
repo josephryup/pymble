@@ -7,9 +7,11 @@ import {
   CreditCard,
   FileText,
   PackageCheck,
+  Pencil,
   Plus,
   Receipt,
   Send,
+  Trash2,
   TrendingUp,
   XCircle,
 } from "lucide-react";
@@ -28,11 +30,19 @@ import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsList
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import { OpsPayableChargeTarget } from "@/components/ops/OpsPayableChargeTarget";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
+import {
+  fetchOpsCostCentreOptions,
+  fetchOpsLegacyProjectOptions,
+} from "@/lib/ops/legacy-projects";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approvePaymentRequestAction,
   cancelPaymentRequestAction,
+  deletePaymentRequestAction,
+  updatePaymentRequestAction,
   createPaymentRequestAction,
   markPaymentRequestPaidAction,
   rejectPaymentRequestAction,
@@ -42,6 +52,8 @@ import {
 import {
   canApproveOpsPaymentRequest,
   canCancelOpsPaymentRequest,
+  canDeleteOpsPaymentRequest,
+  canEditOpsPaymentRequest,
   canCreateOpsPaymentRequest,
   canPayOpsPaymentRequest,
   canRejectOpsPaymentRequest,
@@ -259,6 +271,8 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
     cashflowChart,
     supplierAgeing,
     receivablesAgeing,
+    legacyProjectOptions,
+    costCentreOptions,
   ] = await Promise.all([
     fetchPaginatedOpsPaymentRequests({
       listState,
@@ -275,6 +289,8 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
     fetchOpsCashflowChart(),
     fetchOpsSupplierAgeing(),
     fetchOpsReceivablesAgeing(),
+    fetchOpsLegacyProjectOptions(),
+    fetchOpsCostCentreOptions(),
   ]);
   const notice = paymentRequestNotice(params);
   const canCreate = canCreateOpsPaymentRequest(auth.profile.role);
@@ -544,17 +560,21 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                 Create payment request
               </span>
               <span className="mt-1 block text-sm text-muted-foreground">
-                Link a supplier bill or expense to a site, optional PO, and optional budget line.
+                Charge a supplier bill or expense to a live site, a completed project, or
+                an overhead cost centre.
               </span>
             </span>
             <span className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Open
             </span>
           </summary>
-          {siteOptions.length === 0 ? (
+          {siteOptions.length === 0 &&
+          legacyProjectOptions.length === 0 &&
+          costCentreOptions.length === 0 ? (
             <div className="border-t border-border p-5">
               <div className={OPS_NOTICE_WARNING_CLASS}>
-                Add at least one active site before creating payment requests.
+                A payable has to be charged to something. Add an active site, register a
+                completed project, or set up a cost centre first.
               </div>
             </div>
           ) : (
@@ -574,19 +594,11 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                   ))}
                 </select>
               </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Site
-                <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id" required>
-                  <option value="" disabled>
-                    Select site
-                  </option>
-                  {siteOptions.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.code} - {site.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <OpsPayableChargeTarget
+                costCentreOptions={costCentreOptions}
+                legacyProjectOptions={legacyProjectOptions}
+                siteOptions={siteOptions}
+              />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Supplier
                 <select className={OPS_INPUT_CLASS} defaultValue="" name="supplier_id">
@@ -703,6 +715,28 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
               const canApprove = canApproveOpsPaymentRequest(auth.profile.role, paymentRequest);
               const canReject = canRejectOpsPaymentRequest(auth.profile.role, paymentRequest);
               const canPay = canPayOpsPaymentRequest(auth.profile.role, paymentRequest);
+              const canEdit = canEditOpsPaymentRequest(
+                auth.profile.id,
+                auth.profile.role,
+                paymentRequest,
+              );
+              const chargedTo =
+                paymentRequest.charge_target === "legacy_project"
+                  ? paymentRequest.legacy_project
+                    ? `${paymentRequest.legacy_project.code} — ${paymentRequest.legacy_project.name}`
+                    : "Completed project"
+                  : paymentRequest.charge_target === "overhead"
+                    ? paymentRequest.cost_centre
+                      ? `${paymentRequest.cost_centre.code} — ${paymentRequest.cost_centre.name}`
+                      : "Overhead"
+                    : paymentRequest.site
+                      ? `${paymentRequest.site.code} - ${paymentRequest.site.name}`
+                      : "Site";
+              const canDelete = canDeleteOpsPaymentRequest(
+                auth.profile.id,
+                auth.profile.role,
+                paymentRequest,
+              );
               const canCancel = canCancelOpsPaymentRequest(
                 auth.profile.id,
                 auth.profile.role,
@@ -799,6 +833,18 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                           </OpsConfirmSubmitButton>
                         </form>
                       ) : null}
+                      {canDelete ? (
+                        <form action={deletePaymentRequestAction}>
+                          <input name="payment_request_id" type="hidden" value={paymentRequest.id} />
+                          <OpsConfirmSubmitButton
+                            className={`${OPS_DANGER_BUTTON_CLASS} w-full`}
+                            confirmText={`Permanently delete ${paymentRequest.request_number}? Nothing has been posted for it, so there is nothing to reverse — but this cannot be undone.`}
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                            Delete
+                          </OpsConfirmSubmitButton>
+                        </form>
+                      ) : null}
                     </div>
                   </div>
 
@@ -817,8 +863,14 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                       value={paymentRequest.purchase_order?.po_number ?? "Not linked"}
                     />
                     <PaymentMetric
-                      label="Budget"
-                      value={paymentRequest.budget?.budget_number ?? "Not linked"}
+                      label={
+                        paymentRequest.charge_target === "site"
+                          ? "Site"
+                          : paymentRequest.charge_target === "legacy_project"
+                            ? "Completed project"
+                            : "Overhead"
+                      }
+                      value={chargedTo}
                     />
                   </dl>
 
@@ -845,6 +897,91 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                     <p className="mt-4 rounded-md border border-border px-3 py-3 text-sm leading-6 text-muted-foreground">
                       {paymentRequest.description}
                     </p>
+                  ) : null}
+
+                  {canEdit ? (
+                    <details className="mt-4 rounded-md border border-border">
+                      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+                        <Pencil className="size-4" aria-hidden="true" />
+                        Edit this payable
+                      </summary>
+
+                      <form
+                        action={updatePaymentRequestAction}
+                        className="grid gap-4 border-t border-border p-4 lg:grid-cols-2"
+                      >
+                        <input
+                          name="payment_request_id"
+                          type="hidden"
+                          value={paymentRequest.id}
+                        />
+
+                        <label className={OPS_LABEL_CLASS}>
+                          Title
+                          <input
+                            className={OPS_INPUT_CLASS}
+                            defaultValue={paymentRequest.title}
+                            maxLength={160}
+                            name="title"
+                            required
+                          />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Amount ({paymentRequest.currency_code})
+                          <input
+                            className={OPS_INPUT_CLASS}
+                            defaultValue={paymentRequest.requested_amount}
+                            min="0"
+                            name="requested_amount"
+                            step="0.01"
+                            type="number"
+                          />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Due date
+                          <input
+                            className={OPS_INPUT_CLASS}
+                            defaultValue={paymentRequest.due_date ?? ""}
+                            name="due_date"
+                            type="date"
+                          />
+                        </label>
+                        <label className={OPS_LABEL_CLASS}>
+                          Description
+                          <textarea
+                            className={OPS_INPUT_CLASS}
+                            defaultValue={paymentRequest.description}
+                            maxLength={800}
+                            name="description"
+                            rows={2}
+                          />
+                        </label>
+
+                        {/* Re-charging a payable is the correction most often
+                            needed, and it is safe here: nothing posts until
+                            approval, and editing is only possible in draft or
+                            rejected. */}
+                        <OpsPayableChargeTarget
+                          costCentreOptions={costCentreOptions}
+                          defaultChargeTarget={paymentRequest.charge_target}
+                          defaultCostCentreId={paymentRequest.cost_centre_id ?? ""}
+                          defaultCostTreatment={paymentRequest.cost_treatment ?? ""}
+                          defaultLegacyProjectId={paymentRequest.legacy_project_id ?? ""}
+                          defaultSiteId={paymentRequest.site_id ?? ""}
+                          legacyProjectOptions={legacyProjectOptions}
+                          siteOptions={siteOptions}
+                        />
+
+                        <div className="lg:col-span-2">
+                          <OpsSubmitButton
+                            className={OPS_PRIMARY_BUTTON_CLASS}
+                            pendingLabel="Saving..."
+                          >
+                            Save changes
+                          </OpsSubmitButton>
+                        </div>
+                      </form>
+                    </details>
                   ) : null}
 
                   {paymentRequest.items.length > 0 ? (

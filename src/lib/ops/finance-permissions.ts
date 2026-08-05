@@ -203,6 +203,28 @@ export function canArchiveOpsPaymentRequest(
   return terminal.includes(paymentRequest.status) && PAYMENT_ARCHIVE_ROLES.includes(role);
 }
 
-export function canDeleteOpsPaymentRequest(role: OpsUserRole) {
-  return role === "developer";
+/**
+ * Permanently deleting a payable.
+ *
+ * The previous rule was `role === "developer"` with NO status check, which is
+ * the wrong way round on both counts: it permitted deleting a paid payable —
+ * orphaning the journal entry and cost entry raised on approval, silently
+ * unbalancing the ledger — while forbidding the only case anyone actually
+ * needs, which is removing a bill they just keyed wrong.
+ *
+ * A payable posts nothing until it is APPROVED. `draft` and `rejected` are
+ * therefore the only states where deletion leaves no financial trail behind,
+ * and they are exactly where it is now allowed. Anything that has been
+ * approved or paid must be cancelled instead: that reverses properly and keeps
+ * the history, which is what the accounts require.
+ */
+export function canDeleteOpsPaymentRequest(
+  actorId: string,
+  role: OpsUserRole,
+  paymentRequest: OpsPaymentRequestMutationTarget,
+) {
+  return (
+    (paymentRequest.status === "draft" || paymentRequest.status === "rejected") &&
+    (PAYMENT_APPROVE_ROLES.includes(role) || paymentRequest.requested_by === actorId)
+  );
 }

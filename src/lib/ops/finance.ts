@@ -1,3 +1,7 @@
+import type {
+  OpsLegacyCostTreatment,
+  OpsPaymentChargeTarget,
+} from "@/lib/ops/payables-core";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   opsIlikeOrFilter,
@@ -147,7 +151,14 @@ export type OpsPaymentRequestSummary = {
     role: OpsUserRole;
   } | null;
   site: OpsFinanceSiteSummary | null;
-  site_id: string;
+  site_id: string | null;
+  /** What this payable is charged to. Exactly one of the three ids is set. */
+  charge_target: OpsPaymentChargeTarget;
+  cost_centre: { code: string; id: string; name: string } | null;
+  cost_centre_id: string | null;
+  cost_treatment: OpsLegacyCostTreatment | null;
+  legacy_project: { code: string; id: string; name: string } | null;
+  legacy_project_id: string | null;
   status: OpsPaymentRequestStatus;
   supplier: OpsFinanceSupplierSummary | null;
   supplier_id: string | null;
@@ -720,6 +731,9 @@ export async function fetchPaginatedOpsPaymentRequests(
         "created_at",
         "updated_at",
         "site:sites!payment_requests_site_id_fkey(id, code, name)",
+        "charge_target, cost_treatment, legacy_project_id, cost_centre_id",
+        "legacy_project:legacy_projects!payment_requests_legacy_project_id_fkey(id, code, name)",
+        "cost_centre:cost_centres!payment_requests_cost_centre_id_fkey(id, code, name)",
         "supplier:suppliers!payment_requests_supplier_id_fkey(id, supplier_code, legal_name)",
         "purchase_order:purchase_orders!payment_requests_purchase_order_id_fkey(id, po_number, status, total_amount)",
         "budget:project_budgets!payment_requests_budget_id_fkey(id, budget_number, title)",
@@ -914,6 +928,9 @@ export async function fetchOpsFinanceAgeingDashboard(): Promise<OpsFinanceAgeing
         "paid_at",
         "created_at",
         "site:sites!payment_requests_site_id_fkey(id, code, name)",
+        "charge_target, cost_treatment, legacy_project_id, cost_centre_id",
+        "legacy_project:legacy_projects!payment_requests_legacy_project_id_fkey(id, code, name)",
+        "cost_centre:cost_centres!payment_requests_cost_centre_id_fkey(id, code, name)",
         "supplier:suppliers!payment_requests_supplier_id_fkey(id, supplier_code, legal_name)",
       ].join(", "),
     )

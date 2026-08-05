@@ -189,10 +189,12 @@ export type PostPaymentRequestInput = {
   id: string;
   request_number: string;
   title: string;
-  site_id: string;
+  /** Null for legacy-project and overhead payables. */
+  site_id: string | null;
   payment_type: OpsPaymentRequestType;
   requested_amount: number | string;
   payment_reference?: string;
+  cost_treatment?: "opening_balance" | "current_period" | null;
 };
 
 export async function postPaymentRequestJournalSafe(
@@ -214,6 +216,7 @@ export async function postPaymentRequestJournalSafe(
       payment_type: input.payment_type,
       amount: round2(amount),
       payment_reference: input.payment_reference,
+      cost_treatment: input.cost_treatment ?? null,
     };
 
     const entryDate = new Date().toISOString().slice(0, 10);

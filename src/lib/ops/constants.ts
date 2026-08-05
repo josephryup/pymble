@@ -712,6 +712,16 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Delivery Exceptions",
   },
   {
+    description: "Completed projects kept only so their unpaid balances can be recorded. Not sites — no budget, programme or team.",
+    group: "finance",
+    href: "/ops/finance/legacy-projects",
+    id: "finance-legacy-projects",
+    phase: "Phase 3",
+    roles: OPS_FINANCE_ROLES,
+    status: "ready",
+    title: "Completed Projects",
+  },
+  {
     description: "One view of cashflow, receivables, payables, budget variance, and project margin.",
     group: "finance",
     href: "/ops/finance",

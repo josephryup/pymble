@@ -60,7 +60,17 @@ export async function upsertProjectCostEntry(input: {
     material_request_id?: string | null;
     payment_request_id?: string | null;
     purchase_order_id?: string | null;
-    site_id: string;
+    /** Overhead attribution, when the cost belongs to no project at all. */
+    cost_centre_id?: string | null;
+    /**
+     * A completed project from the legacy register. Mutually exclusive with
+     * site_id — the payment_requests CHECK constraint is what enforces that;
+     * this just carries the resolved answer into the cost ledger so
+     * "what did that project cost us" stays answerable.
+     */
+    legacy_project_id?: string | null;
+    /** Null for legacy-project and overhead costs. */
+    site_id: string | null;
     source_id: string;
     source_table: string;
     supplier_id?: string | null;
@@ -112,6 +122,8 @@ export async function upsertProjectCostEntry(input: {
     material_request_id: input.payload.material_request_id ?? null,
     payment_request_id: input.payload.payment_request_id ?? null,
     purchase_order_id: input.payload.purchase_order_id ?? null,
+    cost_centre_id: input.payload.cost_centre_id ?? null,
+    legacy_project_id: input.payload.legacy_project_id ?? null,
     site_id: input.payload.site_id,
     source_id: input.payload.source_id,
     source_table: input.payload.source_table,
