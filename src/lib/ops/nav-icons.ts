@@ -77,6 +77,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   "/ops/workers": HardHat,
   "/ops/attendance": ClipboardCheck,
   "/ops/approvals": ClipboardCheck,
+  "/ops/approvals/rules": ScrollText,
   "/ops/notifications": Bell,
   "/ops/inbox": MessageSquare,
   "/ops/subcontractors": Handshake,

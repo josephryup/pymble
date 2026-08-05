@@ -1,3 +1,4 @@
+import { formatOpsRole } from "@/lib/ops/roles";
 import type {
   OpsMaterialRequestScope,
   OpsMaterialRequestStatus,
@@ -174,13 +175,28 @@ export function canSubmitOpsMaterialRequest(
   return canEditOpsMaterialRequest(actorId, actorRole, request);
 }
 
+/**
+ * Value threshold above which an extra approver joins the chain.
+ *
+ * Read from `approval_workflow_settings` (workflow_key = 'material_request')
+ * so the MD can move the amount without a deploy. The chain itself stays here
+ * in code: with one Projects Manager and one Operations Manager the routing is
+ * org-chart-shaped and does not vary, and segregation of duties is guaranteed
+ * by tests over this function. The amount is the part that actually changes.
+ */
+export type OpsMaterialRequestApprovalThreshold = {
+  threshold_amount: number;
+  threshold_enabled: boolean;
+  threshold_step_role: OpsUserRole | null;
+};
+
 export function materialRequestApprovalSteps(
   _priority: OpsPriority,
-  _estimatedTotal: number,
+  estimatedTotal: number,
   scope: OpsMaterialRequestScope = "site",
+  threshold?: OpsMaterialRequestApprovalThreshold | null,
 ): OpsMaterialApprovalStepTemplate[] {
   void _priority;
-  void _estimatedTotal;
 
   // When the chain completes, the material request moves to `pricing_pending`
   // for Procurement to attach supplier prices, then to `priced` for Finance to
@@ -193,31 +209,40 @@ export function materialRequestApprovalSteps(
   // concern only. If no active PM exists, the submit action swaps the step's
   // approver to the Managing Director at chain-construction time (deliberately
   // NOT the generic OM/GM fallback chain).
-  if (scope === "site") {
-    return [
-      {
-        approverRole: "projects_manager",
-        label: "Projects Manager review",
-        sequence: 1,
-        stepNumber: 1,
-      },
-      {
-        approverRole: "operations_manager",
-        label: "Operations review",
-        sequence: 1,
-        stepNumber: 2,
-      },
-    ];
+  const baseRoles: OpsUserRole[] =
+    scope === "site" ? ["projects_manager", "operations_manager"] : ["operations_manager"];
+
+  const roles = [...baseRoles];
+
+  // Value-based escalation. Previously `estimatedTotal` was accepted and
+  // discarded, so a K200 request and a K200,000 request took the identical
+  // chain — the single most standard approval control, absent.
+  //
+  // Escalation only ADDS an approver; it can never shorten the chain, so a
+  // misconfigured threshold cannot weaken an approval.
+  if (
+    threshold?.threshold_enabled &&
+    threshold.threshold_step_role &&
+    estimatedTotal >= threshold.threshold_amount
+  ) {
+    roles.push(threshold.threshold_step_role);
   }
 
-  return [
-    {
-      approverRole: "operations_manager",
-      label: "Operations review",
+  const labels: Partial<Record<OpsUserRole, string>> = {
+    operations_manager: "Operations review",
+    projects_manager: "Projects Manager review",
+  };
+
+  return roles
+    // A role already in the chain is not asked twice — e.g. a threshold role
+    // that happens to match an existing step.
+    .filter((role, index, all) => all.indexOf(role) === index)
+    .map((role, index) => ({
+      approverRole: role,
+      label: labels[role] ?? `${formatOpsRole(role)} review`,
       sequence: 1,
-      stepNumber: 1,
-    },
-  ];
+      stepNumber: index + 1,
+    }));
 }
 
 export function canAttachMaterialRequestPricing(role: OpsUserRole) {

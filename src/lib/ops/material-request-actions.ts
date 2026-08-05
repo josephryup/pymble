@@ -23,6 +23,7 @@ import {
   materialRequestApprovalRecipientRoles,
   materialRequestApprovalSteps,
 } from "@/lib/ops/material-request-permissions";
+import { fetchMaterialRequestApprovalSettings } from "@/lib/ops/approval-settings";
 import { trackOpsEvent } from "@/lib/ops/analytics";
 import { parseCsvRows, readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
 import { collectOpsLineItems } from "@/lib/ops/line-items";
@@ -794,7 +795,15 @@ export async function submitMaterialRequestForApprovalAction(formData: FormData)
     (sum, item) => sum + normalizeMoney(item.estimated_total),
     0,
   );
-  const steps = materialRequestApprovalSteps(request.priority, estimatedTotal, request.scope);
+  // Threshold comes from approval_workflow_settings so the MD can move the
+  // amount without a deploy; the chain itself stays in code.
+  const approvalSettings = await fetchMaterialRequestApprovalSettings();
+  const steps = materialRequestApprovalSteps(
+    request.priority,
+    estimatedTotal,
+    request.scope,
+    approvalSettings,
+  );
   const now = new Date().toISOString();
   const supabase = getOpsSupabaseServiceClient();
 

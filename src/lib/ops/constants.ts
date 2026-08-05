@@ -408,6 +408,17 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Attendance",
   },
   {
+    description: "See who signs off what, and the value at which an extra approver joins the chain.",
+    group: "workspace",
+    href: "/ops/approvals/rules",
+    id: "approval-rules",
+    navigationRoles: OPS_OPERATIONAL_ROLES,
+    phase: "Phase 1",
+    roles: OPS_OPERATIONAL_ROLES,
+    status: "ready",
+    title: "Approval Rules",
+  },
+  {
     description: "Review submitted records, capture decisions, and keep approval history traceable.",
     group: "workspace",
     href: "/ops/approvals",
