@@ -64,6 +64,29 @@ function applyBaselineSecurityHeaders(response: NextResponse) {
   return response;
 }
 
+/**
+ * Ops endpoints that serve a binary asset rather than a JSON payload, and so
+ * must be allowed to keep their own Cache-Control.
+ *
+ * The blanket `no-store` below is correct and stays: /api/ops responses carry
+ * payroll figures, TPINs and finance rows that must not survive in the browser
+ * disk or back-button cache. But it was also being applied to the avatar
+ * route, silently replacing the `private, max-age=86400, immutable` that route
+ * deliberately sets — so every face on every render re-invoked a Node function
+ * that does an auth check, a users lookup and an R2 GetObject, and streamed
+ * the whole image back through it. An activity feed showing 20 people cost 20
+ * invocations, on every render, forever.
+ *
+ * `private` is the load-bearing word in what the route sets: it permits the
+ * user's own browser cache while forbidding the Vercel CDN or any shared proxy
+ * from holding an authenticated image. If that ever becomes `public`, a
+ * colleague's photo turns world-readable at a guessable URL. Only add paths
+ * here that serve non-confidential bytes under their own `private` policy.
+ */
+export function servesOwnCacheableOpsAsset(pathname: string) {
+  return pathname.startsWith("/api/ops/avatar/");
+}
+
 function applyOpsSecurityHeaders(
   response: NextResponse,
   host: string,
@@ -76,7 +99,9 @@ function applyOpsSecurityHeaders(
     return response;
   }
 
-  response.headers.set("Cache-Control", "no-store, max-age=0");
+  if (!servesOwnCacheableOpsAsset(pathname)) {
+    response.headers.set("Cache-Control", "no-store, max-age=0");
+  }
   response.headers.set("Content-Security-Policy", contentSecurityPolicy);
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
   response.headers.set("X-Robots-Tag", "noindex, nofollow");
