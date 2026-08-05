@@ -280,5 +280,36 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    // Listed explicitly, and FIRST, so that no path under them can ever be
+    // dropped by the static-asset exclusion in the catch-all below. A request
+    // to /api/ops/anything.png must still reach this proxy — otherwise a
+    // crafted extension would be a way to skip the ops security headers and
+    // the local-role-preview mutation block.
+    "/ops/:path*",
+    "/api/ops/:path*",
+    // Bare redirect into /ops/auth/callback, but it forwards OAuth params, so
+    // it keeps proxy coverage rather than relying on the destination alone.
+    "/auth/:path*",
+    // Retired paths, 404'd by isRetiredOpsPath. They resolve to nothing in the
+    // build either way; this keeps the existing behaviour exactly.
+    "/register/:path*",
+    "/signup/:path*",
+    // Everything else — this is what powers the ops-host path rewrite, so it
+    // cannot be dropped, but it no longer needs to run for static files.
+    //
+    // Until now this proxy ran on EVERY request: X-Frame-Options was
+    // observable on /logo.png, on a 1.7MB PDF, and on / while it was being
+    // served from the CDN (X-Vercel-Cache: HIT). Because a proxy is a Node
+    // function on Vercel (every deployment reports lambdaRuntimeStats
+    // {"nodejs":3}, no edge runtime), each of those was billed Fluid CPU —
+    // and for a static asset all it did was attach four headers that
+    // next.config.ts now sets at the edge for free.
+    //
+    // The extension list is the set actually present in public/ plus the
+    // common font/style types, deliberately NOT including .json, .csv or
+    // .webmanifest: those could plausibly be dynamic routes, and
+    // /ops/manifest.webmanifest is one.
+    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpe?g|webp|avif|gif|svg|ico|mp4|webm|mov|pdf|txt|xlsx|ai|js|mjs|map|css|woff2?|ttf|otf|eot)$).*)",
+  ],
 };
