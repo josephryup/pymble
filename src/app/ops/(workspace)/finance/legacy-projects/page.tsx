@@ -79,10 +79,12 @@ export default async function OpsLegacyProjectsPage({ searchParams }: PageProps)
           {money(totalOutstanding)}
         </p>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Payables raised against completed projects and not yet paid. Where a project is
-          set to <strong className="text-foreground">opening balance</strong>, recording
-          these does not move the current year&apos;s profit — the cost already belonged to
-          a closed period, so only the liability comes onto the books.
+          Payables raised against completed projects and not yet paid. These carry no
+          budget — a finished project has none — so they simply sit here as money still
+          owed. Where a project is set to{" "}
+          <strong className="text-foreground">recognise the cost now</strong>, clearing
+          this backlog will show up as cost in the current year, because that is the first
+          time the cost has been recognised at all.
         </p>
       </section>
 
@@ -125,20 +127,21 @@ export default async function OpsLegacyProjectsPage({ searchParams }: PageProps)
 
             <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
               How should its costs be treated?
-              <select className={OPS_INPUT_CLASS} defaultValue="opening_balance" name="cost_treatment">
-                <option value="opening_balance">
-                  Opening balance — the cost was already in our closed accounts
-                </option>
+              <select className={OPS_INPUT_CLASS} defaultValue="current_period" name="cost_treatment">
                 <option value="current_period">
-                  Current year cost — the cost was never recorded anywhere
+                  Recognise the cost now — it was never booked anywhere
+                </option>
+                <option value="opening_balance">
+                  Already booked in closed accounts — bring on the liability only
                 </option>
               </select>
               <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
-                Asked once here because it is answerable once. Choosing{" "}
-                <strong>opening balance</strong> posts these payables against retained
-                earnings, so bringing an old backlog onto the books does not read as this
-                year&apos;s costs rising. Choose <strong>current year</strong> only if the
-                cost was never booked in any prior accounts.
+                Asked once here because it is answerable once. If the cost was never
+                recognised, it has to be recognised somewhere — so it posts as a normal
+                cost and will reduce this year&apos;s profit. Only pick the second option
+                where the expense genuinely already sits in accounts you have closed;
+                using it otherwise would put the debt on the balance sheet while the cost
+                never appears in any profit and loss account, in any year.
               </span>
             </label>
 

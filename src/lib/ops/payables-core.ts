@@ -141,15 +141,17 @@ export function formatOpsChargeTarget(target: OpsPaymentChargeTarget) {
 
 export function formatOpsCostTreatment(treatment: OpsLegacyCostTreatment) {
   return treatment === "opening_balance"
-    ? "Opening balance (prior year)"
-    : "Current year cost";
+    ? "Already booked — liability only"
+    : "Recognise the cost now";
 }
 
 /**
  * Does this payable move current-year profit?
  *
- * Used by reporting so an operations backlog being loaded onto the books does
- * not read as this year's costs having exploded.
+ * True for everything except a legacy payable whose cost was already expensed
+ * in closed books. Reporting uses this to separate a one-off backlog catch-up
+ * from ordinary trading, so bringing old debts onto the books can be explained
+ * rather than just read as costs having exploded.
  */
 export function affectsCurrentYearProfit(resolved: {
   charge_target: OpsPaymentChargeTarget;

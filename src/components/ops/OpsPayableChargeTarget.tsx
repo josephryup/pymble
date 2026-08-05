@@ -40,7 +40,7 @@ export function OpsPayableChargeTarget({
   const groupId = useId();
   const [target, setTarget] = useState(defaultChargeTarget);
   const [legacyProjectId, setLegacyProjectId] = useState(defaultLegacyProjectId);
-  const [treatment, setTreatment] = useState(defaultCostTreatment || "opening_balance");
+  const [treatment, setTreatment] = useState(defaultCostTreatment || "current_period");
 
   const choices = [
     {
@@ -177,13 +177,17 @@ export function OpsPayableChargeTarget({
                 required
                 value={treatment}
               >
-                <option value="opening_balance">Opening balance (prior year)</option>
-                <option value="current_period">Current year cost</option>
+                <option value="current_period">
+                  Recognise the cost now — it was never booked
+                </option>
+                <option value="opening_balance">
+                  Already booked in closed accounts — liability only
+                </option>
               </select>
               <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
                 {treatment === "opening_balance"
-                  ? "Posts against retained earnings — the liability appears, this year's profit does not move."
-                  : "Posts as a normal cost — this will reduce this year's profit."}
+                  ? "Only use this if the cost was already expensed in accounts you have closed. Posts against retained earnings, so this year's profit does not move."
+                  : "The cost has never been recognised, so it is recognised now. Posts as a normal cost and will reduce this year's profit."}
               </span>
             </label>
 

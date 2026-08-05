@@ -59,7 +59,7 @@ export async function createOpsLegacyProjectAction(formData: FormData) {
     client_name: field(formData, "client_name"),
     code: field(formData, "code"),
     completed_on: field(formData, "completed_on"),
-    cost_treatment: field(formData, "cost_treatment") || "opening_balance",
+    cost_treatment: field(formData, "cost_treatment") || "current_period",
     description: field(formData, "description"),
     name: field(formData, "name"),
     notes: field(formData, "notes"),

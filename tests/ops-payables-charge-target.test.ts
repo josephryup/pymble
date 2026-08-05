@@ -81,13 +81,12 @@ describe("legacy project payables", () => {
   it("refuses without a cost treatment", () => {
     // Defaulting silently here would pick an accounting policy on the user's
     // behalf and move — or fail to move — this year's profit without anyone
-    // deciding to.
+    // deciding to. The project-level default is applied by the form, not here.
     const result = resolveOpsChargeTarget({
       chargeTarget: "legacy_project",
       legacyProjectId: LEGACY,
     });
     assert.equal(result.ok, false);
-    assert.match(result.ok === false ? result.message : "", /opening balance|current year/i);
   });
 
   it("refuses an unknown cost treatment", () => {

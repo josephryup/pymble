@@ -11,11 +11,18 @@ import {
 /**
  * General ledger treatment of payables, including the legacy ones.
  *
- * The finding these guard: a payable for a COMPLETED project is a prior
- * period's cost. Accruing it as an ordinary bill (Dr expense / Cr AP) drops
- * last year's cost into this year's profit and loss and understates current
- * year profit by the whole backlog. Under `opening_balance` the debit goes to
- * equity instead, so only the balance sheet moves.
+ * Two treatments, and picking the wrong one is a real misstatement either way.
+ *
+ * `current_period` (the DEFAULT) recognises the cost now. This is correct when
+ * the cost was never booked anywhere — which is the actual situation for
+ * Pymble's completed projects. The backlog lands in the current year's P&L
+ * because that is the first time the cost has been recognised at all.
+ *
+ * `opening_balance` debits equity instead, and is ONLY correct when the expense
+ * already sits in closed accounts and all that is missing is the liability.
+ * Using it on an unrecognised cost would put the debt on the balance sheet
+ * while the cost never appears in any profit and loss account, in any year —
+ * understating cost permanently rather than shifting it.
  */
 
 const bill = (over: Partial<OpsPaymentRequestForPosting> = {}): OpsPaymentRequestForPosting => ({
@@ -85,7 +92,20 @@ describe("legacy payable — opening balance treatment", () => {
   });
 });
 
-describe("legacy payable — current period treatment", () => {
+describe("legacy payable — current period treatment (the default)", () => {
+  it("recognises the cost, because it was never recognised before", () => {
+    // The whole reason this is the default: Pymble's completed-project costs
+    // were never booked. An unrecognised cost has to be recognised somewhere,
+    // and the only correct place is an expense account.
+    const { lines } = buildPaymentRequestAccrualJournal(
+      bill({ cost_treatment: "current_period" }),
+      "2026-08-05",
+    );
+    const expenseLine = lines.find((line) => line.debit);
+    assert.equal(expenseLine?.account_code, OPS_GL_ACCOUNTS.materials);
+    assert.notEqual(expenseLine?.account_code, OPS_GL_ACCOUNTS.retainedEarnings);
+  });
+
   it("debits the normal expense account", () => {
     const { lines } = buildPaymentRequestAccrualJournal(
       bill({ cost_treatment: "current_period" }),
