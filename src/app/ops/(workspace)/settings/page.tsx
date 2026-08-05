@@ -1,9 +1,13 @@
-import { Building2, MapPin, Save, ShieldCheck } from "lucide-react";
+import { Building2, MapPin, Save, Scale, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { fetchPurchaseOrderApprovalSettings } from "@/lib/ops/approval-settings";
-import { updatePurchaseOrderApprovalSettingsAction } from "@/lib/ops/approval-settings-actions";
+import {
+  updateBudgetControlSettingsAction,
+  updatePurchaseOrderApprovalSettingsAction,
+} from "@/lib/ops/approval-settings-actions";
+import { fetchOpsTenderPolicy } from "@/lib/ops/tender-policy";
 import { OpsSystemHealthPanel } from "@/components/ops/OpsSystemHealthPanel";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { formatCoordinateValue } from "@/lib/ops/coordinates";
@@ -49,6 +53,13 @@ function settingsNotice(params: OpsSearchParams) {
     };
   }
 
+  if (firstParam(params.updated) === "budget_controls") {
+    return {
+      message: "Tender and pricing controls saved.",
+      tone: "success" as const,
+    };
+  }
+
   return null;
 }
 
@@ -67,11 +78,13 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
     notFound();
   }
 
-  const [profile, purchaseOrderApprovalSettings, systemHealth] = await Promise.all([
-    fetchOpsOrganizationProfile(),
-    fetchPurchaseOrderApprovalSettings(),
-    fetchOpsSystemHealth(),
-  ]);
+  const [profile, purchaseOrderApprovalSettings, systemHealth, budgetControls] =
+    await Promise.all([
+      fetchOpsOrganizationProfile(),
+      fetchPurchaseOrderApprovalSettings(),
+      fetchOpsSystemHealth(),
+      fetchOpsTenderPolicy(),
+    ]);
   const canManage = canManageOps(auth.profile.role);
   const notice = settingsNotice(params);
 
@@ -348,7 +361,9 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
                 Purchase order approvals
               </h2>
               <p className="text-sm text-muted-foreground">
-                Draft purchase orders must pass this chain before they can be issued.
+                Draft purchase orders must pass this chain before they can be issued. This
+                does <strong>not</strong> control when comparison prices are required —
+                that is the tender threshold below.
               </p>
             </div>
           </div>
@@ -431,6 +446,86 @@ export default async function OpsSettingsPage({ searchParams }: PageProps) {
           </OpsSubmitButton>
         ) : null}
       </form>
+
+      <section className="rounded-lg border border-border bg-card p-5 shadow-sm md:p-7">
+        <div className="mb-4 flex items-start gap-3">
+          <div className="grid size-10 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+            <Scale className="size-5" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="font-heading text-xl font-bold text-foreground">
+              Tender and pricing controls
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              A material request worth this much or more cannot be sent to Finance until
+              comparison prices have been recorded against it.
+            </p>
+          </div>
+        </div>
+
+        <form action={updateBudgetControlSettingsAction} className="grid gap-4 md:grid-cols-3">
+          <label className={OPS_LABEL_CLASS}>
+            Tender threshold (ZMW)
+            <input
+              className={OPS_INPUT_CLASS}
+              defaultValue={budgetControls.thresholdZmw}
+              disabled={!canManage}
+              min="0"
+              name="tender_threshold_zmw"
+              step="0.01"
+              type="number"
+            />
+            <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
+              Requests below this go straight to Finance. Raising it removes the
+              requirement to compare prices on everything underneath.
+            </span>
+          </label>
+
+          <label className={OPS_LABEL_CLASS}>
+            PO unit price tolerance (%)
+            <input
+              className={OPS_INPUT_CLASS}
+              defaultValue={budgetControls.unitPriceTolerancePercent}
+              disabled={!canManage}
+              min="0"
+              name="po_unit_price_tolerance_percent"
+              step="0.01"
+              type="number"
+            />
+            <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
+              How far a purchase order unit price may drift from the approved price
+              before it is flagged.
+            </span>
+          </label>
+
+          <div className="rounded-md border border-border p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
+              Currently
+            </p>
+            <p className="mt-1 font-heading text-lg font-bold text-foreground">
+              RFQ required from K{" "}
+              {Number(budgetControls.thresholdZmw).toLocaleString("en-ZM")}
+            </p>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              Two other rules still force an RFQ regardless of value: no item naming a
+              supplier at all, or an item naming a supplier that is not on the approved
+              register.
+            </p>
+          </div>
+
+          {canManage ? (
+            <div className="md:col-span-3">
+              <OpsSubmitButton
+                className={OPS_PRIMARY_BUTTON_CLASS}
+                pendingLabel="Saving tender controls..."
+              >
+                <Save className="size-4" aria-hidden="true" />
+                Save tender controls
+              </OpsSubmitButton>
+            </div>
+          ) : null}
+        </form>
+      </section>
 
       <OpsSystemHealthPanel health={systemHealth} />
     </div>
