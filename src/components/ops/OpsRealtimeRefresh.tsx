@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { decideRefresh, isEditableTag } from "@/lib/ops/refresh-policy";
 import { getOpsSupabaseBrowserClient } from "@/lib/ops/supabase-browser";
 
@@ -45,9 +45,22 @@ export function OpsRealtimeRefresh({ tables, debounceMs = 500 }: OpsRealtimeRefr
   // Set when a refresh was suppressed, so the update is not lost — it lands as
   // soon as the reason for suppressing it goes away.
   const pending = useRef(false);
+  // Every call site passes an inline array literal (`tables={["invoices"]}`),
+  // so `tables` is a NEW array identity on each render. Depending on it
+  // directly tore the channel down and resubscribed after every render —
+  // including every router.refresh() this component itself triggers. Depending
+  // on the joined string instead makes the effect run only when the tables
+  // genuinely change.
+  const tablesKey = tables.join(",");
+  // Stable across re-renders, unique per mounted instance. The channel name
+  // previously embedded Date.now(), which guaranteed a fresh topic on every
+  // resubscribe; a bare name would instead collide when two instances watch
+  // the same tables (department-reports renders two).
+  const instanceId = useId();
 
   useEffect(() => {
-    if (tables.length === 0) return;
+    if (tablesKey === "") return;
+    const watchedTables = tablesKey.split(",");
 
     const runRefresh = () => {
       const now = Date.now();
@@ -95,10 +108,10 @@ export function OpsRealtimeRefresh({ tables, debounceMs = 500 }: OpsRealtimeRefr
 
     const supabase = getOpsSupabaseBrowserClient();
     if (!supabase) return; // Env vars missing; no-op (workspace still renders).
-    const channelName = `ops-page-realtime:${tables.join(",")}:${Date.now()}`;
+    const channelName = `ops-page-realtime:${tablesKey}:${instanceId}`;
     let channel = supabase.channel(channelName);
 
-    for (const table of tables) {
+    for (const table of watchedTables) {
       channel = channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
@@ -114,7 +127,7 @@ export function OpsRealtimeRefresh({ tables, debounceMs = 500 }: OpsRealtimeRefr
       document.removeEventListener("focusout", onBlur);
       supabase.removeChannel(channel).catch(() => null);
     };
-  }, [router, tables, debounceMs]);
+  }, [router, tablesKey, instanceId, debounceMs]);
 
   return null;
 }

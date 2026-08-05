@@ -24,6 +24,41 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Baseline security headers for the whole origin.
+        //
+        // These are duplicated from applyBaselineSecurityHeaders in
+        // src/proxy.ts ON PURPOSE, and this config is the copy that is meant
+        // to survive. The proxy currently runs on every request — including
+        // immutable static assets and pages the CDN serves from cache — which
+        // is the single largest source of Vercel Fluid invocations in this
+        // project. Setting them here, where Vercel applies them at the edge
+        // for zero compute, is what makes it safe to stop running a Node
+        // function purely to attach four headers.
+        //
+        // Both layers set identical values, so the changeover has no window
+        // where the origin is unprotected. Do not remove this block when the
+        // proxy matcher is narrowed — narrowing it is the whole point.
+        source: "/:path*",
+        headers: [
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+        ],
+      },
+      {
         source: "/:path*.(jpg|jpeg|png|webp|avif|svg|gif|ico)",
         headers: [
           {
