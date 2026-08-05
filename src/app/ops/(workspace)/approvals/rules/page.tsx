@@ -145,7 +145,7 @@ export default async function OpsApprovalRulesPage() {
         <div className="border-b border-border p-5">
           <h2 className="text-lg font-bold text-foreground">Configured thresholds</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            The value at which each workflow adds a further approver. Edited in Settings by
+            The value at which each workflow adds a further approver. Only edited by
             leadership.
           </p>
         </div>
@@ -203,21 +203,16 @@ export default async function OpsApprovalRulesPage() {
           <TriangleAlert className="mt-0.5 size-5 shrink-0 text-amber-600" aria-hidden="true" />
           <div className="space-y-2 text-sm leading-6 text-muted-foreground">
             <p>
-              <strong className="text-foreground">Who approves is fixed in code.</strong> Two
-              controls depend on it and are enforced by tests: the person who authorised a
-              spend cannot also commit it to a supplier, and IT cannot grant itself financial
-              authority. Making the chain editable would move those from guaranteed to
-              merely intended.
+              <strong className="text-foreground">Contact Leadership for approval requests pending</strong>
             </p>
             <p>
-              If the chain here is genuinely wrong for how a department works, that is worth
-              changing — as a code change with a test, not a setting.
+              Always make sure your request is submitted. After creating a request, it becomes a draft. So ensure you actually do submit it for approval
             </p>
           </div>
         </div>
         <div className="mt-4">
           <OpsInlineEmpty>
-            Thresholds are edited under Settings; the chain is changed by the development team.
+            Thresholds are edited by Leadership only. 
           </OpsInlineEmpty>
         </div>
       </section>
