@@ -242,9 +242,22 @@ const OPS_FLEET_LOGISTICS_ROLES: OpsUserRole[] = [
   "admin_receptionist",
 ];
 
+/**
+ * Documents is open to EVERY role, including crew and interns — a document can
+ * now be addressed to named people (document_recipients), so a site worker
+ * must be able to reach the library both to send a delivery note up the chain
+ * and to receive what was sent to them. Reaching the module is not the same as
+ * seeing its contents: the five visibility tiers plus the explicit recipient
+ * grant still decide what any given person actually sees, and crew can only
+ * ever file a document as public or private.
+ */
 const OPS_DOCUMENT_ROLES: OpsUserRole[] = [
   ...OPS_OPERATIONAL_ROLES,
   "human_resource",
+  "accountant_intern",
+  "engineering_intern",
+  "it_manager",
+  "crew",
 ];
 
 const OPS_STAFF_ROLES: OpsUserRole[] = [
@@ -542,7 +555,7 @@ export const OPS_MODULES: OpsModule[] = [
     id: "documents",
     navigationRoles: OPS_DOCUMENT_ROLES,
     phase: "Phase 1",
-    roles: OPS_OPERATIONAL_ROLES,
+    roles: OPS_DOCUMENT_ROLES,
     status: "ready",
     title: "Documents",
   },

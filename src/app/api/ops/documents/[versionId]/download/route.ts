@@ -120,8 +120,20 @@ export async function GET(
     return NextResponse.json({ error: "Document was not found." }, { status: 404 });
   }
 
+  const { data: recipientRow } = await supabase
+    .from("document_recipients")
+    .select("id")
+    .eq("document_id", document.id)
+    .eq("user_id", user.profile.id)
+    .maybeSingle<{ id: string }>();
+
   const canDownload =
-    canDownloadOpsDocument(user.profile.role, user.profile.id, document) ||
+    canDownloadOpsDocument(
+      user.profile.role,
+      user.profile.id,
+      document,
+      Boolean(recipientRow),
+    ) ||
     (await canDownloadLinkedEmployeeDocument({
       actorId: user.profile.id,
       actorRole: user.profile.role,

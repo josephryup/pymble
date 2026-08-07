@@ -11,6 +11,12 @@ export function canDownloadOpsDocument(
   actorRole: OpsUserRole,
   actorId: string,
   document: OpsDocumentDownloadTarget,
+  /**
+   * Whether the actor was named on the document (a document_recipients row).
+   * A direct share carries download rights, not just visibility — otherwise
+   * "sent to you" would show a file you cannot open.
+   */
+  isRecipient = false,
 ) {
   if (document.status === "archived") {
     return false;
@@ -20,5 +26,6 @@ export function canDownloadOpsDocument(
     actorRole,
     document.visibility,
     document.uploaded_by === actorId,
+    isRecipient,
   );
 }

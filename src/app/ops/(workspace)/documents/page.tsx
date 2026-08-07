@@ -10,6 +10,8 @@ import {
   Trash2,
   Upload,
   UploadCloud,
+  Users,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -22,18 +24,23 @@ import {
   archiveOpsDocumentAction,
   removeOpsDocumentAttachmentAction,
   requestDocumentApprovalAction,
+  shareOpsDocumentAction,
+  unshareOpsDocumentAction,
   uploadOpsDocumentAction,
 } from "@/lib/ops/document-actions";
 import {
   assignableOpsDocumentVisibilities,
   canMutateOpsDocument,
-  isOpsDocumentSuperAdmin,
   OPS_DOCUMENT_VISIBILITY_LABELS,
   OPS_DOCUMENT_VISIBILITY_SHORT,
 } from "@/lib/ops/document-permissions";
-import { fetchPaginatedOpsDocumentLibrary, type OpsDocumentLibraryItem } from "@/lib/ops/documents";
+import {
+  fetchOpsDocumentRecipientOptions,
+  fetchPaginatedOpsDocumentLibrary,
+  type OpsDocumentLibraryItem,
+} from "@/lib/ops/documents";
 import { parseOpsListState } from "@/lib/ops/listing";
-import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
+import { canAccessOpsHref } from "@/lib/ops/permissions";
 import type { OpsApprovalStatus, OpsDocumentVisibility } from "@/lib/ops/types";
 import {
   OPS_DANGER_BUTTON_CLASS,
@@ -135,6 +142,8 @@ const NOTICES: Record<string, string> = {
   attachment_added: "Files added to the document.",
   attachment_removed: "File removed from the document.",
   archived: "Document archived.",
+  shared: "Document sent — the recipients have been notified.",
+  unshared: "Recipient removed from the document.",
 };
 
 export default async function OpsDocumentsPage({ searchParams }: PageProps) {
@@ -150,15 +159,17 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
   const listState = parseOpsListState(params, { defaultPageSize: 10 });
   const category = documentCategoryFromParam(firstParam(params.category));
   const visibility = documentVisibilityFromParam(firstParam(params.visibility));
-  const documentPage = await fetchPaginatedOpsDocumentLibrary({
-    category,
-    listState,
-    query: listState.query,
-    visibility,
-  });
+  const [documentPage, recipientOptions] = await Promise.all([
+    fetchPaginatedOpsDocumentLibrary({
+      category,
+      listState,
+      query: listState.query,
+      visibility,
+    }),
+    fetchOpsDocumentRecipientOptions(auth.profile.id),
+  ]);
   const documents = documentPage.items;
   const hasActiveListFilter = listState.query.length > 0 || Boolean(category) || Boolean(visibility);
-  const canUpload = canManageOps(auth.profile.role);
   const assignable = assignableOpsDocumentVisibilities(auth.profile.role);
   const error = firstParam(params.error);
   const createdNotice = firstParam(params.created) === "document" ? NOTICES.document : null;
@@ -215,67 +226,81 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
         </div>
       ) : null}
 
-      {canUpload ? (
-        <section className="rounded-lg border border-border bg-card p-5">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
-              <Upload className="size-5" aria-hidden="true" />
-            </div>
-            <div>
-              <h2 className="font-heading text-xl font-bold text-foreground">New document group</h2>
-              <p className="text-sm text-muted-foreground">
-                One title, one visibility level, and one or more files. Add or remove files later.
-              </p>
-            </div>
+      <section className="rounded-lg border border-border bg-card p-5">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-md bg-primary-blue text-white">
+            <Upload className="size-5" aria-hidden="true" />
           </div>
-          <form action={uploadOpsDocumentAction} className="grid gap-4">
-            <div className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6">
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Group title
-                <input className={OPS_INPUT_CLASS} name="title" placeholder="e.g. Rubis contract pack" required />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Category
-                <select className={OPS_INPUT_CLASS} defaultValue="general" name="category">
-                  {DOCUMENT_CATEGORIES.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Visibility
-                <select className={OPS_INPUT_CLASS} defaultValue="private" name="visibility">
-                  {assignable.map((tier) => (
-                    <option key={tier} value={tier}>
-                      {OPS_DOCUMENT_VISIBILITY_LABELS[tier]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
-                Description
-                <input className={OPS_INPUT_CLASS} name="description" placeholder="Optional notes" />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Files (up to 10)
-                <input accept={FILE_ACCEPT} className={OPS_INPUT_CLASS} multiple name="documents" required type="file" />
-              </label>
-            </div>
-            <div>
-              <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
-                <Upload className="size-4" aria-hidden="true" />
-                Create document group
-              </button>
-            </div>
-          </form>
-        </section>
-      ) : (
-        <div className="rounded-md border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-          Your role has read-only access to the document library.
+          <div>
+            <h2 className="font-heading text-xl font-bold text-foreground">New document group</h2>
+            <p className="text-sm text-muted-foreground">
+              One title, one visibility level, and one or more files. Send it to specific people and
+              they are notified straight away — whatever the visibility level.
+            </p>
+          </div>
         </div>
-      )}
+        <form action={uploadOpsDocumentAction} className="grid gap-4">
+          <div className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6">
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Group title
+              <input className={OPS_INPUT_CLASS} name="title" placeholder="e.g. Rubis contract pack" required />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Category
+              <select className={OPS_INPUT_CLASS} defaultValue="general" name="category">
+                {DOCUMENT_CATEGORIES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Visibility
+              <select className={OPS_INPUT_CLASS} defaultValue="private" name="visibility">
+                {assignable.map((tier) => (
+                  <option key={tier} value={tier}>
+                    {OPS_DOCUMENT_VISIBILITY_LABELS[tier]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
+              Description
+              <input className={OPS_INPUT_CLASS} name="description" placeholder="Optional notes" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Files (up to 10)
+              <input accept={FILE_ACCEPT} className={OPS_INPUT_CLASS} multiple name="documents" required type="file" />
+            </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>
+              Send to (optional)
+              <select
+                className={`${OPS_INPUT_CLASS} h-auto`}
+                multiple
+                name="recipient_ids"
+                size={Math.min(Math.max(recipientOptions.length, 3), 8)}
+              >
+                {recipientOptions.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.full_name}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 text-xs font-normal text-muted-foreground">
+                Hold Ctrl (or Cmd) to pick several. Everyone you choose is notified and can open the
+                document even when the visibility level would otherwise hide it from them.
+              </span>
+            </label>
+          </div>
+          <div>
+            <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
+              <Upload className="size-4" aria-hidden="true" />
+              Create document group
+            </button>
+          </div>
+        </form>
+      </section>
 
       <section className="rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between gap-3 border-b border-border p-5">
@@ -320,8 +345,16 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
         {documents.length > 0 ? (
           <ul className="divide-y divide-border">
             {documents.map((document) => {
-              const canEdit = canMutateOpsDocument(auth.profile.id, auth.profile.role, document) &&
-                (canUpload || isOpsDocumentSuperAdmin(auth.profile.role));
+              const canEdit = canMutateOpsDocument(auth.profile.id, auth.profile.role, document);
+              const sentToMe = document.recipients.some(
+                (recipient) => recipient.id === auth.profile.id,
+              );
+              // Already-shared people and the uploader are not offerable again.
+              const shareableWith = recipientOptions.filter(
+                (person) =>
+                  person.id !== document.uploaded_by &&
+                  !document.recipients.some((recipient) => recipient.id === person.id),
+              );
               const isApprovalOpen = hasOpenApproval(document.approval_status);
               const canRequest = canEdit && canRequestApproval(document);
               const attachments = [...document.versions].sort(
@@ -350,6 +383,12 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {sentToMe ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-emerald-700">
+                          <Send className="size-3" aria-hidden="true" />
+                          Sent to you
+                        </span>
+                      ) : null}
                       <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] ${visibilityClass(document.visibility)}`}>
                         <Lock className="size-3" aria-hidden="true" />
                         {OPS_DOCUMENT_VISIBILITY_SHORT[document.visibility]}
@@ -406,7 +445,65 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
                     ))}
                   </ul>
 
+                  {document.recipients.length > 0 ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                        Sent to
+                      </span>
+                      {document.recipients.map((recipient) => (
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 py-1 pl-2.5 pr-1.5 text-xs font-semibold text-foreground"
+                          key={recipient.id}
+                        >
+                          <Users className="size-3 text-muted-foreground" aria-hidden="true" />
+                          {recipient.full_name}
+                          {canEdit ? (
+                            <form action={unshareOpsDocumentAction} className="contents">
+                              <input name="document_id" type="hidden" value={document.document_id} />
+                              <input name="recipient_id" type="hidden" value={recipient.id} />
+                              <button
+                                aria-label={`Stop sharing ${document.title} with ${recipient.full_name}`}
+                                className={`rounded-full p-0.5 text-muted-foreground transition hover:text-red-600 ${OPS_FOCUS_CLASS}`}
+                                type="submit"
+                              >
+                                <X className="size-3.5" aria-hidden="true" />
+                              </button>
+                            </form>
+                          ) : null}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
                   <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {canEdit && !isApprovalOpen && shareableWith.length > 0 ? (
+                      <details className="group rounded-md border border-border">
+                        <summary className={`flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden ${OPS_FOCUS_CLASS}`}>
+                          <Users className="size-4" aria-hidden="true" />
+                          Send to people
+                        </summary>
+                        <form action={shareOpsDocumentAction} className="grid gap-2 border-t border-border p-3">
+                          <input name="document_id" type="hidden" value={document.document_id} />
+                          <select
+                            className={`${OPS_INPUT_CLASS} h-auto`}
+                            multiple
+                            name="recipient_ids"
+                            required
+                            size={Math.min(Math.max(shareableWith.length, 3), 8)}
+                          >
+                            {shareableWith.map((person) => (
+                              <option key={person.id} value={person.id}>
+                                {person.full_name}
+                              </option>
+                            ))}
+                          </select>
+                          <button className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} type="submit">
+                            <Send className="size-4" aria-hidden="true" />
+                            Send and notify
+                          </button>
+                        </form>
+                      </details>
+                    ) : null}
                     {document.approval_request_id ? (
                       <Link className={OPS_SECONDARY_BUTTON_CLASS} href={`/ops/approvals/${document.approval_request_id}`}>
                         View approval

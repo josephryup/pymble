@@ -73,14 +73,22 @@ function isManagementTier(role: OpsUserRole) {
  * Whether a viewer may see a document of the given visibility. `isUploader`
  * is the actor being the document's uploader — they always retain access to
  * their own upload.
+ *
+ * `isRecipient` is the actor having been named explicitly on the document (a
+ * document_recipients row). A direct share overrides the tier entirely — that
+ * is what "send this document to Mary" means. It is deliberately checked
+ * BEFORE the visibility switch so it also opens `private` and `md_restricted`
+ * documents to the people the uploader chose, and only to them.
  */
 export function canViewOpsDocumentVisibility(
   role: OpsUserRole,
   visibility: OpsDocumentVisibility,
   isUploader: boolean,
+  isRecipient = false,
 ) {
   if (isOpsDocumentSuperAdmin(role)) return true;
   if (isUploader) return true;
+  if (isRecipient) return true;
 
   switch (visibility) {
     case "public":

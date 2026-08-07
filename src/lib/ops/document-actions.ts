@@ -19,6 +19,9 @@ import { safeOpsFileName, validateOpsUploadFile } from "@/lib/ops/upload-validat
 import type { OpsDocumentStatus, OpsDocumentVisibility, OpsUserRole } from "@/lib/ops/types";
 
 const MAX_ATTACHMENTS_PER_UPLOAD = 10;
+const MAX_RECIPIENTS_PER_DOCUMENT = 50;
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const uploadDocumentSchema = z.object({
   category: z
@@ -127,6 +130,85 @@ async function prepareAttachments(files: File[]): Promise<PreparedAttachment[]> 
   return prepared;
 }
 
+/**
+ * The people this document is being sent to. Ids are validated against
+ * `users` before anything is granted, so a tampered form cannot mint a share
+ * to a non-existent or deactivated account. The uploader is dropped — they
+ * already have access as the owner.
+ */
+async function resolveRecipients(formData: FormData, actorId: string) {
+  const requested = Array.from(
+    new Set(
+      formData
+        .getAll("recipient_ids")
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter((value) => UUID_PATTERN.test(value) && value !== actorId),
+    ),
+  ).slice(0, MAX_RECIPIENTS_PER_DOCUMENT);
+
+  if (requested.length === 0) {
+    return [];
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, full_name")
+    .in("id", requested)
+    .eq("is_active", true);
+
+  if (error) {
+    documentError(error.message);
+  }
+
+  return (data ?? []) as Array<{ full_name: string; id: string }>;
+}
+
+/**
+ * Grants access to the named recipients and tells each of them. The grant is
+ * an upsert so re-sharing is idempotent, and the notification carries a
+ * document-scoped idempotency key so a repeat share does not re-notify.
+ */
+async function shareDocumentWith(
+  recipients: Array<{ full_name: string; id: string }>,
+  document: { id: string; title: string },
+  actor: { full_name: string; id: string },
+) {
+  if (recipients.length === 0) {
+    return;
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase.from("document_recipients").upsert(
+    recipients.map((recipient) => ({
+      document_id: document.id,
+      shared_by: actor.id,
+      user_id: recipient.id,
+    })),
+    { onConflict: "document_id,user_id" },
+  );
+
+  if (error) {
+    documentError(error.message);
+  }
+
+  await Promise.all(
+    recipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: "/ops/documents",
+        body: `${actor.full_name} sent you "${document.title}".`,
+        idempotencyKey: `document-shared:${document.id}:${recipient.id}`,
+        moduleKey: "documents",
+        recipientId: recipient.id,
+        sourceId: document.id,
+        sourceTable: "documents",
+        title: "A document was shared with you",
+      }).catch(() => null),
+    ),
+  );
+}
+
 function collectUploadFiles(formData: FormData): File[] {
   return [...formData.getAll("documents"), formData.get("document")]
     .filter((value): value is File => value instanceof File && value.size > 0)
@@ -200,9 +282,11 @@ async function rollbackAttachments(versionIds: string[], keys: string[]) {
 export async function uploadOpsDocumentAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
-    documentError("Your role cannot upload documents yet.");
-  }
+  // Every signed-in user may upload a document and send it to colleagues —
+  // crew included, so a site worker can push a delivery note or a signed form
+  // up the chain. What a document EXPOSES is still bounded: the visibility
+  // tier is checked against assignableOpsDocumentVisibilities below, and crew
+  // can only assign public or private.
 
   const parsed = uploadDocumentSchema.safeParse({
     category: field(formData, "category") || "general",
@@ -224,6 +308,7 @@ export async function uploadOpsDocumentAction(formData: FormData) {
     documentError("Select at least one file to upload.");
   }
 
+  const recipients = await resolveRecipients(formData, profile.id);
   const attachments = await prepareAttachments(files);
 
   const supabase = getOpsSupabaseServiceClient();
@@ -253,6 +338,12 @@ export async function uploadOpsDocumentAction(formData: FormData) {
     profile.id,
   );
 
+  await shareDocumentWith(
+    recipients,
+    { id: document.id, title: parsed.data.title },
+    { full_name: profile.full_name, id: profile.id },
+  );
+
   await recordOpsAuditEvent({
     action: "document.uploaded",
     actorUserId: profile.id,
@@ -262,6 +353,7 @@ export async function uploadOpsDocumentAction(formData: FormData) {
       attachment_count: attachments.length,
       category: parsed.data.category,
       file_names: attachments.map((attachment) => attachment.fileName),
+      recipient_ids: recipients.map((recipient) => recipient.id),
       version_ids: ids,
       visibility: parsed.data.visibility,
     },
@@ -273,6 +365,106 @@ export async function uploadOpsDocumentAction(formData: FormData) {
 
   revalidatePath("/ops/documents");
   redirect("/ops/documents?created=document");
+}
+
+/**
+ * Sends an EXISTING document to more people. Gated by canMutateOpsDocument —
+ * only the uploader (or a super-admin) decides who else sees their document,
+ * so a recipient cannot re-share what was sent to them.
+ */
+export async function shareOpsDocumentAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = documentIdSchema.safeParse({ document_id: field(formData, "document_id") });
+  if (!parsed.success) {
+    documentError(parsed.error.issues[0]?.message ?? "Select a document.");
+  }
+
+  const document = await fetchDocumentForMutation(parsed.data.document_id);
+  if (!document) {
+    documentError("Document was not found.");
+  }
+  if (document.status === "archived") {
+    documentError("Archived documents cannot be shared.");
+  }
+  if (!canMutateDocument(profile.id, profile.role, document)) {
+    documentError("You can only share documents you uploaded.");
+  }
+
+  const recipients = await resolveRecipients(formData, profile.id);
+  if (recipients.length === 0) {
+    documentError("Select at least one person to send this document to.");
+  }
+
+  await shareDocumentWith(
+    recipients,
+    { id: document.id, title: document.title },
+    { full_name: profile.full_name, id: profile.id },
+  );
+
+  await recordOpsAuditEvent({
+    action: "document.shared",
+    actorUserId: profile.id,
+    entityId: document.id,
+    entityType: "document",
+    metadata: { recipient_ids: recipients.map((recipient) => recipient.id) },
+    moduleKey: "documents",
+    sourceId: document.id,
+    sourceTable: "documents",
+    summary: `Sent ${document.title} to ${recipients.length} recipient${recipients.length === 1 ? "" : "s"}`,
+  }).catch(() => null);
+
+  revalidatePath("/ops/documents");
+  redirect("/ops/documents?updated=shared");
+}
+
+/** Revokes one direct share. The tier still governs everyone else. */
+export async function unshareOpsDocumentAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = documentIdSchema.safeParse({ document_id: field(formData, "document_id") });
+  if (!parsed.success) {
+    documentError(parsed.error.issues[0]?.message ?? "Select a document.");
+  }
+
+  const recipientId = field(formData, "recipient_id").trim();
+  if (!UUID_PATTERN.test(recipientId)) {
+    documentError("Select a recipient to remove.");
+  }
+
+  const document = await fetchDocumentForMutation(parsed.data.document_id);
+  if (!document) {
+    documentError("Document was not found.");
+  }
+  if (!canMutateDocument(profile.id, profile.role, document)) {
+    documentError("You can only change sharing on documents you uploaded.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("document_recipients")
+    .delete()
+    .eq("document_id", document.id)
+    .eq("user_id", recipientId);
+
+  if (error) {
+    documentError(error.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "document.unshared",
+    actorUserId: profile.id,
+    entityId: document.id,
+    entityType: "document",
+    metadata: { recipient_id: recipientId },
+    moduleKey: "documents",
+    sourceId: document.id,
+    sourceTable: "documents",
+    summary: `Removed a recipient from ${document.title}`,
+  }).catch(() => null);
+
+  revalidatePath("/ops/documents");
+  redirect("/ops/documents?updated=unshared");
 }
 
 export async function addOpsDocumentAttachmentAction(formData: FormData) {
@@ -417,9 +609,10 @@ export async function removeOpsDocumentAttachmentAction(formData: FormData) {
 export async function archiveOpsDocumentAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
-  if (!canManageOps(profile.role)) {
-    documentError("Your role cannot archive documents yet.");
-  }
+  // No role gate here: uploading is open to everyone, so everyone must be able
+  // to retire what they uploaded. canMutateDocument below is the real check —
+  // uploader or super-admin — and it is strictly narrower than the role gate
+  // that used to sit here.
 
   const parsed = documentIdSchema.safeParse({
     document_id: field(formData, "document_id"),

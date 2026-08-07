@@ -17,6 +17,11 @@ import type {
   OpsUserRole,
 } from "@/lib/ops/types";
 
+export type OpsDocumentRecipient = {
+  full_name: string;
+  id: string;
+};
+
 export type OpsDocumentVersionSummary = {
   checksum_sha256: string | null;
   content_type: string;
@@ -51,6 +56,8 @@ export type OpsDocumentLibraryItem = {
   current_version_number: number;
   description: string;
   document_id: string;
+  /** People the document was sent to directly, beyond its visibility tier. */
+  recipients: OpsDocumentRecipient[];
   status: OpsDocumentStatus;
   title: string;
   uploaded_by: string | null;
@@ -147,6 +154,58 @@ function visibleTiersForRole(role: OpsUserRole): OpsDocumentVisibility[] {
   return ALL_VISIBILITIES.filter((visibility) =>
     canViewOpsDocumentVisibility(role, visibility, false),
   );
+}
+
+type RawDocumentRecipient = {
+  document_id: string;
+  user: OpsDocumentRecipient | OpsDocumentRecipient[] | null;
+  user_id: string;
+};
+
+/** Document ids that were shared directly with this user. */
+async function fetchDocumentIdsSharedWith(userId: string) {
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("document_recipients")
+    .select("document_id")
+    .eq("user_id", userId);
+
+  if (error) {
+    throw error;
+  }
+
+  return Array.from(
+    new Set(((data ?? []) as Array<{ document_id: string }>).map((row) => row.document_id)),
+  );
+}
+
+/** Recipients of each document, for display on the library card. */
+async function fetchRecipientsByDocumentId(documentIds: string[]) {
+  const grouped = new Map<string, OpsDocumentRecipient[]>();
+
+  if (documentIds.length === 0) {
+    return grouped;
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("document_recipients")
+    .select("document_id, user_id, user:users!document_recipients_user_id_fkey(id, full_name)")
+    .in("document_id", documentIds);
+
+  if (error) {
+    throw error;
+  }
+
+  ((data ?? []) as unknown as RawDocumentRecipient[]).forEach((row) => {
+    const user = Array.isArray(row.user) ? (row.user[0] ?? null) : row.user;
+    grouped.set(row.document_id, [
+      ...(grouped.get(row.document_id) ?? []),
+      user ?? { full_name: "Unknown user", id: row.user_id },
+    ]);
+  });
+
+  return grouped;
 }
 
 function versionsByDocumentId(versions: RawDocumentVersion[]) {
@@ -251,11 +310,17 @@ async function fetchOpsDocumentLibraryItems(
 
   if (!isSuperAdmin) {
     // Exact tier gate pushed to the DB (pagination-safe): tiers this role can
-    // see, plus the viewer's own uploads.
+    // see, plus the viewer's own uploads, plus anything sent to them directly.
+    // The direct-share arm is what lets a `private` or `md_restricted` document
+    // reach a named recipient without widening the tier for anyone else.
     const tiers = visibleTiersForRole(profile.role);
-    documentQuery = documentQuery.or(
-      `visibility.in.(${tiers.join(",")}),uploaded_by.eq.${profile.id}`,
-    );
+    const sharedWithMe = await fetchDocumentIdsSharedWith(profile.id);
+    const clauses = [
+      `visibility.in.(${tiers.join(",")})`,
+      `uploaded_by.eq.${profile.id}`,
+      ...(sharedWithMe.length > 0 ? [`id.in.(${sharedWithMe.join(",")})`] : []),
+    ];
+    documentQuery = documentQuery.or(clauses.join(","));
   }
 
   const { data: documents, error: documentError, count } = await (listState
@@ -296,7 +361,12 @@ async function fetchOpsDocumentLibraryItems(
   const [
     { data: versions, error: versionError },
     { data: approvalData, error: approvalError },
-  ] = await Promise.all([versionQuery, approvalQuery]);
+    groupedRecipients,
+  ] = await Promise.all([
+    versionQuery,
+    approvalQuery,
+    fetchRecipientsByDocumentId(documentIds),
+  ]);
 
   if (versionError) {
     throw versionError;
@@ -325,6 +395,7 @@ async function fetchOpsDocumentLibraryItems(
       current_version_number: document.current_version_number,
       description: document.description,
       document_id: document.id,
+      recipients: groupedRecipients.get(document.id) ?? [],
       status: document.status,
       title: document.title,
       uploaded_by: document.uploaded_by,
@@ -345,6 +416,28 @@ export async function fetchPaginatedOpsDocumentLibrary(
 ): Promise<OpsPaginatedResult<OpsDocumentLibraryItem>> {
   const result = await fetchOpsDocumentLibraryItems(options, options.listState);
   return toOpsPaginatedResult(result.items, result.count, options.listState);
+}
+
+/**
+ * Active colleagues a document can be sent to, for the "Share with" picker.
+ * The uploader is excluded — they already retain access to their own upload.
+ */
+export async function fetchOpsDocumentRecipientOptions(
+  excludeUserId: string,
+): Promise<OpsDocumentRecipient[]> {
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, full_name")
+    .eq("is_active", true)
+    .neq("id", excludeUserId)
+    .order("full_name", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as OpsDocumentRecipient[];
 }
 
 export async function fetchOpsDocumentById(documentId: string) {
@@ -368,12 +461,14 @@ export async function fetchOpsDocumentById(documentId: string) {
   }
 
   const rawDocument = document as unknown as RawDocumentWithUploader;
+  const recipients = (await fetchRecipientsByDocumentId([rawDocument.id])).get(rawDocument.id) ?? [];
 
   if (
     !canViewOpsDocumentVisibility(
       profile.role,
       rawDocument.visibility,
       rawDocument.uploaded_by === profile.id,
+      recipients.some((recipient) => recipient.id === profile.id),
     )
   ) {
     return null;
@@ -428,6 +523,7 @@ export async function fetchOpsDocumentById(documentId: string) {
     current_version_number: rawDocument.current_version_number,
     description: rawDocument.description,
     document_id: rawDocument.id,
+    recipients,
     status: rawDocument.status,
     title: rawDocument.title,
     uploaded_by: rawDocument.uploaded_by,
@@ -475,11 +571,13 @@ export async function fetchOpsDocumentsForRecord(input: FetchOpsDocumentsForReco
     throw documentError;
   }
 
+  const sharedWithMe = new Set(await fetchDocumentIdsSharedWith(profile.id));
   const visibleDocuments = ((documents ?? []) as RawDocument[]).filter((document) =>
     canViewOpsDocumentVisibility(
       profile.role,
       document.visibility,
       document.uploaded_by === profile.id,
+      sharedWithMe.has(document.id),
     ),
   );
   const visibleDocumentIds = visibleDocuments.map((document) => document.id);
@@ -563,11 +661,13 @@ export async function fetchOpsDocumentsForRecords(input: FetchOpsDocumentsForRec
     throw documentError;
   }
 
+  const sharedWithMe = new Set(await fetchDocumentIdsSharedWith(profile.id));
   const visibleDocuments = ((documents ?? []) as RawDocument[]).filter((document) =>
     canViewOpsDocumentVisibility(
       profile.role,
       document.visibility,
       document.uploaded_by === profile.id,
+      sharedWithMe.has(document.id),
     ),
   );
   const visibleDocumentIds = visibleDocuments.map((document) => document.id);
