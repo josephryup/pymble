@@ -30,10 +30,11 @@ import {
   updateProjectTaskProgressAction,
 } from "@/lib/ops/project-task-actions";
 import {
-  fetchOpsCostCodeOptionsForSite,
-  leafCostCodeOptions,
-  type OpsCostCodeOption,
+  fetchOpsCostCodeChoicesForSite,
+  leafCostCodeChoices,
+  type OpsCostCodeChoice,
 } from "@/lib/ops/cost-code-picker";
+import { OpsCostCodePicker } from "@/components/ops/OpsCostCodePicker";
 import { computeProgrammeVariance } from "@/lib/ops/schedule-variance";
 import {
   canArchiveProjectTask,
@@ -105,8 +106,8 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
 
   // The site's WBS leaves, so an activity can name the cost code it spends
   // against — the link that makes "what has this activity cost" answerable.
-  const costCodeOptions = leafCostCodeOptions(
-    await fetchOpsCostCodeOptionsForSite(siteId).catch(() => []),
+  const costCodeChoices = leafCostCodeChoices(
+    await fetchOpsCostCodeChoicesForSite(siteId).catch(() => []),
   );
 
   const canCreate = canCreateProjectTask(profile.role);
@@ -371,17 +372,12 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
             </label>
             {/* Links the programme to the money: an activity that names its
                 cost code can be compared against what that code has spent. */}
-            <label className={`${OPS_LABEL_CLASS} md:col-span-3`}>
-              Cost code (optional)
-              <select className={OPS_INPUT_CLASS} defaultValue="" name="cost_code_id">
-                <option value="">— No cost attached —</option>
-                {costCodeOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <OpsCostCodePicker
+              choices={costCodeChoices}
+              className={`${OPS_LABEL_CLASS} md:col-span-3`}
+              label="Cost code (optional)"
+              unsetLabel="— No cost attached —"
+            />
             <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
               Assigned engineer
               <select className={OPS_INPUT_CLASS} defaultValue="" name="assigned_to">
@@ -425,7 +421,7 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
               canEdit={canEdit}
               canArchive={canArchive}
               assignableStaff={assignableStaff}
-              costCodeOptions={costCodeOptions}
+              costCodeChoices={costCodeChoices}
               linkedBoqLines={boqLinesByTaskId.get(task.id) ?? []}
             />
           ))}
@@ -442,7 +438,7 @@ function ProjectTaskCard({
   canEdit,
   canArchive,
   assignableStaff,
-  costCodeOptions,
+  costCodeChoices,
   linkedBoqLines,
 }: {
   task: OpsProjectTask;
@@ -451,7 +447,7 @@ function ProjectTaskCard({
   canEdit: boolean;
   canArchive: boolean;
   assignableStaff: Array<{ id: string; full_name: string; role: string }>;
-  costCodeOptions: OpsCostCodeOption[];
+  costCodeChoices: OpsCostCodeChoice[];
   linkedBoqLines: OpsBoqLineItem[];
 }) {
   const canProgress = canUpdateProjectTaskProgress(role, actorId, task);
@@ -628,21 +624,12 @@ function ProjectTaskCard({
                 ))}
               </select>
             </label>
-            <label className={`${OPS_LABEL_CLASS} sm:col-span-3`}>
-              Cost code
-              <select
-                className={OPS_INPUT_CLASS}
-                defaultValue={task.cost_code_id ?? ""}
-                name="cost_code_id"
-              >
-                <option value="">— No cost attached —</option>
-                {costCodeOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <OpsCostCodePicker
+              choices={costCodeChoices}
+              className={`${OPS_LABEL_CLASS} sm:col-span-3`}
+              unsetLabel="— No cost attached —"
+              value={task.cost_code_id}
+            />
             <label className={OPS_LABEL_CLASS}>
               Status
               <select className={OPS_INPUT_CLASS} defaultValue={task.status} name="status">

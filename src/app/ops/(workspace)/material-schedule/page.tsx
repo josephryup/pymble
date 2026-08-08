@@ -56,9 +56,11 @@ import {
   type OpsMaterialTriggerAlert,
 } from "@/lib/ops/boq";
 import {
-  fetchOpsCostCodeOptions,
-  type OpsCostCodeOption,
+  fetchOpsCostCodeChoices,
+  leafCostCodeChoices,
+  type OpsCostCodeChoice,
 } from "@/lib/ops/cost-code-picker";
+import { OpsCostCodePicker } from "@/components/ops/OpsCostCodePicker";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { boqLineVariance } from "@/lib/ops/boq-actuals";
 import { createCallOffFromScheduleAction } from "@/lib/ops/call-off-actions";
@@ -652,13 +654,13 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
   const visibleVariance = totalBudgeted - totalActual;
 
   const uniqueSiteIds = Array.from(new Set(boqDocuments.map((document) => document.site_id)));
-  const [tasksPerSite, triggerAlertsPerSite, costCodeOptionsBySiteId] = await Promise.all([
+  const [tasksPerSite, triggerAlertsPerSite, costCodeChoicesBySiteId] = await Promise.all([
     Promise.all(uniqueSiteIds.map((siteId) => fetchOpsProjectTasksForSite(siteId))),
     Promise.all(uniqueSiteIds.map((siteId) => fetchOpsMaterialTriggerAlerts(siteId))),
     // The WBS leaf each planned line charges — inherited by every request
     // called off against it, so this is where planned↔actual is wired.
-    fetchOpsCostCodeOptions(uniqueSiteIds).catch(
-      () => new Map<string, OpsCostCodeOption[]>(),
+    fetchOpsCostCodeChoices(uniqueSiteIds).catch(
+      () => new Map<string, OpsCostCodeChoice[]>(),
     ),
   ]);
   const tasksBySiteId = new Map<string, OpsProjectTask[]>(
@@ -1140,19 +1142,12 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                       {/* Every request called off against this line inherits
                           this code, so it is where the planned↔actual link is
                           actually made. */}
-                      <label className={`${OPS_LABEL_CLASS} md:col-span-2 lg:col-span-2`}>
-                        Cost code
-                        <select className={OPS_INPUT_CLASS} defaultValue="" name="cost_code_id">
-                          <option value="">Not set</option>
-                          {(costCodeOptionsBySiteId.get(document.site_id) ?? [])
-                            .filter((option) => !option.isPhase)
-                            .map((option) => (
-                              <option key={option.id} value={option.id}>
-                                {option.label}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
+                      <OpsCostCodePicker
+                        choices={leafCostCodeChoices(
+                          costCodeChoicesBySiteId.get(document.site_id) ?? [],
+                        )}
+                        className={`${OPS_LABEL_CLASS} md:col-span-2 lg:col-span-2`}
+                      />
                       <label className={`${OPS_LABEL_CLASS} md:col-span-2 lg:col-span-2`}>
                         Linked schedule task (optional)
                         <select className={OPS_INPUT_CLASS} defaultValue="" name="project_task_id">
@@ -1516,19 +1511,13 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                                             <input className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.needed_by ?? ""} name="needed_by" type="date" />
                                           </label>
                                         </div>
-                                        <label className="text-xs font-bold text-muted-foreground">
-                                          Cost code
-                                          <select className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.cost_code_id ?? ""} name="cost_code_id">
-                                            <option value="">Not set</option>
-                                            {(costCodeOptionsBySiteId.get(document.site_id) ?? [])
-                                              .filter((option) => !option.isPhase)
-                                              .map((option) => (
-                                                <option key={option.id} value={option.id}>
-                                                  {option.label}
-                                                </option>
-                                              ))}
-                                          </select>
-                                        </label>
+                                        <OpsCostCodePicker
+                                          choices={leafCostCodeChoices(
+                                            costCodeChoicesBySiteId.get(document.site_id) ?? [],
+                                          )}
+                                          className="text-xs font-bold text-muted-foreground"
+                                          value={item.cost_code_id}
+                                        />
                                         <label className="text-xs font-bold text-muted-foreground">
                                           Linked schedule task
                                           <select className={`${OPS_INPUT_CLASS} mt-1`} defaultValue={item.project_task_id ?? ""} name="project_task_id">

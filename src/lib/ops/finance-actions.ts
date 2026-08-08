@@ -13,9 +13,8 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import { opsReturnTo } from "@/lib/ops/return-paths";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
-  fetchOpsCostCodeOptionsForSite,
-  optionalCostCodeIdSchema,
-  validateCostCodeForSite,
+  optionalCostCodeSelectionSchema,
+  resolveOpsCostCodeSelection,
 } from "@/lib/ops/cost-code-picker";
 import {
   canActivateOpsProjectBudget,
@@ -67,7 +66,7 @@ const budgetLineSchema = z.object({
   budgeted_amount: z.coerce.number().min(0, "Budgeted amount cannot be negative."),
   category: z.string().trim().max(80).default("general"),
   cost_code: z.string().trim().max(40).default(""),
-  cost_code_id: optionalCostCodeIdSchema,
+  cost_code_id: optionalCostCodeSelectionSchema,
   description: z.string().trim().min(2, "Line description is required.").max(180),
   notes: z.string().trim().max(800).default(""),
 });
@@ -526,26 +525,25 @@ export async function addProjectBudgetLineAction(formData: FormData) {
   // short list of lines while the leaves beneath still roll up into it — so
   // leafOnly is deliberately not set here (unlike spend, which must charge a
   // leaf).
-  const costCode = await validateCostCodeForSite({
-    costCodeId: parsed.data.cost_code_id,
+  const costCode = await resolveOpsCostCodeSelection({
+    selection: parsed.data.cost_code_id,
     siteId: budget.site_id,
+    actorUserId: profile.id,
   });
   if (!costCode.ok) {
     budgetError(costCode.message);
   }
 
-  // Required whenever the project HAS a WBS. Money budgeted to no cost code is
-  // invisible to the availability bands, the roll-up and every variance report
-  // — the state that left 17 of 37 live budget lines unreadable. Projects with
-  // no WBS yet are still allowed through, because refusing there would be a
-  // dead end rather than a prompt.
+  // Required, with no "unless the project has no cost codes" escape. That
+  // escape existed while the picker could only offer a project's own WBS, which
+  // is empty on most projects; now that any library code can be chosen and is
+  // provisioned on save, the list is never empty and there is nothing to excuse.
+  // Money budgeted to no cost code is invisible to the availability bands, the
+  // roll-up and every variance report.
   if (!costCode.costCodeId) {
-    const siteCostCodes = await fetchOpsCostCodeOptionsForSite(budget.site_id);
-    if (siteCostCodes.length > 0) {
-      budgetError(
-        "Pick a cost code for this budget line — without one the budget cannot be compared to actual spend.",
-      );
-    }
+    budgetError(
+      "Pick a cost code for this budget line — without one the budget cannot be compared to actual spend.",
+    );
   }
 
   const lineNumber = await nextBudgetLineNumber(budget.id);
@@ -645,7 +643,7 @@ const budgetLineEditSchema = z.object({
     .max(1_000_000_000_000, "That budgeted amount looks unrealistic."),
   category: z.string().trim().max(80).default("general"),
   cost_code: z.string().trim().max(20).default(""),
-  cost_code_id: optionalCostCodeIdSchema,
+  cost_code_id: optionalCostCodeSelectionSchema,
   description: z.string().trim().min(2, "Describe the budget line.").max(200),
   notes: z.string().trim().max(400).default(""),
 });
@@ -691,9 +689,10 @@ export async function editProjectBudgetLineAction(formData: FormData) {
     budgetError("Your role cannot change lines on this budget.");
   }
 
-  const costCode = await validateCostCodeForSite({
-    costCodeId: parsed.data.cost_code_id,
+  const costCode = await resolveOpsCostCodeSelection({
+    selection: parsed.data.cost_code_id,
     siteId: line.budget.site_id,
+    actorUserId: profile.id,
   });
   if (!costCode.ok) {
     budgetError(costCode.message);

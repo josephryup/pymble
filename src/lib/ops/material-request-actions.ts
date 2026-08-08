@@ -33,8 +33,8 @@ import {
 } from "@/lib/ops/budget-availability";
 import { canRecodeOpsSpend } from "@/lib/ops/cost-code-permissions";
 import {
-  optionalCostCodeIdSchema,
-  validateCostCodeForSite,
+  optionalCostCodeSelectionSchema,
+  resolveOpsCostCodeSelection,
 } from "@/lib/ops/cost-code-picker";
 import { postCostEntryToGlSafe } from "@/lib/ops/gl-cost-bridge";
 import { buildScheduleLineMatcher } from "@/lib/ops/material-schedule-match";
@@ -141,7 +141,7 @@ const itemSchema = z.object({
   // and because it needs a live issued schedule to exist, in practice every
   // item fell through to the site's unplanned/contingency leaf. A requester who
   // knows the work knows the code, so let them say so.
-  cost_code_id: optionalCostCodeIdSchema,
+  cost_code_id: optionalCostCodeSelectionSchema,
   // Optional link back to the planned material schedule (BOQ) line this item
   // fulfils. Drives budget-line resolution at submit time.
   boq_line_item_id: z
@@ -426,9 +426,10 @@ export async function addMaterialRequestItemAction(formData: FormData) {
 
   // Spend charges a leaf, never a phase — a phase total is the roll-up of its
   // leaves, so booking at both levels on one branch would double-count.
-  const costCode = await validateCostCodeForSite({
-    costCodeId: parsed.data.cost_code_id,
+  const costCode = await resolveOpsCostCodeSelection({
+    selection: parsed.data.cost_code_id,
     siteId: request.site_id,
+    actorUserId: profile.id,
     leafOnly: true,
   });
   if (!costCode.ok) {
@@ -2091,7 +2092,7 @@ export async function setMaterialRequestItemCostCodeAction(formData: FormData) {
   const parsed = z
     .object({
       item_id: z.string().uuid("Select a line item."),
-      cost_code_id: optionalCostCodeIdSchema,
+      cost_code_id: optionalCostCodeSelectionSchema,
     })
     .safeParse({
       item_id: field(formData, "item_id"),
@@ -2127,9 +2128,10 @@ export async function setMaterialRequestItemCostCodeAction(formData: FormData) {
     materialRequestError("Material request was not found.");
   }
 
-  const costCode = await validateCostCodeForSite({
-    costCodeId: parsed.data.cost_code_id,
+  const costCode = await resolveOpsCostCodeSelection({
+    selection: parsed.data.cost_code_id,
     siteId: request.site_id,
+    actorUserId: profile.id,
     leafOnly: true,
   });
   if (!costCode.ok) {

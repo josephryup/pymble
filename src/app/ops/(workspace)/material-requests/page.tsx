@@ -75,10 +75,11 @@ import {
 import { fetchOpsBoqDocuments } from "@/lib/ops/boq";
 import { canRecodeOpsSpend } from "@/lib/ops/cost-code-permissions";
 import {
-  fetchOpsCostCodeOptions,
-  leafCostCodeOptions,
-  type OpsCostCodeOption,
+  fetchOpsCostCodeChoices,
+  leafCostCodeChoices,
+  type OpsCostCodeChoice,
 } from "@/lib/ops/cost-code-picker";
+import { OpsCostCodePicker } from "@/components/ops/OpsCostCodePicker";
 import {
   fetchOpsRequestBudgetPositions,
   type OpsRequestBudgetPosition,
@@ -319,8 +320,8 @@ function MaterialRequestItems({
   boqLineLabelById,
   canEdit,
   canRecode,
+  costCodeChoices,
   costCodeLabelById,
-  costCodeOptions,
   request,
   supplierOptions,
 }: {
@@ -328,8 +329,8 @@ function MaterialRequestItems({
   canEdit: boolean;
   /** Recoding is allowed after approval — see canRecodeOpsSpend. */
   canRecode: boolean;
+  costCodeChoices: OpsCostCodeChoice[];
   costCodeLabelById: Map<string, string>;
-  costCodeOptions: OpsCostCodeOption[];
   request: OpsMaterialRequestSummary;
   supplierOptions: Array<{ id: string; label: string }>;
 }) {
@@ -400,7 +401,7 @@ function MaterialRequestItems({
                     </span>
                   )}
                 </p>
-                {canRecode && costCodeOptions.length > 0 ? (
+                {canRecode && costCodeChoices.length > 0 ? (
                   <details className="mt-1">
                     <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[11px] font-semibold text-primary-blue hover:underline [&::-webkit-details-marker]:hidden">
                       Change cost code
@@ -411,18 +412,11 @@ function MaterialRequestItems({
                     >
                       <OpsReturnToField />
                       <input name="item_id" type="hidden" value={item.id} />
-                      <select
-                        className={OPS_INPUT_CLASS}
-                        defaultValue={item.cost_code_id ?? ""}
-                        name="cost_code_id"
-                      >
-                        <option value="">Not set</option>
-                        {costCodeOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      <OpsCostCodePicker
+                        choices={costCodeChoices}
+                        label=""
+                        value={item.cost_code_id}
+                      />
                       <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
                         Save
                       </OpsSubmitButton>
@@ -655,12 +649,12 @@ function BudgetPositionNotice({
 
 function AddItemForm({
   boqLineOptions,
-  costCodeOptions,
+  costCodeChoices,
   requestId,
   supplierOptions,
 }: {
   boqLineOptions: Array<{ id: string; label: string }>;
-  costCodeOptions: OpsCostCodeOption[];
+  costCodeChoices: OpsCostCodeChoice[];
   requestId: string;
   supplierOptions: Array<{ id: string; label: string }>;
 }) {
@@ -693,30 +687,12 @@ function AddItemForm({
             variance report are keyed on. It renders unconditionally — unlike
             the schedule dropdown above, which needs a live issued schedule to
             appear and so left every request charging the unplanned bucket. */}
-        {costCodeOptions.length > 0 ? (
-          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
-            Cost code
-            <select className={OPS_INPUT_CLASS} defaultValue="" name="cost_code_id">
-              <option value="">
-                Not set — will charge unplanned / contingency
-              </option>
-              {costCodeOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <span className="mt-1 block text-xs font-medium text-muted-foreground">
-              Which work this material is for. Sets the budget it draws against.
-            </span>
-          </label>
-        ) : (
-          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 min-[520px]:col-span-2 lg:col-span-6 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
-            This project has no cost codes yet, so this spend cannot be charged
-            to a budget. Ask the Quantity Surveyor or Projects Manager to build
-            the cost codes on /ops/cost-codes.
-          </p>
-        )}
+        <OpsCostCodePicker
+          choices={costCodeChoices}
+          className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}
+          helperText="Which work this material is for. Sets the budget it draws against."
+          unsetLabel="Not set — will charge unplanned / contingency"
+        />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
           Item
           <input className={OPS_INPUT_CLASS} name="item_name" required />
@@ -1152,13 +1128,17 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
   // dropdown above, which renders only when the site has a live issued
   // schedule — with none in the system every request fell through to the
   // unplanned/contingency leaf and no budget line ever saw its own spend.
-  const costCodeOptionsBySiteId = await fetchOpsCostCodeOptions(
+  const costCodeChoicesBySiteId = await fetchOpsCostCodeChoices(
     requests.map((request) => request.site_id).filter((id): id is string => Boolean(id)),
-  ).catch(() => new Map<string, OpsCostCodeOption[]>());
+  ).catch(() => new Map<string, OpsCostCodeChoice[]>());
+  // Labels for codes already saved on items. Only "project" choices carry a
+  // node id; library choices have no node until one is provisioned on save.
   const costCodeLabelById = new Map<string, string>();
-  for (const options of costCodeOptionsBySiteId.values()) {
-    for (const option of options) {
-      costCodeLabelById.set(option.id, option.label);
+  for (const choices of costCodeChoicesBySiteId.values()) {
+    for (const choice of choices) {
+      if (choice.group === "project") {
+        costCodeLabelById.set(choice.value.slice("node:".length), choice.label);
+      }
     }
   }
   // Correcting a cost code is a filing decision, not a commercial one, so it
@@ -1700,14 +1680,14 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       boqLineLabelById={boqLineLabelById}
                       canEdit={canEdit}
                       canRecode={canRecode}
-                      costCodeLabelById={costCodeLabelById}
-                      costCodeOptions={
+                      costCodeChoices={
                         request.site_id
-                          ? leafCostCodeOptions(
-                              costCodeOptionsBySiteId.get(request.site_id) ?? [],
+                          ? leafCostCodeChoices(
+                              costCodeChoicesBySiteId.get(request.site_id) ?? [],
                             )
                           : []
                       }
+                      costCodeLabelById={costCodeLabelById}
                       request={request}
                       supplierOptions={supplierOptions}
                     />
@@ -1717,10 +1697,10 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                           boqLineOptions={
                             request.site_id ? (boqLinesBySiteId.get(request.site_id) ?? []) : []
                           }
-                          costCodeOptions={
+                          costCodeChoices={
                             request.site_id
-                              ? leafCostCodeOptions(
-                                  costCodeOptionsBySiteId.get(request.site_id) ?? [],
+                              ? leafCostCodeChoices(
+                                  costCodeChoicesBySiteId.get(request.site_id) ?? [],
                                 )
                               : []
                           }

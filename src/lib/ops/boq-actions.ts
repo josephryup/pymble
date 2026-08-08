@@ -21,8 +21,8 @@ import { LockedBudgetError, syncProjectBudgetFromBoq } from "@/lib/ops/boq-budge
 import { diffBoqRevision, summarizeBoqRevisionDiff } from "@/lib/ops/boq-revisions";
 import { readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
 import {
-  optionalCostCodeIdSchema,
-  validateCostCodeForSite,
+  optionalCostCodeSelectionSchema,
+  resolveOpsCostCodeSelection,
 } from "@/lib/ops/cost-code-picker";
 import { logOpsServerError, swallowOpsError } from "@/lib/ops/log";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
@@ -112,7 +112,7 @@ const createLineItemSchema = z.object({
   // The WBS leaf this planned line belongs to. Every material request called
   // off against the line inherits it, so setting it here is what makes the
   // planned→actual comparison work at all. Had no writer before this.
-  cost_code_id: optionalCostCodeIdSchema,
+  cost_code_id: optionalCostCodeSelectionSchema,
 });
 
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
@@ -309,9 +309,10 @@ export async function createBoqLineItemAction(formData: FormData) {
 
   // A planned line is measured work, so it charges a leaf — a phase node would
   // double-count against the leaves rolled up beneath it.
-  const costCode = await validateCostCodeForSite({
-    costCodeId: parsed.data.cost_code_id,
+  const costCode = await resolveOpsCostCodeSelection({
+    selection: parsed.data.cost_code_id,
     siteId: target.site_id,
+    actorUserId: profile.id,
     leafOnly: true,
   });
   if (!costCode.ok) {
@@ -379,7 +380,7 @@ const updateLineItemSchema = lineItemIdSchema.extend({
   project_task_id: optionalProjectTaskId,
   lead_time_days_override: optionalLeadTimeDays,
   stock_item_id: optionalStockItemId,
-  cost_code_id: optionalCostCodeIdSchema,
+  cost_code_id: optionalCostCodeSelectionSchema,
 });
 
 type BoqDocumentForMutation = OpsBoqMutationTarget & {
@@ -501,9 +502,10 @@ export async function updateBoqLineItemAction(formData: FormData) {
     boqError("Lines can only be edited while the material schedule is in draft.");
   }
 
-  const costCode = await validateCostCodeForSite({
-    costCodeId: parsed.data.cost_code_id,
+  const costCode = await resolveOpsCostCodeSelection({
+    selection: parsed.data.cost_code_id,
     siteId: target.site_id,
+    actorUserId: profile.id,
     leafOnly: true,
   });
   if (!costCode.ok) {

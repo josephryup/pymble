@@ -7,8 +7,8 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
-  optionalCostCodeIdSchema,
-  validateCostCodeForSite,
+  optionalCostCodeSelectionSchema,
+  resolveOpsCostCodeSelection,
 } from "@/lib/ops/cost-code-picker";
 import { logOpsServerError } from "@/lib/ops/log";
 import { fetchOpsProjectTaskById } from "@/lib/ops/project-tasks";
@@ -45,12 +45,12 @@ const createTaskSchema = baseTaskSchema.extend({
   // The WBS leaf this activity's cost belongs to. Optional: a schedule is a
   // plan of work, and plenty of activities (inspections, handovers) carry no
   // cost of their own.
-  cost_code_id: optionalCostCodeIdSchema,
+  cost_code_id: optionalCostCodeSelectionSchema,
 });
 
 const updateTaskSchema = baseTaskSchema.extend({
   id: z.string().uuid("Select a project task."),
-  cost_code_id: optionalCostCodeIdSchema,
+  cost_code_id: optionalCostCodeSelectionSchema,
   status: z.enum(["planned", "in_progress", "completed", "blocked", "cancelled"]),
   completion_percent: z.coerce.number().int().min(0).max(100),
   actual_start_date: z
@@ -110,9 +110,10 @@ export async function createProjectTaskAction(formData: FormData) {
     taskError("Planned end date must be on or after planned start date.");
   }
 
-  const costCode = await validateCostCodeForSite({
-    costCodeId: parsed.data.cost_code_id,
+  const costCode = await resolveOpsCostCodeSelection({
+    selection: parsed.data.cost_code_id,
     siteId: parsed.data.site_id,
+    actorUserId: profile.id,
     leafOnly: true,
   });
   if (!costCode.ok) {
@@ -195,9 +196,10 @@ export async function updateProjectTaskAction(formData: FormData) {
     taskError("Project task was not found.");
   }
 
-  const costCode = await validateCostCodeForSite({
-    costCodeId: patch.cost_code_id,
+  const costCode = await resolveOpsCostCodeSelection({
+    selection: patch.cost_code_id,
     siteId: existing.site_id,
+    actorUserId: profile.id,
     leafOnly: true,
   });
   if (!costCode.ok) {
