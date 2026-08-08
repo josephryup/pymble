@@ -22,6 +22,7 @@ function task(partial: Partial<OpsProjectTask>): OpsProjectTask {
     actual_end_date: null,
     completion_percent: 0,
     assigned_to: null,
+    cost_code_id: null,
     sort_order: 0,
     notes: "",
     created_by: null,

@@ -59,6 +59,8 @@ export type OpsBoqLineItem = {
   lead_time_days_override: number | null;
   project_task_id: string | null;
   task: OpsBoqLineTask | null;
+  /** The WBS leaf this planned line charges; inherited by every call-off. */
+  cost_code_id: string | null;
   stock_item_id: string | null;
   stock_item: OpsBoqLineStockItem | null;
   updated_at: string;
@@ -327,7 +329,7 @@ async function fetchOpsBoqDocumentItems(
   const { data: itemData, error: itemError } = await supabase
     .from("boq_line_items")
     .select(
-      "id, boq_id, description, unit, quantity, unit_rate, budgeted_total, actual_quantity, supplier_id, supplier_name_freeform, category, needed_by, estimated_transport_cost, lead_time_days_override, project_task_id, stock_item_id, updated_at, supplier:suppliers!boq_line_items_supplier_id_fkey(id, supplier_code, legal_name), task:project_tasks!boq_line_items_project_task_id_fkey(id, title, planned_start_date), stock_item:stock_items!boq_line_items_stock_item_id_fkey(id, item_code, item_name, unit, lead_time_days, last_unit_cost)",
+      "id, boq_id, description, unit, quantity, unit_rate, budgeted_total, actual_quantity, supplier_id, supplier_name_freeform, category, needed_by, estimated_transport_cost, lead_time_days_override, project_task_id, cost_code_id, stock_item_id, updated_at, supplier:suppliers!boq_line_items_supplier_id_fkey(id, supplier_code, legal_name), task:project_tasks!boq_line_items_project_task_id_fkey(id, title, planned_start_date), stock_item:stock_items!boq_line_items_stock_item_id_fkey(id, item_code, item_name, unit, lead_time_days, last_unit_cost)",
     )
     .in(
       "boq_id",

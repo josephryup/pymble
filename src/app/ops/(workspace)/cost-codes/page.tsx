@@ -1,4 +1,5 @@
-import { BookOpen, Layers, Plus, Save } from "lucide-react";
+import { BookOpen, Layers, Plus, Save, Target } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
@@ -19,6 +20,7 @@ import {
 } from "@/lib/ops/cost-code-permissions";
 import {
   fetchOpsCostCodeLibrary,
+  fetchOpsMisfiledSpend,
   fetchOpsSiteCostCodePosition,
   flattenCostCodeTree,
 } from "@/lib/ops/cost-codes";
@@ -84,9 +86,12 @@ export default async function OpsCostCodesPage({ searchParams }: PageProps) {
   ]);
 
   const selectedSiteId = firstParam(params.site) ?? siteOptions[0]?.id ?? null;
-  const position = selectedSiteId
-    ? await fetchOpsSiteCostCodePosition(selectedSiteId).catch(() => null)
-    : null;
+  const [position, misfiled] = selectedSiteId
+    ? await Promise.all([
+        fetchOpsSiteCostCodePosition(selectedSiteId).catch(() => null),
+        fetchOpsMisfiledSpend(selectedSiteId).catch(() => null),
+      ])
+    : [null, null];
   const rows = position ? flattenCostCodeTree(position.roots) : [];
   const phases = rows.filter((row) => row.isPhase);
 
@@ -437,6 +442,108 @@ export default async function OpsCostCodesPage({ searchParams }: PageProps) {
           </div>
         ) : null}
       </OpsDashboardPanel>
+
+      {/* ── Where the spend actually went ──────────────────────────────────
+          The roll-up above can show a funded trade code with no spend against
+          it, but never answers the obvious next question. This panel does, and
+          links straight to the line so it can be recoded. */}
+      {selectedSiteId && misfiled ? (
+        <OpsDashboardPanel
+          eyebrow="Cost control"
+          title="Spend not filed against the work"
+          description="Request lines with no cost code, or parked on unplanned / contingency. Each one is money the budget cannot see. Open the request to set the right code."
+        >
+          {misfiled.uncodedBudgetLines.length > 0 ? (
+            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+              <p className="font-bold">
+                {misfiled.uncodedBudgetLines.length} budget line
+                {misfiled.uncodedBudgetLines.length === 1 ? "" : "s"} (
+                {formatZmw(misfiled.uncodedBudgetAmount)}) have no cost code.
+              </p>
+              <p className="mt-1 leading-6">
+                That money is invisible to every comparison on this page. Set a
+                cost code on each from{" "}
+                <Link className="underline" href="/ops/project-budgets">
+                  project budgets
+                </Link>
+                .
+              </p>
+              <ul className="mt-2 space-y-1">
+                {misfiled.uncodedBudgetLines.slice(0, 8).map((line) => (
+                  <li key={line.id} className="text-xs">
+                    {line.budgetNumber} — {line.description} ·{" "}
+                    <span className="font-semibold">{formatZmw(line.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {misfiled.items.length === 0 ? (
+            <OpsEmptyState
+              description="No line on this project is uncoded or sitting on the contingency bucket."
+              icon={Target}
+              title="Every request line is filed against real work"
+            />
+          ) : (
+            <>
+              <p className="mb-3 text-sm font-semibold text-muted-foreground">
+                {misfiled.items.length} line
+                {misfiled.items.length === 1 ? "" : "s"} ·{" "}
+                {formatZmw(misfiled.totalAmount)} — {misfiled.uncodedCount} with no
+                code, {misfiled.contingencyCount} on unplanned / contingency.
+              </p>
+              <div className="overflow-x-auto">
+                <table className={OPS_TABLE_CLASS}>
+                  <caption className="sr-only">
+                    Material request lines that are not filed against a cost code
+                  </caption>
+                  <thead className={OPS_THEAD_CLASS}>
+                    <tr>
+                      <th className={OPS_TH_CLASS} scope="col">Request</th>
+                      <th className={OPS_TH_CLASS} scope="col">Line</th>
+                      <th className={OPS_TH_CLASS} scope="col">Why</th>
+                      <th className={OPS_TH_NUM_CLASS} scope="col">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {misfiled.items.map((item) => (
+                      <tr className={OPS_TR_CLASS} key={item.itemId}>
+                        <td className={OPS_TD_CLASS}>
+                          <Link
+                            className="font-semibold text-primary-blue hover:underline"
+                            href={`/ops/material-requests#mr-${item.requestId}`}
+                          >
+                            {item.requestNumber}
+                          </Link>
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            {item.requestTitle}
+                          </span>
+                        </td>
+                        <td className={OPS_TD_CLASS}>{item.itemName}</td>
+                        <td className={OPS_TD_CLASS}>
+                          <span
+                            className={
+                              item.reason === "uncoded"
+                                ? "inline-flex rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:text-red-300"
+                                : "inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300"
+                            }
+                          >
+                            {item.reason === "uncoded"
+                              ? "No cost code"
+                              : "Unplanned / contingency"}
+                          </span>
+                        </td>
+                        <td className={OPS_TD_NUM_CLASS}>{formatZmw(item.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </OpsDashboardPanel>
+      ) : null}
     </div>
   );
 }

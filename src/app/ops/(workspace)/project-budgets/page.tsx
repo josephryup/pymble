@@ -56,6 +56,10 @@ import {
   scheduleCompositionKey,
   type OpsScheduleCompositionLine,
 } from "@/lib/ops/boq";
+import {
+  fetchOpsCostCodeOptions,
+  type OpsCostCodeOption,
+} from "@/lib/ops/cost-code-picker";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchOpsProjectPnl } from "@/lib/ops/project-pnl";
@@ -146,8 +150,10 @@ function projectBudgetNotice(params: OpsSearchParams) {
  * it from a free-text form here would reopen the drift the spine closed.
  */
 function BudgetLineMaintenance({
+  costCodeOptions,
   line,
 }: {
+  costCodeOptions: OpsCostCodeOption[];
   line: OpsProjectBudgetSummary["lines"][number];
 }) {
   return (
@@ -169,9 +175,27 @@ function BudgetLineMaintenance({
               required
             />
           </label>
+          {/* The WBS link — what the availability bands, the roll-up and every
+              variance report are keyed on. A phase node is allowed here so
+              Finance can budget coarsely and let the leaves roll up into it. */}
+          <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+            Cost code
+            <select
+              className={OPS_INPUT_CLASS}
+              defaultValue={line.cost_code_id ?? ""}
+              name="cost_code_id"
+            >
+              <option value="">Not linked — invisible to budget vs actual</option>
+              {costCodeOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.isPhase ? `${option.label} (whole phase)` : option.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="grid gap-2 min-[520px]:grid-cols-3">
             <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
-              Cost code
+              Reference
               <input
                 className={OPS_INPUT_CLASS}
                 defaultValue={line.cost_code}
@@ -298,7 +322,13 @@ function BudgetMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AddBudgetLineForm({ budget }: { budget: OpsProjectBudgetSummary }) {
+function AddBudgetLineForm({
+  budget,
+  costCodeOptions,
+}: {
+  budget: OpsProjectBudgetSummary;
+  costCodeOptions: OpsCostCodeOption[];
+}) {
   return (
     <details className="rounded-md border border-border">
       <summary
@@ -318,8 +348,41 @@ function AddBudgetLineForm({ budget }: { budget: OpsProjectBudgetSummary }) {
       >
         <OpsReturnToField />
         <input name="budget_id" type="hidden" value={budget.id} />
+        {costCodeOptions.length > 0 ? (
+          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+            Cost code
+            <select className={OPS_INPUT_CLASS} defaultValue="" name="cost_code_id" required>
+              <option disabled value="">
+                Select the work this budget covers
+              </option>
+              {costCodeOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.isPhase ? `${option.label} (whole phase)` : option.label}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs font-medium text-muted-foreground">
+              Budget a whole phase or a single trade. Spend charged to anything
+              beneath a phase rolls up into it.
+            </span>
+          </label>
+        ) : (
+          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900 min-[520px]:col-span-2 lg:col-span-6 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+            This project has no cost codes yet. Lines added now cannot be
+            compared to actual spend — build the cost codes on{" "}
+            <Link
+              className="underline"
+              href={
+                budget.site ? `/ops/cost-codes?site=${budget.site.id}` : "/ops/cost-codes"
+              }
+            >
+              /ops/cost-codes
+            </Link>{" "}
+            first.
+          </p>
+        )}
         <label className={OPS_LABEL_CLASS}>
-          Cost code
+          Reference
           <input className={OPS_INPUT_CLASS} name="cost_code" placeholder="CIV-001" />
         </label>
         <label className={OPS_LABEL_CLASS}>
@@ -379,9 +442,20 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
     fetchActiveSiteOptions(),
     fetchOpsProjectPnl(),
   ]);
+  const budgetSiteIds = [
+    ...new Set(
+      budgetPage.items
+        .map((budget) => budget.site?.id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
   // Which schedule lines compose each generated budget line (audit B2).
-  const scheduleComposition = await fetchOpsScheduleComposition(
-    [...new Set(budgetPage.items.map((budget) => budget.site?.id).filter((id): id is string => Boolean(id)))],
+  const scheduleComposition = await fetchOpsScheduleComposition(budgetSiteIds);
+  // The WBS each budget line can be pointed at. Until this picker existed the
+  // column had no runtime writer at all, so every line created after the
+  // backfill migration was permanently invisible to budget-vs-actual.
+  const costCodeOptionsBySiteId = await fetchOpsCostCodeOptions(budgetSiteIds).catch(
+    () => new Map<string, OpsCostCodeOption[]>(),
   );
   const notice = projectBudgetNotice(params);
   const canCreate = canCreateOpsProjectBudget(auth.profile.role);
@@ -738,6 +812,13 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
               const canActivate = canActivateOpsProjectBudget(auth.profile.role, budget);
               const canLock = canLockOpsProjectBudget(auth.profile.role, budget);
               const canArchive = canArchiveOpsProjectBudget(auth.profile.role, budget);
+              const budgetCostCodeOptions = budget.site
+                ? (costCodeOptionsBySiteId.get(budget.site.id) ?? [])
+                : [];
+              // Money budgeted against no cost code is invisible to the
+              // availability bands and to every variance report, so say so
+              // rather than letting the line look healthy.
+              const uncodedLines = budget.lines.filter((line) => !line.cost_code_id);
 
               return (
                 <article className="p-5" key={budget.id}>
@@ -913,7 +994,23 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                         </form>
                       </details>
                     ) : null}
-                    {canAddLine ? <AddBudgetLineForm budget={budget} /> : null}
+                    {canAddLine ? (
+                      <AddBudgetLineForm
+                        budget={budget}
+                        costCodeOptions={budgetCostCodeOptions}
+                      />
+                    ) : null}
+                    {uncodedLines.length > 0 ? (
+                      <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                        {uncodedLines.length} of {budget.lines.length} line
+                        {budget.lines.length === 1 ? "" : "s"} ({formatMoney(
+                          uncodedLines.reduce((sum, line) => sum + line.budgeted_amount, 0),
+                          budget.currency_code,
+                        )}
+                        ) have no cost code. That money is invisible to budget-vs-actual
+                        and to the approval checks — open Edit on each line and pick one.
+                      </p>
+                    ) : null}
                     {budget.lines.length > 0 ? (
                       <div className="overflow-x-auto rounded-md border border-border">
                         <table className="min-w-[720px] w-full text-left text-sm">
@@ -984,7 +1081,10 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                                 </td>
                                 {canEditLines ? (
                                   <td className="px-3 py-3 align-top">
-                                    <BudgetLineMaintenance line={line} />
+                                    <BudgetLineMaintenance
+                                      costCodeOptions={budgetCostCodeOptions}
+                                      line={line}
+                                    />
                                   </td>
                                 ) : null}
                               </tr>

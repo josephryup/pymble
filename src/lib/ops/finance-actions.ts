@@ -13,6 +13,11 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import { opsReturnTo } from "@/lib/ops/return-paths";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
+  fetchOpsCostCodeOptionsForSite,
+  optionalCostCodeIdSchema,
+  validateCostCodeForSite,
+} from "@/lib/ops/cost-code-picker";
+import {
   canActivateOpsProjectBudget,
   canApproveOpsPaymentRequest,
   canArchiveOpsPaymentRequest,
@@ -62,6 +67,7 @@ const budgetLineSchema = z.object({
   budgeted_amount: z.coerce.number().min(0, "Budgeted amount cannot be negative."),
   category: z.string().trim().max(80).default("general"),
   cost_code: z.string().trim().max(40).default(""),
+  cost_code_id: optionalCostCodeIdSchema,
   description: z.string().trim().min(2, "Line description is required.").max(180),
   notes: z.string().trim().max(800).default(""),
 });
@@ -497,6 +503,7 @@ export async function addProjectBudgetLineAction(formData: FormData) {
     budgeted_amount: field(formData, "budgeted_amount") || "0",
     category: field(formData, "category") || "general",
     cost_code: field(formData, "cost_code"),
+    cost_code_id: field(formData, "cost_code_id"),
     description: field(formData, "description"),
     notes: field(formData, "notes"),
   });
@@ -515,6 +522,32 @@ export async function addProjectBudgetLineAction(formData: FormData) {
     budgetError("Your role cannot add lines to this budget.");
   }
 
+  // A budget line may sit on a PHASE node — that is what lets Finance keep a
+  // short list of lines while the leaves beneath still roll up into it — so
+  // leafOnly is deliberately not set here (unlike spend, which must charge a
+  // leaf).
+  const costCode = await validateCostCodeForSite({
+    costCodeId: parsed.data.cost_code_id,
+    siteId: budget.site_id,
+  });
+  if (!costCode.ok) {
+    budgetError(costCode.message);
+  }
+
+  // Required whenever the project HAS a WBS. Money budgeted to no cost code is
+  // invisible to the availability bands, the roll-up and every variance report
+  // — the state that left 17 of 37 live budget lines unreadable. Projects with
+  // no WBS yet are still allowed through, because refusing there would be a
+  // dead end rather than a prompt.
+  if (!costCode.costCodeId) {
+    const siteCostCodes = await fetchOpsCostCodeOptionsForSite(budget.site_id);
+    if (siteCostCodes.length > 0) {
+      budgetError(
+        "Pick a cost code for this budget line — without one the budget cannot be compared to actual spend.",
+      );
+    }
+  }
+
   const lineNumber = await nextBudgetLineNumber(budget.id);
   const category = normalizeCategory(parsed.data.category);
   const supabase = getOpsSupabaseServiceClient();
@@ -525,6 +558,7 @@ export async function addProjectBudgetLineAction(formData: FormData) {
       budgeted_amount: parsed.data.budgeted_amount,
       category,
       cost_code: parsed.data.cost_code.toUpperCase(),
+      cost_code_id: costCode.costCodeId,
       created_by: profile.id,
       description: parsed.data.description,
       line_number: lineNumber,
@@ -573,7 +607,7 @@ async function fetchBudgetLineForMutation(lineId: string) {
   const { data, error } = await supabase
     .from("project_budget_lines")
     .select(
-      "id, budget_id, line_number, description, category, cost_code, budgeted_amount, notes, source, budget:project_budgets!project_budget_lines_budget_id_fkey(id, site_id, title, status, created_by)",
+      "id, budget_id, line_number, description, category, cost_code, cost_code_id, budgeted_amount, notes, source, budget:project_budgets!project_budget_lines_budget_id_fkey(id, site_id, title, status, created_by)",
     )
     .eq("id", lineId)
     .maybeSingle();
@@ -592,6 +626,7 @@ async function fetchBudgetLineForMutation(lineId: string) {
     description: string;
     category: string;
     cost_code: string;
+    cost_code_id: string | null;
     budgeted_amount: number | string;
     notes: string;
     source: string;
@@ -610,17 +645,23 @@ const budgetLineEditSchema = z.object({
     .max(1_000_000_000_000, "That budgeted amount looks unrealistic."),
   category: z.string().trim().max(80).default("general"),
   cost_code: z.string().trim().max(20).default(""),
+  cost_code_id: optionalCostCodeIdSchema,
   description: z.string().trim().min(2, "Describe the budget line.").max(200),
   notes: z.string().trim().max(400).default(""),
 });
 
 /**
- * Edit a budget line in place.
+ * Edit a budget line in place, including its WBS link.
  *
- * Deliberately does NOT touch `cost_code_id` — the WBS link is maintained on
- * /ops/cost-codes, where the two-level structure and the GL mapping are
- * visible. Letting it be re-pointed from a free-text form here would reopen
- * exactly the drift the spine exists to close.
+ * `cost_code_id` used to be excluded here on the reasoning that the link
+ * belonged on /ops/cost-codes, where the structure and GL mapping are visible.
+ * That screen never grew the control, so in practice the column had NO runtime
+ * writer at all: it was set once by the 20260809 backfill and could never be
+ * corrected, and every budget line created afterwards was permanently
+ * uncodeable. The drift the exclusion was meant to prevent is smaller than the
+ * blindness it caused, so the picker lives here now — a constrained <select>
+ * over the site's own WBS, validated server-side, not the free-text box the
+ * original note was written about.
  *
  * Schedule-generated lines (`source = 'boq'`) are editable but warned about:
  * the next schedule issue overwrites their amount, so an edit here is
@@ -634,6 +675,7 @@ export async function editProjectBudgetLineAction(formData: FormData) {
     budgeted_amount: field(formData, "budgeted_amount") || "0",
     category: field(formData, "category") || "general",
     cost_code: field(formData, "cost_code"),
+    cost_code_id: field(formData, "cost_code_id"),
     description: field(formData, "description"),
     notes: field(formData, "notes"),
   });
@@ -649,6 +691,14 @@ export async function editProjectBudgetLineAction(formData: FormData) {
     budgetError("Your role cannot change lines on this budget.");
   }
 
+  const costCode = await validateCostCodeForSite({
+    costCodeId: parsed.data.cost_code_id,
+    siteId: line.budget.site_id,
+  });
+  if (!costCode.ok) {
+    budgetError(costCode.message);
+  }
+
   const category = normalizeCategory(parsed.data.category);
   const supabase = getOpsSupabaseServiceClient();
   const { error } = await supabase
@@ -657,6 +707,7 @@ export async function editProjectBudgetLineAction(formData: FormData) {
       budgeted_amount: parsed.data.budgeted_amount,
       category,
       cost_code: parsed.data.cost_code.toUpperCase(),
+      cost_code_id: costCode.costCodeId,
       description: parsed.data.description,
       notes: parsed.data.notes,
     })
@@ -681,6 +732,8 @@ export async function editProjectBudgetLineAction(formData: FormData) {
       amount_to: parsed.data.budgeted_amount,
       description_from: line.description,
       description_to: parsed.data.description,
+      cost_code_id_from: line.cost_code_id,
+      cost_code_id_to: costCode.costCodeId,
       source: line.source,
     },
     moduleKey: "project_budgets",

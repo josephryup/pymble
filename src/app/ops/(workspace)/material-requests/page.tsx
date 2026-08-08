@@ -45,6 +45,7 @@ import {
   decideMaterialRequestCostAction,
   deleteMaterialRequestItemAction,
   importMaterialRequestItemsAction,
+  setMaterialRequestItemCostCodeAction,
   setMaterialRequestTransportCostAction,
   submitMaterialRequestForApprovalAction,
   updateMaterialRequestHeaderAction,
@@ -72,6 +73,12 @@ import {
   type OpsMaterialRequestSummary,
 } from "@/lib/ops/material-requests";
 import { fetchOpsBoqDocuments } from "@/lib/ops/boq";
+import { canRecodeOpsSpend } from "@/lib/ops/cost-code-permissions";
+import {
+  fetchOpsCostCodeOptions,
+  leafCostCodeOptions,
+  type OpsCostCodeOption,
+} from "@/lib/ops/cost-code-picker";
 import {
   fetchOpsRequestBudgetPositions,
   type OpsRequestBudgetPosition,
@@ -311,11 +318,18 @@ function MaterialRequestFlowStep({
 function MaterialRequestItems({
   boqLineLabelById,
   canEdit,
+  canRecode,
+  costCodeLabelById,
+  costCodeOptions,
   request,
   supplierOptions,
 }: {
   boqLineLabelById: Map<string, string>;
   canEdit: boolean;
+  /** Recoding is allowed after approval — see canRecodeOpsSpend. */
+  canRecode: boolean;
+  costCodeLabelById: Map<string, string>;
+  costCodeOptions: OpsCostCodeOption[];
   request: OpsMaterialRequestSummary;
   supplierOptions: Array<{ id: string; label: string }>;
 }) {
@@ -370,6 +384,50 @@ function MaterialRequestItems({
                   <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-primary-blue/20 bg-primary-blue/5 px-2 py-0.5 text-[11px] font-semibold text-primary-blue">
                     Schedule: {boqLineLabelById.get(item.boq_line_item_id) ?? "Linked line"}
                   </p>
+                ) : null}
+                {/* The cost code decides which budget this line is measured
+                    against, so it belongs on the line itself rather than only
+                    in an edit form nobody opens. */}
+                <p className="mt-1">
+                  {item.cost_code_id ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                      {costCodeLabelById.get(item.cost_code_id) ?? "Cost code set"}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                      <AlertTriangle className="size-3" aria-hidden="true" />
+                      No cost code — charges unplanned
+                    </span>
+                  )}
+                </p>
+                {canRecode && costCodeOptions.length > 0 ? (
+                  <details className="mt-1">
+                    <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[11px] font-semibold text-primary-blue hover:underline [&::-webkit-details-marker]:hidden">
+                      Change cost code
+                    </summary>
+                    <form
+                      action={setMaterialRequestItemCostCodeAction}
+                      className="mt-1 flex flex-wrap items-end gap-2"
+                    >
+                      <OpsReturnToField />
+                      <input name="item_id" type="hidden" value={item.id} />
+                      <select
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={item.cost_code_id ?? ""}
+                        name="cost_code_id"
+                      >
+                        <option value="">Not set</option>
+                        {costCodeOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
+                        Save
+                      </OpsSubmitButton>
+                    </form>
+                  </details>
                 ) : null}
               </td>
               <td className={`${OPS_TD_CLASS} align-top font-semibold text-muted-foreground`}>
@@ -538,6 +596,26 @@ function BudgetPositionNotice({
     return null;
   }
 
+  // No code on any item: there is no position to report, and saying nothing
+  // (the old behaviour) let an approver see a clean screen for spend that
+  // cannot be charged anywhere.
+  if (!position.decision) {
+    return (
+      <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+        <p className="font-bold">
+          <AlertTriangle className="mr-1.5 inline size-3.5" aria-hidden="true" />
+          No cost code on this request
+        </p>
+        <p className="mt-0.5">
+          All {position.totalItemCount} line
+          {position.totalItemCount === 1 ? "" : "s"} will charge the unplanned /
+          contingency budget, so this spend will not appear against the work it
+          is for. Set a cost code on each line before approving.
+        </p>
+      </div>
+    );
+  }
+
   const { band, message, projected } = position.decision;
   const tone =
     band === "escalate"
@@ -564,16 +642,25 @@ function BudgetPositionNotice({
         {formatZmw(projected.consumed)}
         {projected.usedPercent !== null ? ` · ${projected.usedPercent}% used` : ""}
       </p>
+      {position.uncodedItemCount > 0 ? (
+        <p className="mt-1 font-semibold">
+          {position.uncodedItemCount} of {position.totalItemCount} lines have no
+          cost code and will charge the unplanned budget instead — the figure
+          above covers only the coded ones.
+        </p>
+      ) : null}
     </div>
   );
 }
 
 function AddItemForm({
   boqLineOptions,
+  costCodeOptions,
   requestId,
   supplierOptions,
 }: {
   boqLineOptions: Array<{ id: string; label: string }>;
+  costCodeOptions: OpsCostCodeOption[];
   requestId: string;
   supplierOptions: Array<{ id: string; label: string }>;
 }) {
@@ -602,6 +689,34 @@ function AddItemForm({
             </select>
           </label>
         ) : null}
+        {/* The cost code is what the budget, the approval band and every
+            variance report are keyed on. It renders unconditionally — unlike
+            the schedule dropdown above, which needs a live issued schedule to
+            appear and so left every request charging the unplanned bucket. */}
+        {costCodeOptions.length > 0 ? (
+          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+            Cost code
+            <select className={OPS_INPUT_CLASS} defaultValue="" name="cost_code_id">
+              <option value="">
+                Not set — will charge unplanned / contingency
+              </option>
+              {costCodeOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs font-medium text-muted-foreground">
+              Which work this material is for. Sets the budget it draws against.
+            </span>
+          </label>
+        ) : (
+          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 min-[520px]:col-span-2 lg:col-span-6 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+            This project has no cost codes yet, so this spend cannot be charged
+            to a budget. Ask the Quantity Surveyor or Projects Manager to build
+            the cost codes on /ops/cost-codes.
+          </p>
+        )}
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
           Item
           <input className={OPS_INPUT_CLASS} name="item_name" required />
@@ -1032,6 +1147,23 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
   const budgetLineLabelById = await fetchProjectBudgetLineLabels(
     requests.flatMap((request) => [request.budget_line_id, request.transport_budget_line_id]),
   );
+  // The site's WBS leaves, so a requester can charge the right cost code
+  // directly. Previously the ONLY route to a cost code was the schedule-line
+  // dropdown above, which renders only when the site has a live issued
+  // schedule — with none in the system every request fell through to the
+  // unplanned/contingency leaf and no budget line ever saw its own spend.
+  const costCodeOptionsBySiteId = await fetchOpsCostCodeOptions(
+    requests.map((request) => request.site_id).filter((id): id is string => Boolean(id)),
+  ).catch(() => new Map<string, OpsCostCodeOption[]>());
+  const costCodeLabelById = new Map<string, string>();
+  for (const options of costCodeOptionsBySiteId.values()) {
+    for (const option of options) {
+      costCodeLabelById.set(option.id, option.label);
+    }
+  }
+  // Correcting a cost code is a filing decision, not a commercial one, so it
+  // stays available after approval — see canRecodeOpsSpend.
+  const canRecode = canRecodeOpsSpend(auth.profile.role);
   // Funds available per request, so approvers see the position at the moment
   // of decision instead of learning about an overspend afterwards (audit D8).
   const budgetPositions = await fetchOpsRequestBudgetPositions(
@@ -1567,6 +1699,15 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                     <MaterialRequestItems
                       boqLineLabelById={boqLineLabelById}
                       canEdit={canEdit}
+                      canRecode={canRecode}
+                      costCodeLabelById={costCodeLabelById}
+                      costCodeOptions={
+                        request.site_id
+                          ? leafCostCodeOptions(
+                              costCodeOptionsBySiteId.get(request.site_id) ?? [],
+                            )
+                          : []
+                      }
                       request={request}
                       supplierOptions={supplierOptions}
                     />
@@ -1575,6 +1716,13 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                         <AddItemForm
                           boqLineOptions={
                             request.site_id ? (boqLinesBySiteId.get(request.site_id) ?? []) : []
+                          }
+                          costCodeOptions={
+                            request.site_id
+                              ? leafCostCodeOptions(
+                                  costCodeOptionsBySiteId.get(request.site_id) ?? [],
+                                )
+                              : []
                           }
                           requestId={request.id}
                           supplierOptions={supplierOptions}

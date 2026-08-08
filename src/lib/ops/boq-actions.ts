@@ -20,6 +20,10 @@ import {
 import { LockedBudgetError, syncProjectBudgetFromBoq } from "@/lib/ops/boq-budget-sync";
 import { diffBoqRevision, summarizeBoqRevisionDiff } from "@/lib/ops/boq-revisions";
 import { readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
+import {
+  optionalCostCodeIdSchema,
+  validateCostCodeForSite,
+} from "@/lib/ops/cost-code-picker";
 import { logOpsServerError, swallowOpsError } from "@/lib/ops/log";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
@@ -105,6 +109,10 @@ const createLineItemSchema = z.object({
   project_task_id: optionalProjectTaskId,
   lead_time_days_override: optionalLeadTimeDays,
   stock_item_id: optionalStockItemId,
+  // The WBS leaf this planned line belongs to. Every material request called
+  // off against the line inherits it, so setting it here is what makes the
+  // planned→actual comparison work at all. Had no writer before this.
+  cost_code_id: optionalCostCodeIdSchema,
 });
 
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
@@ -282,6 +290,7 @@ export async function createBoqLineItemAction(formData: FormData) {
     project_task_id: field(formData, "project_task_id"),
     lead_time_days_override: field(formData, "lead_time_days_override"),
     stock_item_id: field(formData, "stock_item_id"),
+    cost_code_id: field(formData, "cost_code_id"),
   });
 
   if (!parsed.success) {
@@ -298,10 +307,21 @@ export async function createBoqLineItemAction(formData: FormData) {
     );
   }
 
+  // A planned line is measured work, so it charges a leaf — a phase node would
+  // double-count against the leaves rolled up beneath it.
+  const costCode = await validateCostCodeForSite({
+    costCodeId: parsed.data.cost_code_id,
+    siteId: target.site_id,
+    leafOnly: true,
+  });
+  if (!costCode.ok) {
+    boqError(costCode.message);
+  }
+
   const supabase = await createOpsServerSessionClient();
   const { data, error } = await supabase
     .from("boq_line_items")
-    .insert(parsed.data)
+    .insert({ ...parsed.data, cost_code_id: costCode.costCodeId })
     .select("id")
     .single<{ id: string }>();
 
@@ -359,6 +379,7 @@ const updateLineItemSchema = lineItemIdSchema.extend({
   project_task_id: optionalProjectTaskId,
   lead_time_days_override: optionalLeadTimeDays,
   stock_item_id: optionalStockItemId,
+  cost_code_id: optionalCostCodeIdSchema,
 });
 
 type BoqDocumentForMutation = OpsBoqMutationTarget & {
@@ -462,6 +483,7 @@ export async function updateBoqLineItemAction(formData: FormData) {
     project_task_id: field(formData, "project_task_id"),
     lead_time_days_override: field(formData, "lead_time_days_override"),
     stock_item_id: field(formData, "stock_item_id"),
+    cost_code_id: field(formData, "cost_code_id"),
   });
   if (!parsed.success) {
     boqError(parsed.error.issues[0]?.message ?? "Check the line item details.");
@@ -479,6 +501,15 @@ export async function updateBoqLineItemAction(formData: FormData) {
     boqError("Lines can only be edited while the material schedule is in draft.");
   }
 
+  const costCode = await validateCostCodeForSite({
+    costCodeId: parsed.data.cost_code_id,
+    siteId: target.site_id,
+    leafOnly: true,
+  });
+  if (!costCode.ok) {
+    boqError(costCode.message);
+  }
+
   const supabase = await createOpsServerSessionClient();
   const { error } = await supabase
     .from("boq_line_items")
@@ -493,6 +524,7 @@ export async function updateBoqLineItemAction(formData: FormData) {
       project_task_id: parsed.data.project_task_id,
       lead_time_days_override: parsed.data.lead_time_days_override,
       stock_item_id: parsed.data.stock_item_id,
+      cost_code_id: costCode.costCodeId,
     })
     .eq("id", parsed.data.line_item_id);
   if (error) {

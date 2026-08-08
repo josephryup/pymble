@@ -31,6 +31,11 @@ import {
   checkOpsBudgetAvailability,
   type BudgetControlDecision,
 } from "@/lib/ops/budget-availability";
+import { canRecodeOpsSpend } from "@/lib/ops/cost-code-permissions";
+import {
+  optionalCostCodeIdSchema,
+  validateCostCodeForSite,
+} from "@/lib/ops/cost-code-picker";
 import { postCostEntryToGlSafe } from "@/lib/ops/gl-cost-bridge";
 import { buildScheduleLineMatcher } from "@/lib/ops/material-schedule-match";
 import { fetchOpsTenderRequirement } from "@/lib/ops/tender-policy";
@@ -131,6 +136,12 @@ const itemSchema = z.object({
     .default("")
     .transform((value) => (value.length > 0 ? value : null)),
   supplier_name_freeform: z.string().trim().max(160).default(""),
+  // The WBS leaf this item charges. Set DIRECTLY here rather than only
+  // inherited from a schedule line: inheritance was the sole route until now,
+  // and because it needs a live issued schedule to exist, in practice every
+  // item fell through to the site's unplanned/contingency leaf. A requester who
+  // knows the work knows the code, so let them say so.
+  cost_code_id: optionalCostCodeIdSchema,
   // Optional link back to the planned material schedule (BOQ) line this item
   // fulfils. Drives budget-line resolution at submit time.
   boq_line_item_id: z
@@ -393,6 +404,7 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     supplier_id: field(formData, "supplier_id"),
     supplier_name_freeform: field(formData, "supplier_name_freeform"),
     unit: field(formData, "unit") || "each",
+    cost_code_id: field(formData, "cost_code_id"),
     boq_line_item_id: field(formData, "boq_line_item_id"),
     off_schedule_reason: field(formData, "off_schedule_reason") || undefined,
     off_schedule_note: field(formData, "off_schedule_note"),
@@ -412,6 +424,17 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     materialRequestError("You can only edit draft or rejected material requests you manage.");
   }
 
+  // Spend charges a leaf, never a phase — a phase total is the roll-up of its
+  // leaves, so booking at both levels on one branch would double-count.
+  const costCode = await validateCostCodeForSite({
+    costCodeId: parsed.data.cost_code_id,
+    siteId: request.site_id,
+    leafOnly: true,
+  });
+  if (!costCode.ok) {
+    materialRequestError(costCode.message);
+  }
+
   const lineNumber = await nextMaterialRequestLineNumber(request.id);
   const supabase = getOpsSupabaseServiceClient();
   const { error } = await supabase.from("material_request_items").insert({
@@ -425,6 +448,7 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     supplier_id: parsed.data.supplier_id,
     supplier_name_freeform: parsed.data.supplier_name_freeform || null,
     unit: parsed.data.unit,
+    cost_code_id: costCode.costCodeId,
     boq_line_item_id: parsed.data.boq_line_item_id,
     // Only meaningful when the item is off-schedule; a linked item is by
     // definition planned, so never carries a reason.
@@ -1414,9 +1438,12 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
       }).catch(() => null);
     }
 
+    // Book against the SAME code the band was just judged on, so the warning
+    // the approver saw and the money the ledger holds can never diverge.
     await upsertMaterialRequestCostEntries({
       actorUserId: profile.id,
       goodsAmount,
+      goodsCostCodeId: costCodeId,
       request,
       lifecycleState: "reserved",
       status: "committed",
@@ -1770,9 +1797,13 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
     // real: advance to `actual`, which relieves the reservation taken at
     // approval in the same call (audit §8.4). Phase 3 inserts `committed` (PO
     // issued) and `accrued` (goods received) between the two.
+    // Same code the reservation was taken on, so advancing the station never
+    // silently moves the money to a different leaf.
+    const closeCostCodeId = await resolveMaterialRequestCostCode(request).catch(() => null);
     const closeEntries = await upsertMaterialRequestCostEntries({
       actorUserId: profile.id,
       goodsAmount,
+      goodsCostCodeId: closeCostCodeId,
       request,
       lifecycleState: "actual",
       status: "posted",
@@ -2033,6 +2064,142 @@ export async function updateMaterialRequestItemAction(formData: FormData) {
       fallback: MATERIAL_REQUEST_ROUTE,
       params: { updated: "item" },
       hash: `mr-${itemRow.request_id}`,
+    }),
+  );
+}
+
+/**
+ * Re-point one line item at a different cost code, at ANY point in the
+ * request's life.
+ *
+ * This is the correction path the system never had. `cost_code_id` could only
+ * ever be inherited — from a schedule line, or from the budget line at submit —
+ * and once the request left draft there was no way to fix a wrong or missing
+ * code at all. The result in the live database was 232 items on one site all
+ * charging the unplanned bucket while eleven funded trade codes sat untouched.
+ * Recoding moves no money and changes no approval: it only says which work the
+ * spend belongs to.
+ *
+ * The ledger is re-pointed in the same call. A cost entry carries the request's
+ * dominant item code, so leaving it behind would put the request and its own
+ * ledger row on different codes — the exact silent divergence this module
+ * exists to prevent.
+ */
+export async function setMaterialRequestItemCostCodeAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = z
+    .object({
+      item_id: z.string().uuid("Select a line item."),
+      cost_code_id: optionalCostCodeIdSchema,
+    })
+    .safeParse({
+      item_id: field(formData, "item_id"),
+      cost_code_id: field(formData, "cost_code_id"),
+    });
+  if (!parsed.success) {
+    materialRequestError(parsed.error.issues[0]?.message ?? "Select a cost code.");
+  }
+
+  if (!canRecodeOpsSpend(profile.role)) {
+    materialRequestError(
+      "Only the Quantity Surveyor, Projects Manager, Finance Manager or leadership can change a cost code.",
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: itemRow } = await supabase
+    .from("material_request_items")
+    .select("id, request_id, item_name, cost_code_id")
+    .eq("id", parsed.data.item_id)
+    .maybeSingle<{
+      id: string;
+      request_id: string;
+      item_name: string;
+      cost_code_id: string | null;
+    }>();
+  if (!itemRow) {
+    materialRequestError("Line item was not found.");
+  }
+
+  const request = await fetchMaterialRequestForMutation(itemRow.request_id);
+  if (!request) {
+    materialRequestError("Material request was not found.");
+  }
+
+  const costCode = await validateCostCodeForSite({
+    costCodeId: parsed.data.cost_code_id,
+    siteId: request.site_id,
+    leafOnly: true,
+  });
+  if (!costCode.ok) {
+    materialRequestError(costCode.message);
+  }
+
+  const { error } = await supabase
+    .from("material_request_items")
+    .update({ cost_code_id: costCode.costCodeId })
+    .eq("id", itemRow.id);
+  if (error) {
+    materialRequestError(error.message);
+  }
+
+  // Follow the money: re-point any live goods entry at the request's new
+  // dominant code. Best-effort — a ledger hiccup must not undo a correction
+  // the user has already been told succeeded.
+  await (async () => {
+    const dominant = await resolveMaterialRequestCostCode(request);
+    if (!dominant) {
+      return;
+    }
+    await supabase
+      .from("project_cost_entries")
+      .update({ cost_code_id: dominant })
+      .eq("material_request_id", request.id)
+      .eq("cost_type", "materials")
+      .neq("lifecycle_state", "released");
+  })().catch((ledgerError: unknown) =>
+    recordOpsAuditEvent({
+      action: "material_request.cost_entry_recode_failed",
+      actorUserId: profile.id,
+      entityId: request.id,
+      entityType: "material_request",
+      metadata: {
+        error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
+      },
+      moduleKey: "material_requests",
+      sourceId: request.id,
+      sourceTable: "material_requests",
+      summary: `Could not re-point the ledger entry for ${request.request_number}`,
+    }).catch(() => null),
+  );
+
+  await recordOpsAuditEvent({
+    action: "material_request.item_recoded",
+    actorUserId: profile.id,
+    entityId: itemRow.id,
+    entityType: "material_request_item",
+    metadata: {
+      item_name: itemRow.item_name,
+      cost_code_id_from: itemRow.cost_code_id,
+      cost_code_id_to: costCode.costCodeId,
+      request_number: request.request_number,
+      request_status: request.status,
+    },
+    moduleKey: "material_requests",
+    sourceId: request.id,
+    sourceTable: "material_requests",
+    summary: `Changed the cost code on "${itemRow.item_name}" (${request.request_number})`,
+  }).catch(() => null);
+
+  revalidatePath(MATERIAL_REQUEST_ROUTE);
+  revalidatePath("/ops/cost-codes");
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: MATERIAL_REQUEST_ROUTE,
+      params: { updated: "item_recoded" },
+      hash: `mr-${request.id}`,
     }),
   );
 }

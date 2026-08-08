@@ -63,6 +63,22 @@ export function canRequestOpsCostCode(role: OpsUserRole) {
 }
 
 /**
+ * Re-point spend that is already committed at a different cost code.
+ *
+ * Deliberately NOT the same gate as editing a request. Editing a request is
+ * closed once it is approved — correctly, since quantities and prices are then
+ * agreed — but the cost code is not a commercial term, it is a filing decision,
+ * and it is routinely got wrong or left unset by the person raising the
+ * request. Without a post-approval route to correct it, a mistake is permanent
+ * and every report built on it stays wrong forever. So the people who own the
+ * WBS may recode at any point in the request's life; the money, quantities and
+ * approvals are untouched, and every change is audited.
+ */
+export function canRecodeOpsSpend(role: OpsUserRole) {
+  return PROJECT_WBS_MANAGE_ROLES.includes(role) || role === "finance_manager";
+}
+
+/**
  * Read cost codes. Every active ops user — see the note above on why this is
  * intentionally open. Access to the *workspace* is already gated upstream by
  * requireOpsUser, so this is not a security boundary, it is a statement that

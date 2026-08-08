@@ -1,3 +1,8 @@
+import {
+  CONTINGENCY_LIBRARY_CODE,
+  fetchOpsContingencyCostCodeIdsFor,
+  isOpsContingencyCostCode,
+} from "@/lib/ops/cost-code-picker";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 /**
@@ -137,10 +142,22 @@ export function computeBudgetAvailability(
  * situation that produced K971,031 of requests against a K0 budget on site
  * 0003, and it should reach the MD rather than pass silently. It is still not
  * blocked.
+ *
+ * `isContingencyCode` is the one exception, and it exists because the rule
+ * above misfired at scale. The contingency leaf is the designed destination for
+ * off-schedule spend, so it legitimately receives requests all day; when its
+ * own allowance is zero, "unfunded" fired on EVERY request routed there —
+ * 232 of them on one site alone. An escalation that never varies is not a
+ * control, it is noise the MD learns to skip, which is worse than silence
+ * because it hides the genuine cases. So an unfunded contingency asks for a
+ * written reason instead, and only escalates once it exceeds an allowance that
+ * actually exists.
  */
 export function decideBudgetControl(input: {
   position: BudgetPositionInput;
   amount: number;
+  /** True when the code is the site's unplanned/contingency leaf. */
+  isContingencyCode?: boolean;
   thresholds?: OpsBudgetControlThresholds;
 }): BudgetControlDecision {
   const thresholds = input.thresholds ?? DEFAULT_BUDGET_CONTROL_THRESHOLDS;
@@ -155,11 +172,13 @@ export function decideBudgetControl(input: {
   const unfunded = projected.budgeted <= 0 && projected.consumed > 0;
   const usedPercent = projected.usedPercent;
 
+  const isContingency = input.isContingencyCode ?? false;
+
   let band: BudgetControlBand = "ok";
   if (unfunded) {
-    band = "escalate";
+    band = isContingency ? "reason_required" : "escalate";
   } else if (usedPercent === null) {
-    band = "escalate";
+    band = isContingency ? "reason_required" : "escalate";
   } else if (usedPercent > thresholds.escalatePercent) {
     band = "escalate";
   } else if (usedPercent > thresholds.reasonPercent) {
@@ -169,7 +188,10 @@ export function decideBudgetControl(input: {
   }
 
   let message: string;
-  if (unfunded || usedPercent === null) {
+  if ((unfunded || usedPercent === null) && isContingency) {
+    message =
+      "This is off-schedule spend and the contingency allowance is not set, so there is nothing to measure it against. Record why it is needed, and set a contingency amount on the budget so the next one can be judged.";
+  } else if (unfunded || usedPercent === null) {
     message =
       "This cost code has no budget. The spend is allowed but will be reported to the Managing Director — set a budget for this code to clear the flag.";
   } else if (band === "ok") {
@@ -218,15 +240,68 @@ export async function fetchOpsBudgetControlThresholds(): Promise<OpsBudgetContro
 }
 
 /**
+ * How a cost code is funded, beyond its own budget lines.
+ *
+ * The contingency leaf is special: nobody writes a budget line for "unplanned",
+ * but every budget already carries a `contingency_amount` on its header, which
+ * until now funded nothing at all. Treating that header figure as the
+ * contingency leaf's budget is what gives off-schedule spend something real to
+ * be measured against, instead of every such request reporting a zero budget.
+ */
+async function fetchContingencyAllowance(costCodeId: string): Promise<number> {
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: node, error: nodeError } = await supabase
+    .from("project_cost_codes")
+    .select(
+      "site_id, library:cost_code_library!project_cost_codes_library_code_id_fkey(code)",
+    )
+    .eq("id", costCodeId)
+    .maybeSingle();
+
+  if (nodeError) {
+    throw nodeError;
+  }
+
+  const row = node as unknown as {
+    site_id: string;
+    library: { code: string } | { code: string }[] | null;
+  } | null;
+  if (!row) {
+    return 0;
+  }
+  const library = Array.isArray(row.library) ? (row.library[0] ?? null) : row.library;
+  if (library?.code !== CONTINGENCY_LIBRARY_CODE) {
+    return 0;
+  }
+
+  const { data: budgets, error: budgetError } = await supabase
+    .from("project_budgets")
+    .select("contingency_amount")
+    .eq("site_id", row.site_id)
+    .in("status", ["draft", "active", "locked"]);
+
+  if (budgetError) {
+    throw budgetError;
+  }
+
+  return ((budgets ?? []) as Array<{ contingency_amount: number | string | null }>).reduce(
+    (sum, budget) => roundMoney(sum + toNumber(budget.contingency_amount)),
+    0,
+  );
+}
+
+/**
  * The live position of one cost code: budgeted from the site's open budget
- * lines, consumed from non-released ledger entries grouped by station.
+ * lines (plus the budget's contingency allowance when this IS the contingency
+ * leaf), consumed from non-released ledger entries grouped by station.
  */
 export async function fetchOpsCostCodePosition(
   costCodeId: string,
 ): Promise<BudgetPositionInput> {
   const supabase = getOpsSupabaseServiceClient();
 
-  const [budgetResult, entriesResult] = await Promise.all([
+  const [budgetResult, entriesResult, contingencyAllowance] = await Promise.all([
     supabase
       .from("project_budget_lines")
       .select("budgeted_amount, budget:project_budgets!inner(status)")
@@ -237,6 +312,7 @@ export async function fetchOpsCostCodePosition(
       .select("amount, lifecycle_state")
       .eq("cost_code_id", costCodeId)
       .neq("lifecycle_state", "released"),
+    fetchContingencyAllowance(costCodeId).catch(() => 0),
   ]);
 
   if (budgetResult.error) {
@@ -247,6 +323,7 @@ export async function fetchOpsCostCodePosition(
   }
 
   const position: BudgetPositionInput = { ...EMPTY_BUDGET_POSITION };
+  position.budgeted = contingencyAllowance;
 
   for (const row of (budgetResult.data ?? []) as Array<{
     budgeted_amount: number | string | null;
@@ -292,19 +369,30 @@ export async function checkOpsBudgetAvailability(input: {
   costCodeId: string;
   amount: number;
 }): Promise<BudgetControlDecision> {
-  const [position, thresholds] = await Promise.all([
+  const [position, thresholds, isContingencyCode] = await Promise.all([
     fetchOpsCostCodePosition(input.costCodeId),
     fetchOpsBudgetControlThresholds(),
+    isOpsContingencyCostCode(input.costCodeId).catch(() => false),
   ]);
 
-  return decideBudgetControl({ position, amount: input.amount, thresholds });
+  return decideBudgetControl({
+    position,
+    amount: input.amount,
+    isContingencyCode,
+    thresholds,
+  });
 }
 
 export type OpsRequestBudgetPosition = {
   requestId: string;
-  costCodeId: string;
-  costCodeLabel: string;
-  decision: BudgetControlDecision;
+  /** Null when not one item on the request carries a cost code. */
+  costCodeId: string | null;
+  costCodeLabel: string | null;
+  /** Items with no cost code — money that will charge the unplanned bucket. */
+  uncodedItemCount: number;
+  totalItemCount: number;
+  /** Null when there is no code to judge a position against. */
+  decision: BudgetControlDecision | null;
 };
 
 /**
@@ -312,9 +400,14 @@ export type OpsRequestBudgetPosition = {
  * screen can show every approver what remains BEFORE they decide (audit D8).
  *
  * Batched deliberately: one query per table rather than per request, because
- * this runs on a list page. Requests whose items carry no cost code are simply
- * absent from the result — the caller renders nothing rather than a zero,
- * since "no code" and "no budget" are different problems.
+ * this runs on a list page.
+ *
+ * Requests whose items carry no cost code used to be absent from the result
+ * entirely, on the reasoning that "no code" and "no budget" are different
+ * problems. True — but the consequence was that the more serious of the two
+ * rendered as nothing at all, and an approver saw a clean screen for a request
+ * that could not be charged anywhere. Both are reported now: `decision` stays
+ * null when there is no code to judge, and `uncodedItemCount` says why.
  */
 export async function fetchOpsRequestBudgetPositions(
   requestIds: string[],
@@ -326,11 +419,12 @@ export async function fetchOpsRequestBudgetPositions(
 
   const supabase = getOpsSupabaseServiceClient();
 
+  // Every item, coded or not — the uncoded ones are the finding, so they can
+  // no longer be filtered out of the query that decides what an approver sees.
   const { data: itemRows, error: itemError } = await supabase
     .from("material_request_items")
     .select("request_id, cost_code_id, actual_total, estimated_total")
-    .in("request_id", requestIds)
-    .not("cost_code_id", "is", null);
+    .in("request_id", requestIds);
 
   if (itemError) {
     throw itemError;
@@ -339,17 +433,23 @@ export async function fetchOpsRequestBudgetPositions(
   // Dominant cost code per request, plus the amount to test against it.
   const perRequest = new Map<
     string,
-    { counts: Map<string, number>; amount: number }
+    { counts: Map<string, number>; amount: number; uncoded: number; total: number }
   >();
   for (const row of (itemRows ?? []) as Array<{
     request_id: string;
-    cost_code_id: string;
+    cost_code_id: string | null;
     actual_total: number | string | null;
     estimated_total: number | string | null;
   }>) {
     const entry =
-      perRequest.get(row.request_id) ?? { counts: new Map<string, number>(), amount: 0 };
-    entry.counts.set(row.cost_code_id, (entry.counts.get(row.cost_code_id) ?? 0) + 1);
+      perRequest.get(row.request_id) ??
+      { counts: new Map<string, number>(), amount: 0, uncoded: 0, total: 0 };
+    entry.total += 1;
+    if (row.cost_code_id) {
+      entry.counts.set(row.cost_code_id, (entry.counts.get(row.cost_code_id) ?? 0) + 1);
+    } else {
+      entry.uncoded += 1;
+    }
     const priced = toNumber(row.actual_total);
     entry.amount = roundMoney(entry.amount + (priced > 0 ? priced : toNumber(row.estimated_total)));
     perRequest.set(row.request_id, entry);
@@ -360,16 +460,13 @@ export async function fetchOpsRequestBudgetPositions(
       Array.from(perRequest.values()).flatMap((entry) => Array.from(entry.counts.keys())),
     ),
   );
-  if (costCodeIds.length === 0) {
-    return out;
-  }
 
-  const [thresholds, labelResult] = await Promise.all([
+  const [thresholds, labelResult, contingencyIds] = await Promise.all([
     fetchOpsBudgetControlThresholds(),
-    supabase
-      .from("project_cost_codes")
-      .select("id, path, name")
-      .in("id", costCodeIds),
+    costCodeIds.length > 0
+      ? supabase.from("project_cost_codes").select("id, path, name").in("id", costCodeIds)
+      : Promise.resolve({ data: [], error: null }),
+    fetchOpsContingencyCostCodeIdsFor(costCodeIds).catch(() => new Set<string>()),
   ]);
 
   if (labelResult.error) {
@@ -392,13 +489,33 @@ export async function fetchOpsRequestBudgetPositions(
   for (const [requestId, entry] of perRequest) {
     const costCodeId = Array.from(entry.counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
     const position = costCodeId ? positions.get(costCodeId) : null;
-    if (!costCodeId || !position) continue;
+
+    if (!costCodeId || !position) {
+      // Nothing to judge, but the request still needs to be reported: every
+      // one of its items will charge the unplanned bucket.
+      out.set(requestId, {
+        requestId,
+        costCodeId: null,
+        costCodeLabel: null,
+        uncodedItemCount: entry.uncoded,
+        totalItemCount: entry.total,
+        decision: null,
+      });
+      continue;
+    }
 
     out.set(requestId, {
       requestId,
       costCodeId,
       costCodeLabel: labelById.get(costCodeId) ?? "Cost code",
-      decision: decideBudgetControl({ position, amount: entry.amount, thresholds }),
+      uncodedItemCount: entry.uncoded,
+      totalItemCount: entry.total,
+      decision: decideBudgetControl({
+        position,
+        amount: entry.amount,
+        isContingencyCode: contingencyIds.has(costCodeId),
+        thresholds,
+      }),
     });
   }
 

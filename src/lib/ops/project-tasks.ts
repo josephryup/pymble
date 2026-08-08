@@ -39,6 +39,9 @@ export type OpsProjectTask = {
   actual_end_date: string | null;
   completion_percent: number;
   assigned_to: string | null;
+  /** The WBS leaf this activity's cost belongs to. Optional — not every
+   *  activity carries cost of its own. */
+  cost_code_id: string | null;
   sort_order: number;
   notes: string;
   created_by: string | null;
@@ -115,6 +118,7 @@ const TASK_SELECT = [
   "actual_end_date",
   "completion_percent",
   "assigned_to",
+  "cost_code_id",
   "sort_order",
   "notes",
   "created_by",

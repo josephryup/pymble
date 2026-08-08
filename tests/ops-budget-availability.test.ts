@@ -171,3 +171,75 @@ describe("decideBudgetControl", () => {
     assert.equal(escalating.band, "escalate");
   });
 });
+
+describe("decideBudgetControl — contingency codes", () => {
+  const thresholds = DEFAULT_BUDGET_CONTROL_THRESHOLDS;
+
+  // The contingency leaf is the designed destination for off-schedule spend,
+  // so it receives requests constantly. Escalating every one of them (which is
+  // what an unfunded code normally does) produced an alert that never varied
+  // and therefore carried no information — 232 items on one site alone.
+  it("asks for a reason rather than escalating when contingency is unfunded", () => {
+    const decision = decideBudgetControl({
+      position: position({ budgeted: 0 }),
+      amount: 40_000,
+      isContingencyCode: true,
+      thresholds,
+    });
+
+    assert.equal(decision.band, "reason_required");
+    assert.equal(decision.requiresReason, true);
+    assert.equal(decision.escalateToLeadership, false);
+    assert.match(decision.message, /contingency allowance is not set/);
+  });
+
+  it("still escalates an unfunded code that is NOT contingency", () => {
+    const decision = decideBudgetControl({
+      position: position({ budgeted: 0 }),
+      amount: 40_000,
+      isContingencyCode: false,
+      thresholds,
+    });
+
+    assert.equal(decision.band, "escalate");
+    assert.equal(decision.escalateToLeadership, true);
+  });
+
+  it("escalates a FUNDED contingency once it blows past the tolerance", () => {
+    // The softening only covers "nothing to measure against". Once an
+    // allowance exists, contingency is judged like any other code.
+    const decision = decideBudgetControl({
+      position: position({ budgeted: 100_000, reserved: 100_000 }),
+      amount: 50_000,
+      isContingencyCode: true,
+      thresholds,
+    });
+
+    assert.equal(decision.band, "escalate");
+    assert.equal(decision.escalateToLeadership, true);
+  });
+
+  it("leaves a contingency inside its allowance alone", () => {
+    const decision = decideBudgetControl({
+      position: position({ budgeted: 100_000 }),
+      amount: 10_000,
+      isContingencyCode: true,
+      thresholds,
+    });
+
+    assert.equal(decision.band, "ok");
+    assert.equal(decision.requiresReason, false);
+  });
+
+  it("never blocks, whatever the band", () => {
+    for (const isContingencyCode of [true, false]) {
+      const decision = decideBudgetControl({
+        position: position({ budgeted: 0 }),
+        amount: 1_000_000,
+        isContingencyCode,
+        thresholds,
+      });
+      assert.equal(decision.allowed, true);
+    }
+  });
+});

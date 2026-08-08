@@ -6,6 +6,10 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import {
+  optionalCostCodeIdSchema,
+  validateCostCodeForSite,
+} from "@/lib/ops/cost-code-picker";
 import { logOpsServerError } from "@/lib/ops/log";
 import { fetchOpsProjectTaskById } from "@/lib/ops/project-tasks";
 import {
@@ -38,10 +42,15 @@ const baseTaskSchema = z.object({
 const createTaskSchema = baseTaskSchema.extend({
   site_id: z.string().uuid("Select a project site."),
   parent_task_id: optionalUuid,
+  // The WBS leaf this activity's cost belongs to. Optional: a schedule is a
+  // plan of work, and plenty of activities (inspections, handovers) carry no
+  // cost of their own.
+  cost_code_id: optionalCostCodeIdSchema,
 });
 
 const updateTaskSchema = baseTaskSchema.extend({
   id: z.string().uuid("Select a project task."),
+  cost_code_id: optionalCostCodeIdSchema,
   status: z.enum(["planned", "in_progress", "completed", "blocked", "cancelled"]),
   completion_percent: z.coerce.number().int().min(0).max(100),
   actual_start_date: z
@@ -92,6 +101,7 @@ export async function createProjectTaskAction(formData: FormData) {
     assigned_to: field(formData, "assigned_to"),
     sort_order: field(formData, "sort_order") || "0",
     notes: field(formData, "notes"),
+    cost_code_id: field(formData, "cost_code_id"),
   });
   if (!parsed.success) {
     taskError(parsed.error.issues[0]?.message ?? "Check the task details.");
@@ -100,10 +110,19 @@ export async function createProjectTaskAction(formData: FormData) {
     taskError("Planned end date must be on or after planned start date.");
   }
 
+  const costCode = await validateCostCodeForSite({
+    costCodeId: parsed.data.cost_code_id,
+    siteId: parsed.data.site_id,
+    leafOnly: true,
+  });
+  if (!costCode.ok) {
+    taskError(costCode.message);
+  }
+
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("project_tasks")
-    .insert({ ...parsed.data, created_by: profile.id })
+    .insert({ ...parsed.data, cost_code_id: costCode.costCodeId, created_by: profile.id })
     .select("id")
     .single<{ id: string }>();
 
@@ -153,6 +172,7 @@ export async function updateProjectTaskAction(formData: FormData) {
     completion_percent: field(formData, "completion_percent") || "0",
     actual_start_date: field(formData, "actual_start_date"),
     actual_end_date: field(formData, "actual_end_date"),
+    cost_code_id: field(formData, "cost_code_id"),
   });
   if (!parsed.success) {
     taskError(parsed.error.issues[0]?.message ?? "Check the task details.");
@@ -163,9 +183,30 @@ export async function updateProjectTaskAction(formData: FormData) {
 
   const supabase = getOpsSupabaseServiceClient();
   const { id, ...patch } = parsed.data;
+
+  // The task's own site decides which codes are valid, so it has to be read
+  // before the patch is written rather than trusted from the form.
+  const { data: existing } = await supabase
+    .from("project_tasks")
+    .select("site_id")
+    .eq("id", id)
+    .maybeSingle<{ site_id: string }>();
+  if (!existing) {
+    taskError("Project task was not found.");
+  }
+
+  const costCode = await validateCostCodeForSite({
+    costCodeId: patch.cost_code_id,
+    siteId: existing.site_id,
+    leafOnly: true,
+  });
+  if (!costCode.ok) {
+    taskError(costCode.message);
+  }
+
   const { error, data } = await supabase
     .from("project_tasks")
-    .update(patch)
+    .update({ ...patch, cost_code_id: costCode.costCodeId })
     .eq("id", id)
     .is("archived_at", null)
     .select("site_id")

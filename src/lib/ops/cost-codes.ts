@@ -332,6 +332,191 @@ export async function fetchOpsSiteCostCodePosition(siteId: string): Promise<{
   return rollUpCostCodeTree(nodes, amounts);
 }
 
+export type OpsMisfiledSpendItem = {
+  itemId: string;
+  itemName: string;
+  amount: number;
+  requestId: string;
+  requestNumber: string;
+  requestTitle: string;
+  requestStatus: string;
+  /** "uncoded" = no code at all; "contingency" = parked on unplanned. */
+  reason: "uncoded" | "contingency";
+};
+
+export type OpsMisfiledSpend = {
+  items: OpsMisfiledSpendItem[];
+  uncodedCount: number;
+  contingencyCount: number;
+  totalAmount: number;
+  /** Budget lines holding money against no cost code at all. */
+  uncodedBudgetLines: Array<{
+    id: string;
+    description: string;
+    budgetNumber: string;
+    amount: number;
+  }>;
+  uncodedBudgetAmount: number;
+};
+
+/**
+ * Everything on one site that is filed somewhere useless: request lines with no
+ * cost code, request lines parked on the unplanned/contingency leaf, and budget
+ * lines holding money against no code at all.
+ *
+ * This is the screen the system was missing. The roll-up above could always
+ * show that a trade code had a budget and no spend, but nothing could answer
+ * the follow-up question — "so where did the spend actually go?" — which is why
+ * 232 items sat on one site's contingency leaf while eleven funded trade codes
+ * showed nothing. Pairing the two makes the misfiling findable and, with the
+ * recode action, fixable in one pass.
+ *
+ * Capped: this is a worklist, not a report. A site with thousands of misfiled
+ * lines has a process problem the list cannot solve by being longer.
+ */
+export async function fetchOpsMisfiledSpend(
+  siteId: string,
+  options?: { limit?: number },
+): Promise<OpsMisfiledSpend> {
+  const supabase = getOpsSupabaseServiceClient();
+  const limit = Math.min(Math.max(options?.limit ?? 100, 1), 500);
+
+  const contingencyIds = new Set<string>();
+  const { data: contingencyRows } = await supabase
+    .from("project_cost_codes")
+    .select("id, library:cost_code_library!project_cost_codes_library_code_id_fkey(code)")
+    .eq("site_id", siteId);
+  type ContingencyRow = {
+    id: string;
+    library: { code: string } | { code: string }[] | null;
+  };
+  for (const row of (contingencyRows ?? []) as unknown as ContingencyRow[]) {
+    const library = Array.isArray(row.library) ? (row.library[0] ?? null) : row.library;
+    if (library?.code === "90.90") {
+      contingencyIds.add(row.id);
+    }
+  }
+
+  // The misfiled filter has to run in the DATABASE, not after the fetch.
+  // Filtering a page of recent rows in memory would silently scan only the
+  // newest `limit` items — on a site carrying 232 misfiled lines that is
+  // precisely the backlog this list exists to work through, so most of it
+  // would never appear.
+  const misfiledFilter = [
+    "cost_code_id.is.null",
+    ...(contingencyIds.size > 0
+      ? [`cost_code_id.in.(${Array.from(contingencyIds).join(",")})`]
+      : []),
+  ].join(",");
+
+  const [itemResult, budgetLineResult] = await Promise.all([
+    supabase
+      .from("material_request_items")
+      .select(
+        "id, item_name, cost_code_id, actual_total, estimated_total, request:material_requests!material_request_items_request_id_fkey!inner(id, request_number, title, status, site_id)",
+      )
+      .eq("request.site_id", siteId)
+      .not("request.status", "in", "(cancelled,rejected)")
+      .or(misfiledFilter)
+      .order("created_at", { ascending: false })
+      .limit(limit),
+    supabase
+      .from("project_budget_lines")
+      .select(
+        "id, description, budgeted_amount, budget:project_budgets!project_budget_lines_budget_id_fkey!inner(budget_number, site_id, status)",
+      )
+      .eq("budget.site_id", siteId)
+      .in("budget.status", ["draft", "active", "locked"])
+      .is("cost_code_id", null)
+      .gt("budgeted_amount", 0),
+  ]);
+
+  if (itemResult.error) {
+    throw itemResult.error;
+  }
+  if (budgetLineResult.error) {
+    throw budgetLineResult.error;
+  }
+
+  type ItemRow = {
+    id: string;
+    item_name: string;
+    cost_code_id: string | null;
+    actual_total: number | string | null;
+    estimated_total: number | string | null;
+    request:
+      | { id: string; request_number: string; title: string; status: string }
+      | Array<{ id: string; request_number: string; title: string; status: string }>
+      | null;
+  };
+
+  const items: OpsMisfiledSpendItem[] = [];
+  let totalAmount = 0;
+  let uncodedCount = 0;
+  let contingencyCount = 0;
+
+  // The query already restricted this to misfiled lines on live requests, so
+  // the loop only classifies and totals — it does not re-filter. Keeping the
+  // rule in one place is what stops the list and its own counts diverging.
+  for (const row of (itemResult.data ?? []) as unknown as ItemRow[]) {
+    const request = Array.isArray(row.request) ? (row.request[0] ?? null) : row.request;
+    if (!request) {
+      continue;
+    }
+    const isUncoded = !row.cost_code_id;
+
+    const priced = toNumber(row.actual_total);
+    const amount = priced > 0 ? priced : toNumber(row.estimated_total);
+    totalAmount = roundMoney(totalAmount + amount);
+    if (isUncoded) {
+      uncodedCount += 1;
+    } else {
+      contingencyCount += 1;
+    }
+
+    items.push({
+      itemId: row.id,
+      itemName: row.item_name,
+      amount,
+      requestId: request.id,
+      requestNumber: request.request_number,
+      requestTitle: request.title,
+      requestStatus: request.status,
+      reason: isUncoded ? "uncoded" : "contingency",
+    });
+  }
+
+  type BudgetLineRow = {
+    id: string;
+    description: string;
+    budgeted_amount: number | string | null;
+    budget: { budget_number: string } | Array<{ budget_number: string }> | null;
+  };
+
+  const uncodedBudgetLines: OpsMisfiledSpend["uncodedBudgetLines"] = [];
+  let uncodedBudgetAmount = 0;
+  for (const row of (budgetLineResult.data ?? []) as unknown as BudgetLineRow[]) {
+    const budget = Array.isArray(row.budget) ? (row.budget[0] ?? null) : row.budget;
+    const amount = toNumber(row.budgeted_amount);
+    uncodedBudgetAmount = roundMoney(uncodedBudgetAmount + amount);
+    uncodedBudgetLines.push({
+      id: row.id,
+      description: row.description,
+      budgetNumber: budget?.budget_number ?? "Budget",
+      amount,
+    });
+  }
+
+  return {
+    items,
+    uncodedCount,
+    contingencyCount,
+    totalAmount,
+    uncodedBudgetLines,
+    uncodedBudgetAmount,
+  };
+}
+
 /**
  * Resolve the WBS leaf a material request item should charge, given the
  * schedule line it fulfils (if any). Returns the site's unplanned/contingency

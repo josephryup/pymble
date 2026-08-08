@@ -39,6 +39,8 @@ export type OpsMaterialRequestItem = {
   actual_total: number;
   actual_unit_cost: number;
   boq_line_item_id: string | null;
+  /** The WBS leaf this line charges. Null means it lands on the unplanned bucket. */
+  cost_code_id: string | null;
   created_at: string;
   estimated_total: number;
   estimated_unit_cost: number;
@@ -449,7 +451,7 @@ async function fetchMaterialRequestItems(requestIds: string[]) {
   const { data, error } = await supabase
     .from("material_request_items")
     .select(
-      "id, request_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, actual_unit_cost, actual_total, notes, created_at, supplier_id, supplier_name_freeform, boq_line_item_id, supplier:suppliers!material_request_items_supplier_id_fkey(legal_name)",
+      "id, request_id, line_number, item_name, specification, unit, quantity, estimated_unit_cost, estimated_total, actual_unit_cost, actual_total, notes, created_at, supplier_id, supplier_name_freeform, boq_line_item_id, cost_code_id, supplier:suppliers!material_request_items_supplier_id_fkey(legal_name)",
     )
     .in("request_id", requestIds)
     .order("line_number", { ascending: true });

@@ -226,8 +226,14 @@ type BudgetLineForCostEntry = {
  * Both are best-effort from the caller's perspective (wrap in .catch()) so a
  * ledger hiccup never blocks the underlying status transition.
  *
- * Each entry carries the cost code inherited from its budget line, so the
- * ledger and the budget can never disagree about which code money sits on.
+ * Cost code on the goods entry: `goodsCostCodeId` when the caller has resolved
+ * one from the request's own items, otherwise the code inherited from the
+ * budget line. The override matters because the availability check
+ * (resolveMaterialRequestCostCode) already prefers the item-level code — before
+ * it existed the check could test one code while the booking landed on another,
+ * so recoding an item changed the warning but never moved the money. Transport
+ * always follows its own budget line: it is a cross-cutting cost with no item.
+ *
  * When `lifecycleState` advances the request to a new station, superseded
  * stations are relieved in the same call (see releaseSupersededCostStations).
  */
@@ -235,6 +241,8 @@ export async function upsertMaterialRequestCostEntries(input: {
   actorUserId: string;
   request: MaterialRequestForCostEntry;
   goodsAmount: number;
+  /** Item-derived WBS leaf for the goods entry. Falls back to the budget line's. */
+  goodsCostCodeId?: string | null;
   lifecycleState?: OpsCostLifecycleState;
   status: OpsProjectCostEntryStatus;
 }) {
@@ -286,7 +294,8 @@ export async function upsertMaterialRequestCostEntries(input: {
         amount: input.goodsAmount,
         budget_id: budgetIdByLine.get(request.budget_line_id) ?? null,
         budget_line_id: request.budget_line_id,
-        cost_code_id: costCodeByLine.get(request.budget_line_id) ?? null,
+        cost_code_id:
+          input.goodsCostCodeId ?? costCodeByLine.get(request.budget_line_id) ?? null,
         cost_type: "materials",
         description: request.title
           ? `${request.request_number} / ${request.title}`

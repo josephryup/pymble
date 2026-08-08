@@ -66,6 +66,12 @@ export type OpsProjectBudgetLineSummary = {
   category: string;
   committed_amount: number;
   cost_code: string;
+  /**
+   * The WBS leaf or phase this line budgets. Null means the money is invisible
+   * to the availability bands, the cost-code roll-up and every variance report
+   * — surfaced in the UI rather than left silent.
+   */
+  cost_code_id: string | null;
   created_at: string;
   description: string;
   id: string;
@@ -456,7 +462,7 @@ async function fetchProjectBudgetLines(budgetIds: string[]) {
   const { data, error } = await supabase
     .from("project_budget_lines")
     .select(
-      "id, budget_id, line_number, cost_code, category, description, budgeted_amount, notes, created_at, source",
+      "id, budget_id, line_number, cost_code, cost_code_id, category, description, budgeted_amount, notes, created_at, source",
     )
     .in("budget_id", budgetIds)
     .order("line_number", { ascending: true });

@@ -29,6 +29,11 @@ import {
   updateProjectTaskAction,
   updateProjectTaskProgressAction,
 } from "@/lib/ops/project-task-actions";
+import {
+  fetchOpsCostCodeOptionsForSite,
+  leafCostCodeOptions,
+  type OpsCostCodeOption,
+} from "@/lib/ops/cost-code-picker";
 import { computeProgrammeVariance } from "@/lib/ops/schedule-variance";
 import {
   canArchiveProjectTask,
@@ -97,6 +102,12 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
   ]);
   if (siteRes.error || !siteRes.data) notFound();
   const site = siteRes.data as { id: string; code: string; name: string };
+
+  // The site's WBS leaves, so an activity can name the cost code it spends
+  // against — the link that makes "what has this activity cost" answerable.
+  const costCodeOptions = leafCostCodeOptions(
+    await fetchOpsCostCodeOptionsForSite(siteId).catch(() => []),
+  );
 
   const canCreate = canCreateProjectTask(profile.role);
   const canEdit = canEditProjectTask(profile.role);
@@ -358,6 +369,19 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
               Planned end
               <input className={OPS_INPUT_CLASS} name="planned_end_date" required type="date" />
             </label>
+            {/* Links the programme to the money: an activity that names its
+                cost code can be compared against what that code has spent. */}
+            <label className={`${OPS_LABEL_CLASS} md:col-span-3`}>
+              Cost code (optional)
+              <select className={OPS_INPUT_CLASS} defaultValue="" name="cost_code_id">
+                <option value="">— No cost attached —</option>
+                {costCodeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
               Assigned engineer
               <select className={OPS_INPUT_CLASS} defaultValue="" name="assigned_to">
@@ -401,6 +425,7 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
               canEdit={canEdit}
               canArchive={canArchive}
               assignableStaff={assignableStaff}
+              costCodeOptions={costCodeOptions}
               linkedBoqLines={boqLinesByTaskId.get(task.id) ?? []}
             />
           ))}
@@ -417,6 +442,7 @@ function ProjectTaskCard({
   canEdit,
   canArchive,
   assignableStaff,
+  costCodeOptions,
   linkedBoqLines,
 }: {
   task: OpsProjectTask;
@@ -425,6 +451,7 @@ function ProjectTaskCard({
   canEdit: boolean;
   canArchive: boolean;
   assignableStaff: Array<{ id: string; full_name: string; role: string }>;
+  costCodeOptions: OpsCostCodeOption[];
   linkedBoqLines: OpsBoqLineItem[];
 }) {
   const canProgress = canUpdateProjectTaskProgress(role, actorId, task);
@@ -597,6 +624,21 @@ function ProjectTaskCard({
                 {assignableStaff.map((member) => (
                   <option key={member.id} value={member.id}>
                     {member.full_name} ({formatOpsRole(member.role)})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-3`}>
+              Cost code
+              <select
+                className={OPS_INPUT_CLASS}
+                defaultValue={task.cost_code_id ?? ""}
+                name="cost_code_id"
+              >
+                <option value="">— No cost attached —</option>
+                {costCodeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
                   </option>
                 ))}
               </select>
