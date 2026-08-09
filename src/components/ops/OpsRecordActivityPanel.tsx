@@ -18,7 +18,12 @@ import {
   uploadOpsRecordAttachmentAction,
 } from "@/lib/ops/record-activity-actions";
 import {
+  OPS_DOCUMENT_VISIBILITY_LABELS,
+  OPS_DOCUMENT_VISIBILITY_ORDER,
+} from "@/lib/ops/document-permissions";
+import {
   OPS_RECORD_ACTIVITY_SOURCE_LABELS,
+  OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY,
   type OpsRecordActivitySourceTable,
 } from "@/lib/ops/record-activity";
 import { formatOpsRole, formatOpsUserName } from "@/lib/ops/roles";
@@ -210,10 +215,19 @@ export function OpsRecordActivityPanel({
               <div className="grid gap-3 min-[520px]:grid-cols-2">
                 <Label className={`${OPS_LABEL_CLASS} grid gap-1.5`}>
                   <span>Visibility</span>
-                  <select className={OPS_INPUT_CLASS} defaultValue="restricted" name="visibility">
-                    <option value="restricted">Restricted</option>
-                    <option value="company">Company</option>
-                    <option value="private">Private</option>
+                  {/* These must be the members of `ops_document_visibility`.
+                      The old Restricted/Company/Private list matched nothing in
+                      the database, so every upload was rejected by Postgres. */}
+                  <select
+                    className={OPS_INPUT_CLASS}
+                    defaultValue={OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY[sourceTable]}
+                    name="visibility"
+                  >
+                    {OPS_DOCUMENT_VISIBILITY_ORDER.map((tier) => (
+                      <option key={tier} value={tier}>
+                        {OPS_DOCUMENT_VISIBILITY_LABELS[tier]}
+                      </option>
+                    ))}
                   </select>
                 </Label>
                 <Label className={`${OPS_LABEL_CLASS} grid gap-1.5`}>

@@ -1,8 +1,11 @@
 import { Inbox, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { OpsDirectUploadField } from "@/components/ops/OpsDirectUploadField";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { OPS_DOCUMENT_VISIBILITY_SHORT } from "@/lib/ops/document-permissions";
+import { OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY } from "@/lib/ops/record-activity";
 import { createDepartmentReportAction } from "@/lib/ops/department-report-actions";
 import { fetchOpsDepartmentMetricPrefill } from "@/lib/ops/department-report-metrics";
 import {
@@ -301,6 +304,19 @@ export default async function OpsNewDepartmentReportPage({ searchParams }: PageP
             />
           </details>
         ) : null}
+
+        <fieldset className="grid gap-2 rounded-lg border border-border bg-card p-4">
+          <legend className="text-sm font-bold text-foreground">Attachments</legend>
+          <p className="text-sm text-muted-foreground">
+            Photos, PDFs, spreadsheets or documents that back up this report. They
+            are linked to the report as soon as it saves, and stay visible to{" "}
+            {OPS_DOCUMENT_VISIBILITY_SHORT[
+              OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY.department_reports
+            ].toLowerCase()}{" "}
+            — you can change that per file from the report afterwards.
+          </p>
+          <OpsDirectUploadField multiple scope="record_attachment" />
+        </fieldset>
 
         <div className="flex items-center gap-3">
           <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">

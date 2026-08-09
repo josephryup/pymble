@@ -8,9 +8,12 @@ import {
   parseOpsNotificationActionInput,
   safeOpsNotificationReturnTo,
 } from "../src/lib/ops/notification-form";
+import { OPS_DOCUMENT_VISIBILITY_ORDER } from "../src/lib/ops/document-permissions";
 import {
   isOpsRecordActivitySourceTable,
   normalizeOpsRecordCommentBody,
+  OPS_RECORD_ACTIVITY_SOURCE_TABLES,
+  OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY,
   validateOpsRecordCommentBody,
 } from "../src/lib/ops/record-activity";
 import { safeOpsReturnTo } from "../src/lib/ops/return-paths";
@@ -340,6 +343,54 @@ describe("upload validation", () => {
 
     for (const prefix of Object.values(OPS_UPLOAD_KEY_PREFIXES)) {
       assert.ok(prefix.startsWith("documents/"));
+    }
+  });
+});
+
+describe("record attachment visibility", () => {
+  it("defaults every source table to a real ops_document_visibility member", () => {
+    // The panel used to offer "restricted"/"company", which are not members of
+    // the Postgres enum, so every attachment upload failed with a raw
+    // `invalid input value for enum ops_document_visibility` error. Anything
+    // pre-selected must exist in the database's vocabulary.
+    for (const table of OPS_RECORD_ACTIVITY_SOURCE_TABLES) {
+      assert.ok(
+        OPS_DOCUMENT_VISIBILITY_ORDER.includes(
+          OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY[table],
+        ),
+        `${table} defaults to a visibility tier that does not exist`,
+      );
+    }
+  });
+
+  it("never starts personal or commercial records company-wide", () => {
+    // Public means every signed-in staff member, so an employee contract or a
+    // payment request must not land there by default.
+    for (const table of [
+      "employee_contracts",
+      "employees",
+      "invoices",
+      "leave_requests",
+      "payment_requests",
+      "performance_appraisals",
+      "department_reports",
+    ] as const) {
+      assert.notEqual(
+        OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY[table],
+        "public",
+        `${table} attachments must not default to all staff`,
+      );
+    }
+  });
+
+  it("keeps site evidence visible to the people working the record", () => {
+    for (const table of [
+      "daily_site_reports",
+      "qa_inspections",
+      "snag_items",
+      "material_tests",
+    ] as const) {
+      assert.equal(OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY[table], "public");
     }
   });
 });

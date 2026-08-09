@@ -11,17 +11,20 @@ import { extractMentionedUserIds } from "@/lib/ops/mentions";
 import { fetchOpsActiveUsers } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { canManageOps } from "@/lib/ops/permissions";
-import { deleteOpsR2Object, headOpsR2Object, putOpsR2Object } from "@/lib/ops/r2";
+import { putOpsR2Object } from "@/lib/ops/r2";
 import {
   OPS_RECORD_ACTIVITY_SOURCE_TABLES,
+  OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY,
   validateOpsRecordCommentBody,
   type OpsRecordActivitySourceTable,
 } from "@/lib/ops/record-activity";
+import {
+  linkOpsRecordAttachment,
+  verifyOpsUploadedObject,
+} from "@/lib/ops/record-attachments";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import {
-  OPS_ALLOWED_UPLOAD_TYPES,
   OPS_MAX_UPLOAD_BYTES,
-  OPS_UPLOAD_KEY_PREFIXES,
   safeOpsFileName,
   validateOpsUploadFile,
 } from "@/lib/ops/upload-validation";
@@ -31,9 +34,14 @@ const sourceSchema = z.object({
   source_table: z.enum(OPS_RECORD_ACTIVITY_SOURCE_TABLES),
 });
 
+// Visibility must speak the database's vocabulary. It previously offered
+// "company"/"restricted", which are not members of `ops_document_visibility`,
+// so Postgres rejected every attachment with a raw enum error.
 const uploadAttachmentSchema = sourceSchema.extend({
   title: z.string().trim().max(160).default(""),
-  visibility: z.enum(["company", "restricted", "private"]).default("restricted"),
+  visibility: z
+    .enum(["public", "management", "finance", "md_restricted", "private"])
+    .optional(),
 });
 
 const commentSchema = sourceSchema.extend({
@@ -143,39 +151,16 @@ async function resolveUploadedObject(
     };
   }
 
-  const allowedPrefixes = Object.values(OPS_UPLOAD_KEY_PREFIXES);
+  const verified = await verifyOpsUploadedObject(
+    claimedKey,
+    field(formData, "file_name"),
+  );
 
-  if (!allowedPrefixes.some((prefix) => claimedKey.startsWith(`${prefix}/`))) {
-    onError("That upload could not be verified. Try selecting the file again.");
+  if (!verified.ok) {
+    onError(verified.message);
   }
 
-  const stored = await headOpsR2Object(claimedKey);
-
-  if (!stored || stored.contentLength === 0) {
-    onError("The upload did not finish. Select the file again.");
-  }
-
-  if (stored.contentLength > OPS_MAX_UPLOAD_BYTES) {
-    await deleteOpsR2Object(claimedKey).catch(() => null);
-    onError(
-      `Attachments must be ${Math.floor(OPS_MAX_UPLOAD_BYTES / (1024 * 1024))} MB or smaller.`,
-    );
-  }
-
-  if (!OPS_ALLOWED_UPLOAD_TYPES.has(stored.contentType)) {
-    await deleteOpsR2Object(claimedKey).catch(() => null);
-    onError("Upload a PDF, Word, Excel, CSV, text, JPEG, PNG, or WebP file.");
-  }
-
-  const declaredName = safeOpsFileName(field(formData, "file_name") || "attachment");
-
-  return {
-    checksum: null,
-    contentType: stored.contentType,
-    fileName: field(formData, "file_name") || declaredName,
-    key: claimedKey,
-    size: stored.contentLength,
-  };
+  return verified.upload;
 }
 
 async function resolveRecordContext(
@@ -1521,7 +1506,9 @@ export async function uploadOpsRecordAttachmentAction(formData: FormData) {
     source_id: field(formData, "source_id"),
     source_table: field(formData, "source_table"),
     title: field(formData, "title"),
-    visibility: field(formData, "visibility") || "restricted",
+    // Left undefined when absent so the per-record-type default applies below,
+    // decided on the server rather than trusted from the form.
+    visibility: field(formData, "visibility") || undefined,
   });
 
   if (!parsed.success) {
@@ -1543,77 +1530,35 @@ export async function uploadOpsRecordAttachmentAction(formData: FormData) {
   const key = upload.key;
   const title = parsed.data.title || upload.fileName;
 
-  const supabase = getOpsSupabaseServiceClient();
-  const { data: document, error: documentError } = await supabase
-    .from("documents")
-    .insert({
-      category: context.category,
-      description: `Linked to ${context.label}.`,
-      status: "active",
-      title,
-      uploaded_by: profile.id,
-      visibility: parsed.data.visibility,
-    })
-    .select("id")
-    .single<{ id: string }>();
+  const visibility =
+    parsed.data.visibility ??
+    OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY[parsed.data.source_table];
 
-  if (documentError || !document) {
-    await deleteOpsR2Object(key).catch(() => null);
-    activityError(context.route, documentError?.message ?? "The attachment could not be logged.");
-  }
-
-  const { data: version, error: versionError } = await supabase
-    .from("document_versions")
-    .insert({
-      checksum_sha256: upload.checksum,
-      content_type: upload.contentType,
-      document_id: document.id,
-      file_name: upload.fileName,
-      file_size_bytes: upload.size,
-      r2_key: key,
-      uploaded_by: profile.id,
-      version_number: 1,
-    })
-    .select("id")
-    .single<{ id: string }>();
-
-  if (versionError || !version) {
-    await Promise.all([
-      deleteOpsR2Object(key).catch(() => null),
-      supabase
-        .from("documents")
-        .update({ archived_at: new Date().toISOString(), status: "archived" })
-        .eq("id", document.id)
-        .then(() => null),
-    ]);
-    activityError(context.route, versionError?.message ?? "The attachment version could not be logged.");
-  }
-
-  const { error: linkError } = await supabase.from("document_links").insert({
-    created_by: profile.id,
-    document_id: document.id,
-    module_key: context.moduleKey,
-    site_id: context.siteId,
-    source_id: context.sourceId,
-    source_table: context.sourceTable,
+  const linked = await linkOpsRecordAttachment({
+    category: context.category,
+    checksum: upload.checksum,
+    contentType: upload.contentType,
+    fileName: upload.fileName,
+    key,
+    label: context.label,
+    moduleKey: context.moduleKey,
+    siteId: context.siteId,
+    size: upload.size,
+    sourceId: context.sourceId,
+    sourceTable: context.sourceTable,
+    title,
+    uploadedBy: profile.id,
+    visibility,
   });
 
-  if (linkError) {
-    await Promise.all([
-      deleteOpsR2Object(key).catch(() => null),
-      supabase
-        .from("documents")
-        .update({ archived_at: new Date().toISOString(), status: "archived" })
-        .eq("id", document.id)
-        .then(() => null),
-    ]);
-    activityError(context.route, linkError.message);
+  if (!linked.ok) {
+    activityError(context.route, linked.message);
   }
 
   await recordOpsAuditEvent({
     action: "record.attachment_uploaded",
     actorUserId: profile.id,
-    entityId: document.id,
+    entityId: linked.documentId,
     entityType: "document",
     metadata: {
       content_type: upload.contentType,
@@ -1621,8 +1566,9 @@ export async function uploadOpsRecordAttachmentAction(formData: FormData) {
       file_size_bytes: upload.size,
       site_id: context.siteId,
       source_label: context.label,
-      version_id: version.id,
-      visibility: parsed.data.visibility,
+      version_id: linked.versionId,
+      // The tier actually applied, not what the form happened to send.
+      visibility,
     },
     moduleKey: context.moduleKey,
     sourceId: context.sourceId,

@@ -24,6 +24,11 @@ import { fetchOpsDepartmentReportById } from "@/lib/ops/department-reports";
 import { logOpsServerError } from "@/lib/ops/log";
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
+import { OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY } from "@/lib/ops/record-activity";
+import {
+  linkOpsRecordAttachment,
+  verifyOpsUploadedObject,
+} from "@/lib/ops/record-attachments";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsUserRole } from "@/lib/ops/types";
 
@@ -200,6 +205,76 @@ async function notifyHeadOnReview({
   }).catch(() => null);
 }
 
+/**
+ * Links whatever the author attached on the creation form to the report that
+ * was just saved.
+ *
+ * The files are already in R2 — `OpsDirectUploadField` PUTs them as they are
+ * picked and hands the form back nothing but keys, which is the only way a
+ * scanned drawing or phone photo gets past the 4.5 MB Server Action ceiling.
+ * The keys are re-verified server-side before anything is linked.
+ *
+ * Returns a message when some files could not be attached, or null when
+ * everything (including nothing) attached cleanly. The report is already
+ * committed by this point, so a bad file is a warning, never a rollback.
+ */
+async function attachFilesToReport({
+  formData,
+  reportId,
+  reportTitle,
+  uploaderId,
+}: {
+  formData: FormData;
+  reportId: string;
+  reportTitle: string;
+  uploaderId: string;
+}): Promise<string | null> {
+  const keys = formData.getAll("r2_key").filter((value): value is string =>
+    typeof value === "string" && value.length > 0,
+  );
+
+  if (keys.length === 0) return null;
+
+  const names = formData.getAll("file_name");
+  const failures: string[] = [];
+
+  for (const [index, key] of keys.entries()) {
+    const declaredName = names[index];
+    const fileName = typeof declaredName === "string" ? declaredName : "";
+    const verified = await verifyOpsUploadedObject(key, fileName);
+
+    if (!verified.ok) {
+      failures.push(fileName || "A file");
+      continue;
+    }
+
+    const linked = await linkOpsRecordAttachment({
+      category: "department_report",
+      checksum: verified.upload.checksum,
+      contentType: verified.upload.contentType,
+      fileName: verified.upload.fileName,
+      key: verified.upload.key,
+      label: reportTitle,
+      moduleKey: "department_reports",
+      siteId: null,
+      size: verified.upload.size,
+      sourceId: reportId,
+      sourceTable: "department_reports",
+      title: verified.upload.fileName,
+      uploadedBy: uploaderId,
+      visibility: OPS_RECORD_ATTACHMENT_DEFAULT_VISIBILITY.department_reports,
+    });
+
+    if (!linked.ok) {
+      failures.push(verified.upload.fileName);
+    }
+  }
+
+  if (failures.length === 0) return null;
+
+  return `The report was saved, but ${failures.length === 1 ? "this file" : "these files"} could not be attached: ${failures.join(", ")}. Try attaching again from the report.`;
+}
+
 export async function createDepartmentReportAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   const parsed = createReportSchema.safeParse({
@@ -268,8 +343,23 @@ export async function createDepartmentReportAction(formData: FormData) {
     summary: `Created department report draft: ${parsed.data.title}`,
   }).catch(() => null);
 
+  const attachmentOutcome = await attachFilesToReport({
+    formData,
+    reportId: data.id,
+    reportTitle: parsed.data.title,
+    uploaderId: profile.id,
+  });
+
   revalidatePath(ROUTE);
-  redirect(`${ROUTE}/${data.id}?created=report`);
+  revalidatePath("/ops/documents");
+  // The report itself saved. A file that would not attach must not read as a
+  // failed save, so it is reported as a warning on the report we just created
+  // rather than bouncing the author back to a form whose content is now gone.
+  redirect(
+    attachmentOutcome
+      ? `${ROUTE}/${data.id}?error=${encodeURIComponent(attachmentOutcome)}`
+      : `${ROUTE}/${data.id}?created=report`,
+  );
 }
 
 export async function updateDepartmentReportAction(formData: FormData) {

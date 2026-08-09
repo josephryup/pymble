@@ -12,6 +12,9 @@ const RAW_ACTION_ERROR_PATTERNS = [
   /\bviolates (foreign key|not-null|check|exclusion) constraint\b/i,
   /\bnew row violates row-level security policy\b/i,
   /\b(row-level security|permission denied|invalid input syntax)\b/i,
+  // `invalid input value for enum ops_document_visibility: "restricted"` reached
+  // a user verbatim — it names an internal type and leaks the schema.
+  /\binvalid input value for enum\b/i,
   /\bsyntax error at or near\b/i,
   /\bdeadlock detected|could not serialize access\b/i,
   /\bnull value in column\b/i,
