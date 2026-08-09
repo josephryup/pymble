@@ -62,7 +62,8 @@ type RecordContext = {
     | "/ops/fleet-logistics"
     | "/ops/hse"
     | "/ops/hse-compliance"
-    | "/ops/employees";
+    | "/ops/employees"
+    | "/ops/department-reports";
   siteId: string | null;
   sourceId: string;
   sourceTable: OpsRecordActivitySourceTable;
@@ -1440,28 +1441,73 @@ async function resolveRecordContext(
       : null;
   }
 
-  const { data, error } = await supabase
-    .from("invoices")
-    .select("id, site_id, invoice_number")
-    .eq("id", sourceId)
-    .is("deleted_at", null)
-    .maybeSingle<{ id: string; invoice_number: string; site_id: string }>();
+  if (sourceTable === "department_reports") {
+    // Archived reports are deliberately still resolvable: archiving only takes
+    // a report off the active list, it stays readable to leadership, and the
+    // activity panel is still mounted on its page.
+    const { data, error } = await supabase
+      .from("department_reports")
+      .select("id, title")
+      .eq("id", sourceId)
+      .maybeSingle<{ id: string; title: string }>();
 
-  if (error) {
-    throw error;
+    if (error) {
+      throw error;
+    }
+
+    return data
+      ? {
+          category: "department_report",
+          label: data.title,
+          moduleKey: "department_reports",
+          route: "/ops/department-reports",
+          // Department reports are company-wide, not tied to a site.
+          siteId: null,
+          sourceId: data.id,
+          sourceTable,
+        }
+      : null;
   }
 
-  return data
-    ? {
-        category: "invoice",
-        label: data.invoice_number,
-        moduleKey: "invoices",
-        route: "/ops/invoices",
-        siteId: data.site_id,
-        sourceId: data.id,
-        sourceTable,
-      }
-    : null;
+  if (sourceTable === "invoices") {
+    const { data, error } = await supabase
+      .from("invoices")
+      .select("id, site_id, invoice_number")
+      .eq("id", sourceId)
+      .is("deleted_at", null)
+      .maybeSingle<{ id: string; invoice_number: string; site_id: string }>();
+
+    if (error) {
+      throw error;
+    }
+
+    return data
+      ? {
+          category: "invoice",
+          label: data.invoice_number,
+          moduleKey: "invoices",
+          route: "/ops/invoices",
+          siteId: data.site_id,
+          sourceId: data.id,
+          sourceTable,
+        }
+      : null;
+  }
+
+  // Invoices used to sit here as an unguarded trailing query, which meant any
+  // table registered in OPS_RECORD_ACTIVITY_SOURCE_TABLES without a branch of
+  // its own silently had its id looked up in `invoices` — a guaranteed miss
+  // reported to the user as "The record could not be found." That is how
+  // attachments on department reports broke. Falling through now returns null
+  // honestly, and the exhaustive check below makes the omission a build error
+  // rather than a runtime mystery.
+  // fleet_operator_documents is registered but has no page mounting the panel,
+  // so it has no branch. Annotating the leftover here means adding a table to
+  // the registry without a branch fails `tsc` instead of shipping.
+  const unhandled: "fleet_operator_documents" = sourceTable;
+  void unhandled;
+
+  return null;
 }
 
 export async function uploadOpsRecordAttachmentAction(formData: FormData) {
