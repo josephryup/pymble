@@ -8,8 +8,9 @@ import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
+  acknowledgeDepartmentReportAction,
   archiveDepartmentReportAction,
-  reviewDepartmentReportAction,
+  requestDepartmentReportRevisionsAction,
   submitDepartmentReportAction,
   updateDepartmentReportAction,
 } from "@/lib/ops/department-report-actions";
@@ -316,7 +317,7 @@ export default async function OpsDepartmentReportDetailPage({
 
       {canReview ? (
         <form
-          action={reviewDepartmentReportAction}
+          action={acknowledgeDepartmentReportAction}
           className="rounded-lg border border-border bg-card p-4 shadow-sm"
         >
           <input name="id" type="hidden" value={report.id} />
@@ -333,20 +334,19 @@ export default async function OpsDepartmentReportDetailPage({
             />
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              className={OPS_PRIMARY_BUTTON_CLASS}
-              name="decision"
-              type="submit"
-              value="acknowledged"
-            >
+            {/* Each button carries its own action. The decision used to ride on
+                the submitter's name/value, which only reaches the server if the
+                browser attaches the submitter to the FormData — when it did not,
+                the reviewer got a bare schema error and the report stayed stuck
+                in review. A formAction cannot go missing. */}
+            <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
               <CheckCircle2 className="size-4" aria-hidden="true" />
               Acknowledge
             </button>
             <button
               className={OPS_SECONDARY_BUTTON_CLASS}
-              name="decision"
+              formAction={requestDepartmentReportRevisionsAction}
               type="submit"
-              value="revision_requested"
             >
               <RotateCcw className="size-4" aria-hidden="true" />
               Request revisions

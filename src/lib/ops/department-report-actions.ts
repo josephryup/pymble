@@ -423,14 +423,56 @@ export async function submitDepartmentReportAction(formData: FormData) {
   redirect(`${ROUTE}/${parsed.data.id}?updated=submitted`);
 }
 
-export async function reviewDepartmentReportAction(formData: FormData) {
+/** Acknowledge — bound to its own button so no `decision` field has to survive the post. */
+export async function acknowledgeDepartmentReportAction(formData: FormData) {
+  return reviewDepartmentReport(formData, "acknowledged");
+}
+
+/** Request revisions — the other half of the same decision. */
+export async function requestDepartmentReportRevisionsAction(formData: FormData) {
+  return reviewDepartmentReport(formData, "revision_requested");
+}
+
+/**
+ * Records a leadership decision on a submitted report.
+ *
+ * The decision is a parameter rather than a form field on purpose. It used to
+ * ride on the submit button's `name`/`value`, which is the one input on the
+ * page that is not a real form control — it only exists if the browser attaches
+ * the submitter to the FormData, and anything that re-dispatches or synthesises
+ * the submit loses it silently. When it went missing the reviewer got a bare
+ * schema complaint and the report stayed stuck. Two bound actions cannot lose
+ * it: which function runs *is* the decision.
+ */
+async function reviewDepartmentReport(
+  formData: FormData,
+  decision: "acknowledged" | "revision_requested",
+) {
   const { profile } = await requireOpsUser();
   const parsed = reviewSchema.safeParse({
     id: field(formData, "id"),
-    decision: field(formData, "decision"),
+    decision,
     review_notes: field(formData, "review_notes"),
   });
   if (!parsed.success) {
+    // Validation failures here were previously invisible: the action redirects
+    // rather than throwing, so nothing reached Sentry or the platform logs and
+    // a reviewer reporting "it says Invalid input" left nothing to look at.
+    // Codes and paths only — review notes are internal commentary, not log fodder.
+    logOpsServerError(new Error("Department report review input rejected"), {
+      action: "reviewDepartmentReportAction",
+      actorUserId: profile.id,
+      module: "department_reports",
+      extra: {
+        decision,
+        issues: parsed.error.issues.map((issue) => ({
+          code: issue.code,
+          message: issue.message,
+          path: issue.path.join("."),
+        })),
+      },
+    });
+
     // The id is the one field that tells us where to send them back to, so use
     // it when it survived validation even though something else did not.
     const rawId = field(formData, "id");
