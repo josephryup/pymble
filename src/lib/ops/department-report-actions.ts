@@ -78,6 +78,19 @@ function reportError(message: string): never {
   );
 }
 
+/**
+ * Same failure, but shown on the report it happened to.
+ *
+ * Bouncing a reviewer to the index left them reading a message with no idea
+ * which report it belonged to, and with the review notes they had just typed
+ * gone. Anything that already knows its report id reports the failure here.
+ */
+function reportRecordError(id: string, message: string): never {
+  redirect(
+    `${ROUTE}/${id}?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`,
+  );
+}
+
 function parseMetrics(input: string): Record<string, unknown> {
   if (!input) return {};
   try {
@@ -418,24 +431,34 @@ export async function reviewDepartmentReportAction(formData: FormData) {
     review_notes: field(formData, "review_notes"),
   });
   if (!parsed.success) {
-    reportError(parsed.error.issues[0]?.message ?? "Check the review fields.");
+    // The id is the one field that tells us where to send them back to, so use
+    // it when it survived validation even though something else did not.
+    const rawId = field(formData, "id");
+    const message = parsed.error.issues[0]?.message ?? "Check the review fields.";
+    if (z.string().uuid().safeParse(rawId).success) {
+      reportRecordError(rawId, message);
+    }
+    reportError(message);
   }
+
+  const reviewError = (message: string): never =>
+    reportRecordError(parsed.data.id, message);
 
   const existing = await fetchOpsDepartmentReportById(parsed.data.id);
   if (!existing) reportError("The department report was not found.");
   // Individual reports are reviewed by the line manager they route to
   // (e.g. Projects Manager); compiled reports need MD/GM/Developer.
   if (!canReviewDepartmentReportRecord(profile.role, existing)) {
-    reportError("Your role cannot review this report.");
+    reviewError("Your role cannot review this report.");
   }
   if (
     (existing.submitted_by === profile.id || existing.created_by === profile.id) &&
     profile.role !== "developer"
   ) {
-    reportError("You cannot review your own report.");
+    reviewError("You cannot review your own report.");
   }
   if (existing.status === "draft") {
-    reportError("The report has not been submitted yet.");
+    reviewError("The report has not been submitted yet.");
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -449,7 +472,7 @@ export async function reviewDepartmentReportAction(formData: FormData) {
       review_notes: parsed.data.review_notes,
     })
     .eq("id", parsed.data.id);
-  if (error) reportError(error.message);
+  if (error) reviewError(error.message);
 
   await recordOpsAuditEvent({
     action:

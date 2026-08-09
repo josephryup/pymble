@@ -25,6 +25,31 @@ For UI consistency and accessibility standards, use `docs/pymble-ops-design-syst
      - `R2_ACCESS_KEY_ID`
      - `R2_SECRET_ACCESS_KEY`
      - `R2_BUCKET_NAME`
+   - **Add a CORS policy to the bucket.** Attachments are uploaded by the browser
+     straight to R2 with a presigned `PUT`, because a Next Server Action body is
+     capped at 1 MB by default and at 4.5 MB by Vercel no matter how it is
+     configured — every site photo and scanned drawing failed with a 413 while
+     the bytes went through the server. Without this policy the browser blocks
+     the upload before it leaves the page. In **R2 → your bucket → Settings →
+     CORS Policy**:
+
+     ```json
+     [
+       {
+         "AllowedOrigins": [
+           "https://ops.pymbleconstruction.com",
+           "http://localhost:3000"
+         ],
+         "AllowedMethods": ["PUT"],
+         "AllowedHeaders": ["content-type"],
+         "MaxAgeSeconds": 3600
+       }
+     ]
+     ```
+
+     Drop the `localhost` entry if local uploads are not needed. `PUT` is the
+     only method required; reads still go through short-lived signed GET URLs
+     minted server-side.
 
 3. Subdomain
    - Recommended host: `ops.pymbleconstruction.com`.

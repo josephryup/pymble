@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsDirectUploadField } from "@/components/ops/OpsDirectUploadField";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
@@ -57,7 +58,6 @@ import {
 } from "@/lib/ops/ui";
 import { formatOpsLabel as formatLabel, formatOpsDate as formatDate } from "@/lib/ops/format";
 
-const FILE_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp";
 
 type PageProps = { searchParams?: Promise<OpsSearchParams> };
 
@@ -271,7 +271,7 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
             </label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Files (up to 10)
-              <input accept={FILE_ACCEPT} className={OPS_INPUT_CLASS} multiple name="documents" required type="file" />
+              <OpsDirectUploadField multiple scope="document" />
             </label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>
               Send to (optional)
@@ -526,7 +526,7 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
                         </summary>
                         <form action={addOpsDocumentAttachmentAction} className="grid gap-2 border-t border-border p-3">
                           <input name="document_id" type="hidden" value={document.document_id} />
-                          <input accept={FILE_ACCEPT} className={OPS_INPUT_CLASS} multiple name="documents" required type="file" />
+                          <OpsDirectUploadField multiple scope="document" />
                           <OpsConfirmSubmitButton className={`${OPS_SECONDARY_BUTTON_CLASS} w-full`} confirmText="Confirm upload">
                             <UploadCloud className="size-4" aria-hidden="true" />
                             Add to group

@@ -13,9 +13,15 @@ import {
 } from "@/lib/ops/document-permissions";
 import { canManageOps } from "@/lib/ops/permissions";
 import { queueOpsNotification } from "@/lib/ops/notifications";
-import { deleteOpsR2Object, putOpsR2Object } from "@/lib/ops/r2";
+import { deleteOpsR2Object, headOpsR2Object, putOpsR2Object } from "@/lib/ops/r2";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
-import { safeOpsFileName, validateOpsUploadFile } from "@/lib/ops/upload-validation";
+import {
+  OPS_ALLOWED_UPLOAD_TYPES,
+  OPS_MAX_UPLOAD_BYTES,
+  OPS_UPLOAD_KEY_PREFIXES,
+  safeOpsFileName,
+  validateOpsUploadFile,
+} from "@/lib/ops/upload-validation";
 import type { OpsDocumentStatus, OpsDocumentVisibility, OpsUserRole } from "@/lib/ops/types";
 
 const MAX_ATTACHMENTS_PER_UPLOAD = 10;
@@ -95,14 +101,76 @@ async function hasOpenDocumentApproval(documentId: string) {
   return data;
 }
 
+const MAX_UPLOAD_MB = Math.floor(OPS_MAX_UPLOAD_BYTES / (1024 * 1024));
+
 type PreparedAttachment = {
-  bytes: Uint8Array;
-  checksum: string;
+  /** Null once the browser has already PUT the bytes straight to R2. */
+  bytes: Uint8Array | null;
+  /**
+   * Null for direct-to-R2 uploads: the server never sees those bytes, and a
+   * hash the browser reported is not a checksum of anything we verified. The
+   * column is display-only and nullable, so an honest null beats a claim.
+   */
+  checksum: string | null;
   contentType: string;
   fileName: string;
   fileSize: number;
+  /** Set when the object is already in R2 and must not be uploaded again. */
+  key: string | null;
   safeName: string;
 };
+
+/**
+ * Verifies files the browser already sent straight to R2.
+ *
+ * Nothing the form says about them is trusted: the key has to sit under a
+ * prefix this server mints (otherwise a signed-in user could point a new
+ * document version at somebody else's object), and the size and type are read
+ * back off the stored object rather than taken from the hidden fields beside it.
+ */
+async function prepareUploadedAttachments(
+  keys: string[],
+  names: string[],
+): Promise<PreparedAttachment[]> {
+  const allowedPrefixes = Object.values(OPS_UPLOAD_KEY_PREFIXES);
+  const prepared: PreparedAttachment[] = [];
+
+  for (const [index, key] of keys.entries()) {
+    if (!allowedPrefixes.some((prefix) => key.startsWith(`${prefix}/`))) {
+      documentError("That upload could not be verified. Select the files again.");
+    }
+
+    const stored = await headOpsR2Object(key);
+
+    if (!stored || stored.contentLength === 0) {
+      documentError("An upload did not finish. Select the files again.");
+    }
+
+    if (stored.contentLength > OPS_MAX_UPLOAD_BYTES) {
+      await deleteOpsR2Object(key).catch(() => null);
+      documentError(`Each file must be ${MAX_UPLOAD_MB} MB or smaller.`);
+    }
+
+    if (!OPS_ALLOWED_UPLOAD_TYPES.has(stored.contentType)) {
+      await deleteOpsR2Object(key).catch(() => null);
+      documentError("Upload PDF, Word, Excel, CSV, text, JPEG, PNG, or WebP files.");
+    }
+
+    const fileName = names[index] || "document";
+
+    prepared.push({
+      bytes: null,
+      checksum: null,
+      contentType: stored.contentType,
+      fileName,
+      fileSize: stored.contentLength,
+      key,
+      safeName: safeOpsFileName(fileName),
+    });
+  }
+
+  return prepared;
+}
 
 /** Validates every file in a multi-file field and reads their bytes. */
 async function prepareAttachments(files: File[]): Promise<PreparedAttachment[]> {
@@ -110,7 +178,7 @@ async function prepareAttachments(files: File[]): Promise<PreparedAttachment[]> 
   for (const candidate of files) {
     const upload = validateOpsUploadFile(candidate, {
       empty: "Select at least one file to upload.",
-      tooLarge: "Each file must be 25 MB or smaller.",
+      tooLarge: `Each file must be ${MAX_UPLOAD_MB} MB or smaller.`,
       unsupportedType: "Upload PDF, Word, Excel, CSV, text, JPEG, PNG, or WebP files.",
     });
     if (!upload.ok) {
@@ -124,10 +192,34 @@ async function prepareAttachments(files: File[]): Promise<PreparedAttachment[]> 
       contentType: file.type,
       fileName: file.name || safeOpsFileName("document"),
       fileSize: file.size,
+      key: null,
       safeName: safeOpsFileName(file.name || "document"),
     });
   }
   return prepared;
+}
+
+/**
+ * The attachments for this submission, whichever way they arrived: keys from
+ * `OpsDirectUploadField` (the only path that works above ~1 MB, since a Server
+ * Action body cannot exceed 4.5 MB on Vercel however `bodySizeLimit` is set),
+ * or small inline files so the form still works without JavaScript.
+ */
+async function collectAttachments(formData: FormData): Promise<PreparedAttachment[]> {
+  const keys = formData
+    .getAll("r2_key")
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .slice(0, MAX_ATTACHMENTS_PER_UPLOAD);
+
+  if (keys.length > 0) {
+    const names = formData
+      .getAll("file_name")
+      .map((value) => (typeof value === "string" ? value : ""));
+
+    return prepareUploadedAttachments(keys, names);
+  }
+
+  return prepareAttachments(collectUploadFiles(formData));
 }
 
 /**
@@ -234,15 +326,22 @@ async function persistAttachments(
   for (let index = 0; index < attachments.length; index += 1) {
     const attachment = attachments[index];
     const versionNumber = startVersion + index;
-    const key = `documents/${category}/${crypto.randomUUID()}-v${versionNumber}-${attachment.safeName}`;
+    // Direct-to-R2 uploads are already stored under a server-minted key; only
+    // the legacy inline path still needs the bytes pushed from here.
+    const key =
+      attachment.key ??
+      `documents/${category}/${crypto.randomUUID()}-v${versionNumber}-${attachment.safeName}`;
 
-    try {
-      await putOpsR2Object({ body: attachment.bytes, contentType: attachment.contentType, key });
-      keys.push(key);
-    } catch (uploadError) {
-      await rollbackAttachments(ids, keys);
-      documentError(uploadError instanceof Error ? uploadError.message : "Upload failed.");
+    if (attachment.bytes) {
+      try {
+        await putOpsR2Object({ body: attachment.bytes, contentType: attachment.contentType, key });
+      } catch (uploadError) {
+        await rollbackAttachments(ids, keys);
+        documentError(uploadError instanceof Error ? uploadError.message : "Upload failed.");
+      }
     }
+
+    keys.push(key);
 
     const { data: version, error: versionError } = await supabase
       .from("document_versions")
@@ -303,13 +402,11 @@ export async function uploadOpsDocumentAction(formData: FormData) {
     documentError("You cannot file a document under that visibility level.");
   }
 
-  const files = collectUploadFiles(formData);
-  if (files.length === 0) {
+  const recipients = await resolveRecipients(formData, profile.id);
+  const attachments = await collectAttachments(formData);
+  if (attachments.length === 0) {
     documentError("Select at least one file to upload.");
   }
-
-  const recipients = await resolveRecipients(formData, profile.id);
-  const attachments = await prepareAttachments(files);
 
   const supabase = getOpsSupabaseServiceClient();
   const { data: document, error: documentErrorResult } = await supabase
@@ -491,11 +588,10 @@ export async function addOpsDocumentAttachmentAction(formData: FormData) {
     documentError("Resolve the open approval before adding files.");
   }
 
-  const files = collectUploadFiles(formData);
-  if (files.length === 0) {
+  const attachments = await collectAttachments(formData);
+  if (attachments.length === 0) {
     documentError("Select at least one file to add.");
   }
-  const attachments = await prepareAttachments(files);
 
   const { ids } = await persistAttachments(
     document.id,

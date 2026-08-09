@@ -15,8 +15,11 @@ import {
 } from "../src/lib/ops/record-activity";
 import { safeOpsReturnTo } from "../src/lib/ops/return-paths";
 import {
+  isOpsUploadScope,
   OPS_MAX_UPLOAD_BYTES,
+  OPS_UPLOAD_KEY_PREFIXES,
   safeOpsFileName,
+  validateOpsUploadDescriptor,
   validateOpsUploadFile,
 } from "../src/lib/ops/upload-validation";
 
@@ -296,5 +299,47 @@ describe("upload validation", () => {
       uploadMessages,
     );
     assert.deepEqual(oversized, { message: "Too large.", ok: false });
+  });
+
+  it("applies the same gate to a described file as to its bytes", () => {
+    assert.deepEqual(
+      validateOpsUploadDescriptor(
+        { contentType: "application/pdf", size: 1024 },
+        uploadMessages,
+      ),
+      { ok: true },
+    );
+    assert.deepEqual(
+      validateOpsUploadDescriptor({ contentType: "application/pdf", size: 0 }, uploadMessages),
+      { message: "Select a file.", ok: false },
+    );
+    assert.deepEqual(
+      validateOpsUploadDescriptor(
+        { contentType: "application/pdf", size: OPS_MAX_UPLOAD_BYTES + 1 },
+        uploadMessages,
+      ),
+      { message: "Too large.", ok: false },
+    );
+    assert.deepEqual(
+      validateOpsUploadDescriptor(
+        { contentType: "application/javascript", size: 1024 },
+        uploadMessages,
+      ),
+      { message: "Unsupported.", ok: false },
+    );
+  });
+
+  it("only signs uploads into a known key prefix", () => {
+    assert.equal(isOpsUploadScope("record_attachment"), true);
+    assert.equal(isOpsUploadScope("document"), true);
+    // A caller-chosen prefix is what would let a presigned PUT overwrite the
+    // object behind an existing document version.
+    assert.equal(isOpsUploadScope("documents/../../anything"), false);
+    assert.equal(isOpsUploadScope(""), false);
+    assert.equal(isOpsUploadScope(undefined), false);
+
+    for (const prefix of Object.values(OPS_UPLOAD_KEY_PREFIXES)) {
+      assert.ok(prefix.startsWith("documents/"));
+    }
   });
 });

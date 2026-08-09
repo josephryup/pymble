@@ -28,9 +28,13 @@ export function buildOpsContentSecurityPolicy(options: { isDev: boolean }) {
   // so `wss:` to the Supabase origins must be allowed in production too,
   // otherwise the OpsAutoRefresh + OpsRealtimeRefresh subscriptions silently
   // fail and the workspace looks stale.
+  // R2 is in connect-src because attachments are PUT to a presigned URL by the
+  // browser itself. They have to be: a Server Action body cannot exceed 4.5 MB
+  // on Vercel, so routing a 25 MB drawing through one is not an option. It is
+  // already in img-src for the signed read URLs.
   const connectSrc = isDev
-    ? "connect-src 'self' ws: wss: https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com"
-    : "connect-src 'self' wss://*.supabase.co wss://*.supabase.in https://*.supabase.co https://*.supabase.in https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com";
+    ? "connect-src 'self' ws: wss: https://*.supabase.co https://*.supabase.in https://*.r2.cloudflarestorage.com https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com"
+    : "connect-src 'self' wss://*.supabase.co wss://*.supabase.in https://*.supabase.co https://*.supabase.in https://*.r2.cloudflarestorage.com https://*.sentry.io https://*.ingest.sentry.io https://vitals.vercel-insights.com https://*.vercel-insights.com";
 
   return [
     "default-src 'self'",

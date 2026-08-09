@@ -11,14 +11,20 @@ import { extractMentionedUserIds } from "@/lib/ops/mentions";
 import { fetchOpsActiveUsers } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { canManageOps } from "@/lib/ops/permissions";
-import { deleteOpsR2Object, putOpsR2Object } from "@/lib/ops/r2";
+import { deleteOpsR2Object, headOpsR2Object, putOpsR2Object } from "@/lib/ops/r2";
 import {
   OPS_RECORD_ACTIVITY_SOURCE_TABLES,
   validateOpsRecordCommentBody,
   type OpsRecordActivitySourceTable,
 } from "@/lib/ops/record-activity";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
-import { safeOpsFileName, validateOpsUploadFile } from "@/lib/ops/upload-validation";
+import {
+  OPS_ALLOWED_UPLOAD_TYPES,
+  OPS_MAX_UPLOAD_BYTES,
+  OPS_UPLOAD_KEY_PREFIXES,
+  safeOpsFileName,
+  validateOpsUploadFile,
+} from "@/lib/ops/upload-validation";
 
 const sourceSchema = z.object({
   source_id: z.string().uuid("Select a record."),
@@ -73,6 +79,102 @@ function fallbackError(message: string): never {
 
 function activityError(route: RecordContext["route"], message: string): never {
   redirect(`${route}?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
+}
+
+type ResolvedUpload = {
+  /**
+   * Null for direct-to-R2 uploads: the server never sees those bytes, and a
+   * hash the browser reported is not a checksum of anything we verified. The
+   * column is display-only and nullable, so an honest null beats a claim.
+   */
+  checksum: string | null;
+  contentType: string;
+  fileName: string;
+  key: string;
+  size: number;
+};
+
+/**
+ * Turns whatever the form sent into an object that is definitely in R2.
+ *
+ * Two shapes arrive here. The normal one is a `r2_key` from
+ * `OpsDirectUploadField`, where the browser has already PUT the bytes straight
+ * to R2 — this is the only path that works for files over ~1 MB, since a
+ * Server Action body cannot exceed 4.5 MB on Vercel no matter how
+ * `bodySizeLimit` is configured. The other is a small inline `document` file,
+ * kept so the form still works without JavaScript.
+ *
+ * Nothing the browser says about a direct upload is trusted: the key must sit
+ * under a prefix this server mints, and the size and type are read back off the
+ * stored object rather than taken from the hidden fields next to it.
+ */
+async function resolveUploadedObject(
+  formData: FormData,
+  legacyKeyPrefix: string,
+  onError: (message: string) => never,
+): Promise<ResolvedUpload> {
+  const claimedKey = field(formData, "r2_key");
+
+  if (!claimedKey) {
+    const upload = validateOpsUploadFile(formData.get("document"), {
+      empty: "Select a document to upload.",
+      tooLarge: `Attachments must be ${Math.floor(OPS_MAX_UPLOAD_BYTES / (1024 * 1024))} MB or smaller.`,
+      unsupportedType: "Upload a PDF, Word, Excel, CSV, text, JPEG, PNG, or WebP file.",
+    });
+
+    if (!upload.ok) {
+      onError(upload.message);
+    }
+
+    const file = upload.file;
+    const fileBytes = new Uint8Array(await file.arrayBuffer());
+    const safeName = safeOpsFileName(file.name || "attachment");
+    const key = `${legacyKeyPrefix}/${crypto.randomUUID()}-${safeName}`;
+
+    await putOpsR2Object({ body: fileBytes, contentType: file.type, key });
+
+    return {
+      checksum: crypto.createHash("sha256").update(fileBytes).digest("hex"),
+      contentType: file.type,
+      fileName: file.name || safeName,
+      key,
+      size: file.size,
+    };
+  }
+
+  const allowedPrefixes = Object.values(OPS_UPLOAD_KEY_PREFIXES);
+
+  if (!allowedPrefixes.some((prefix) => claimedKey.startsWith(`${prefix}/`))) {
+    onError("That upload could not be verified. Try selecting the file again.");
+  }
+
+  const stored = await headOpsR2Object(claimedKey);
+
+  if (!stored || stored.contentLength === 0) {
+    onError("The upload did not finish. Select the file again.");
+  }
+
+  if (stored.contentLength > OPS_MAX_UPLOAD_BYTES) {
+    await deleteOpsR2Object(claimedKey).catch(() => null);
+    onError(
+      `Attachments must be ${Math.floor(OPS_MAX_UPLOAD_BYTES / (1024 * 1024))} MB or smaller.`,
+    );
+  }
+
+  if (!OPS_ALLOWED_UPLOAD_TYPES.has(stored.contentType)) {
+    await deleteOpsR2Object(claimedKey).catch(() => null);
+    onError("Upload a PDF, Word, Excel, CSV, text, JPEG, PNG, or WebP file.");
+  }
+
+  const declaredName = safeOpsFileName(field(formData, "file_name") || "attachment");
+
+  return {
+    checksum: null,
+    contentType: stored.contentType,
+    fileName: field(formData, "file_name") || declaredName,
+    key: claimedKey,
+    size: stored.contentLength,
+  };
 }
 
 async function resolveRecordContext(
@@ -1386,29 +1488,14 @@ export async function uploadOpsRecordAttachmentAction(formData: FormData) {
     fallbackError("The record could not be found.");
   }
 
-  const upload = validateOpsUploadFile(formData.get("document"), {
-    empty: "Select a document to upload.",
-    tooLarge: "Attachments must be 25 MB or smaller.",
-    unsupportedType: "Upload a PDF, Word, Excel, CSV, text, JPEG, PNG, or WebP file.",
-  });
+  const upload = await resolveUploadedObject(
+    formData,
+    `documents/${context.moduleKey}/${context.sourceId}`,
+    (message) => activityError(context.route, message),
+  );
 
-  if (!upload.ok) {
-    activityError(context.route, upload.message);
-  }
-
-  const file = upload.file;
-
-  const fileBytes = new Uint8Array(await file.arrayBuffer());
-  const checksum = crypto.createHash("sha256").update(fileBytes).digest("hex");
-  const safeName = safeOpsFileName(file.name || "attachment");
-  const title = parsed.data.title || file.name || safeName;
-  const key = `documents/${context.moduleKey}/${context.sourceId}/${crypto.randomUUID()}-${safeName}`;
-
-  await putOpsR2Object({
-    body: fileBytes,
-    contentType: file.type,
-    key,
-  });
+  const key = upload.key;
+  const title = parsed.data.title || upload.fileName;
 
   const supabase = getOpsSupabaseServiceClient();
   const { data: document, error: documentError } = await supabase
@@ -1432,11 +1519,11 @@ export async function uploadOpsRecordAttachmentAction(formData: FormData) {
   const { data: version, error: versionError } = await supabase
     .from("document_versions")
     .insert({
-      checksum_sha256: checksum,
-      content_type: file.type,
+      checksum_sha256: upload.checksum,
+      content_type: upload.contentType,
       document_id: document.id,
-      file_name: file.name || safeName,
-      file_size_bytes: file.size,
+      file_name: upload.fileName,
+      file_size_bytes: upload.size,
       r2_key: key,
       uploaded_by: profile.id,
       version_number: 1,
@@ -1483,9 +1570,9 @@ export async function uploadOpsRecordAttachmentAction(formData: FormData) {
     entityId: document.id,
     entityType: "document",
     metadata: {
-      content_type: file.type,
-      file_name: file.name || safeName,
-      file_size_bytes: file.size,
+      content_type: upload.contentType,
+      file_name: upload.fileName,
+      file_size_bytes: upload.size,
       site_id: context.siteId,
       source_label: context.label,
       version_id: version.id,

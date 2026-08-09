@@ -13,6 +13,24 @@ export const OPS_ALLOWED_UPLOAD_TYPES = new Set([
   "image/webp",
 ]);
 
+/**
+ * Where a direct-to-R2 upload is allowed to land, keyed by an opaque scope the
+ * client asks for. The client never names an object key: it picks a scope, and
+ * the server pairs that prefix with a fresh UUID. Without this, a presigned PUT
+ * would let any signed-in user choose the key and overwrite the object behind
+ * an existing document version.
+ */
+export const OPS_UPLOAD_KEY_PREFIXES = {
+  document: "documents/library",
+  record_attachment: "documents/record-attachments",
+} as const;
+
+export type OpsUploadScope = keyof typeof OPS_UPLOAD_KEY_PREFIXES;
+
+export function isOpsUploadScope(value: unknown): value is OpsUploadScope {
+  return typeof value === "string" && value in OPS_UPLOAD_KEY_PREFIXES;
+}
+
 export type OpsUploadValidationMessages = {
   empty: string;
   tooLarge: string;
@@ -71,6 +89,32 @@ export function safeOpsFileName(name: string) {
     .slice(0, 96);
 
   return safeName || "file";
+}
+
+/**
+ * The same gate as `validateOpsUploadFile`, but against a description of a file
+ * rather than its bytes — used twice in the direct-upload path: in the browser
+ * before anything is sent, and on the server when signing the PUT. The bytes
+ * themselves are re-checked against the stored object afterwards, because a
+ * claimed size and type are only a claim.
+ */
+export function validateOpsUploadDescriptor(
+  descriptor: { contentType: string; size: number },
+  messages: OpsUploadValidationMessages,
+): { message: string; ok: false } | { ok: true } {
+  if (!Number.isFinite(descriptor.size) || descriptor.size <= 0) {
+    return { message: messages.empty, ok: false };
+  }
+
+  if (descriptor.size > OPS_MAX_UPLOAD_BYTES) {
+    return { message: messages.tooLarge, ok: false };
+  }
+
+  if (!OPS_ALLOWED_UPLOAD_TYPES.has(descriptor.contentType)) {
+    return { message: messages.unsupportedType, ok: false };
+  }
+
+  return { ok: true };
 }
 
 export function validateOpsUploadFile(

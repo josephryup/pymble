@@ -36,6 +36,16 @@ describe("buildOpsContentSecurityPolicy", () => {
     assert.ok(connectSrc.includes("https://*.supabase.co"));
   });
 
+  it("allows the browser to PUT attachments straight to R2", () => {
+    // Without this the presigned upload is blocked in the browser, and every
+    // attachment over ~1 MB is unpostable: a Server Action body cannot exceed
+    // 4.5 MB on Vercel, so there is no server-side fallback to fall back to.
+    for (const isDev of [true, false]) {
+      const connectSrc = directive(buildOpsContentSecurityPolicy({ isDev }), "connect-src");
+      assert.ok(connectSrc.includes("https://*.r2.cloudflarestorage.com"));
+    }
+  });
+
   it("keeps the hardening directives intact in both modes", () => {
     for (const isDev of [true, false]) {
       const policy = buildOpsContentSecurityPolicy({ isDev });

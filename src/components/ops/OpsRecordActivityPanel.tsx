@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import { ChevronDown, Download, Loader2, MessageSquare, Paperclip, Upload } from "lucide-react";
+import {
+  OpsDirectUploadField,
+  type OpsUploadedFile,
+} from "@/components/ops/OpsDirectUploadField";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +71,9 @@ export function OpsRecordActivityPanel({
   const [activity, setActivity] = useState<ActivityState | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // The file is already in R2 by the time the form is submitted, so the submit
+  // is gated on the upload having finished rather than on a file being picked.
+  const [uploadedFile, setUploadedFile] = useState<OpsUploadedFile | null>(null);
   const totalItems = activity ? activity.comments.length + activity.documents.length : null;
 
   async function loadActivity() {
@@ -211,32 +218,19 @@ export function OpsRecordActivityPanel({
                 </Label>
                 <Label className={`${OPS_LABEL_CLASS} grid gap-1.5`}>
                   <span>File</span>
-                  <span className="mt-1 block rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center transition hover:border-primary hover:bg-primary/[0.03]">
-                    <span className="mx-auto flex size-10 items-center justify-center rounded-md bg-card text-primary shadow-sm ring-1 ring-border">
-                      <Upload className="size-5" aria-hidden="true" />
-                    </span>
-                    <span className="mt-2 block text-sm font-semibold text-foreground">
-                      Click to upload
-                    </span>
-                    <span className="mt-1 block text-xs font-medium text-muted-foreground">
-                      PDF, Office, CSV, text, or image evidence
-                    </span>
-                    <Input
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.webp"
-                      className="mt-3 min-h-11 cursor-pointer text-xs font-medium file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-xs file:font-semibold file:text-primary-foreground"
-                      name="document"
-                      required
-                      type="file"
-                    />
-                  </span>
+                  <OpsDirectUploadField
+                    onUploadedChange={(files) => setUploadedFile(files[0] ?? null)}
+                    scope="record_attachment"
+                  />
                 </Label>
               </div>
               <OpsSubmitButton
                 className={OPS_PRIMARY_BUTTON_CLASS}
-                pendingLabel="Uploading attachment..."
+                disabled={!uploadedFile}
+                pendingLabel="Linking attachment..."
               >
                 <Upload className="size-4" aria-hidden="true" />
-                Upload attachment
+                {uploadedFile ? "Attach uploaded file" : "Choose a file first"}
               </OpsSubmitButton>
             </form>
           ) : null}

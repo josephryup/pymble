@@ -15,6 +15,12 @@ type OpsSubmitButtonProps = {
   "aria-label"?: string;
   children: React.ReactNode;
   className: string;
+  /**
+   * Blocks the submit for a reason the form knows about but the DOM does not —
+   * e.g. a direct-to-R2 upload that has not finished, where there is no form
+   * control for native constraint validation to complain about.
+   */
+  disabled?: boolean;
   pendingLabel?: string;
   /** Native tooltip. Supplements aria-label for sighted mouse users. */
   title?: string;
@@ -24,6 +30,7 @@ export function OpsSubmitButton({
   "aria-label": ariaLabel,
   children,
   className,
+  disabled = false,
   pendingLabel = "Working...",
   title,
 }: OpsSubmitButtonProps) {
@@ -41,14 +48,14 @@ export function OpsSubmitButton({
 
   return (
     <Button
-      aria-disabled={pending}
+      aria-disabled={pending || disabled}
       aria-label={ariaLabel}
       aria-live="polite"
       className={className}
       title={title}
-      disabled={pending}
+      disabled={pending || disabled}
       onClick={(event) => {
-        if (pending || firedRef.current) {
+        if (pending || disabled || firedRef.current) {
           event.preventDefault();
           return;
         }
