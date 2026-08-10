@@ -109,7 +109,6 @@ export async function startQaChecklistCore(
       criterion: item.criterion ?? "",
       is_hold_point: Boolean(item.holdPoint),
       result: "pending" as const,
-      client_result: "pending" as const,
       created_by: profile.id,
     })),
   );

@@ -863,7 +863,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
           ) : (
             <form
               action={createBoqDocumentAction}
-              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
@@ -892,7 +892,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                   then submit to Procurement for pricing.
                 </p>
               </div>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                 <button
                   className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`}
                   type="submit"
@@ -1064,7 +1064,7 @@ export default async function OpsBoqPage({ searchParams }: PageProps) {
                     </summary>
                     <form
                       action={createBoqLineItemAction}
-                      className="grid gap-3 border-t border-border p-4 md:grid-cols-3 lg:grid-cols-6"
+                      className="grid gap-3 border-t border-border p-4 md:grid-cols-3 lg:grid-cols-4"
                     >
                       <input name="boq_id" type="hidden" value={document.id} />
                       <label className={`${OPS_LABEL_CLASS} md:col-span-3 lg:col-span-2`}>

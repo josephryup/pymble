@@ -1,11 +1,21 @@
 import { Camera, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import {
+  OpsListControls,
+  OpsPaginationControls,
+  type OpsListSelectFilter,
+} from "@/components/ops/OpsListControls";
+import { parseOpsListState } from "@/lib/ops/listing";
 import { OpsOfflineForm } from "@/components/ops/OpsOfflineForm";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { deleteSitePhotoAction, uploadSitePhotoAction } from "@/lib/ops/photo-actions";
-import { fetchOpsSitePhotos, type OpsSitePhoto } from "@/lib/ops/photos";
+import {
+  fetchOpsSitePhotoSummary,
+  fetchPaginatedOpsSitePhotos,
+  type OpsSitePhoto,
+} from "@/lib/ops/photos";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canAccessOpsHref, canManageSites, canRecordAttendance } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
@@ -48,10 +58,16 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
     notFound();
   }
 
-  const [photos, siteOptions] = await Promise.all([
-    fetchOpsSitePhotos(),
+  const listState = parseOpsListState(params, { defaultPageSize: 24 });
+  const siteFilter = firstParam(params.site) ?? "";
+  const tagFilter = firstParam(params.tag) ?? "";
+
+  const [photoPage, summary, siteOptions] = await Promise.all([
+    fetchPaginatedOpsSitePhotos({ listState, siteId: siteFilter, tag: tagFilter }),
+    fetchOpsSitePhotoSummary(),
     fetchActiveSiteOptions(),
   ]);
+  const photos = photoPage.items;
   const canUpload = canRecordAttendance(auth.profile.role);
   const canManagePhotos = canManageSites(auth.profile.role);
   const notice =
@@ -59,8 +75,31 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
     (firstParam(params.deleted) === "photo"
       ? { tone: "success" as const, message: "Photo deleted." }
       : null);
-  const safetyCount = photos.filter((photo) => photo.tag === "safety").length;
-  const deliveryCount = photos.filter((photo) => photo.tag === "delivery").length;
+
+  const listFilters: OpsListSelectFilter[] = [
+    {
+      label: "Site",
+      name: "site",
+      options: [
+        { label: "All sites", value: "" },
+        ...siteOptions.map((site) => ({ label: `${site.code} - ${site.name}`, value: site.id })),
+      ],
+      value: siteFilter,
+    },
+    {
+      label: "Tag",
+      name: "tag",
+      options: [
+        { label: "All tags", value: "" },
+        { label: "Progress", value: "progress" },
+        { label: "Delivery", value: "delivery" },
+        { label: "Safety", value: "safety" },
+      ],
+      value: tagFilter,
+    },
+  ];
+  const hasActiveFilter =
+    listState.query.length > 0 || siteFilter.length > 0 || tagFilter.length > 0;
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -83,7 +122,7 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
                 Photos
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-foreground">
-                {photos.length}
+                {summary.photos}
               </p>
             </div>
             <div className="rounded-md border border-border px-4 py-3">
@@ -91,7 +130,7 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
                 Deliveries
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-foreground">
-                {deliveryCount}
+                {summary.deliveries}
               </p>
             </div>
             <div className="rounded-md border border-border px-4 py-3">
@@ -99,7 +138,7 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
                 Safety
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-foreground">
-                {safetyCount}
+                {summary.safety}
               </p>
             </div>
           </div>
@@ -139,7 +178,7 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
           ) : (
             <OpsOfflineForm
               action={uploadSitePhotoAction}
-              className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
               kind="site_photo.upload"
               replayEndpoint="/api/ops/offline/photos"
               summary="Site photo"
@@ -179,7 +218,7 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
                   type="file"
                 />
               </label>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                 <OpsSubmitButton
                   className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`}
                   pendingLabel="Uploading..."
@@ -193,9 +232,17 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
         </section>
       ) : null}
 
-      <section>
+      <section className="overflow-hidden rounded-lg border border-border bg-card" id="photo-list">
+        <OpsListControls
+          action="/ops/photos"
+          filters={listFilters}
+          params={params}
+          placeholder="Search captions"
+          query={listState.query}
+          resultLabel="photos"
+        />
         {photos.length > 0 ? (
-          <div className="grid gap-4 min-[520px]:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 p-5 min-[520px]:grid-cols-2 xl:grid-cols-3">
             {photos.map((photo) => (
               <article
                 className="overflow-hidden rounded-lg border border-border bg-card"
@@ -255,18 +302,29 @@ export default async function OpsPhotosPage({ searchParams }: PageProps) {
             ))}
           </div>
         ) : (
-          <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-border bg-card p-8 text-center">
+          <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
             <Camera className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
               <p className="font-heading text-xl font-bold text-foreground">
-                No site photos yet
+                {hasActiveFilter ? "No photos match this search" : "No site photos yet"}
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
-                Site photos will appear here after the first upload.
+                {hasActiveFilter
+                  ? "Clear the search, or pick a different site or tag."
+                  : "Site photos will appear here after the first upload."}
               </p>
             </div>
           </div>
         )}
+        <OpsPaginationControls
+          anchor="photo-list"
+          basePath="/ops/photos"
+          filters={listFilters}
+          pagination={photoPage.pagination}
+          params={params}
+          query={listState.query}
+          resultLabel="photos"
+        />
       </section>
     </div>
   );

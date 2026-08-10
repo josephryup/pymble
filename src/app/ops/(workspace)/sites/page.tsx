@@ -287,14 +287,14 @@ function SiteManagePanel({
         <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
       </summary>
       <div className="border-t border-border p-4">
-        <form action={updateSiteAction} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <form action={updateSiteAction} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <input name="id" type="hidden" value={site.id} />
           <SiteFields
             canSeeActualBudget={canSeeActualBudget}
             canSeeBudget={canSeeBudget}
             site={site}
           />
-          <div className="flex items-end sm:col-span-2 lg:col-span-6">
+          <div className="flex items-end sm:col-span-2 lg:col-span-4">
             <OpsSubmitButton
               className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`}
               pendingLabel="Saving..."
@@ -446,7 +446,7 @@ export default async function OpsSitesPage({ searchParams }: PageProps) {
               </p>
             </div>
           </div>
-          <form action={createSiteAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          <form action={createSiteAction} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <SiteFields canSeeActualBudget={canSeeActualBudget} canSeeBudget={canSeeBudget} />
             <div className="flex items-end sm:col-span-2 lg:col-span-2">
               <OpsSubmitButton

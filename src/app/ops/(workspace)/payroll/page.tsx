@@ -26,7 +26,13 @@ import {
   updateCashAdvanceAction,
   updatePayrollRunAction,
 } from "@/lib/ops/payroll-actions";
-import { fetchOpsCashAdvances, fetchOpsPayrollRuns } from "@/lib/ops/payroll";
+import {
+  fetchOpsCashAdvanceSummary,
+  fetchOpsPayrollRuns,
+  fetchPaginatedOpsCashAdvances,
+} from "@/lib/ops/payroll";
+import { OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { parseOpsListState } from "@/lib/ops/listing";
 import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import { fetchAttendanceWorkerOptions } from "@/lib/ops/attendance";
@@ -110,15 +116,19 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
     notFound();
   }
 
-  const [advances, payrollRuns, workerOptions] = await Promise.all([
-    fetchOpsCashAdvances(),
+  const listState = parseOpsListState(params, { defaultPageSize: 15 });
+
+  const [advancePage, advanceSummary, payrollRuns, workerOptions] = await Promise.all([
+    fetchPaginatedOpsCashAdvances(listState),
+    fetchOpsCashAdvanceSummary(),
     fetchOpsPayrollRuns(),
     fetchAttendanceWorkerOptions(),
   ]);
+  const advances = advancePage.items;
   const canManage = canManageOps(auth.profile.role);
   const notice = payrollNotice(params);
-  const openAdvances = advances.filter((advance) => !advance.deducted_in_run_id);
-  const openAdvanceTotal = openAdvances.reduce((sum, advance) => sum + advance.amount, 0);
+  // Outstanding across the whole ledger, not just this page.
+  const openAdvanceTotal = advanceSummary.outstanding;
   const draftRuns = payrollRuns.filter((run) => run.status === "draft").length;
   const latestNet = payrollRuns[0]?.total_net ?? 0;
 
@@ -329,7 +339,7 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
       )}
 
       <section className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-lg border border-border bg-card">
+        <div className="rounded-lg border border-border bg-card" id="advance-list">
           <div className="border-b border-border p-5">
             <h2 className="font-heading text-xl font-bold text-foreground">Cash advances</h2>
           </div>
@@ -460,6 +470,14 @@ export default async function OpsPayrollPage({ searchParams }: PageProps) {
               </div>
             )}
           </div>
+          <OpsPaginationControls
+            anchor="advance-list"
+            basePath="/ops/payroll"
+            pagination={advancePage.pagination}
+            params={params}
+            query=""
+            resultLabel="cash advances"
+          />
         </div>
 
         <div className="rounded-lg border border-border bg-card">

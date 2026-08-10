@@ -274,7 +274,7 @@ export default async function OpsSubcontractorDetailPage({
             </summary>
             <form
               action={createSubcontractorAssignmentAction}
-              className="grid gap-3 border-t border-border p-5 md:grid-cols-6"
+              className="grid gap-3 border-t border-border p-5 md:grid-cols-4"
             >
               <input name="subcontractor_id" type="hidden" value={sub.id} />
               <label className={`${OPS_LABEL_CLASS} md:col-span-2`}>
@@ -320,7 +320,7 @@ export default async function OpsSubcontractorDetailPage({
                   <option value="cancelled">Cancelled</option>
                 </select>
               </label>
-              <div className="md:col-span-6">
+              <div className="md:col-span-4">
                 <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
                   Allocate
                 </button>
@@ -371,7 +371,7 @@ export default async function OpsSubcontractorDetailPage({
                       </summary>
                       <form
                         action={requestSubcontractorPaymentAction}
-                        className="grid gap-2 border-t border-border p-3 sm:grid-cols-5"
+                        className="grid gap-2 border-t border-border p-3 sm:grid-cols-4"
                       >
                         <input name="assignment_id" type="hidden" value={assignment.id} />
                         <label className={OPS_LABEL_CLASS}>
@@ -417,7 +417,7 @@ export default async function OpsSubcontractorDetailPage({
                           Reference
                           <input className={OPS_INPUT_CLASS} name="reference" />
                         </label>
-                        <div className="sm:col-span-5">
+                        <div className="sm:col-span-4">
                           <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
                             Submit request
                           </button>

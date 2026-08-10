@@ -180,7 +180,7 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
           </summary>
           <form
             action={createCustomerAction}
-            className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
           >
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Legal name
@@ -214,11 +214,11 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
               Country
               <input className={OPS_INPUT_CLASS} defaultValue="Zambia" name="country" />
             </label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
               Notes
               <input className={OPS_INPUT_CLASS} name="notes" />
             </label>
-            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6 lg:justify-end">
+            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4 lg:justify-end">
               <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit">
                 <Plus className="size-4" aria-hidden="true" />
                 Add customer

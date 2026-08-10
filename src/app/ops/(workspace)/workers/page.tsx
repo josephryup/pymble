@@ -1,6 +1,13 @@
 import React from "react";
 import { BadgeDollarSign, Phone, Plus, Users } from "lucide-react";
 import { notFound } from "next/navigation";
+import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
+import { OpsField, OpsFormGrid } from "@/components/ops/OpsForm";
+import {
+  OpsListControls,
+  OpsPaginationControls,
+  type OpsListSelectFilter,
+} from "@/components/ops/OpsListControls";
 import {
   OpsMobileRecordCard,
   OpsMobileRecordList,
@@ -10,11 +17,17 @@ import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { DEFAULT_WORKER_DAILY_RATE } from "@/lib/ops/attendance-earnings";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref, canManageOps } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { archiveWorkerAction, createWorkerAction, updateWorkerAction } from "@/lib/ops/worker-actions";
-import { fetchOpsWorkers } from "@/lib/ops/workers";
+import {
+  fetchOpsWorkerRegisterSummary,
+  fetchOpsWorkerTradeOptions,
+  fetchPaginatedOpsWorkers,
+  OPS_WORKER_UNASSIGNED_SITE,
+} from "@/lib/ops/workers";
 import {
   firstParam,
   formatZmw,
@@ -38,14 +51,52 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
     notFound();
   }
 
-  const [workers, siteOptions] = await Promise.all([fetchOpsWorkers(), fetchActiveSiteOptions()]);
+  // Search covers name, code, trade and phone; the two selects narrow by the
+  // things a foreman actually asks for — who is on this site, who is a mason.
+  const listState = parseOpsListState(params);
+  const siteFilter = firstParam(params.site) ?? "";
+  const tradeFilter = firstParam(params.trade) ?? "";
+
+  const [workerPage, summary, siteOptions, trades] = await Promise.all([
+    fetchPaginatedOpsWorkers({ listState, siteId: siteFilter, trade: tradeFilter }),
+    fetchOpsWorkerRegisterSummary(),
+    fetchActiveSiteOptions(),
+    fetchOpsWorkerTradeOptions(),
+  ]);
+  const workers = workerPage.items;
   const canManage = canManageOps(auth.profile.role);
   const notice =
     noticeFromParams(params, "worker", "Worker created successfully.") ??
     (firstParam(params.updated) === "worker"
       ? { tone: "success" as const, message: "Worker details updated." }
       : null);
-  const dailyExposure = workers.reduce((sum, worker) => sum + worker.daily_rate, 0);
+
+  const listFilters: OpsListSelectFilter[] = [
+    {
+      label: "Site",
+      name: "site",
+      options: [
+        { label: "All sites", value: "" },
+        { label: "Not assigned", value: OPS_WORKER_UNASSIGNED_SITE },
+        ...siteOptions.map((site) => ({
+          label: `${site.code} - ${site.name}`,
+          value: site.id,
+        })),
+      ],
+      value: siteFilter,
+    },
+    {
+      label: "Trade",
+      name: "trade",
+      options: [
+        { label: "All trades", value: "" },
+        ...trades.map((trade) => ({ label: trade, value: trade })),
+      ],
+      value: tradeFilter,
+    },
+  ];
+  const hasActiveFilter =
+    listState.query.length > 0 || siteFilter.length > 0 || tradeFilter.length > 0;
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -68,7 +119,7 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                 Active workers
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-foreground">
-                {workers.length}
+                {summary.activeWorkers}
               </p>
             </div>
             <div className="rounded-md border border-border px-4 py-3">
@@ -76,7 +127,7 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                 Daily exposure
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-foreground">
-                {formatZmw(dailyExposure)}
+                {formatZmw(summary.dailyExposure)}
               </p>
             </div>
           </div>
@@ -109,80 +160,71 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
               </p>
             </div>
           </div>
-          <form
-            action={createWorkerAction}
-            className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
-          >
-            <label className={OPS_LABEL_CLASS}>
-              Code
-              <input className={OPS_INPUT_CLASS} name="worker_code" required />
-            </label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-              Full name
-              <input className={OPS_INPUT_CLASS} name="full_name" required />
-            </label>
-            <label className={OPS_LABEL_CLASS}>
-              Trade
-              <input className={OPS_INPUT_CLASS} name="trade" required />
-            </label>
-            <label className={OPS_LABEL_CLASS}>
-              Phone
-              <input className={OPS_INPUT_CLASS} name="phone" required />
-            </label>
-            <label className={OPS_LABEL_CLASS}>
-              Daily rate
-              <input
-                className={OPS_INPUT_CLASS}
-                defaultValue={DEFAULT_WORKER_DAILY_RATE}
-                min="1"
-                name="daily_rate"
-                required
-                step="0.01"
-                type="number"
-              />
-              <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                Fixed rate paid for a day&apos;s attendance, regardless of hours worked.
-              </span>
-            </label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-              Site assignment
-              <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id">
-                <option value="">Site assignment not set</option>
-                {siteOptions.map((site) => (
-                  <option key={site.id} value={site.id}>
-                    {site.code} - {site.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={OPS_LABEL_CLASS}>
-              Worker type
-              <select className={OPS_INPUT_CLASS} defaultValue="casual" name="worker_type">
-                <option value="casual">Casual</option>
-                <option value="permanent">Permanent</option>
-              </select>
-            </label>
-            <label className={OPS_LABEL_CLASS}>
-              MoMo provider
-              <select className={OPS_INPUT_CLASS} defaultValue="" name="momo_provider">
-                <option value="">None</option>
-                <option value="mtn">MTN</option>
-                <option value="airtel">Airtel</option>
-              </select>
-            </label>
-            <label className={OPS_LABEL_CLASS}>
-              MoMo number
-              <input className={OPS_INPUT_CLASS} name="momo_number" />
-            </label>
-            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-1">
-              <OpsSubmitButton
-                className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
-                pendingLabel="Adding worker..."
+          {/* Reference use of the shared form primitives — see OpsForm.tsx. */}
+          <form action={createWorkerAction}>
+            <OpsFormGrid>
+              <OpsField label="Code">
+                <input className={OPS_INPUT_CLASS} name="worker_code" required />
+              </OpsField>
+              <OpsField label="Full name" span={2}>
+                <input className={OPS_INPUT_CLASS} name="full_name" required />
+              </OpsField>
+              <OpsField label="Trade">
+                <input className={OPS_INPUT_CLASS} name="trade" required />
+              </OpsField>
+              <OpsField label="Phone">
+                <input className={OPS_INPUT_CLASS} name="phone" required />
+              </OpsField>
+              <OpsField
+                hint="Fixed rate paid for a day's attendance, regardless of hours worked."
+                label="Daily rate"
               >
-                <Plus className="size-4" aria-hidden="true" />
-                Add worker
-              </OpsSubmitButton>
-            </div>
+                <input
+                  className={OPS_INPUT_CLASS}
+                  defaultValue={DEFAULT_WORKER_DAILY_RATE}
+                  min="1"
+                  name="daily_rate"
+                  required
+                  step="0.01"
+                  type="number"
+                />
+              </OpsField>
+              <OpsField label="Site assignment" span={2}>
+                <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id">
+                  <option value="">Site assignment not set</option>
+                  {siteOptions.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.code} - {site.name}
+                    </option>
+                  ))}
+                </select>
+              </OpsField>
+              <OpsField label="Worker type">
+                <select className={OPS_INPUT_CLASS} defaultValue="casual" name="worker_type">
+                  <option value="casual">Casual</option>
+                  <option value="permanent">Permanent</option>
+                </select>
+              </OpsField>
+              <OpsField label="MoMo provider">
+                <select className={OPS_INPUT_CLASS} defaultValue="" name="momo_provider">
+                  <option value="">None</option>
+                  <option value="mtn">MTN</option>
+                  <option value="airtel">Airtel</option>
+                </select>
+              </OpsField>
+              <OpsField label="MoMo number">
+                <input className={OPS_INPUT_CLASS} name="momo_number" />
+              </OpsField>
+              <div className="flex items-end">
+                <OpsSubmitButton
+                  className={`${OPS_PRIMARY_BUTTON_CLASS} w-full`}
+                  pendingLabel="Adding worker..."
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                  Add worker
+                </OpsSubmitButton>
+              </div>
+            </OpsFormGrid>
           </form>
         </section>
       ) : (
@@ -191,10 +233,18 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
         </div>
       )}
 
-      <section className="rounded-lg border border-border bg-card">
+      <section className="rounded-lg border border-border bg-card" id="worker-list">
         <div className="border-b border-border p-5">
           <h2 className="font-heading text-xl font-bold text-foreground">Current workers</h2>
         </div>
+        <OpsListControls
+          action="/ops/workers"
+          filters={listFilters}
+          params={params}
+          placeholder="Name, worker code, trade or phone"
+          query={listState.query}
+          resultLabel="workers"
+        />
         {workers.length > 0 ? (
           <>
             <OpsMobileRecordList>
@@ -312,13 +362,10 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                   {canManage ? (
                     <tr>
                       <td className="px-5 pb-4 pt-0" colSpan={6}>
-                        <details className="rounded-md border border-border">
-                          <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-muted-foreground">
-                            Edit worker details
-                          </summary>
+                        <OpsCollapsible title="Edit worker details">
                           <form
                             action={updateWorkerAction}
-                            className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
+                            className="mt-3 grid gap-3 border-t border-border pt-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
                           >
                             <input name="id" type="hidden" value={worker.id} />
                             <label className={OPS_LABEL_CLASS}>
@@ -421,7 +468,7 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
                               </button>
                             </div>
                           </form>
-                        </details>
+                        </OpsCollapsible>
                       </td>
                     </tr>
                   ) : null}
@@ -436,14 +483,25 @@ export default async function OpsWorkersPage({ searchParams }: PageProps) {
             <Users className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
               <p className="font-heading text-xl font-bold text-foreground">
-                No workers registered yet
+                {hasActiveFilter ? "No workers match this search" : "No workers registered yet"}
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
-                Add your first worker above. Worker records are used in attendance and payroll.
+                {hasActiveFilter
+                  ? "Clear the search or pick a different site or trade."
+                  : "Add your first worker above. Worker records are used in attendance and payroll."}
               </p>
             </div>
           </div>
         )}
+        <OpsPaginationControls
+          anchor="worker-list"
+          basePath="/ops/workers"
+          filters={listFilters}
+          pagination={workerPage.pagination}
+          params={params}
+          query={listState.query}
+          resultLabel="workers"
+        />
       </section>
     </div>
   );

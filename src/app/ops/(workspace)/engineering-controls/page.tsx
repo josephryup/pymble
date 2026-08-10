@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
@@ -505,7 +506,7 @@ function CreateSiteInstructionForm({
         </span>
         <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
       </summary>
-      <form action={createSiteInstructionAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
+      <form action={createSiteInstructionAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-4">
         <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
           Project/site
           <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -544,7 +545,7 @@ function CreateSiteInstructionForm({
             <UserOptions users={users} />
           </select>
         </label>
-        <label className={`${OPS_LABEL_CLASS} md:col-span-2 xl:col-span-6`}>
+        <label className={`${OPS_LABEL_CLASS} md:col-span-2 xl:col-span-4`}>
           Description
           <textarea className={OPS_INPUT_CLASS} name="description" rows={3} />
         </label>
@@ -581,7 +582,7 @@ function CreateQaInspectionForm({
         </span>
         <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
       </summary>
-      <form action={createQaInspectionAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
+      <form action={createQaInspectionAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-4">
         <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
           Project/site
           <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -644,7 +645,7 @@ function CreateLinkedRecordsForm({
           </span>
           <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
         </summary>
-        <form action={createMaterialTestAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
+        <form action={createMaterialTestAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-4">
           <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
             Project/site
             <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -706,7 +707,7 @@ function CreateLinkedRecordsForm({
           </span>
           <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
         </summary>
-        <form action={createSnagItemAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
+        <form action={createSnagItemAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-4">
           <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
             Project/site
             <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -747,7 +748,7 @@ function CreateLinkedRecordsForm({
             Location
             <input className={OPS_INPUT_CLASS} name="location" />
           </label>
-          <label className={`${OPS_LABEL_CLASS} md:col-span-2 xl:col-span-6`}>
+          <label className={`${OPS_LABEL_CLASS} md:col-span-2 xl:col-span-4`}>
             Description
             <textarea className={OPS_INPUT_CLASS} name="description" rows={3} />
           </label>
@@ -768,7 +769,7 @@ function CreateLinkedRecordsForm({
           </span>
           <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
         </summary>
-        <form action={createDrawingRecordAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
+        <form action={createDrawingRecordAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-4">
           <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
             Project/site
             <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -805,7 +806,7 @@ function CreateLinkedRecordsForm({
               <DrawingDocumentVersionOptions versions={documentVersions} />
             </select>
           </label>
-          <label className={`${OPS_LABEL_CLASS} md:col-span-2 xl:col-span-6`}>
+          <label className={`${OPS_LABEL_CLASS} md:col-span-2 xl:col-span-4`}>
             Notes
             <input className={OPS_INPUT_CLASS} name="notes" />
           </label>
@@ -826,7 +827,7 @@ function CreateLinkedRecordsForm({
           </span>
           <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
         </summary>
-        <form action={createProgrammeMilestoneAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-6">
+        <form action={createProgrammeMilestoneAction} className="grid gap-3 border-t border-border p-5 md:grid-cols-2 xl:grid-cols-4">
           <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
             Project/site
             <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -894,10 +895,7 @@ function InstructionActions({
         </InlineActionForm>
       ) : null}
       {canAcknowledgeOpsSiteInstruction(userId, role, instruction) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Acknowledge
-          </summary>
+        <OpsCollapsible title="Acknowledge">
           <form action={acknowledgeSiteInstructionAction} className="mt-3 grid gap-3">
             <input name="instruction_id" type="hidden" value={instruction.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -909,7 +907,7 @@ function InstructionActions({
               Acknowledge
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCloseOpsSiteInstruction(role, instruction) ? (
         <InlineActionForm
@@ -1035,7 +1033,7 @@ function InstructionFollowUps({
             </span>
             <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
           </summary>
-          <form action={createSiteInstructionFollowUpAction} className="grid gap-3 border-t border-border p-4 md:grid-cols-2 xl:grid-cols-6">
+          <form action={createSiteInstructionFollowUpAction} className="grid gap-3 border-t border-border p-4 md:grid-cols-2 xl:grid-cols-4">
             <input name="instruction_id" type="hidden" value={instruction.id} />
             <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
               Title
@@ -1086,10 +1084,7 @@ function QaInspectionActions({
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsQaInspection(role, inspection) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Complete inspection
-          </summary>
+        <OpsCollapsible title="Complete inspection">
           <form action={completeQaInspectionAction} className="mt-3 grid gap-3 md:grid-cols-3">
             <input name="inspection_id" type="hidden" value={inspection.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1113,13 +1108,10 @@ function QaInspectionActions({
               Complete
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canRequireOpsQaInspectionAction(role, inspection) ? (
-        <details className="w-full rounded-md border border-orange-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-orange-700">
-            Require action
-          </summary>
+        <OpsCollapsible title="Require action" tone="warning">
           <form action={requireQaInspectionAction} className="mt-3 grid gap-3">
             <input name="inspection_id" type="hidden" value={inspection.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1131,7 +1123,7 @@ function QaInspectionActions({
               Mark action required
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCloseOpsQaInspection(role, inspection) ? (
         <InlineActionForm
@@ -1209,7 +1201,7 @@ function QaInspectionItems({
             </span>
             <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Open</span>
           </summary>
-          <form action={addQaInspectionItemAction} className="grid gap-3 border-t border-border p-4 md:grid-cols-2 xl:grid-cols-6">
+          <form action={addQaInspectionItemAction} className="grid gap-3 border-t border-border p-4 md:grid-cols-2 xl:grid-cols-4">
             <input name="inspection_id" type="hidden" value={inspection.id} />
             <label className={`${OPS_LABEL_CLASS} xl:col-span-2`}>
               Checklist item
@@ -1268,10 +1260,7 @@ function MaterialTestActions({ role, test }: { role: OpsUserRole; test: OpsMater
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canUpdateOpsMaterialTest(role, test) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Update result
-          </summary>
+        <OpsCollapsible title="Update result">
           <form action={updateMaterialTestResultAction} className="mt-3 grid gap-3 md:grid-cols-3">
             <input name="test_id" type="hidden" value={test.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1297,7 +1286,7 @@ function MaterialTestActions({ role, test }: { role: OpsUserRole; test: OpsMater
               Update
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsMaterialTest(role, test) ? (
         <InlineActionForm
@@ -1329,10 +1318,7 @@ function SnagActions({ role, snag, userId }: { role: OpsUserRole; snag: OpsSnagI
         </InlineActionForm>
       ) : null}
       {canResolveOpsSnagItem(userId, role, snag) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Resolve snag
-          </summary>
+        <OpsCollapsible title="Resolve snag">
           <form action={resolveSnagItemAction} className="mt-3 grid gap-3">
             <input name="snag_id" type="hidden" value={snag.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1344,7 +1330,7 @@ function SnagActions({ role, snag, userId }: { role: OpsUserRole; snag: OpsSnagI
               Resolve
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canVerifyOpsSnagItem(role, snag) ? (
         <InlineActionForm
@@ -1405,10 +1391,7 @@ function MilestoneActions({ milestone, role }: { milestone: OpsProgrammeMileston
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canUpdateOpsProgrammeMilestone(role, milestone) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Update milestone
-          </summary>
+        <OpsCollapsible title="Update milestone">
           <form action={updateProgrammeMilestoneAction} className="mt-3 grid gap-3 md:grid-cols-3">
             <input name="milestone_id" type="hidden" value={milestone.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1442,7 +1425,7 @@ function MilestoneActions({ milestone, role }: { milestone: OpsProgrammeMileston
               Update
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCompleteOpsProgrammeMilestone(role, milestone) ? (
         <InlineActionForm
@@ -1709,7 +1692,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
                     ? [{ href: "#qa-inspection-create", label: "Raise a QA inspection" }]
                     : []
                 }
-                description="Inspections and their hold points are recorded here, including the client sign-off captured on the engineer's device at the point of check."
+                description="Inspections and their hold points are recorded here, including the Projects Manager sign-off that closes each checklist."
                 icon={ClipboardCheck}
                 title="No QA inspections yet"
               />

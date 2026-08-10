@@ -131,7 +131,7 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
           </summary>
           <form
             action={createHseWeeklyReportAction}
-            className="grid gap-4 border-t border-border p-5 sm:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 border-t border-border p-5 sm:grid-cols-2 lg:grid-cols-4"
           >
             <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-2`}>
               Site
@@ -174,15 +174,15 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
               Inspections
               <input className={OPS_INPUT_CLASS} defaultValue="0" min="0" name="inspections_completed" type="number" />
             </label>
-            <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-4`}>
               Concerns / risks for this week
               <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="concerns" />
             </label>
-            <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-4`}>
               Actions planned for next week
               <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="actions_planned_next_week" />
             </label>
-            <div className="flex items-end sm:col-span-2 lg:col-span-6">
+            <div className="flex items-end sm:col-span-2 lg:col-span-4">
               <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full lg:w-auto`} type="submit">
                 <Plus className="size-4" aria-hidden="true" />
                 Save as draft
@@ -312,7 +312,7 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
                       </summary>
                       <form
                         action={updateHseWeeklyReportAction}
-                        className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-6"
+                        className="grid gap-3 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-4"
                       >
                         <input name="report_id" type="hidden" value={report.id} />
                         <input name="site_id" type="hidden" value={report.site_id} />
@@ -344,15 +344,15 @@ export default async function OpsHseWeeklyPage({ searchParams }: PageProps) {
                           Inspections
                           <input className={OPS_INPUT_CLASS} defaultValue={report.inspections_completed} min="0" name="inspections_completed" type="number" />
                         </label>
-                        <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-6`}>
+                        <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-4`}>
                           Concerns
                           <textarea className={`${OPS_INPUT_CLASS} min-h-24`} defaultValue={report.concerns} name="concerns" />
                         </label>
-                        <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-6`}>
+                        <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-4`}>
                           Actions planned next week
                           <textarea className={`${OPS_INPUT_CLASS} min-h-24`} defaultValue={report.actions_planned_next_week} name="actions_planned_next_week" />
                         </label>
-                        <div className="flex items-end sm:col-span-2 lg:col-span-6">
+                        <div className="flex items-end sm:col-span-2 lg:col-span-4">
                           <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
                             <Pencil className="size-4" aria-hidden="true" />
                             Save changes

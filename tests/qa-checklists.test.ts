@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  canCompleteQaChecklist,
   canRecordQaOverride,
   evaluateQaChecklist,
+  isAwaitingQaSignOff,
   type QaChecklistEvaluationItem,
   type QaItemResult,
 } from "../src/lib/ops/qa-checklist-rules";
+import {
+  canArchiveOpsQaChecklist,
+  canSignOffOpsQaChecklist,
+} from "../src/lib/ops/engineering-controls-permissions";
+import type { OpsUserRole } from "../src/lib/ops/types";
 import {
   QA_CHECKLIST_TEMPLATES,
   qaChecklistTemplate,
@@ -130,6 +137,114 @@ describe("evaluateQaChecklist", () => {
     const result = evaluateQaChecklist([]);
     assert.equal(result.canComplete, true);
     assert.equal(result.score, 100);
+  });
+});
+
+describe("Projects Manager sign-off gate", () => {
+  const finished = evaluateQaChecklist([item("pass"), item("pass")]);
+  const unfinished = evaluateQaChecklist([item("pass"), item("pending")]);
+  const heldUp = evaluateQaChecklist([item("fail", { isHoldPoint: true, photoCount: 1 })]);
+
+  it("blocks completion until the PM has signed, however clean the checklist is", () => {
+    assert.equal(finished.canComplete, true);
+    const decision = canCompleteQaChecklist({
+      evaluation: finished,
+      holdPointsReleased: false,
+      pmSignedAt: null,
+    });
+    assert.equal(decision.allowed, false);
+    assert.match(decision.allowed ? "" : decision.reason, /Projects Manager/);
+  });
+
+  it("allows completion once the PM has signed", () => {
+    assert.deepEqual(
+      canCompleteQaChecklist({
+        evaluation: finished,
+        holdPointsReleased: false,
+        pmSignedAt: "2026-08-14T08:00:00Z",
+      }),
+      { allowed: true },
+    );
+  });
+
+  it("reports the fieldwork blockers first, not the sign-off", () => {
+    const decision = canCompleteQaChecklist({
+      evaluation: unfinished,
+      holdPointsReleased: false,
+      pmSignedAt: null,
+    });
+    assert.equal(decision.allowed, false);
+    assert.match(decision.allowed ? "" : decision.reason, /unanswered/);
+  });
+
+  it("cannot be bought past with a hold-point override", () => {
+    // The override releases the hold point; the signature is still required.
+    const decision = canCompleteQaChecklist({
+      evaluation: heldUp,
+      holdPointsReleased: true,
+      pmSignedAt: null,
+    });
+    assert.equal(decision.allowed, false);
+    assert.match(decision.allowed ? "" : decision.reason, /Projects Manager/);
+  });
+
+  it("queues a run for sign-off only once the fieldwork is done", () => {
+    assert.equal(
+      isAwaitingQaSignOff({ evaluation: finished, holdPointsReleased: false, pmSignedAt: null }),
+      true,
+    );
+    assert.equal(
+      isAwaitingQaSignOff({ evaluation: unfinished, holdPointsReleased: false, pmSignedAt: null }),
+      false,
+    );
+    assert.equal(
+      isAwaitingQaSignOff({ evaluation: heldUp, holdPointsReleased: true, pmSignedAt: null }),
+      true,
+    );
+    assert.equal(
+      isAwaitingQaSignOff({
+        evaluation: finished,
+        holdPointsReleased: false,
+        pmSignedAt: "2026-08-14T08:00:00Z",
+      }),
+      false,
+    );
+  });
+
+  it("is the Projects Manager's signature, with leadership as the fallback", () => {
+    for (const role of [
+      "projects_manager",
+      "managing_director",
+      "general_manager",
+      "owner",
+      "developer",
+    ] as OpsUserRole[]) {
+      assert.ok(canSignOffOpsQaChecklist(role), role);
+    }
+    for (const role of [
+      "engineer",
+      "supervisor",
+      "operations_manager",
+      "quantity_surveyor",
+      "hse_officer",
+    ] as OpsUserRole[]) {
+      assert.equal(canSignOffOpsQaChecklist(role), false, role);
+    }
+  });
+
+  it("restricts archiving to the Developer and Managing Director", () => {
+    assert.ok(canArchiveOpsQaChecklist("developer"));
+    assert.ok(canArchiveOpsQaChecklist("managing_director"));
+    // `owner` is the MD seat everywhere in this codebase (isManagingDirectorRole).
+    assert.ok(canArchiveOpsQaChecklist("owner"));
+    for (const role of [
+      "general_manager",
+      "projects_manager",
+      "operations_manager",
+      "engineer",
+    ] as OpsUserRole[]) {
+      assert.equal(canArchiveOpsQaChecklist(role), false, role);
+    }
   });
 });
 

@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
+import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPanelSkeleton } from "@/components/ops/OpsPanelSkeleton";
@@ -354,10 +355,7 @@ function PpeActions({ issue, role }: { issue: OpsPpeIssueSummary; role: OpsUserR
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canReturnOpsPpeIssue(role, issue) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Return PPE
-          </summary>
+        <OpsCollapsible title="Return PPE">
           <form action={returnPpeIssueAction} className="mt-3 grid gap-3">
             <input name="issue_id" type="hidden" value={issue.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -369,13 +367,10 @@ function PpeActions({ issue, role }: { issue: OpsPpeIssueSummary; role: OpsUserR
               Mark returned
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canMarkOpsPpeIssueDamaged(role, issue) ? (
-        <details className="w-full rounded-md border border-orange-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-orange-700">
-            Mark damaged
-          </summary>
+        <OpsCollapsible title="Mark damaged" tone="warning">
           <form action={markPpeIssueDamagedAction} className="mt-3 grid gap-3">
             <input name="issue_id" type="hidden" value={issue.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -390,13 +385,10 @@ function PpeActions({ issue, role }: { issue: OpsPpeIssueSummary; role: OpsUserR
               Mark damaged
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canMarkOpsPpeIssueLost(role, issue) ? (
-        <details className="w-full rounded-md border border-red-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-red-700">
-            Mark lost
-          </summary>
+        <OpsCollapsible title="Mark lost" tone="danger">
           <form action={markPpeIssueLostAction} className="mt-3 grid gap-3">
             <input name="issue_id" type="hidden" value={issue.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -411,7 +403,7 @@ function PpeActions({ issue, role }: { issue: OpsPpeIssueSummary; role: OpsUserR
               Mark lost
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsPpeIssue(role, issue) ? (
         <InlineActionForm
@@ -432,10 +424,7 @@ function ToolboxTalkActions({ role, talk }: { role: OpsUserRole; talk: OpsToolbo
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsToolboxTalk(role, talk) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Complete talk
-          </summary>
+        <OpsCollapsible title="Complete talk">
           <form action={completeToolboxTalkAction} className="mt-3 grid gap-3 sm:grid-cols-2">
             <input name="talk_id" type="hidden" value={talk.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -459,7 +448,7 @@ function ToolboxTalkActions({ role, talk }: { role: OpsUserRole; talk: OpsToolbo
               Complete
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsToolboxTalk(role, talk) ? (
         <InlineActionForm
@@ -480,10 +469,7 @@ function InspectionActions({ inspection, role }: { inspection: OpsHseInspectionS
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsHseInspection(role, inspection) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Complete inspection
-          </summary>
+        <OpsCollapsible title="Complete inspection">
           <form action={completeHseInspectionAction} className="mt-3 grid gap-3 sm:grid-cols-3">
             <input name="inspection_id" type="hidden" value={inspection.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -506,13 +492,10 @@ function InspectionActions({ inspection, role }: { inspection: OpsHseInspectionS
               Complete
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canRequireOpsHseInspectionAction(role, inspection) ? (
-        <details className="w-full rounded-md border border-orange-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-orange-700">
-            Require action
-          </summary>
+        <OpsCollapsible title="Require action" tone="warning">
           <form action={requireHseInspectionActionAction} className="mt-3 grid gap-3">
             <input name="inspection_id" type="hidden" value={inspection.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -523,7 +506,7 @@ function InspectionActions({ inspection, role }: { inspection: OpsHseInspectionS
               Require action
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCloseOpsHseInspection(role, inspection) ? (
         <InlineActionForm
@@ -569,10 +552,7 @@ function InspectionFindingActions({
         </InlineActionForm>
       ) : null}
       {canCorrectOpsHseInspectionFinding(role, finding) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Correct finding
-          </summary>
+        <OpsCollapsible title="Correct finding">
           <form action={correctHseInspectionFindingAction} className="mt-3 grid gap-3">
             <input name="finding_id" type="hidden" value={finding.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -583,7 +563,7 @@ function InspectionFindingActions({
               Mark corrected
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canVerifyOpsHseInspectionFinding(role, finding) ? (
         <InlineActionForm
@@ -621,10 +601,7 @@ function SafetyTrainingActions({
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsSafetyTraining(role, record) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Complete training
-          </summary>
+        <OpsCollapsible title="Complete training">
           <form action={completeSafetyTrainingRecordAction} className="mt-3 grid gap-3 sm:grid-cols-3">
             <input name="training_id" type="hidden" value={record.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -647,7 +624,7 @@ function SafetyTrainingActions({
               Complete training
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsSafetyTraining(role, record) ? (
         <InlineActionForm
@@ -730,10 +707,7 @@ function ComplianceAuditActions({
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {canCompleteOpsHseComplianceAudit(role, audit) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Complete audit
-          </summary>
+        <OpsCollapsible title="Complete audit">
           <form action={completeHseComplianceAuditAction} className="mt-3 grid gap-3 sm:grid-cols-3">
             <input name="audit_id" type="hidden" value={audit.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -764,13 +738,10 @@ function ComplianceAuditActions({
               Complete audit
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canRequireOpsHseComplianceAuditAction(role, audit) ? (
-        <details className="w-full rounded-md border border-orange-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-orange-700">
-            Require action
-          </summary>
+        <OpsCollapsible title="Require action" tone="warning">
           <form action={requireHseComplianceAuditActionAction} className="mt-3 grid gap-3">
             <input name="audit_id" type="hidden" value={audit.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -781,7 +752,7 @@ function ComplianceAuditActions({
               Require action
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCloseOpsHseComplianceAudit(role, audit) ? (
         <InlineActionForm

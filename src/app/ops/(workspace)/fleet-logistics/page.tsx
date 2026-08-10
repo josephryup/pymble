@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCharts";
+import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
@@ -760,10 +761,7 @@ function TransportActions({
         </InlineActionForm>
       ) : null}
       {canScheduleOpsTransportRequest(role, request) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Schedule dispatch
-          </summary>
+        <OpsCollapsible title="Schedule dispatch">
           <form action={scheduleTransportRequestAction} className="mt-3 grid gap-3 sm:grid-cols-2">
             <input name="request_id" type="hidden" value={request.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -842,13 +840,10 @@ function TransportActions({
               Save dispatch
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCompleteOpsTransportRequest(role, request) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Complete transport
-          </summary>
+        <OpsCollapsible title="Complete transport">
           <form action={completeTransportRequestAction} className="mt-3 grid gap-3 sm:grid-cols-2">
             <input name="request_id" type="hidden" value={request.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -869,13 +864,10 @@ function TransportActions({
               Complete
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canRejectOpsTransportRequest(role, request) ? (
-        <details className="w-full rounded-md border border-red-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-red-700">
-            Reject request
-          </summary>
+        <OpsCollapsible title="Reject request" tone="danger">
           <form action={rejectTransportRequestAction} className="mt-3 grid gap-3">
             <input name="request_id" type="hidden" value={request.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -886,7 +878,7 @@ function TransportActions({
               Reject
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsTransportRequest(actorId, role, request) ? (
         <InlineActionForm
@@ -934,10 +926,7 @@ function AccommodationActions({
         </InlineActionForm>
       ) : null}
       {canCompleteOpsAccommodationBooking(role, booking) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Complete stay
-          </summary>
+        <OpsCollapsible title="Complete stay">
           <form action={completeAccommodationBookingAction} className="mt-3 grid gap-3 sm:grid-cols-2">
             <input name="booking_id" type="hidden" value={booking.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -958,7 +947,7 @@ function AccommodationActions({
               Complete stay
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsAccommodationBooking(actorId, role, booking) ? (
         <InlineActionForm
@@ -996,10 +985,7 @@ function LabourActions({
         </InlineActionForm>
       ) : null}
       {canCompleteOpsLabourAllocation(role, allocation) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Complete labour
-          </summary>
+        <OpsCollapsible title="Complete labour">
           <form action={completeLabourAllocationAction} className="mt-3 grid gap-3 sm:grid-cols-2">
             <input name="allocation_id" type="hidden" value={allocation.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1020,7 +1006,7 @@ function LabourActions({
               Complete labour
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsLabourAllocation(actorId, role, allocation) ? (
         <InlineActionForm

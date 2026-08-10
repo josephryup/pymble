@@ -351,7 +351,7 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
           </summary>
           <form
             action={createProjectTaskAction}
-            className="grid gap-3 border-t border-border p-5 md:grid-cols-6"
+            className="grid gap-3 border-t border-border p-5 md:grid-cols-4"
           >
             <input name="site_id" type="hidden" value={site.id} />
             <label className={`${OPS_LABEL_CLASS} md:col-span-3`}>
@@ -389,7 +389,7 @@ export default async function OpsProjectScheduleSitePage({ params, searchParams 
                 ))}
               </select>
             </label>
-            <div className="md:col-span-6">
+            <div className="md:col-span-4">
               <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
                 <Plus className="size-4" aria-hidden="true" />
                 Add task
@@ -574,7 +574,7 @@ function ProjectTaskCard({
           </summary>
           <form
             action={updateProjectTaskAction}
-            className="grid gap-2 border-t border-border p-3 sm:grid-cols-6"
+            className="grid gap-2 border-t border-border p-3 sm:grid-cols-4"
           >
             <input name="id" type="hidden" value={task.id} />
             <label className={`${OPS_LABEL_CLASS} sm:col-span-3`}>
@@ -679,11 +679,11 @@ function ProjectTaskCard({
                 type="number"
               />
             </label>
-            <label className={`${OPS_LABEL_CLASS} sm:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-4`}>
               Notes
               <input className={OPS_INPUT_CLASS} defaultValue={task.notes} name="notes" />
             </label>
-            <div className="flex items-center gap-2 sm:col-span-6">
+            <div className="flex items-center gap-2 sm:col-span-4">
               <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
                 Save task
               </button>

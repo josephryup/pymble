@@ -152,7 +152,7 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
             </span>
             <Plus className="size-5 shrink-0 text-primary-blue" aria-hidden="true" />
           </summary>
-          <form action={createItAssetAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItAssetAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
               Asset name
               <input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Dell Latitude 5420" required />
@@ -207,7 +207,7 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
               Location
               <input className={OPS_INPUT_CLASS} name="location" placeholder="Desk / room / store" />
             </label>
-            <fieldset className="grid gap-4 min-[520px]:grid-cols-2 lg:col-span-6 lg:grid-cols-5">
+            <fieldset className="grid gap-4 min-[520px]:grid-cols-2 lg:col-span-4 lg:grid-cols-4">
               <legend className="mb-2 flex items-center gap-2 text-sm font-bold text-foreground">
                 <Cpu className="size-4 text-primary-blue" aria-hidden="true" />
                 Hardware specifications
@@ -245,11 +245,11 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
               Purchase cost (ZMW)
               <input className={OPS_INPUT_CLASS} min="0" name="purchase_cost" step="0.01" type="number" />
             </label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
               Notes
               <input className={OPS_INPUT_CLASS} name="notes" />
             </label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end">
+            <div className="flex items-end lg:col-span-4 lg:justify-end">
               <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit">
                 <Plus className="size-4" aria-hidden="true" />
                 Register asset
@@ -357,10 +357,10 @@ export default async function OpsItAssetsPage({ searchParams }: PageProps) {
                   </div>
                   <form
                     action={updateItAssetSpecsAction}
-                    className="mt-4 grid gap-3 rounded-md border border-border bg-muted/40 p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                    className="mt-4 grid gap-3 rounded-md border border-border bg-muted/40 p-3 min-[520px]:grid-cols-2 lg:grid-cols-4"
                   >
                     <input name="asset_id" type="hidden" value={asset.id} />
-                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground min-[520px]:col-span-2 lg:col-span-6">
+                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground min-[520px]:col-span-2 lg:col-span-4">
                       <Cpu className="size-3.5 text-primary-blue" aria-hidden="true" />
                       Hardware specifications
                     </p>

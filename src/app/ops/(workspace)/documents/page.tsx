@@ -240,7 +240,7 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
           </div>
         </div>
         <form action={uploadOpsDocumentAction} className="grid gap-4">
-          <div className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <div className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Group title
               <input className={OPS_INPUT_CLASS} name="title" placeholder="e.g. Rubis contract pack" required />
@@ -273,7 +273,7 @@ export default async function OpsDocumentsPage({ searchParams }: PageProps) {
               Files (up to 10)
               <OpsDirectUploadField multiple scope="document" />
             </label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
               Send to (optional)
               <select
                 className={`${OPS_INPUT_CLASS} h-auto`}

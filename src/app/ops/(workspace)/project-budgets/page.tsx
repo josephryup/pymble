@@ -340,13 +340,13 @@ function AddBudgetLineForm({
       </summary>
       <form
         action={addProjectBudgetLineAction}
-        className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
       >
         <OpsReturnToField />
         <input name="budget_id" type="hidden" value={budget.id} />
         <OpsCostCodePicker
           choices={costCodeChoices}
-          className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}
+          className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}
           helperText="Budget a whole phase or a single trade. Anything picked from the library is added to this project when you save."
           required
           unsetLabel="Select the work this budget covers"
@@ -374,7 +374,7 @@ function AddBudgetLineForm({
             type="number"
           />
         </label>
-        <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-5`}>
+        <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
           Notes
           <input className={OPS_INPUT_CLASS} name="notes" />
         </label>
@@ -680,7 +680,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           ) : (
             <form
               action={createProjectBudgetAction}
-              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
             >
               <OpsReturnToField />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -723,11 +723,11 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                   type="number"
                 />
               </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                 Description
                 <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="description" />
               </label>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
                   Create budget
@@ -906,7 +906,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                         </summary>
                         <form
                           action={editProjectBudgetAction}
-                          className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                          className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
                         >
                           <OpsReturnToField />
                           <input name="budget_id" type="hidden" value={budget.id} />
@@ -951,7 +951,7 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
                               type="number"
                             />
                           </label>
-                          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-5`}>
+                          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                             Description
                             <textarea className={`${OPS_INPUT_CLASS} min-h-24`} defaultValue={budget.description} name="description" />
                           </label>

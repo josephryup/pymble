@@ -1,4 +1,9 @@
 import { createOpsServerSessionClient } from "@/lib/ops/auth";
+import {
+  opsIlikeOrFilter,
+  toOpsPaginatedResult,
+  type OpsListState,
+} from "@/lib/ops/listing";
 import type { OpsMomoProvider, OpsPayrollStatus, OpsPayoutStatus } from "@/lib/ops/types";
 
 export type OpsPayrollWorker = {
@@ -84,36 +89,79 @@ function normalizeRelation<T>(value: Relation<T>) {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-export async function fetchOpsCashAdvances() {
+const CASH_ADVANCE_COLUMNS = `
+  id,
+  worker_id,
+  amount,
+  note,
+  issued_at,
+  deducted_in_run_id,
+  created_at,
+  worker:workers!cash_advances_worker_id_fkey(id, worker_code, full_name)
+`;
+
+function normalizeCashAdvance(advance: RawCashAdvance) {
+  return {
+    ...advance,
+    amount: normalizeMoney(advance.amount),
+    worker: normalizeRelation(advance.worker),
+  };
+}
+
+/**
+ * Cash advances, one page at a time. The previous hard `limit(50)` put every
+ * advance older than the most recent fifty out of reach entirely — on a ledger
+ * that decides what gets deducted from somebody's pay (UI/UX audit §1d).
+ */
+export async function fetchPaginatedOpsCashAdvances(listState: OpsListState) {
   const supabase = await createOpsServerSessionClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("cash_advances")
-    .select(
-      `
-        id,
-        worker_id,
-        amount,
-        note,
-        issued_at,
-        deducted_in_run_id,
-        created_at,
-        worker:workers!cash_advances_worker_id_fkey(id, worker_code, full_name)
-      `,
-    )
-    .is("archived_at", null)
+    .select(CASH_ADVANCE_COLUMNS, { count: "exact" })
+    .is("archived_at", null);
+
+  const search = opsIlikeOrFilter(["note"], listState.query);
+  if (search) query = query.or(search);
+
+  const { count, data, error } = await query
     .order("issued_at", { ascending: false })
     .order("created_at", { ascending: false })
-    .limit(50);
+    .range(listState.from, listState.to);
 
   if (error) {
     throw error;
   }
 
-  return ((data ?? []) as unknown as RawCashAdvance[]).map((advance) => ({
-    ...advance,
-    amount: normalizeMoney(advance.amount),
-    worker: normalizeRelation(advance.worker),
-  }));
+  return toOpsPaginatedResult(
+    ((data ?? []) as unknown as RawCashAdvance[]).map(normalizeCashAdvance),
+    count,
+    listState,
+  );
+}
+
+/** Outstanding advance total across the whole ledger, for the header tile. */
+export async function fetchOpsCashAdvanceSummary() {
+  const supabase = await createOpsServerSessionClient();
+  const { count, data, error } = await supabase
+    .from("cash_advances")
+    .select("amount, deducted_in_run_id", { count: "exact" })
+    .is("archived_at", null);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as Array<{
+    amount: number | string;
+    deducted_in_run_id: string | null;
+  }>;
+
+  return {
+    advances: count ?? 0,
+    outstanding: rows
+      .filter((row) => !row.deducted_in_run_id)
+      .reduce((sum, row) => sum + normalizeMoney(row.amount), 0),
+  };
 }
 
 export async function fetchOpsPayrollRuns() {

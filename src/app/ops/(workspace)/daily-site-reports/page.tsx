@@ -218,7 +218,7 @@ function AddEntryForm({ reportId }: { reportId: string }) {
       </summary>
       <form
         action={addDailySiteReportEntryAction}
-        className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
       >
         <input name="report_id" type="hidden" value={reportId} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -455,7 +455,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
           ) : (
             <OpsOfflineForm
               action={createDailySiteReportAction}
-              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
               kind="daily_site_report.create"
               replayEndpoint="/api/ops/offline/daily-site-reports"
               summary="Daily site report"
@@ -519,7 +519,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
                 Incidents
                 <input className={OPS_INPUT_CLASS} min="0" name="incident_count" type="number" />
               </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                 Progress summary
                 <textarea className={OPS_INPUT_CLASS} name="progress_summary" required rows={3} />
               </label>
@@ -547,7 +547,7 @@ export default async function OpsDailySiteReportsPage({ searchParams }: PageProp
                 Commercial notes
                 <textarea className={OPS_INPUT_CLASS} name="commercial_notes" rows={2} />
               </label>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                 <OpsSubmitButton
                   className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`}
                   pendingLabel="Creating..."

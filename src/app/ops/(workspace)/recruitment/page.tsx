@@ -244,7 +244,7 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
           </summary>
           <form
             action={createJobPostingAction}
-            className="grid gap-4 border-t border-border p-5 sm:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 border-t border-border p-5 sm:grid-cols-2 lg:grid-cols-4"
           >
             <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-3`}>
               Job title
@@ -272,11 +272,11 @@ export default async function OpsRecruitmentPage({ searchParams }: PageProps) {
               Salary range (optional)
               <input className={OPS_INPUT_CLASS} name="salary_range" />
             </label>
-            <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-4`}>
               Short summary
               <input className={OPS_INPUT_CLASS} name="summary" placeholder="One line shown in the careers list" />
             </label>
-            <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} sm:col-span-2 lg:col-span-4`}>
               Description
               <textarea className={`${OPS_INPUT_CLASS} min-h-28`} name="description" />
             </label>

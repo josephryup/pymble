@@ -114,11 +114,11 @@ export default async function OpsItSecurityPage({ searchParams }: PageProps) {
           <ShieldAlert className="size-4" aria-hidden="true" /> Security incidents
         </h2>
         {canManage ? (
-          <form action={createItSecurityIncidentAction} className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-6">
+          <form action={createItSecurityIncidentAction} className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Title<input className={OPS_INPUT_CLASS} name="title" placeholder="e.g. Phishing email reported" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-1`}>Severity<select className={OPS_INPUT_CLASS} defaultValue="medium" name="severity">{Object.entries(SEVERITY_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Summary<input className={OPS_INPUT_CLASS} name="summary" /></label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end"><button className={OPS_PRIMARY_BUTTON_CLASS} type="submit"><Plus className="size-4" aria-hidden="true" />Log incident</button></div>
+            <div className="flex items-end lg:col-span-4 lg:justify-end"><button className={OPS_PRIMARY_BUTTON_CLASS} type="submit"><Plus className="size-4" aria-hidden="true" />Log incident</button></div>
           </form>
         ) : null}
         {incidents.length === 0 ? (
@@ -162,12 +162,12 @@ export default async function OpsItSecurityPage({ searchParams }: PageProps) {
           <DatabaseBackup className="size-4" aria-hidden="true" /> Backup jobs
         </h2>
         {canManage ? (
-          <form action={createItBackupRecordAction} className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-6">
+          <form action={createItBackupRecordAction} className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Job name<input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Nightly DB backup" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Target<input className={OPS_INPUT_CLASS} name="target" placeholder="e.g. Cloudflare R2 + NAS" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-1`}>Frequency<input className={OPS_INPUT_CLASS} name="frequency" placeholder="Daily" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-1`}>Status<select className={OPS_INPUT_CLASS} defaultValue="success" name="status">{Object.entries(BACKUP_STATUS_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end"><button className={OPS_PRIMARY_BUTTON_CLASS} type="submit"><Plus className="size-4" aria-hidden="true" />Add backup job</button></div>
+            <div className="flex items-end lg:col-span-4 lg:justify-end"><button className={OPS_PRIMARY_BUTTON_CLASS} type="submit"><Plus className="size-4" aria-hidden="true" />Add backup job</button></div>
           </form>
         ) : null}
         {backups.length === 0 ? (

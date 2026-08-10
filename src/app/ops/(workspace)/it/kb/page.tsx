@@ -64,11 +64,11 @@ export default async function OpsItKbPage({ searchParams }: PageProps) {
           <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <LibraryBig className="size-5 text-primary-blue" aria-hidden="true" /> New article
           </summary>
-          <form action={createItKbArticleAction} className="grid gap-4 border-t border-border p-5 lg:grid-cols-6">
+          <form action={createItKbArticleAction} className="grid gap-4 border-t border-border p-5 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>Title<input className={OPS_INPUT_CLASS} name="title" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Category<input className={OPS_INPUT_CLASS} defaultValue="general" name="category" /></label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>Body<textarea className={`${OPS_INPUT_CLASS} min-h-40`} name="body" placeholder="Step-by-step how-to..." /></label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Save draft</button></div>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>Body<textarea className={`${OPS_INPUT_CLASS} min-h-40`} name="body" placeholder="Step-by-step how-to..." /></label>
+            <div className="flex items-end lg:col-span-4 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Save draft</button></div>
           </form>
         </details>
       ) : null}

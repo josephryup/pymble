@@ -80,15 +80,15 @@ export default async function OpsItCredentialsPage({ searchParams }: PageProps) 
           <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <KeySquare className="size-5 text-primary-blue" aria-hidden="true" /> Record credential
           </summary>
-          <form action={createItCredentialAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItCredentialAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Name<input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Domain registrar admin" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>System<input className={OPS_INPUT_CLASS} name="system_name" placeholder="e.g. Cloudflare" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Account identifier<input className={OPS_INPUT_CLASS} name="account_identifier" placeholder="username / email (not the password)" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Owner<select className={OPS_INPUT_CLASS} defaultValue="" name="owner_user_id"><option value="">Unassigned</option>{sortedUsers.map((u) => (<option key={u.id} value={u.id}>{u.full_name} — {formatOpsRole(u.role)}</option>))}</select></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Vault location<input className={OPS_INPUT_CLASS} name="vault_location" placeholder="e.g. Bitwarden › IT collection" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Rotation due<input className={OPS_INPUT_CLASS} name="rotation_due_date" type="date" /></label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>Notes<input className={OPS_INPUT_CLASS} name="notes" /></label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Record credential</button></div>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>Notes<input className={OPS_INPUT_CLASS} name="notes" /></label>
+            <div className="flex items-end lg:col-span-4 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Record credential</button></div>
           </form>
         </details>
       ) : null}

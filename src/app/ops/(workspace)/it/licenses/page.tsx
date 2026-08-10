@@ -87,7 +87,7 @@ export default async function OpsItLicensesPage({ searchParams }: PageProps) {
           <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <AppWindow className="size-5 text-primary-blue" aria-hidden="true" /> Add licence
           </summary>
-          <form action={createItLicenseAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItLicenseAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Software<input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Microsoft 365 Business" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Vendor<input className={OPS_INPUT_CLASS} name="vendor" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Billing<select className={OPS_INPUT_CLASS} defaultValue="annual" name="billing">{Object.entries(BILLING_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
@@ -96,7 +96,7 @@ export default async function OpsItLicensesPage({ searchParams }: PageProps) {
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Unit cost (ZMW)<input className={OPS_INPUT_CLASS} min="0" name="unit_cost" step="0.01" type="number" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Renewal date<input className={OPS_INPUT_CLASS} name="renewal_date" type="date" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Notes<input className={OPS_INPUT_CLASS} name="notes" /></label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Add licence</button></div>
+            <div className="flex items-end lg:col-span-4 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Add licence</button></div>
           </form>
         </details>
       ) : null}

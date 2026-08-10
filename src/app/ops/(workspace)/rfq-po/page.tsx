@@ -203,7 +203,7 @@ function EditRfqItemForm({
       </summary>
       <form
         action={updateRfqItemAction}
-        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-4"
       >
         <input name="rfq_item_id" type="hidden" value={item.id} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -289,7 +289,7 @@ function EditRfqItemForm({
           Notes
           <input className={OPS_INPUT_CLASS} defaultValue={item.notes} name="notes" />
         </label>
-        <div className="flex items-end lg:col-span-6">
+        <div className="flex items-end lg:col-span-4">
           <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
             <Pencil className="size-4" aria-hidden="true" />
             Save line
@@ -401,7 +401,7 @@ function EditRfqForm({ rfq }: { rfq: OpsRfqSummary }) {
       </summary>
       <form
         action={updateRfqAction}
-        className="grid gap-3 border-t border-border p-3 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 lg:grid-cols-4"
       >
         <input name="rfq_id" type="hidden" value={rfq.id} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
@@ -417,7 +417,7 @@ function EditRfqForm({ rfq }: { rfq: OpsRfqSummary }) {
             type="date"
           />
         </label>
-        <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
           Description
           <input
             className={OPS_INPUT_CLASS}
@@ -425,7 +425,7 @@ function EditRfqForm({ rfq }: { rfq: OpsRfqSummary }) {
             name="description"
           />
         </label>
-        <div className="flex items-end lg:col-span-6">
+        <div className="flex items-end lg:col-span-4">
           <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
             <Pencil className="size-4" aria-hidden="true" />
             Save RFQ
@@ -451,7 +451,7 @@ function AddRfqItemForm({
       </summary>
       <form
         action={addRfqItemAction}
-        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-4"
       >
         <input name="rfq_id" type="hidden" value={rfqId} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -1022,7 +1022,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
           ) : (
             <form
               action={createRfqAction}
-              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
             >
               <OpsScopeSitePicker
                 defaultSiteId={
@@ -1054,7 +1054,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                 Description
                 <input className={OPS_INPUT_CLASS} name="description" />
               </label>
-              <div className="lg:col-span-6">
+              <div className="lg:col-span-4">
                 <p className="mb-2 text-sm font-semibold text-foreground">Line items</p>
                 <OpsLineItemsEditor
                   firstItemDefaults={{
@@ -1068,7 +1068,7 @@ export default async function OpsRfqPoPage({ searchParams }: PageProps) {
                   withActualCost
                 />
               </div>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6 lg:justify-end">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4 lg:justify-end">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
                   Create requisition

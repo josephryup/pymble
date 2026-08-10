@@ -66,11 +66,11 @@ export default async function OpsItChecklistsPage({ searchParams }: PageProps) {
           <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <ListChecks className="size-5 text-primary-blue" aria-hidden="true" /> New checklist
           </summary>
-          <form action={createItChecklistRunAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItChecklistRunAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Employee name<input className={OPS_INPUT_CLASS} name="employee_name" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Type<select className={OPS_INPUT_CLASS} defaultValue="onboarding" name="kind"><option value="onboarding">Onboarding (joining)</option><option value="offboarding">Offboarding (leaving)</option></select></label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>Notes<input className={OPS_INPUT_CLASS} name="notes" /></label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Create checklist</button></div>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>Notes<input className={OPS_INPUT_CLASS} name="notes" /></label>
+            <div className="flex items-end lg:col-span-4 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Create checklist</button></div>
           </form>
         </details>
       ) : null}

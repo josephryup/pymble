@@ -1032,7 +1032,7 @@ function AllocateEquipmentForm({
       ) : (
         <form
           action={allocateEquipmentAction}
-          className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+          className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
         >
           <input name="request_id" type="hidden" value={request.id} />
           <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -1074,7 +1074,7 @@ function AllocateEquipmentForm({
             Actual rate
             <input className={OPS_INPUT_CLASS} min="0" name="actual_daily_rate" step="0.01" type="number" />
           </label>
-          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-5`}>
+          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
             Notes
             <input className={OPS_INPUT_CLASS} name="notes" />
           </label>
@@ -1382,7 +1382,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
               ) : (
                 <form
                   action={createEquipmentRequestAction}
-                  className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                  className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
                 >
                   <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                     Site
@@ -1445,11 +1445,11 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
                     Needed until
                     <input className={OPS_INPUT_CLASS} name="needed_until" type="date" />
                   </label>
-                  <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+                  <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                     Description
                     <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="description" />
                   </label>
-                  <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+                  <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                     <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                       <Plus className="size-4" aria-hidden="true" />
                       Create request

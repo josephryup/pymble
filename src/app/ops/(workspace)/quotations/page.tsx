@@ -323,7 +323,7 @@ function QuotationCard({
           </summary>
           <form
             action={addQuotationLineAction}
-            className="grid gap-3 border-t border-border p-5 md:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-3 border-t border-border p-5 md:grid-cols-2 lg:grid-cols-4"
           >
             <input name="quotation_id" type="hidden" value={quotation.id} />
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -361,7 +361,7 @@ function QuotationCard({
                 type="number"
               />
             </label>
-            <div className="flex items-end lg:col-span-5">
+            <div className="flex items-end lg:col-span-4">
               <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
                 <Plus className="size-4" aria-hidden="true" />
                 Add line

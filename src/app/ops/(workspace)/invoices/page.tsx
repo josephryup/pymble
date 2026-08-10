@@ -328,7 +328,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
           ) : (
             <form
               action={createInvoiceAction}
-              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site

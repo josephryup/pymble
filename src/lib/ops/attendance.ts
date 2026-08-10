@@ -1,5 +1,6 @@
 import { attendanceRateSettings, type AttendanceRateSettings } from "@/lib/ops/attendance-core";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
+import { toOpsPaginatedResult, type OpsListState } from "@/lib/ops/listing";
 import { fetchActiveOpsAssignedSiteIds, requiresOpsSiteAssignment } from "@/lib/ops/site-assignments";
 import type { OpsAttendancePresence, OpsAttendanceSource } from "@/lib/ops/types";
 
@@ -190,8 +191,27 @@ export type OpsAttendanceFilters = {
 
 export async function fetchOpsAttendanceRecords(
   filters: OpsAttendanceFilters = {},
-  options: { limit?: number } = {},
+  options: { limit?: number; listState?: OpsListState } = {},
 ) {
+  return (await fetchPaginatedOpsAttendanceRecords(filters, options)).items;
+}
+
+/**
+ * Attendance is the fastest-growing table in the workspace — one row per worker
+ * per day — and it was capped at the most recent 100 records with no way to
+ * reach anything older (UI/UX audit §1d). Supply `listState` to page it.
+ */
+export async function fetchPaginatedOpsAttendanceRecords(
+  filters: OpsAttendanceFilters = {},
+  options: { limit?: number; listState?: OpsListState } = {},
+) {
+  const listState = options.listState ?? {
+    from: 0,
+    page: 1,
+    pageSize: options.limit ?? 100,
+    query: "",
+    to: (options.limit ?? 100) - 1,
+  };
   const { profile } = await requireOpsUser();
   const supabase = await createOpsServerSessionClient();
   let query = supabase
@@ -214,6 +234,7 @@ export async function fetchOpsAttendanceRecords(
         worker:workers!attendance_records_worker_id_fkey(id, worker_code, full_name, trade),
         site:sites!attendance_records_site_id_fkey(id, code, name)
       `,
+      { count: "exact" },
     )
     .eq("is_active", true)
     // Cancelled rows are soft-deleted: keep them out of the working list.
@@ -221,7 +242,7 @@ export async function fetchOpsAttendanceRecords(
 
   if (requiresOpsSiteAssignment(profile.role)) {
     const siteIds = await fetchActiveOpsAssignedSiteIds(profile.id);
-    if (siteIds.length === 0) return [];
+    if (siteIds.length === 0) return toOpsPaginatedResult<OpsAttendanceRecord>([], 0, listState);
     query = query.in("site_id", siteIds);
   }
 
@@ -238,24 +259,73 @@ export async function fetchOpsAttendanceRecords(
     query = query.lte("clock_in_at", `${filters.dateTo}T23:59:59.999+02:00`);
   }
 
-  const { data, error } = await query
+  const { count, data, error } = await query
     .order("clock_in_at", { ascending: false })
-    .limit(options.limit ?? 100);
+    .range(listState.from, listState.to);
 
   if (error) {
     throw error;
   }
 
-  return ((data ?? []) as unknown as RawAttendanceRecord[]).map(({ gps_label, ...record }) => ({
-    ...record,
-    site_note: gps_label ?? "",
-    amount_earned: normalizeMoney(record.amount_earned),
-    hours_worked: normalizeMoney(record.hours_worked),
-    overtime_amount: normalizeMoney(record.overtime_amount),
-    overtime_hours: normalizeMoney(record.overtime_hours),
-    site: normalizeRelation(record.site),
-    worker: normalizeRelation(record.worker),
-  }));
+  const records = ((data ?? []) as unknown as RawAttendanceRecord[]).map(
+    ({ gps_label, ...record }) => ({
+      ...record,
+      site_note: gps_label ?? "",
+      amount_earned: normalizeMoney(record.amount_earned),
+      hours_worked: normalizeMoney(record.hours_worked),
+      overtime_amount: normalizeMoney(record.overtime_amount),
+      overtime_hours: normalizeMoney(record.overtime_hours),
+      site: normalizeRelation(record.site),
+      worker: normalizeRelation(record.worker),
+    }),
+  );
+
+  return toOpsPaginatedResult(records, count, listState);
+}
+
+/**
+ * Totals across the whole filtered set, so the header tiles keep describing the
+ * filter rather than whichever page happens to be on screen. Two narrow columns
+ * instead of the joined rows.
+ */
+export async function fetchOpsAttendanceSummary(filters: OpsAttendanceFilters = {}) {
+  const { profile } = await requireOpsUser();
+  const supabase = await createOpsServerSessionClient();
+  let query = supabase
+    .from("attendance_records")
+    .select("amount_earned, approved_at")
+    .eq("is_active", true)
+    .is("cancelled_at", null);
+
+  if (requiresOpsSiteAssignment(profile.role)) {
+    const siteIds = await fetchActiveOpsAssignedSiteIds(profile.id);
+    if (siteIds.length === 0) return { records: 0, pending: 0, earned: 0 };
+    query = query.in("site_id", siteIds);
+  }
+
+  if (filters.workerId) query = query.eq("worker_id", filters.workerId);
+  if (filters.siteId) query = query.eq("site_id", filters.siteId);
+  if (filters.presence) query = query.eq("presence", filters.presence);
+  if (filters.approval === "approved") query = query.not("approved_at", "is", null);
+  if (filters.approval === "pending") query = query.is("approved_at", null);
+  if (filters.dateFrom) {
+    query = query.gte("clock_in_at", `${filters.dateFrom}T00:00:00+02:00`);
+  }
+  if (filters.dateTo) {
+    query = query.lte("clock_in_at", `${filters.dateTo}T23:59:59.999+02:00`);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as Array<{ amount_earned: number | string; approved_at: string | null }>;
+  return {
+    records: rows.length,
+    pending: rows.filter((row) => !row.approved_at).length,
+    earned: rows.reduce((sum, row) => sum + normalizeMoney(row.amount_earned), 0),
+  };
 }
 
 export type OpsAttendanceDailyPoint = {

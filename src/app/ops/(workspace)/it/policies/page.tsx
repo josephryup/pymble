@@ -66,12 +66,12 @@ export default async function OpsItPoliciesPage({ searchParams }: PageProps) {
           <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <ScrollText className="size-5 text-primary-blue" aria-hidden="true" /> New policy
           </summary>
-          <form action={createItPolicyAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItPolicyAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Title<input className={OPS_INPUT_CLASS} name="title" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Category<select className={OPS_INPUT_CLASS} defaultValue="acceptable_use" name="category">{Object.entries(IT_POLICY_CATEGORY_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-1`}>Version<input className={OPS_INPUT_CLASS} defaultValue="1" min="1" name="version" type="number" /></label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-6`}>Policy text<textarea className={`${OPS_INPUT_CLASS} min-h-40`} name="body" /></label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Save draft</button></div>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>Policy text<textarea className={`${OPS_INPUT_CLASS} min-h-40`} name="body" /></label>
+            <div className="flex items-end lg:col-span-4 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Save draft</button></div>
           </form>
         </details>
       ) : null}

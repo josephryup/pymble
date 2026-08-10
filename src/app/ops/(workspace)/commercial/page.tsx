@@ -25,6 +25,7 @@ import {
   OpsCommercialFunnel,
 } from "@/components/ops/OpsCommercialCharts";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
+import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsCommercialKpiPanel } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
@@ -624,10 +625,7 @@ function IpcActions({
         </InlineActionForm>
       ) : null}
       {canCertifyOpsCommercialIpc(role, ipc) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Certify IPC
-          </summary>
+        <OpsCollapsible title="Certify IPC">
           <form action={certifyCommercialIpcAction} className="mt-3 grid gap-3 sm:grid-cols-3">
             <input name="ipc_id" type="hidden" value={ipc.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -650,7 +648,7 @@ function IpcActions({
               Certify
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canMarkOpsCommercialIpcInvoiced(role, ipc) ? (
         <InlineActionForm
@@ -663,10 +661,7 @@ function IpcActions({
         </InlineActionForm>
       ) : null}
       {canCreateOpsCommercialInvoiceFromIpc(role, ipc) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Create invoice from IPC
-          </summary>
+        <OpsCollapsible title="Create invoice from IPC">
           <form action={createInvoiceFromCommercialIpcAction} className="mt-3 grid gap-3">
             <input name="ipc_id" type="hidden" value={ipc.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -691,7 +686,7 @@ function IpcActions({
               Create invoice
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canMarkOpsCommercialIpcPaid(role, ipc) ? (
         <InlineActionForm
@@ -704,10 +699,7 @@ function IpcActions({
         </InlineActionForm>
       ) : null}
       {canRejectOpsCommercialIpc(role, ipc) ? (
-        <details className="w-full rounded-md border border-red-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-red-700">
-            Reject IPC
-          </summary>
+        <OpsCollapsible title="Reject IPC" tone="danger">
           <form action={rejectCommercialIpcAction} className="mt-3 grid gap-3">
             <input name="ipc_id" type="hidden" value={ipc.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -718,7 +710,7 @@ function IpcActions({
               Reject
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsCommercialIpc(actorId, role, ipc) ? (
         <InlineActionForm
@@ -756,10 +748,7 @@ function VariationActions({
         </InlineActionForm>
       ) : null}
       {canPriceOpsCommercialVariation(role, variation) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Price variation
-          </summary>
+        <OpsCollapsible title="Price variation">
           <form action={priceCommercialVariationAction} className="mt-3 grid gap-3">
             <input name="variation_id" type="hidden" value={variation.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -774,13 +763,10 @@ function VariationActions({
               Price
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canApproveOpsCommercialVariation(role, variation) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Approve variation
-          </summary>
+        <OpsCollapsible title="Approve variation">
           <form action={approveCommercialVariationAction} className="mt-3 grid gap-3">
             <input name="variation_id" type="hidden" value={variation.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -795,7 +781,7 @@ function VariationActions({
               Approve
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCloseOpsCommercialVariation(role, variation) ? (
         <InlineActionForm
@@ -808,10 +794,7 @@ function VariationActions({
         </InlineActionForm>
       ) : null}
       {canRejectOpsCommercialVariation(role, variation) ? (
-        <details className="w-full rounded-md border border-red-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-red-700">
-            Reject variation
-          </summary>
+        <OpsCollapsible title="Reject variation" tone="danger">
           <form action={rejectCommercialVariationAction} className="mt-3 grid gap-3">
             <input name="variation_id" type="hidden" value={variation.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -822,7 +805,7 @@ function VariationActions({
               Reject
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsCommercialVariation(actorId, role, variation) ? (
         <InlineActionForm
@@ -870,10 +853,7 @@ function ClaimActions({
         </InlineActionForm>
       ) : null}
       {canAgreeOpsCommercialClaim(role, claim) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Agree claim
-          </summary>
+        <OpsCollapsible title="Agree claim">
           <form action={agreeCommercialClaimAction} className="mt-3 grid gap-3">
             <input name="claim_id" type="hidden" value={claim.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -888,7 +868,7 @@ function ClaimActions({
               Agree
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCloseOpsCommercialClaim(role, claim) ? (
         <InlineActionForm
@@ -901,10 +881,7 @@ function ClaimActions({
         </InlineActionForm>
       ) : null}
       {canRejectOpsCommercialClaim(role, claim) ? (
-        <details className="w-full rounded-md border border-red-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-red-700">
-            Reject claim
-          </summary>
+        <OpsCollapsible title="Reject claim" tone="danger">
           <form action={rejectCommercialClaimAction} className="mt-3 grid gap-3">
             <input name="claim_id" type="hidden" value={claim.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -915,7 +892,7 @@ function ClaimActions({
               Reject
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsCommercialClaim(actorId, role, claim) ? (
         <InlineActionForm
@@ -1008,10 +985,7 @@ function ValuationActions({
         </InlineActionForm>
       ) : null}
       {canRejectOpsCommercialValuation(role, valuation) ? (
-        <details className="w-full rounded-md border border-red-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-red-700">
-            Reject valuation
-          </summary>
+        <OpsCollapsible title="Reject valuation" tone="danger">
           <form action={rejectCommercialValuationAction} className="mt-3 grid gap-3">
             <input name="valuation_id" type="hidden" value={valuation.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1022,7 +996,7 @@ function ValuationActions({
               Reject
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsCommercialValuation(actorId, role, valuation) ? (
         <InlineActionForm
@@ -1284,10 +1258,7 @@ function RetentionReleaseActions({
         </InlineActionForm>
       ) : null}
       {canApproveOpsCommercialRetentionRelease(role, release) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Approve release
-          </summary>
+        <OpsCollapsible title="Approve release">
           <form action={approveCommercialRetentionReleaseAction} className="mt-3 grid gap-3">
             <input name="release_id" type="hidden" value={release.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1309,13 +1280,10 @@ function RetentionReleaseActions({
               Approve
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canReleaseOpsCommercialRetentionRelease(role, release) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Release retention
-          </summary>
+        <OpsCollapsible title="Release retention">
           <form action={releaseCommercialRetentionReleaseAction} className="mt-3 grid gap-3 min-[520px]:grid-cols-2">
             <input name="release_id" type="hidden" value={release.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1337,13 +1305,10 @@ function RetentionReleaseActions({
               Release
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canRejectOpsCommercialRetentionRelease(role, release) ? (
-        <details className="w-full rounded-md border border-red-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-red-700">
-            Reject release
-          </summary>
+        <OpsCollapsible title="Reject release" tone="danger">
           <form action={rejectCommercialRetentionReleaseAction} className="mt-3 grid gap-3">
             <input name="release_id" type="hidden" value={release.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1354,7 +1319,7 @@ function RetentionReleaseActions({
               Reject
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsCommercialRetentionRelease(actorId, role, release) ? (
         <InlineActionForm
@@ -1447,10 +1412,7 @@ function MilestoneActions({
         </InlineActionForm>
       ) : null}
       {canAchieveOpsCommercialMilestone(actorId, role, milestone) ? (
-        <details className="w-full rounded-md border border-border p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
-            Achieve milestone
-          </summary>
+        <OpsCollapsible title="Achieve milestone">
           <form action={achieveCommercialMilestoneAction} className="mt-3 grid gap-3 min-[520px]:grid-cols-2">
             <input name="milestone_id" type="hidden" value={milestone.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1472,7 +1434,7 @@ function MilestoneActions({
               Achieve
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCertifyOpsCommercialMilestone(role, milestone) ? (
         <InlineActionForm
@@ -1485,10 +1447,7 @@ function MilestoneActions({
         </InlineActionForm>
       ) : null}
       {canDelayOpsCommercialMilestone(actorId, role, milestone) ? (
-        <details className="w-full rounded-md border border-red-100 p-3">
-          <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.1em] text-red-700">
-            Delay milestone
-          </summary>
+        <OpsCollapsible title="Delay milestone" tone="danger">
           <form action={delayCommercialMilestoneAction} className="mt-3 grid gap-3">
             <input name="milestone_id" type="hidden" value={milestone.id} />
             <label className={OPS_LABEL_CLASS}>
@@ -1499,7 +1458,7 @@ function MilestoneActions({
               Delay
             </button>
           </form>
-        </details>
+        </OpsCollapsible>
       ) : null}
       {canCancelOpsCommercialMilestone(actorId, role, milestone) ? (
         <InlineActionForm

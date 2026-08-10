@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Archive,
   Camera,
   CheckCircle2,
   ClipboardCheck,
@@ -8,10 +9,18 @@ import {
   Play,
   RotateCcw,
   ShieldAlert,
+  UserCheck,
 } from "lucide-react";
 import { notFound } from "next/navigation";
+import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
+import {
+  OpsListControls,
+  OpsPaginationControls,
+  type OpsListSelectFilter,
+} from "@/components/ops/OpsListControls";
+import { parseOpsListState } from "@/lib/ops/listing";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsOfflineForm } from "@/components/ops/OpsOfflineForm";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
@@ -19,35 +28,37 @@ import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
+  canArchiveOpsQaChecklist,
   canCreateOpsEngineeringControl,
   canReleaseOpsQaHoldPoint,
+  canSignOffOpsQaChecklist,
   canViewOpsEngineeringControls,
 } from "@/lib/ops/engineering-controls-permissions";
 import { todayInLusaka } from "@/lib/ops/format";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import {
+  acknowledgeQaChecklistAction,
+  archiveQaChecklistAction,
   attachQaChecklistEvidenceAction,
   completeQaChecklistAction,
   overrideQaHoldPointAction,
-  recordQaClientSignOffAction,
   reopenQaChecklistAction,
   setQaChecklistItemAction,
   startQaChecklistAction,
 } from "@/lib/ops/qa-checklist-actions";
 import { qaChecklistTemplateOptions } from "@/lib/ops/qa-checklist-templates";
-import type { QaItemResult } from "@/lib/ops/qa-checklist-rules";
+import { isAwaitingQaSignOff, type QaItemResult } from "@/lib/ops/qa-checklist-rules";
 import {
-  fetchOpsQaChecklistRuns,
   fetchOpsQaChecklistStats,
+  fetchPaginatedOpsQaChecklistRuns,
   type QaChecklistRun,
 } from "@/lib/ops/qa-checklists";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
-import type { OpsUserRole } from "@/lib/ops/types";
+import type { OpsQaInspectionStatus, OpsUserRole } from "@/lib/ops/types";
 import {
   firstParam,
   noticeFromParams,
   OPS_DANGER_BUTTON_CLASS,
-  OPS_FOCUS_CLASS,
   OPS_INPUT_CLASS,
   OPS_LABEL_CLASS,
   OPS_NOTICE_WARNING_CLASS,
@@ -60,6 +71,19 @@ import {
 export const dynamic = "force-dynamic";
 
 type PageProps = { searchParams?: Promise<OpsSearchParams> };
+
+/** Statuses a live checklist can be filtered by — cancelled runs are excluded
+ * from the read model entirely, so offering it would return nothing. */
+const QA_STATUS_OPTIONS: OpsQaInspectionStatus[] = [
+  "planned",
+  "completed",
+  "action_required",
+  "closed",
+];
+
+function isQaStatus(value: string | undefined): value is OpsQaInspectionStatus {
+  return Boolean(value) && (QA_STATUS_OPTIONS as string[]).includes(value!);
+}
 
 const RESULT_OPTIONS: Array<{ value: QaItemResult; label: string }> = [
   { value: "pending", label: "—" },
@@ -75,11 +99,13 @@ function checklistNotice(params: OpsSearchParams) {
 
   const updated = firstParam(params.updated);
   const messages: Record<string, string> = {
+    acknowledged: "Sign-off recorded. The checklist is complete.",
+    archived: "Checklist archived. It can be restored from the archive.",
     completed: "Checklist completed.",
+    evidence: "Photo attached.",
     item: "Answer saved.",
     override: "Hold point released. The reason is recorded on the checklist.",
-    reopened: "Checklist reopened for correction.",
-    signed: "Client sign-off recorded.",
+    reopened: "Checklist reopened for correction. The sign-off was cleared with it.",
   };
 
   return updated && messages[updated]
@@ -88,10 +114,12 @@ function checklistNotice(params: OpsSearchParams) {
 }
 
 function ChecklistRunCard({
+  expanded,
   run,
   role,
   userId,
 }: {
+  expanded: boolean;
   run: QaChecklistRun;
   role: OpsUserRole;
   userId: string;
@@ -100,27 +128,69 @@ function ChecklistRunCard({
   const canEdit = isOpen && canCreateOpsEngineeringControl(role);
   const holdPointBlocker = run.evaluation.blockers.find((blocker) => blocker.code === "hold_points");
   const released = Boolean(run.overrideAt);
-  const canComplete =
+  const fieldworkDone =
     run.evaluation.blockers.filter((blocker) => !(released && blocker.code === "hold_points"))
       .length === 0;
+  const awaitingSignOff = isAwaitingQaSignOff({
+    evaluation: run.evaluation,
+    holdPointsReleased: released,
+    pmSignedAt: run.pmSignedAt,
+  });
+  const canSignOff =
+    isOpen && awaitingSignOff && canSignOffOpsQaChecklist(role) && run.inspectorId !== userId;
 
   return (
-    <article className="rounded-lg border border-border bg-card" id={`run-${run.id}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-5">
-        <div className="min-w-0">
+    // The whole header is the toggle. A site with several checklists open was
+    // previously one unbroken page of every item and every form (UI/UX audit
+    // §3); collapsed, the page becomes a list you can scan.
+    <OpsCollapsible
+      id={`run-${run.id}`}
+      meta={
+        <div className="rounded-md border border-border px-4 py-2 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Score
+          </p>
+          <p className="mt-1 font-heading text-2xl font-bold text-foreground">
+            {run.evaluation.score}%
+          </p>
+          <p className="text-xs font-normal text-muted-foreground">
+            {run.evaluation.passed}/{run.evaluation.total} passed
+          </p>
+        </div>
+      }
+      open={expanded}
+      title={
+        <div className="font-sans text-base font-normal">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-heading text-lg font-bold text-foreground">{run.process}</h3>
-            <span className={opsStatusBadgeClass(run.status)}>{run.status.replace("_", " ")}</span>
-            {run.clientSignedAt ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-emerald-700">
-                <FileSignature className="size-3" aria-hidden="true" />
-                Client signed
-              </span>
-            ) : null}
+              <h3 className="font-heading text-lg font-bold text-foreground">{run.process}</h3>
+              <span className={opsStatusBadgeClass(run.status)}>{run.status.replace("_", " ")}</span>
+              {run.pmSignedAt ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-emerald-700">
+                  <UserCheck className="size-3" aria-hidden="true" />
+                  PM signed
+                </span>
+              ) : null}
+              {awaitingSignOff ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-sky-700">
+                  <FileSignature className="size-3" aria-hidden="true" />
+                  Awaiting PM sign-off
+                </span>
+              ) : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {run.inspectionNumber} · {run.siteLabel}
             {run.location ? ` · ${run.location}` : ""} · {run.inspectionDate}
+          </p>
+          {/* Who is answerable for these answers — the point of the record. */}
+          <p className="mt-1 text-sm text-muted-foreground">
+            Initiated by <strong className="text-foreground">{run.initiatorName}</strong>
+            {run.pmSignedAt ? (
+              <>
+                {" · signed off by "}
+                <strong className="text-foreground">{run.pmSignedByName || "Projects Manager"}</strong>
+                {` on ${new Date(run.pmSignedAt).toLocaleDateString("en-ZM")}`}
+              </>
+            ) : null}
           </p>
           {run.needsTemplateReview ? (
             <p className="mt-2 text-xs font-semibold text-orange-700">
@@ -129,19 +199,9 @@ function ChecklistRunCard({
             </p>
           ) : null}
         </div>
-        <div className="rounded-md border border-border px-4 py-2 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Score
-          </p>
-          <p className="mt-1 font-heading text-2xl font-bold text-foreground">
-            {run.evaluation.score}%
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {run.evaluation.passed}/{run.evaluation.total} passed
-          </p>
-        </div>
-      </div>
-
+      }
+      variant="panel"
+    >
       {run.evaluation.blockers.length > 0 && isOpen ? (
         <div className={`m-5 ${OPS_NOTICE_WARNING_CLASS}`}>
           <p className="font-bold">Cannot complete yet</p>
@@ -194,11 +254,14 @@ function ChecklistRunCard({
             </div>
 
             {canEdit ? (
-              <form action={setQaChecklistItemAction} className="mt-3 grid gap-2 sm:grid-cols-4">
+              <form
+                action={setQaChecklistItemAction}
+                className="mt-3 grid gap-2 sm:grid-cols-[minmax(8rem,12rem)_minmax(0,1fr)_auto]"
+              >
                 <input name="run_id" type="hidden" value={run.id} />
                 <input name="item_id" type="hidden" value={item.id} />
-                <label className={OPS_LABEL_CLASS}>
-                  Contractor
+                <label className={`${OPS_LABEL_CLASS} min-w-0`}>
+                  Result
                   <select className={OPS_INPUT_CLASS} defaultValue={item.result} name="result">
                     {RESULT_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -207,21 +270,7 @@ function ChecklistRunCard({
                     ))}
                   </select>
                 </label>
-                <label className={OPS_LABEL_CLASS}>
-                  Client
-                  <select
-                    className={OPS_INPUT_CLASS}
-                    defaultValue={item.clientResult}
-                    name="client_result"
-                  >
-                    {RESULT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={OPS_LABEL_CLASS}>
+                <label className={`${OPS_LABEL_CLASS} min-w-0`}>
                   Note
                   <input className={OPS_INPUT_CLASS} defaultValue={item.notes} name="notes" />
                 </label>
@@ -233,8 +282,7 @@ function ChecklistRunCard({
               </form>
             ) : (
               <p className="mt-2 text-sm text-muted-foreground">
-                Contractor: <strong>{item.result}</strong> · Client:{" "}
-                <strong>{item.clientResult}</strong>
+                Result: <strong>{item.result}</strong>
                 {item.notes ? ` · ${item.notes}` : ""}
               </p>
             )}
@@ -280,11 +328,24 @@ function ChecklistRunCard({
       </ul>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border bg-muted/30 p-5">
-        {canEdit ? (
+        {/*
+          The engineer no longer closes their own checklist. Once the fieldwork
+          is done it waits for the Projects Manager, whose acknowledgement is
+          what completes it.
+        */}
+        {canEdit && !run.pmSignedAt ? (
+          <p className="text-sm text-muted-foreground">
+            {fieldworkDone
+              ? "Ready for the Projects Manager to acknowledge. Completing is their sign-off."
+              : "Answer every item and photograph the failures, then it goes to the Projects Manager."}
+          </p>
+        ) : null}
+
+        {canEdit && run.pmSignedAt ? (
           <form action={completeQaChecklistAction}>
             <input name="run_id" type="hidden" value={run.id} />
             <OpsConfirmSubmitButton
-              className={canComplete ? OPS_PRIMARY_BUTTON_CLASS : OPS_SECONDARY_BUTTON_CLASS}
+              className={OPS_PRIMARY_BUTTON_CLASS}
               confirmText="Confirm complete"
             >
               <CheckCircle2 className="size-4" aria-hidden="true" />
@@ -293,13 +354,47 @@ function ChecklistRunCard({
           </form>
         ) : null}
 
+        {canSignOff ? (
+          <form action={acknowledgeQaChecklistAction} className="grid w-full gap-2">
+            <label className={`${OPS_LABEL_CLASS} min-w-0`}>
+              Sign-off note (optional)
+              <input
+                className={OPS_INPUT_CLASS}
+                name="note"
+                placeholder="Anything the record should carry"
+              />
+            </label>
+            <input name="run_id" type="hidden" value={run.id} />
+            <div>
+              <OpsConfirmSubmitButton
+                className={OPS_PRIMARY_BUTTON_CLASS}
+                confirmText="Confirm sign-off"
+              >
+                <UserCheck className="size-4" aria-hidden="true" />
+                Acknowledge and complete
+              </OpsConfirmSubmitButton>
+            </div>
+          </form>
+        ) : null}
+
+        {isOpen && awaitingSignOff && canSignOffOpsQaChecklist(role) && run.inspectorId === userId ? (
+          <p className="text-sm text-muted-foreground">
+            You started this checklist, so somebody else has to acknowledge it.
+          </p>
+        ) : null}
+
+        {run.pmSignOffNote ? (
+          <p className="w-full text-sm text-muted-foreground">
+            Sign-off note: “{run.pmSignOffNote}”
+          </p>
+        ) : null}
+
         {isOpen && holdPointBlocker && !released && canReleaseOpsQaHoldPoint(role) ? (
-          <details className="w-full rounded-md border border-orange-200 bg-orange-50/60 p-3">
-            <summary
-              className={`cursor-pointer text-sm font-bold text-orange-800 ${OPS_FOCUS_CLASS}`}
-            >
-              Release hold point (senior sign-off)
-            </summary>
+          <OpsCollapsible
+            className="bg-orange-50/60"
+            title="Release hold point (senior sign-off)"
+            tone="warning"
+          >
             {run.inspectorId === userId ? (
               <p className="mt-2 text-sm text-orange-900">
                 You ran this inspection, so you cannot release its own hold point. Ask a second
@@ -329,60 +424,10 @@ function ChecklistRunCard({
                 </div>
               </form>
             )}
-          </details>
+          </OpsCollapsible>
         ) : null}
 
-        {!isOpen && !run.clientSignedAt ? (
-          <details className="w-full rounded-md border border-border bg-card p-3">
-            <summary className={`cursor-pointer text-sm font-bold text-foreground ${OPS_FOCUS_CLASS}`}>
-              <FileSignature className="mr-1 inline size-4" aria-hidden="true" />
-              Client sign-off
-            </summary>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Hand the device to the client representative. They type their own name to sign; the
-              record notes that it was witnessed on your device.
-            </p>
-            <form action={recordQaClientSignOffAction} className="mt-2 grid gap-2 sm:grid-cols-2">
-              <input name="run_id" type="hidden" value={run.id} />
-              <label className={OPS_LABEL_CLASS}>
-                Representative name
-                <input className={OPS_INPUT_CLASS} name="client_rep_name" required />
-              </label>
-              <label className={OPS_LABEL_CLASS}>
-                Capacity / role
-                <input className={OPS_INPUT_CLASS} name="client_rep_role" />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} sm:col-span-2`}>
-                Signature — type full name
-                <input className={OPS_INPUT_CLASS} name="client_signature_name" required />
-              </label>
-              <label className={`${OPS_LABEL_CLASS} sm:col-span-2`}>
-                Client comment
-                <textarea className={OPS_INPUT_CLASS} name="client_comment" rows={2} />
-              </label>
-              <div className="sm:col-span-2">
-                <OpsConfirmSubmitButton
-                  className={OPS_PRIMARY_BUTTON_CLASS}
-                  confirmText="Confirm sign-off"
-                >
-                  <FileSignature className="size-4" aria-hidden="true" />
-                  Record sign-off
-                </OpsConfirmSubmitButton>
-              </div>
-            </form>
-          </details>
-        ) : null}
-
-        {run.clientSignedAt ? (
-          <p className="text-sm text-muted-foreground">
-            Signed by <strong className="text-foreground">{run.clientRepName}</strong>
-            {run.clientRepRole ? ` (${run.clientRepRole})` : ""} on{" "}
-            {new Date(run.clientSignedAt).toLocaleDateString("en-ZM")}
-            {run.clientComment ? ` — “${run.clientComment}”` : ""}
-          </p>
-        ) : null}
-
-        {!isOpen && !run.clientSignedAt && canReleaseOpsQaHoldPoint(role) ? (
+        {!isOpen && canReleaseOpsQaHoldPoint(role) ? (
           <form action={reopenQaChecklistAction}>
             <input name="run_id" type="hidden" value={run.id} />
             <OpsConfirmSubmitButton
@@ -394,8 +439,21 @@ function ChecklistRunCard({
             </OpsConfirmSubmitButton>
           </form>
         ) : null}
+
+        {canArchiveOpsQaChecklist(role) ? (
+          <form action={archiveQaChecklistAction}>
+            <input name="run_id" type="hidden" value={run.id} />
+            <OpsConfirmSubmitButton
+              className={OPS_DANGER_BUTTON_CLASS}
+              confirmText="Confirm archive"
+            >
+              <Archive className="size-4" aria-hidden="true" />
+              Archive
+            </OpsConfirmSubmitButton>
+          </form>
+        ) : null}
       </div>
-    </article>
+    </OpsCollapsible>
   );
 }
 
@@ -412,15 +470,58 @@ export default async function OpsSiteChecklistsPage({ searchParams }: PageProps)
     notFound();
   }
 
-  const [runs, stats, siteOptions] = await Promise.all([
-    fetchOpsQaChecklistRuns({ limit: 30 }),
+  // The list used to be a hard `limit: 30` with nothing past it — a site that
+  // ran more inspections than that simply could not reach the older ones.
+  const listState = parseOpsListState(params, { defaultPageSize: 10 });
+  const siteFilter = firstParam(params.site) ?? "";
+  const requestedStatus = firstParam(params.status);
+  const statusFilter: OpsQaInspectionStatus | "" = isQaStatus(requestedStatus)
+    ? requestedStatus
+    : "";
+
+  const [runPage, stats, siteOptions] = await Promise.all([
+    fetchPaginatedOpsQaChecklistRuns({
+      listState,
+      siteId: siteFilter || null,
+      status: statusFilter || null,
+    }),
     fetchOpsQaChecklistStats(),
     fetchActiveSiteOptions(),
   ]);
+  const runs = runPage.items;
 
   const notice = checklistNotice(params);
   const canStart = canCreateOpsEngineeringControl(auth.profile.role);
   const templates = qaChecklistTemplateOptions();
+  // Cards are collapsed by default; every action redirects with ?open=<id> so
+  // the checklist you were working on comes back expanded.
+  const openRunId = firstParam(params.open) ?? "";
+
+  const listFilters: OpsListSelectFilter[] = [
+    {
+      label: "Site",
+      name: "site",
+      options: [
+        { label: "All sites", value: "" },
+        ...siteOptions.map((site) => ({ label: `${site.code} - ${site.name}`, value: site.id })),
+      ],
+      value: siteFilter,
+    },
+    {
+      label: "Status",
+      name: "status",
+      options: [
+        { label: "All statuses", value: "" },
+        ...QA_STATUS_OPTIONS.map((status) => ({
+          label: status.replace(/_/g, " "),
+          value: status,
+        })),
+      ],
+      value: statusFilter,
+    },
+  ];
+  const hasActiveFilter =
+    listState.query.length > 0 || siteFilter.length > 0 || statusFilter.length > 0;
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -467,9 +568,9 @@ export default async function OpsSiteChecklistsPage({ searchParams }: PageProps)
         <OpsKpiCard
           href="/ops/site-checklists"
           icon={FileSignature}
-          label="Awaiting client signature"
-          tone={stats.awaitingClient > 0 ? "warn" : "good"}
-          value={stats.awaitingClient.toLocaleString("en-ZM")}
+          label="Awaiting PM sign-off"
+          tone={stats.awaitingSignOff > 0 ? "warn" : "good"}
+          value={stats.awaitingSignOff.toLocaleString("en-ZM")}
         />
       </section>
 
@@ -488,7 +589,7 @@ export default async function OpsSiteChecklistsPage({ searchParams }: PageProps)
           </div>
           <OpsOfflineForm
             action={startQaChecklistAction}
-            className="grid gap-3 md:grid-cols-2 lg:grid-cols-5"
+            className="grid gap-3 md:grid-cols-2 lg:grid-cols-4"
             kind="qa_checklist.start"
             replayEndpoint="/api/ops/offline/qa-checklists"
             summary="Site checklist"
@@ -534,7 +635,7 @@ export default async function OpsSiteChecklistsPage({ searchParams }: PageProps)
                 type="date"
               />
             </label>
-            <div className="flex items-end lg:col-span-5">
+            <div className="flex items-end lg:col-span-4">
               <OpsSubmitButton
                 className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`}
                 pendingLabel="Starting..."
@@ -547,24 +648,48 @@ export default async function OpsSiteChecklistsPage({ searchParams }: PageProps)
         </section>
       ) : null}
 
-      {runs.length > 0 ? (
-        <section className="space-y-4">
-          {runs.map((run) => (
-            <ChecklistRunCard
-              key={run.id}
-              role={auth.profile.role}
-              run={run}
-              userId={auth.profile.id}
-            />
-          ))}
-        </section>
-      ) : (
-        <OpsEmptyState
-          icon={ClipboardCheck}
-          title="No checklists yet"
-          description="Start one above. Every construction process has a standard set of checks ready to run."
+      <section className="overflow-hidden rounded-lg border border-border bg-card" id="checklist-list">
+        <OpsListControls
+          action="/ops/site-checklists"
+          filters={listFilters}
+          params={params}
+          placeholder="Inspection number, title or location"
+          query={listState.query}
+          resultLabel="checklists"
         />
-      )}
+        {runs.length > 0 ? (
+          <div className="space-y-4 p-5">
+            {runs.map((run) => (
+              <ChecklistRunCard
+                expanded={run.id === openRunId}
+                key={run.id}
+                role={auth.profile.role}
+                run={run}
+                userId={auth.profile.id}
+              />
+            ))}
+          </div>
+        ) : (
+          <OpsEmptyState
+            icon={ClipboardCheck}
+            title={hasActiveFilter ? "No checklists match this search" : "No checklists yet"}
+            description={
+              hasActiveFilter
+                ? "Clear the search, or pick a different site or status."
+                : "Start one above. Every construction process has a standard set of checks ready to run."
+            }
+          />
+        )}
+        <OpsPaginationControls
+          anchor="checklist-list"
+          basePath="/ops/site-checklists"
+          filters={listFilters}
+          pagination={runPage.pagination}
+          params={params}
+          query={listState.query}
+          resultLabel="checklists"
+        />
+      </section>
     </div>
   );
 }

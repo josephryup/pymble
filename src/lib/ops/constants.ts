@@ -662,7 +662,7 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Site Instructions and Quality Assurance / Quality Control",
   },
   {
-    description: "Run the company inspection checklist for each construction process: contractor and client verdicts, photo evidence on failures, hold points, and client sign-off on site.",
+    description: "Run the company inspection checklist for each construction process: one verdict per check, photo evidence on failures, hold points, and the Projects Manager's sign-off to close it.",
     group: "engineering",
     href: "/ops/site-checklists",
     id: "site-checklists",

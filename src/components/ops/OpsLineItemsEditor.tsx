@@ -76,7 +76,7 @@ export function OpsLineItemsEditor({
             </button>
           </div>
 
-          <div className="grid gap-3 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <div className="grid gap-3 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Item name
               <input
@@ -130,15 +130,15 @@ export function OpsLineItemsEditor({
                 />
               </label>
             ) : null}
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Specification
               <input className={OPS_INPUT_CLASS} name="specification" />
             </label>
-            <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Notes
               <input className={OPS_INPUT_CLASS} name="notes" />
             </label>
-            <div className="lg:col-span-6">
+            <div className="lg:col-span-4">
               <OpsSupplierPicker
                 defaultSupplierId={defaults?.supplier_id ?? null}
                 helperText="Optional — pick this line's supplier from the list or type a new name."

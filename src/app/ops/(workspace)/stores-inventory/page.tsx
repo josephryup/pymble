@@ -959,7 +959,7 @@ export default async function OpsStoresInventoryPage({ searchParams }: PageProps
             ) : (
               <form
                 action={recordGoodsReceivedAction}
-                className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
               >
                 <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>
                   Purchase order line

@@ -219,7 +219,7 @@ export default async function OpsStaffPayrollPage({ searchParams }: PageProps) {
           </div>
           <div className="divide-y divide-border rounded-md border border-border">
             {employees.map((employee) => (
-              <form action={updateStaffBankDetailsAction} className="grid gap-3 p-3 md:grid-cols-5" key={`bank-${employee.id}`}>
+              <form action={updateStaffBankDetailsAction} className="grid gap-3 p-3 md:grid-cols-4" key={`bank-${employee.id}`}>
                 <input name="employee_id" type="hidden" value={employee.id} />
                 <div className="flex flex-col justify-center">
                   <p className="font-semibold text-foreground">{employee.full_name}</p>

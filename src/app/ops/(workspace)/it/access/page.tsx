@@ -75,13 +75,13 @@ export default async function OpsItAccessPage({ searchParams }: PageProps) {
           <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <KeyRound className="size-5 text-primary-blue" aria-hidden="true" /> Record access
           </summary>
-          <form action={createItAccessGrantAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItAccessGrantAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Employee<select className={OPS_INPUT_CLASS} defaultValue="" name="user_id"><option value="">Unlinked / shared</option>{sortedUsers.map((u) => (<option key={u.id} value={u.id}>{u.full_name} — {formatOpsRole(u.role)}</option>))}</select></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>System<input className={OPS_INPUT_CLASS} name="system_name" placeholder="e.g. Company Email" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Access level<input className={OPS_INPUT_CLASS} name="access_level" placeholder="e.g. Standard / Admin" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Account identifier<input className={OPS_INPUT_CLASS} name="account_identifier" placeholder="e.g. j.doe@pymble..." /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Notes<input className={OPS_INPUT_CLASS} name="notes" /></label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Record access</button></div>
+            <div className="flex items-end lg:col-span-4 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Record access</button></div>
           </form>
         </details>
       ) : null}

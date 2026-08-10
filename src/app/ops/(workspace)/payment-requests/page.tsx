@@ -580,7 +580,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
           ) : (
             <form
               action={createPaymentRequestAction}
-              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
             >
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Purchase order
@@ -651,15 +651,15 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                 Invoice reference
                 <input className={OPS_INPUT_CLASS} name="invoice_reference" />
               </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                 Title
                 <input className={OPS_INPUT_CLASS} name="title" required />
               </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                 Description
                 <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="description" />
               </label>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
                   Create payment

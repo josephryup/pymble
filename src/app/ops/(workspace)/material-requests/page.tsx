@@ -666,12 +666,12 @@ function AddItemForm({
       </summary>
       <form
         action={addMaterialRequestItemAction}
-        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-4"
       >
         <OpsReturnToField />
         <input name="request_id" type="hidden" value={requestId} />
         {boqLineOptions.length > 0 ? (
-          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+          <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
             Link to material schedule line (optional)
             <select className={OPS_INPUT_CLASS} defaultValue="" name="boq_line_item_id">
               <option value="">Not tied to a planned schedule line</option>
@@ -689,7 +689,7 @@ function AddItemForm({
             appear and so left every request charging the unplanned bucket. */}
         <OpsCostCodePicker
           choices={costCodeChoices}
-          className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}
+          className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}
           helperText="Which work this material is for. Sets the budget it draws against."
           unsetLabel="Not set — will charge unplanned / contingency"
         />
@@ -1381,7 +1381,7 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
           ) : (
             <form
               action={createMaterialRequestAction}
-              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
             >
               <OpsReturnToField />
               <OpsScopeSitePicker allowedScopes={allowedScopes} sites={siteOptions} />
@@ -1407,11 +1407,11 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                 Needed by
                 <input className={OPS_INPUT_CLASS} name="needed_by" type="date" />
               </label>
-              <div className="lg:col-span-6">
+              <div className="lg:col-span-4">
                 <p className="mb-2 text-sm font-semibold text-foreground">Line items</p>
                 <OpsLineItemsEditor suppliers={supplierOptions} />
               </div>
-              <div className="flex items-end lg:col-span-6">
+              <div className="flex items-end lg:col-span-4">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full sm:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
                   Create request

@@ -1,6 +1,12 @@
 import { ShieldCheck, UserMinus, UserPlus, Users } from "lucide-react";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import {
+  OpsListControls,
+  OpsPaginationControls,
+  type OpsListSelectFilter,
+} from "@/components/ops/OpsListControls";
+import { parseOpsListState } from "@/lib/ops/listing";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import {
   OpsMobileRecordCard,
@@ -21,7 +27,7 @@ import {
   createStaffMemberAction,
   deactivateStaffMemberAction,
 } from "@/lib/ops/staff-actions";
-import { fetchOpsStaffMembers } from "@/lib/ops/staff";
+import { fetchOpsStaffMembers, fetchPaginatedOpsStaffMembers } from "@/lib/ops/staff";
 import {
   assignEngineeringInternToSiteAction,
   unassignEngineeringInternFromSiteAction,
@@ -119,18 +125,51 @@ function roleClass(role: string) {
 }
 
 export default async function OpsStaffPage({ searchParams }: PageProps) {
-  const [params, auth] = await Promise.all([searchParams ?? Promise.resolve({}), requireOpsUser()]);
+  const [params, auth] = await Promise.all([
+    searchParams ?? Promise.resolve({} as OpsSearchParams),
+    requireOpsUser(),
+  ]);
 
   if (!canAccessOpsHref(auth.profile.role, "/ops/staff", await fetchOpsModuleAccessOverrides())) {
     notFound();
   }
 
   const canManageAssignments = canManageOpsSiteAssignments(auth.profile.role);
-  const [staffMembers, siteOptions, siteAssignments] = await Promise.all([
+  // The register is searchable and paged; the full list still drives the header
+  // counts and the intern picker, so those keep describing the whole company.
+  const listState = parseOpsListState(params, { defaultPageSize: 15 });
+  const roleFilter = firstParam(params.staff_role) ?? "";
+  const statusFilter = firstParam(params.status) === "inactive" ? "inactive" : "";
+
+  const [staffPage, staffMembers, siteOptions, siteAssignments] = await Promise.all([
+    fetchPaginatedOpsStaffMembers({ listState, role: roleFilter, status: statusFilter }),
     fetchOpsStaffMembers(),
     fetchActiveSiteOptions(),
     canManageAssignments ? fetchActiveEngineeringInternSiteAssignments() : Promise.resolve([]),
   ]);
+  const registerMembers = staffPage.items;
+  const hasActiveFilter =
+    listState.query.length > 0 || roleFilter.length > 0 || statusFilter.length > 0;
+  const staffFilters: OpsListSelectFilter[] = [
+    {
+      label: "Role",
+      name: "staff_role",
+      options: [
+        { label: "All roles", value: "" },
+        ...OPS_STAFF_ROLE_OPTIONS.map((option) => ({ label: option.label, value: option.value })),
+      ],
+      value: roleFilter,
+    },
+    {
+      label: "Status",
+      name: "status",
+      options: [
+        { label: "Active", value: "" },
+        { label: "Inactive", value: "inactive" },
+      ],
+      value: statusFilter,
+    },
+  ];
   const canCreateStaff = canManageStaff(auth.profile.role);
   const engineeringInterns = staffMembers.filter(
     (member) => member.is_active && member.role === "engineering_intern",
@@ -264,7 +303,7 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
           </div>
           <form
             action={createStaffMemberAction}
-            className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
           >
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Full name
@@ -298,7 +337,7 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
                 ))}
               </select>
             </label>
-            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-5">
+            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
               <OpsSubmitButton
                 className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`}
                 pendingLabel="Sending invitation..."
@@ -367,14 +406,22 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
         </section>
       ) : null}
 
-      <section className="rounded-lg border border-border bg-card">
+      <section className="rounded-lg border border-border bg-card" id="staff-register">
         <div className="border-b border-border p-5">
           <h2 className="font-heading text-xl font-bold text-foreground">Access register</h2>
         </div>
-        {staffMembers.length > 0 ? (
+        <OpsListControls
+          action="/ops/staff"
+          filters={staffFilters}
+          params={params}
+          placeholder="Name, email or phone"
+          query={listState.query}
+          resultLabel="staff"
+        />
+        {registerMembers.length > 0 ? (
           <>
             <OpsMobileRecordList>
-              {staffMembers.map((member) => (
+              {registerMembers.map((member) => (
                 <OpsMobileRecordCard key={member.id}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -492,7 +539,7 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {staffMembers.map((member) => (
+                {registerMembers.map((member) => (
                   <tr key={member.id}>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
@@ -592,14 +639,25 @@ export default async function OpsStaffPage({ searchParams }: PageProps) {
             <Users className="size-10 text-primary-blue" aria-hidden="true" />
             <div>
               <p className="font-heading text-xl font-bold text-foreground">
-                No staff accounts yet
+                {hasActiveFilter ? "No staff match this search" : "No staff accounts yet"}
               </p>
               <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
-                Invite the Managing Director and operational staff to build the access register.
+                {hasActiveFilter
+                  ? "Clear the search, or pick a different role or status."
+                  : "Invite the Managing Director and operational staff to build the access register."}
               </p>
             </div>
           </div>
         )}
+        <OpsPaginationControls
+          anchor="staff-register"
+          basePath="/ops/staff"
+          filters={staffFilters}
+          pagination={staffPage.pagination}
+          params={params}
+          query={listState.query}
+          resultLabel="staff"
+        />
       </section>
     </div>
   );

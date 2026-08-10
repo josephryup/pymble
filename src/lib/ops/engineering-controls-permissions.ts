@@ -1,3 +1,4 @@
+import { isDeveloperRole, isManagingDirectorRole } from "@/lib/ops/roles";
 import type {
   OpsDrawingRegisterStatus,
   OpsMaterialTestStatus,
@@ -65,6 +66,36 @@ const ENGINEERING_VERIFY_ROLES = new Set<OpsUserRole>([
  */
 export function canReleaseOpsQaHoldPoint(role: OpsUserRole) {
   return ENGINEERING_DECISION_ROLES.has(role);
+}
+
+/**
+ * Acknowledge a site checklist. This is the signature that completes it — the
+ * engineer who ran the checks cannot close their own accountability record.
+ *
+ * Deliberately narrower than ENGINEERING_DECISION_ROLES: the Projects Manager
+ * owns this, with leadership as the fallback for when that seat is unfilled or
+ * when the PM ran the checklist themselves. The Operations Manager is not on
+ * the list — they oversee delivery, they do not sign off engineering QA.
+ */
+const QA_SIGN_OFF_ROLES = new Set<OpsUserRole>([
+  "projects_manager",
+  "developer",
+  "managing_director",
+  "general_manager",
+  "owner",
+]);
+
+export function canSignOffOpsQaChecklist(role: OpsUserRole) {
+  return QA_SIGN_OFF_ROLES.has(role);
+}
+
+/**
+ * Archive a site checklist. Developer and Managing Director only — a checklist
+ * is the evidence that work was inspected, so taking one out of circulation is
+ * not a site-level decision. Archived runs stay readable in /ops/archive.
+ */
+export function canArchiveOpsQaChecklist(role: OpsUserRole) {
+  return isDeveloperRole(role) || isManagingDirectorRole(role);
 }
 
 export function canViewOpsEngineeringControls(role: OpsUserRole) {

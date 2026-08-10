@@ -16,6 +16,8 @@ import React from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
+import { OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { parseOpsListState } from "@/lib/ops/listing";
 import {
   OpsMobileRecordCard,
   OpsMobileRecordList,
@@ -38,7 +40,8 @@ import {
   fetchAttendanceRoster,
   fetchAttendanceWorkerOptions,
   fetchOpsAttendanceDailySummary,
-  fetchOpsAttendanceRecords,
+  fetchOpsAttendanceSummary,
+  fetchPaginatedOpsAttendanceRecords,
   type OpsAttendanceFilters,
   type OpsAttendanceRecord,
   type OpsAttendanceRosterWorker,
@@ -339,9 +342,12 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
   const rosterSiteId = firstParam(params.roster_site) || null;
   const rosterDate = dateParam(firstParam(params.roster_date)) ?? todayInLusaka();
 
-  const [records, workerOptions, siteOptions, dailySummary, rateSettings, roster] =
+  const listState = parseOpsListState(params, { defaultPageSize: 25 });
+
+  const [recordPage, attendanceSummary, workerOptions, siteOptions, dailySummary, rateSettings, roster] =
     await Promise.all([
-      fetchOpsAttendanceRecords(filters),
+      fetchPaginatedOpsAttendanceRecords(filters, { listState }),
+      fetchOpsAttendanceSummary(filters),
       fetchAttendanceWorkerOptions(),
       fetchActiveSiteOptions(),
       fetchOpsAttendanceDailySummary(7),
@@ -361,8 +367,10 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
   const canApproveRecord = (record: OpsAttendanceRecord) =>
     canApprove && (canSelfApprove || record.created_by !== auth.profile.id);
   const notice = attendanceNotice(params);
-  const pendingCount = records.filter((record) => !record.approved_at).length;
-  const earnedTotal = records.reduce((sum, record) => sum + record.amount_earned, 0);
+  const records = recordPage.items;
+  // Header tiles describe the whole filtered set, not the page on screen.
+  const pendingCount = attendanceSummary.pending;
+  const earnedTotal = attendanceSummary.earned;
 
   // Real day-over-day movement for the KPI trend arrows.
   const yesterday = dailySummary.days.at(-2);
@@ -389,7 +397,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
                 Records
               </p>
               <p className="mt-1 font-heading text-2xl font-bold text-foreground">
-                {records.length}
+                {attendanceSummary.records}
               </p>
             </div>
             <div className="rounded-md border border-border px-4 py-3">
@@ -514,7 +522,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
           ) : (
             <OpsOfflineForm
               action={createAttendanceAction}
-              className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
               kind="attendance.create"
               replayEndpoint="/api/ops/offline/attendance"
               summary="Attendance record"
@@ -765,7 +773,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
         </div>
       ) : null}
 
-      <section className="rounded-lg border border-border bg-card">
+      <section className="rounded-lg border border-border bg-card" id="attendance-list">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
           <h2 className="font-heading text-xl font-bold text-foreground">Recent attendance</h2>
           <a
@@ -778,7 +786,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
         </div>
         <form
           action="/ops/attendance"
-          className="grid gap-3 border-b border-border bg-muted/40 p-5 md:grid-cols-2 lg:grid-cols-6"
+          className="grid gap-3 border-b border-border bg-muted/40 p-5 md:grid-cols-2 lg:grid-cols-4"
           method="get"
         >
           <label className={OPS_LABEL_CLASS}>
@@ -852,7 +860,7 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
               type="date"
             />
           </label>
-          <div className="flex flex-wrap items-end gap-2 md:col-span-2 lg:col-span-6">
+          <div className="flex flex-wrap items-end gap-2 md:col-span-2 lg:col-span-4">
             <button className={OPS_PRIMARY_BUTTON_CLASS} type="submit">
               <Filter className="size-4" aria-hidden="true" />
               Apply filters
@@ -1130,6 +1138,14 @@ export default async function OpsAttendancePage({ searchParams }: PageProps) {
             </div>
           </div>
         )}
+        <OpsPaginationControls
+          anchor="attendance-list"
+          basePath="/ops/attendance"
+          pagination={recordPage.pagination}
+          params={params}
+          query=""
+          resultLabel="attendance records"
+        />
       </section>
     </div>
   );

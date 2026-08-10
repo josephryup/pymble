@@ -1483,7 +1483,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               Open
             </span>
           </summary>
-          <form action={createEmployeeAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createEmployeeAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <OpsReturnToField />
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Full name
@@ -1574,11 +1574,11 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 ZRA Taxpayer Identification Number. Appears on the employee&apos;s payslip.
               </span>
             </label>
-            <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
               Notes
               <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="notes" />
             </label>
-            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
               <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                 <Plus className="size-4" aria-hidden="true" />
                 Create employee
@@ -1617,7 +1617,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               </div>
             </div>
           ) : (
-            <form action={createLeaveRequestAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+            <form action={createLeaveRequestAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
               <OpsReturnToField />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Employee
@@ -1660,7 +1660,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 Handover notes
                 <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="handover_notes" />
               </label>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
                   Create leave request
@@ -2167,7 +2167,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
             ) : (
               <form
                 action={uploadEmployeeDocumentAction}
-                className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+                className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
               >
                 <input name="return_to" type="hidden" value="/ops/employees#employee-register" />
                 <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -2212,7 +2212,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                     type="file"
                   />
                 </label>
-                <button className={`${OPS_PRIMARY_BUTTON_CLASS} min-[520px]:col-span-2 lg:col-span-6`} type="submit">
+                <button className={`${OPS_PRIMARY_BUTTON_CLASS} min-[520px]:col-span-2 lg:col-span-4`} type="submit">
                   <Upload className="size-4" aria-hidden="true" />
                   Upload employee document
                 </button>
@@ -2251,7 +2251,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               </div>
             </div>
           ) : (
-            <form action={createEmployeeOnboardingItemAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+            <form action={createEmployeeOnboardingItemAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
               <OpsReturnToField />
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Employee
@@ -2287,11 +2287,11 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                   ))}
                 </select>
               </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                 Description
                 <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="description" />
               </label>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
                   Create onboarding item

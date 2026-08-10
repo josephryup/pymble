@@ -29,6 +29,7 @@ export const OPS_ARCHIVE_TYPES = [
   "subcontractors",
   "department_reports",
   "documents",
+  "site_checklists",
 ] as const;
 
 export type OpsArchiveType = (typeof OPS_ARCHIVE_TYPES)[number];
@@ -215,6 +216,24 @@ export const OPS_ARCHIVE_ADAPTERS: Record<OpsArchiveType, OpsArchiveAdapter> = {
     toItem: (row) => ({
       title: text(row, "title") || "Document",
       subtitle: text(row, "status"),
+      archivedAt: timestamp(row, "archived_at"),
+    }),
+  },
+  site_checklists: {
+    label: "Site checklists",
+    singular: "site checklist",
+    table: "qa_inspections",
+    mechanism: "archived_at",
+    columns: "id, inspection_number, title, inspection_date, status, archived_at",
+    moduleHref: "/ops/site-checklists",
+    restorePatch: { archived_at: null, archived_by: null },
+    auditEntityType: "qa_inspection",
+    auditModuleKey: "engineering_controls",
+    toItem: (row) => ({
+      title: text(row, "title") || text(row, "inspection_number") || "Site checklist",
+      subtitle: [text(row, "inspection_number"), text(row, "inspection_date"), text(row, "status")]
+        .filter(Boolean)
+        .join(" · "),
       archivedAt: timestamp(row, "archived_at"),
     }),
   },

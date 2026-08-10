@@ -6,8 +6,30 @@ export const OPS_FOCUS_CLASS =
 export const OPS_INPUT_CLASS =
   `mt-1 min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm font-medium text-foreground shadow-sm shadow-foreground/[0.02] transition-colors placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 ${OPS_FOCUS_CLASS}`;
 
+/**
+ * The field wrapper: a <label> holding its caption and control.
+ *
+ * `min-w-0` is load-bearing. These labels are grid items, and a grid item's
+ * default `min-width: auto` means the item refuses to shrink below its own
+ * intrinsic width — so one <select> whose longest option is a full site label
+ * ("SIATONTOLA - …") spills out of its track and over the field beside it. That
+ * is the "fields overlayed in sections" report in the 2026-08-10 UI/UX audit
+ * (§2a). `w-full` on the control does not help: the control is already sized to
+ * the track, and it is the item's minimum that is being violated. Tailwind's
+ * `grid-cols-N` holds the track at `minmax(0,1fr)`, so the track itself is
+ * innocent — the overflow is the item's.
+ */
 export const OPS_LABEL_CLASS =
-  "text-sm font-medium text-muted-foreground";
+  "min-w-0 text-sm font-medium text-muted-foreground";
+
+/**
+ * Standard form layout: as many ~14rem columns as fit, never more. Replaces the
+ * hand-picked `lg:grid-cols-6` per form, which put nine controls across a
+ * laptop at ~180px each and broke differently at every width (audit §2b).
+ * Children may still span tracks with `sm:col-span-2` etc.
+ */
+export const OPS_FORM_GRID_CLASS =
+  "grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(14rem,100%),1fr))]";
 
 /**
  * Single source of truth for the uppercase "eyebrow" label that sits above

@@ -756,7 +756,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
               </div>
             </div>
           ) : (
-            <form action={createHseIncidentAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+            <form action={createHseIncidentAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Site
                 <select className={OPS_INPUT_CLASS} name="site_id" required>
@@ -796,7 +796,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
                 Location detail
                 <input className={OPS_INPUT_CLASS} name="location_detail" />
               </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                 Title
                 <input className={OPS_INPUT_CLASS} name="title" required />
               </label>
@@ -808,11 +808,11 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
                 Immediate action
                 <textarea className={`${OPS_INPUT_CLASS} min-h-28`} name="immediate_action" />
               </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                 People involved
                 <input className={OPS_INPUT_CLASS} name="people_involved" />
               </label>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
                   Create incident
@@ -845,7 +845,7 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
               Open
             </span>
           </summary>
-          <form action={createCorrectiveActionAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createCorrectiveActionAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Related incident
               <select className={OPS_INPUT_CLASS} name="incident_id">
@@ -897,11 +897,11 @@ export default async function OpsHsePage({ searchParams }: PageProps) {
               Title
               <input className={OPS_INPUT_CLASS} name="title" required />
             </label>
-            <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+            <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
               Description
               <textarea className={`${OPS_INPUT_CLASS} min-h-24`} name="description" />
             </label>
-            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+            <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
               <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                 <Plus className="size-4" aria-hidden="true" />
                 Create action

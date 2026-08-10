@@ -100,7 +100,7 @@ export default async function OpsItInfrastructurePage({ searchParams }: PageProp
           <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-5 py-3 font-heading text-base font-bold text-foreground [&::-webkit-details-marker]:hidden">
             <Network className="size-5 text-primary-blue" aria-hidden="true" /> Add device
           </summary>
-          <form action={createItNetworkDeviceAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6">
+          <form action={createItNetworkDeviceAction} className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Name<input className={OPS_INPUT_CLASS} name="name" placeholder="e.g. Head office core switch" required /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-1`}>Type<select className={OPS_INPUT_CLASS} defaultValue="router" name="device_type">{Object.entries(TYPE_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>Status<select className={OPS_INPUT_CLASS} defaultValue="online" name="status">{Object.entries(STATUS_LABELS).map(([v, l]) => (<option key={v} value={v}>{l}</option>))}</select></label>
@@ -109,7 +109,7 @@ export default async function OpsItInfrastructurePage({ searchParams }: PageProp
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>ISP / provider<input className={OPS_INPUT_CLASS} name="isp_provider" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Location<input className={OPS_INPUT_CLASS} name="location" /></label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-3`}>Notes<input className={OPS_INPUT_CLASS} name="notes" /></label>
-            <div className="flex items-end lg:col-span-6 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Add device</button></div>
+            <div className="flex items-end lg:col-span-4 lg:justify-end"><button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit"><Plus className="size-4" aria-hidden="true" />Add device</button></div>
           </form>
         </details>
       ) : null}

@@ -407,7 +407,7 @@ function AddSupplierContactForm({ supplierId }: { supplierId: string }) {
       </summary>
       <form
         action={addSupplierContactAction}
-        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-6"
+        className="grid gap-3 border-t border-border p-3 min-[520px]:grid-cols-2 lg:grid-cols-4"
       >
         <input name="supplier_id" type="hidden" value={supplierId} />
         <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
@@ -558,7 +558,7 @@ export default async function OpsSuppliersPage({ searchParams }: PageProps) {
           </summary>
           <form
             action={createSupplierAction}
-            className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
           >
             <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
               Legal name

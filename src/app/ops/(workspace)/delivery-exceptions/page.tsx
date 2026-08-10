@@ -649,10 +649,10 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
           ) : (
             <form
               action={createDeliveryExceptionAction}
-              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
             >
               {selectedGrn ? (
-                <div className="rounded-md border border-primary-blue/20 bg-primary-blue/[0.04] px-4 py-3 text-sm leading-6 text-foreground/70 min-[520px]:col-span-2 lg:col-span-6">
+                <div className="rounded-md border border-primary-blue/20 bg-primary-blue/[0.04] px-4 py-3 text-sm leading-6 text-foreground/70 min-[520px]:col-span-2 lg:col-span-4">
                   <span className="font-bold text-foreground">{selectedGrn.grn_number}</span>{" "}
                   selected from Goods Received. Supplier, site, and delivery reference are prefilled
                   for this exception.
@@ -750,15 +750,15 @@ export default async function OpsDeliveryExceptionsPage({ searchParams }: PagePr
                   name="delivery_reference"
                 />
               </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                 Title
                 <input className={OPS_INPUT_CLASS} name="title" required />
               </label>
-              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-6`}>
+              <label className={`${OPS_LABEL_CLASS} min-[520px]:col-span-2 lg:col-span-4`}>
                 Description
                 <textarea className={`${OPS_INPUT_CLASS} min-h-28`} name="description" />
               </label>
-              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-6">
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4">
                 <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full md:w-auto`} type="submit">
                   <Plus className="size-4" aria-hidden="true" />
                   Create exception

@@ -1,7 +1,10 @@
 /**
  * Completion rules for site inspection checklists.
  *
- * Three gates, all decided with the checklist audit:
+ * Four gates. The first three are the fieldwork and were decided with the
+ * checklist audit; the fourth is the Projects Manager's sign-off and lives in
+ * `canCompleteQaChecklist` below rather than in the evaluation, for the reason
+ * given there.
  *
  *  1. **Every item resolved.** `pending` means nobody looked. `not_applicable`
  *     is a real answer and is allowed — the paper form's YES/NO could not
@@ -132,6 +135,54 @@ export function evaluateQaChecklist(
     overridable:
       blockers.length > 0 && blockers.every((blocker) => blocker.code === "hold_points"),
   };
+}
+
+export type QaCompletionDecision =
+  | { allowed: true }
+  | { allowed: false; reason: string };
+
+/**
+ * The fourth gate, added when the checklist became an accountability record:
+ * **the Projects Manager must acknowledge it.** Nobody completes their own
+ * inspection — the value of the document is that a second, named person
+ * accepted the work, and a hold-point override cannot buy past this one.
+ *
+ * Kept out of `evaluateQaChecklist` on purpose. That function answers "is the
+ * fieldwork finished", which is what the hold-point override is allowed to
+ * release. This answers "may it be closed", which nothing releases.
+ */
+export function canCompleteQaChecklist(input: {
+  evaluation: QaChecklistEvaluation;
+  holdPointsReleased: boolean;
+  pmSignedAt: string | null;
+}): QaCompletionDecision {
+  const blockers = input.evaluation.blockers.filter(
+    (blocker) => !(input.holdPointsReleased && blocker.code === "hold_points"),
+  );
+
+  if (blockers.length > 0) {
+    return { allowed: false, reason: blockers.map((blocker) => blocker.message).join(" ") };
+  }
+  if (!input.pmSignedAt) {
+    return {
+      allowed: false,
+      reason:
+        "The Projects Manager has not acknowledged this checklist yet. It cannot be completed without that sign-off.",
+    };
+  }
+  return { allowed: true };
+}
+
+/** True when the fieldwork is done and only the PM's signature is outstanding. */
+export function isAwaitingQaSignOff(input: {
+  evaluation: QaChecklistEvaluation;
+  holdPointsReleased: boolean;
+  pmSignedAt: string | null;
+}) {
+  if (input.pmSignedAt) return false;
+  return input.evaluation.blockers.every(
+    (blocker) => input.holdPointsReleased && blocker.code === "hold_points",
+  );
 }
 
 export type QaOverrideDecision =
