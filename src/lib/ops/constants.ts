@@ -498,6 +498,9 @@ export const OPS_MODULES: OpsModule[] = [
       ...OPS_COMMERCIAL_ROLES,
       ...OPS_PROCUREMENT_ROLES,
       "operations_manager",
+      // Engineering authors schedules too (canCreateBoq), so the manager needs
+      // the sidebar link; `engineer` already arrives via OPS_COMMERCIAL_ROLES.
+      "engineering_manager",
     ],
     phase: "Foundation",
     roles: OPS_OPERATIONAL_ROLES,

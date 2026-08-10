@@ -7,10 +7,15 @@ import type { OpsUserRole } from "@/lib/ops/types";
 
 // BOQ ownership per Part 2.1 of pymble-ops-workflow-design.md.
 //
-// Strategy: BOQ is the Quantity Surveyor's tool, with Projects Manager and
-// Leadership as fallback owners. Procurement Manager / Operations Manager can
-// no longer create BOQs (that was the old `canManageOps` behaviour) — they read
-// it to source materials, they don't author it.
+// Strategy: BOQ is the Quantity Surveyor's tool, with Engineering, Projects
+// Manager and Leadership as fallback owners. Procurement Manager / Operations
+// Manager can no longer create BOQs (that was the old `canManageOps`
+// behaviour) — they read it to source materials, they don't author it.
+//
+// Site engineers take off their own quantities, so they author schedules
+// alongside the QS rather than queueing behind the Projects Manager. Issuing
+// stays narrower (see BOQ_ISSUE_ROLES) because issue is what generates the
+// project budget.
 
 const BOQ_CREATE_ROLES: OpsUserRole[] = [
   "developer",
@@ -20,11 +25,25 @@ const BOQ_CREATE_ROLES: OpsUserRole[] = [
   "manager",
   "projects_manager",
   "quantity_surveyor",
+  "engineering_manager",
+  "engineer",
 ];
 
 // Roles allowed to edit a BOQ (header + lines) while the document is editable.
 // Same as create — keeps ownership clear.
 const BOQ_EDIT_ROLES: OpsUserRole[] = BOQ_CREATE_ROLES;
+
+// Issuing a priced schedule generates the project budget, so it stays with the
+// commercial owners even though Engineering can author and revise the document.
+const BOQ_ISSUE_ROLES: OpsUserRole[] = [
+  "developer",
+  "managing_director",
+  "owner",
+  "general_manager",
+  "manager",
+  "projects_manager",
+  "quantity_surveyor",
+];
 
 // Soft-archive (sets archived_at). Reversible by Developer / Managing Director.
 const BOQ_ARCHIVE_ROLES: OpsUserRole[] = [
@@ -108,7 +127,7 @@ export function canIssueBoq(role: OpsUserRole, document: OpsBoqMutationTarget) {
     return false;
   }
 
-  return BOQ_EDIT_ROLES.includes(role);
+  return BOQ_ISSUE_ROLES.includes(role);
 }
 
 /**

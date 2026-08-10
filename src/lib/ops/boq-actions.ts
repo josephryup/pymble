@@ -227,7 +227,7 @@ export async function createBoqDocumentAction(formData: FormData) {
 
   if (!canCreateBoq(profile.role)) {
     boqError(
-      "Only the Quantity Surveyor, Projects Manager, and leadership can create material schedules.",
+      "Only the Quantity Surveyor, Engineering, Projects Manager, and leadership can create material schedules.",
     );
   }
 
@@ -434,7 +434,7 @@ export async function updateBoqDocumentAction(formData: FormData) {
   }
   if (!canEditBoq(profile.role, target)) {
     boqError(
-      "Only the Quantity Surveyor, Projects Manager, and leadership can edit a material schedule while it is in draft.",
+      "Only the Quantity Surveyor, Engineering, Projects Manager, and leadership can edit a material schedule while it is in draft.",
     );
   }
 
@@ -780,7 +780,7 @@ export async function deleteBoqAction(formData: FormData) {
 }
 
 // ---------------------------------------------------------------------------
-// BOQ pricing-split workflow: draft (QS) → pricing_pending → priced
+// BOQ pricing-split workflow: draft (QS/Engineering) → pricing_pending → priced
 // (Procurement) → issued (QS/Projects Manager/leadership sign-off, which also
 // generates/syncs the project budget). Mirrors the Material Request
 // pricing_pending/priced pattern in material-request-actions.ts.
@@ -800,7 +800,7 @@ export async function submitBoqForPricingAction(formData: FormData) {
   }
   if (!canSubmitBoqForPricing(profile.role, target)) {
     boqError(
-      "Only the Quantity Surveyor, Projects Manager, and leadership can submit a schedule for pricing while it is in draft.",
+      "Only the Quantity Surveyor, Engineering, Projects Manager, and leadership can submit a schedule for pricing while it is in draft.",
     );
   }
 
@@ -881,7 +881,7 @@ export async function attachBoqPricingAction(formData: FormData) {
   }
   if (!canAttachBoqPricing(profile.role, target)) {
     boqError(
-      "Only Procurement and leadership can price a schedule, and only once it has been submitted by the Quantity Surveyor.",
+      "Only Procurement and leadership can price a schedule, and only once it has been submitted for pricing.",
     );
   }
 
@@ -1079,7 +1079,7 @@ export async function createBoqRevisionAction(formData: FormData) {
   }
   if (!canReviseBoq(profile.role, target)) {
     boqError(
-      "Only an issued schedule can be revised, and only by the Quantity Surveyor, Projects Manager, or leadership.",
+      "Only an issued schedule can be revised, and only by the Quantity Surveyor, Engineering, Projects Manager, or leadership.",
     );
   }
 
@@ -1323,7 +1323,7 @@ export async function importBoqLineItemsCsvAction(formData: FormData) {
   }
   if (!canEditBoq(profile.role, target)) {
     boqError(
-      "Only the Quantity Surveyor, Projects Manager, and leadership can import lines while a material schedule is in draft.",
+      "Only the Quantity Surveyor, Engineering, Projects Manager, and leadership can import lines while a material schedule is in draft.",
     );
   }
 
