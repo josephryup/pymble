@@ -16,6 +16,12 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
+import {
+  OpsTabs,
+  resolveOpsTab,
+  type OpsTabDefinition,
+} from "@/components/ops/OpsTabs";
+import { toOpsPaginatedResult } from "@/lib/ops/listing";
 import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
@@ -827,6 +833,13 @@ async function HseAgeingSection() {
   );
 }
 
+const HSE_TABS: OpsTabDefinition[] = [
+  { id: "overview", label: "Overview" },
+  { id: "ppe", label: "Personal Protective Equipment" },
+  { id: "risk", label: "Risk & audits" },
+  { id: "training", label: "Talks, inspections & training" },
+];
+
 export default async function HseCompliancePage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const auth = await requireOpsUser();
@@ -837,36 +850,49 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = statusFromParam(firstParam(params.status));
+  // Only the active tab's data is fetched. This page previously awaited all
+  // twelve of these before it could render anything, on every interaction —
+  // paging the PPE register re-ran the risk, audit, talk, inspection and
+  // training queries too (UI/UX audit §1c).
+  const tab = resolveOpsTab(params, HSE_TABS);
+  const showOverview = tab === "overview";
+  const showPpe = tab === "ppe";
+  const showRisk = tab === "risk";
+  const showTraining = tab === "training";
+
+  const [sites, users, employees, ppeItemOptions] = await Promise.all([
+    fetchActiveSiteOptions(),
+    fetchHseUserOptions(),
+    fetchHseComplianceEmployeeOptions(),
+    // Needed by the create panels, which stay available from every tab.
+    fetchActivePpeItemOptions(),
+  ]);
+
   const [
-    sites,
-    users,
-    employees,
     stats,
     ppeIssues,
     ppeItems,
-    ppeItemOptions,
     toolboxTalks,
     inspections,
     trainingRecords,
     riskAssessments,
     complianceAudits,
   ] = await Promise.all([
-    fetchActiveSiteOptions(),
-    fetchHseUserOptions(),
-    fetchHseComplianceEmployeeOptions(),
-    fetchOpsHseComplianceStats(),
-    fetchPaginatedOpsPpeIssues({
-      listState,
-      query: listState.query,
-      status: status || undefined,
-    }),
-    fetchRecentOpsPpeItems(),
-    fetchActivePpeItemOptions(),
-    fetchRecentOpsToolboxTalks(),
-    fetchRecentOpsHseInspections(),
-    fetchRecentOpsSafetyTrainingRecords(),
-    fetchRecentOpsHseRiskAssessments(),
-    fetchRecentOpsHseComplianceAudits(),
+    showOverview ? fetchOpsHseComplianceStats() : Promise.resolve(null),
+    showPpe
+      ? fetchPaginatedOpsPpeIssues({
+          listState,
+          query: listState.query,
+          status: status || undefined,
+        })
+      : Promise.resolve(toOpsPaginatedResult<OpsPpeIssueSummary>([], 0, listState)),
+    showPpe ? fetchRecentOpsPpeItems() : Promise.resolve([]),
+    showTraining ? fetchRecentOpsToolboxTalks() : Promise.resolve([]),
+    showTraining ? fetchRecentOpsHseInspections() : Promise.resolve([]),
+    showTraining ? fetchRecentOpsSafetyTrainingRecords() : Promise.resolve([]),
+    // The overview's heatmap and escalation watch are built from these two.
+    showOverview || showRisk ? fetchRecentOpsHseRiskAssessments() : Promise.resolve([]),
+    showOverview || showRisk ? fetchRecentOpsHseComplianceAudits() : Promise.resolve([]),
   ]);
   const canCreatePpe = canCreateOpsPpeIssue(auth.profile.role);
   const canCreatePpeItem = canCreateOpsPpeItem(auth.profile.role);
@@ -946,9 +972,18 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         </div>
       ) : null}
 
+      <OpsTabs
+        active={tab}
+        basePath="/ops/hse-compliance"
+        params={params}
+        tabs={HSE_TABS}
+      />
+
+      {showOverview && stats ? (
+        <>
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <OpsKpiCard
-          href="/ops/hse-compliance?status=issued#ppe-register"
+          href="/ops/hse-compliance?tab=ppe&status=issued#ppe-register"
           icon={HardHat}
           label="Issued PPE"
           tone={stats.overduePpe > 0 ? "warn" : "default"}
@@ -956,7 +991,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           value={String(stats.issuedPpe)}
         />
         <OpsKpiCard
-          href="/ops/hse-compliance#toolbox-panel"
+          href="/ops/hse-compliance?tab=training#toolbox-panel"
           icon={ClipboardCheck}
           label="Toolbox talks"
           tone={stats.plannedTalks > 0 ? "default" : "good"}
@@ -964,7 +999,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           value={String(stats.completedTalks)}
         />
         <OpsKpiCard
-          href="/ops/hse-compliance#inspection-panel"
+          href="/ops/hse-compliance?tab=training#inspection-panel"
           icon={ShieldCheck}
           label="Open inspections"
           tone={stats.actionRequiredInspections > 0 || stats.overdueInspections > 0 ? "warn" : "default"}
@@ -972,7 +1007,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           value={String(stats.openInspections)}
         />
         <OpsKpiCard
-          href="/ops/hse-compliance#training-panel"
+          href="/ops/hse-compliance?tab=training#training-panel"
           icon={GraduationCap}
           label="Training due"
           tone={stats.expiredTraining > 0 || stats.trainingDueSoon > 0 ? "warn" : "good"}
@@ -980,7 +1015,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           value={String(stats.trainingDueSoon)}
         />
         <OpsKpiCard
-          href="/ops/hse-compliance#risk-assessment-panel"
+          href="/ops/hse-compliance?tab=risk#risk-assessment-panel"
           icon={ShieldPlus}
           label="Risk reviews"
           tone={stats.reviewDueRiskAssessments > 0 || stats.highRiskAssessments > 0 ? "warn" : "default"}
@@ -988,7 +1023,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           value={String(stats.reviewDueRiskAssessments)}
         />
         <OpsKpiCard
-          href="/ops/hse-compliance#audit-panel"
+          href="/ops/hse-compliance?tab=risk#audit-panel"
           icon={ClipboardList}
           label="Audit actions"
           tone={stats.actionRequiredAudits > 0 || stats.auditsDueSoon > 0 ? "warn" : "default"}
@@ -1127,6 +1162,8 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           </div>
         </div>
       </section>
+        </>
+      ) : null}
 
       {(canCreatePpeItem || canCreatePpe || canCreateTalk || canCreateInspection || canCreateRisk || canCreateAudit || canCreateTraining) ? (
         <section className="grid gap-4 xl:grid-cols-3">
@@ -1602,6 +1639,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
         </section>
       ) : null}
 
+      {showRisk ? (
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-lg border border-border bg-card shadow-sm" id="risk-assessment-panel">
           <div className="flex items-center justify-between gap-3 border-b border-border p-5">
@@ -1744,7 +1782,10 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {showPpe ? (
+        <>
       <section className="rounded-lg border border-border bg-card shadow-sm" id="ppe-stock">
         <div className="flex flex-col gap-3 border-b border-border p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -1835,6 +1876,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           action="/ops/hse-compliance"
           filters={[{ label: "Status", name: "status", options: PPE_STATUS_OPTIONS, value: status }]}
           placeholder="Search issue number, issued-to name, item, or notes"
+          params={params}
           query={listState.query}
           resultLabel="PPE issues"
         />
@@ -1909,14 +1951,19 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           </div>
         </div>
         <OpsPaginationControls
+          anchor="ppe-register"
           basePath="/ops/hse-compliance"
           filters={[{ label: "Status", name: "status", options: PPE_STATUS_OPTIONS, value: status }]}
           pagination={ppeIssues.pagination}
+          params={params}
           query={listState.query}
           resultLabel="PPE issues"
         />
       </section>
+        </>
+      ) : null}
 
+      {showTraining ? (
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-lg border border-border bg-card shadow-sm" id="toolbox-panel">
           <div className="flex items-center justify-between gap-3 border-b border-border p-5">
@@ -2198,7 +2245,9 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {showTraining ? (
       <section className="rounded-lg border border-border bg-card shadow-sm" id="training-panel">
         <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
@@ -2265,6 +2314,7 @@ export default async function HseCompliancePage({ searchParams }: PageProps) {
           )}
         </div>
       </section>
+      ) : null}
     </div>
   );
 }

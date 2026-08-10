@@ -128,9 +128,12 @@ Structural, not cosmetic:
    radius, same border, same padding. Nothing signals what matters.
 2. **29 of 84 pages hand-roll their header** instead of using `OpsPageHeader`
    (`/ops/workers` is one — bespoke eyebrow + `h1` + inline stat tiles).
-3. Carried over from the 2026-07-06 consistency pass: ~58 bespoke `statusClass`
-   functions and 73 files still on legacy colour literals, against the
-   `OPS_NOTICE_*` / status-tone registry that exists to replace them.
+3. ~~Carried over from the 2026-07-06 consistency pass: ~58 bespoke
+   `statusClass` functions and 73 files on legacy colour literals.~~
+   **Wrong — that was a stale note.** Verified 2026-08-10: zero bespoke
+   `statusClass` functions remain, `text-primary-dark` is gone, and `bg-white`
+   survives in 2 places. That migration finished on 2026-07-06. What *is*
+   outstanding from it is the header work in Phase 5 item 11.
 4. Every mutation is a full server-action POST + redirect + full page re-render,
    so the workspace never feels responsive — there is no optimistic or partial
    update anywhere.
@@ -216,13 +219,49 @@ without hiding anything from anyone who does not ask for it.
 `tests/ops-list-pagination.test.ts` guards the coverage and the `params`
 hand-off.
 
-### Phase 5 — page weight (fixes 1c and most of 4)
+### Phase 5 — page weight (fixes 1c and most of 4) — **STARTED 2026-08-10**
 
-10. Split the 8 pages over 1,500 lines into tabbed sub-routes so a tab loads
-    only its own data, and wrap each section in `<Suspense>` so a slow panel
-    stops blocking the page.
-11. Finish the 2026-07-06 migration: bespoke `statusClass` → status-tone
-    registry, legacy colours → tokens, hand-rolled headers → `OpsPageHeader`.
+10. **`OpsTabs` shipped, one page converted.** `src/components/ops/OpsTabs.tsx`
+    drives tabs from `?tab=` rather than sub-routes, so a page keeps one file,
+    one permission check and one set of deep links — the only thing that changes
+    is that the server skips the queries for tabs you are not looking at.
+    Switching tabs drops `page` and carries every other param, the same
+    discipline as `OpsListControls`.
+
+    `/ops/hse-compliance` (2,270 lines) is converted as the reference: four tabs
+    (Overview · PPE · Risk & audits · Talks, inspections & training) over what
+    was a single 12-query `Promise.all`. Each view now runs 4–7 of those
+    queries instead of all twelve.
+
+    **The trap, for whoever does the next one:** splitting sections onto tabs
+    breaks every deep link into them, silently. 45 links and server-action
+    redirects pointed at `#ppe-register`, `#inspection-panel` and friends; after
+    the split those anchors do not exist on the default tab, so the link lands
+    on Overview and simply does nothing. No type error, no runtime error. They
+    all had to be re-pointed with `?tab=`, and the list controls needed
+    `params` so paging the PPE register does not bounce you to Overview.
+    `tests/ops-tabs.test.ts` guards this.
+
+    **Remaining: 7 pages** — commercial (3,204), employees (2,845),
+    engineering-controls (1,984), material-requests (1,877), equipment (1,840),
+    fleet-logistics (1,833), material-schedule (1,601). Same recipe. Worth doing
+    one at a time and checking the anchor/redirect fallout each time, rather
+    than as one scripted sweep.
+
+    `<Suspense>` per section is still outstanding. `/ops/hse-compliance` already
+    streams its ageing watch that way (`HseAgeingSection`), which is the pattern
+    to copy — but it needs each section's fetch moved into its own async
+    component, so it is a second pass over the same files.
+
+11. **Partly obsolete, partly outstanding.** The bespoke `statusClass` functions
+    are *already* gone — the workspace has none left; `opsStatusBadgeClass` is
+    used in 36 files. The remaining piece is **25 workspace pages that still
+    hand-roll their header** instead of using `OpsPageHeader` (attendance, boq,
+    commercial, documents, employees, equipment, photos, payroll, sites, staff,
+    workers, …). That is a per-page judgement job — each hand-rolled header
+    carries different trailing content (stat tiles, action rows) that has to be
+    re-homed — so it belongs with the page-by-page work in item 10 rather than
+    as a scripted sweep.
 
 ### Phase 6 — feel
 

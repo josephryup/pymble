@@ -1182,7 +1182,7 @@ async function HrTrainingRenewalSection({
                         </Link>
                         <Link
                           className={OPS_SECONDARY_BUTTON_CLASS}
-                          href="/ops/hse-compliance#training-panel"
+                          href="/ops/hse-compliance?tab=training#training-panel"
                         >
                           Training register
                         </Link>

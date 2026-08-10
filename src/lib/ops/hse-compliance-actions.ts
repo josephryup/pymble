@@ -626,7 +626,7 @@ export async function createPpeItemAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?created=ppe_item#ppe-stock`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?created=ppe_item&tab=ppe#ppe-stock`);
 }
 
 export async function adjustPpeItemStockAction(formData: FormData) {
@@ -672,7 +672,7 @@ export async function adjustPpeItemStockAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=ppe_stock#ppe-stock`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=ppe_stock&tab=ppe#ppe-stock`);
 }
 
 export async function createPpeIssueAction(formData: FormData) {
@@ -1078,7 +1078,7 @@ export async function createToolboxTalkAttendeeAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=toolbox_attendee#toolbox-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=toolbox_attendee&tab=training#toolbox-panel`);
 }
 
 export async function completeToolboxTalkAction(formData: FormData) {
@@ -1433,7 +1433,7 @@ export async function createHseInspectionFindingAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?created=inspection_finding#inspection-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?created=inspection_finding&tab=training#inspection-panel`);
 }
 
 export async function startHseInspectionFindingAction(formData: FormData) {
@@ -1465,7 +1465,7 @@ export async function startHseInspectionFindingAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=finding_started#inspection-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=finding_started&tab=training#inspection-panel`);
 }
 
 export async function correctHseInspectionFindingAction(formData: FormData) {
@@ -1504,7 +1504,7 @@ export async function correctHseInspectionFindingAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=finding_corrected#inspection-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=finding_corrected&tab=training#inspection-panel`);
 }
 
 export async function verifyHseInspectionFindingAction(formData: FormData) {
@@ -1540,7 +1540,7 @@ export async function verifyHseInspectionFindingAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=finding_verified#inspection-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=finding_verified&tab=training#inspection-panel`);
 }
 
 export async function cancelHseInspectionFindingAction(formData: FormData) {
@@ -1576,7 +1576,7 @@ export async function cancelHseInspectionFindingAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=finding_cancelled#inspection-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=finding_cancelled&tab=training#inspection-panel`);
 }
 
 export async function createSafetyTrainingRecordAction(formData: FormData) {
@@ -1650,7 +1650,7 @@ export async function createSafetyTrainingRecordAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?created=training#training-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?created=training&tab=training#training-panel`);
 }
 
 export async function completeSafetyTrainingRecordAction(formData: FormData) {
@@ -1702,7 +1702,7 @@ export async function completeSafetyTrainingRecordAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=training_completed#training-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=training_completed&tab=training#training-panel`);
 }
 
 export async function cancelSafetyTrainingRecordAction(formData: FormData) {
@@ -1738,7 +1738,7 @@ export async function cancelSafetyTrainingRecordAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=training_cancelled#training-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=training_cancelled&tab=training#training-panel`);
 }
 
 export async function createHseRiskAssessmentAction(formData: FormData) {
@@ -1816,7 +1816,7 @@ export async function createHseRiskAssessmentAction(formData: FormData) {
   }).catch(() => null);
 
   await queueOpsHseUserNotification({
-    actionHref: `${HSE_COMPLIANCE_ROUTE}#risk-assessment-panel`,
+    actionHref: `${HSE_COMPLIANCE_ROUTE}?tab=risk#risk-assessment-panel`,
     actorUserId: profile.id,
     body: `${profile.full_name} assigned risk assessment ${data.assessment_number} to you.`,
     idempotencyKeyPrefix: `hse-risk-assigned:${data.id}`,
@@ -1829,7 +1829,7 @@ export async function createHseRiskAssessmentAction(formData: FormData) {
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
   revalidatePath("/ops/notifications");
-  redirect(`${HSE_COMPLIANCE_ROUTE}?created=risk_assessment#risk-assessment-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?created=risk_assessment&tab=risk#risk-assessment-panel`);
 }
 
 export async function submitHseRiskAssessmentAction(formData: FormData) {
@@ -1880,7 +1880,7 @@ export async function submitHseRiskAssessmentAction(formData: FormData) {
   }).catch(() => null);
 
   await queueOpsHseRoleNotifications({
-    actionHref: `${HSE_COMPLIANCE_ROUTE}#risk-assessment-panel`,
+    actionHref: `${HSE_COMPLIANCE_ROUTE}?tab=risk#risk-assessment-panel`,
     actorUserId: profile.id,
     body: `${profile.full_name} submitted ${assessment.assessment_number} for HSE review.`,
     idempotencyKeyPrefix: `hse-risk-submitted:${assessment.id}`,
@@ -1893,7 +1893,7 @@ export async function submitHseRiskAssessmentAction(formData: FormData) {
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
   revalidatePath("/ops/notifications");
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=risk_submitted#risk-assessment-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=risk_submitted&tab=risk#risk-assessment-panel`);
 }
 
 export async function approveHseRiskAssessmentAction(formData: FormData) {
@@ -1945,7 +1945,7 @@ export async function approveHseRiskAssessmentAction(formData: FormData) {
 
   if (isHighOrCriticalSeverity(assessment.residual_risk)) {
     await queueOpsHseRoleNotifications({
-      actionHref: `${HSE_COMPLIANCE_ROUTE}#risk-assessment-panel`,
+      actionHref: `${HSE_COMPLIANCE_ROUTE}?tab=risk#risk-assessment-panel`,
       actorUserId: profile.id,
       body: `${assessment.assessment_number} was approved with ${assessment.residual_risk} residual risk.`,
       idempotencyKeyPrefix: `hse-risk-high-residual:${assessment.id}`,
@@ -1959,7 +1959,7 @@ export async function approveHseRiskAssessmentAction(formData: FormData) {
   }
 
   await queueOpsHseUserNotification({
-    actionHref: `${HSE_COMPLIANCE_ROUTE}#risk-assessment-panel`,
+    actionHref: `${HSE_COMPLIANCE_ROUTE}?tab=risk#risk-assessment-panel`,
     actorUserId: profile.id,
     body: `${assessment.assessment_number} has been approved.`,
     idempotencyKeyPrefix: `hse-risk-approved:${assessment.id}`,
@@ -1977,7 +1977,7 @@ export async function approveHseRiskAssessmentAction(formData: FormData) {
     stakeholderIds: [assessment.created_by, assessment.responsible_user_id],
     title: `Risk assessment approved: ${assessment.assessment_number}`,
     body: `${profile.full_name} approved ${assessment.assessment_number} — ${assessment.title}.`,
-    actionHref: `${HSE_COMPLIANCE_ROUTE}#risk-assessment-panel`,
+    actionHref: `${HSE_COMPLIANCE_ROUTE}?tab=risk#risk-assessment-panel`,
     moduleKey: "hse_compliance",
     sourceTable: "hse_risk_assessments",
     sourceId: assessment.id,
@@ -1987,7 +1987,7 @@ export async function approveHseRiskAssessmentAction(formData: FormData) {
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
   revalidatePath("/ops/notifications");
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=risk_approved#risk-assessment-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=risk_approved&tab=risk#risk-assessment-panel`);
 }
 
 export async function archiveHseRiskAssessmentAction(formData: FormData) {
@@ -2023,7 +2023,7 @@ export async function archiveHseRiskAssessmentAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=risk_archived#risk-assessment-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=risk_archived&tab=risk#risk-assessment-panel`);
 }
 
 export async function cancelHseRiskAssessmentAction(formData: FormData) {
@@ -2059,7 +2059,7 @@ export async function cancelHseRiskAssessmentAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=risk_cancelled#risk-assessment-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=risk_cancelled&tab=risk#risk-assessment-panel`);
 }
 
 export async function createHseComplianceAuditAction(formData: FormData) {
@@ -2118,7 +2118,7 @@ export async function createHseComplianceAuditAction(formData: FormData) {
   }).catch(() => null);
 
   await queueOpsHseUserNotification({
-    actionHref: `${HSE_COMPLIANCE_ROUTE}#audit-panel`,
+    actionHref: `${HSE_COMPLIANCE_ROUTE}?tab=risk#audit-panel`,
     actorUserId: profile.id,
     body: `${profile.full_name} assigned compliance audit ${data.audit_number} to you.`,
     idempotencyKeyPrefix: `hse-audit-assigned:${data.id}`,
@@ -2131,7 +2131,7 @@ export async function createHseComplianceAuditAction(formData: FormData) {
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
   revalidatePath("/ops/notifications");
-  redirect(`${HSE_COMPLIANCE_ROUTE}?created=compliance_audit#audit-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?created=compliance_audit&tab=risk#audit-panel`);
 }
 
 export async function completeHseComplianceAuditAction(formData: FormData) {
@@ -2205,7 +2205,7 @@ export async function completeHseComplianceAuditAction(formData: FormData) {
 
   if (parsed.data.non_conformance_count > 0) {
     await queueOpsHseRoleNotifications({
-      actionHref: `${HSE_COMPLIANCE_ROUTE}#audit-panel`,
+      actionHref: `${HSE_COMPLIANCE_ROUTE}?tab=risk#audit-panel`,
       actorUserId: profile.id,
       body: `${audit.audit_number} was completed with ${parsed.data.non_conformance_count} non-conformance(s).`,
       idempotencyKeyPrefix: `hse-audit-nc:${audit.id}`,
@@ -2220,7 +2220,7 @@ export async function completeHseComplianceAuditAction(formData: FormData) {
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
   revalidatePath("/ops/notifications");
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=audit_completed#audit-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=audit_completed&tab=risk#audit-panel`);
 }
 
 export async function requireHseComplianceAuditActionAction(formData: FormData) {
@@ -2271,7 +2271,7 @@ export async function requireHseComplianceAuditActionAction(formData: FormData) 
   }).catch(() => null);
 
   await queueOpsHseRoleNotifications({
-    actionHref: `${HSE_COMPLIANCE_ROUTE}#audit-panel`,
+    actionHref: `${HSE_COMPLIANCE_ROUTE}?tab=risk#audit-panel`,
     actorUserId: profile.id,
     body: `${audit.audit_number} now requires HSE compliance action.`,
     idempotencyKeyPrefix: `hse-audit-action-required:${audit.id}`,
@@ -2284,7 +2284,7 @@ export async function requireHseComplianceAuditActionAction(formData: FormData) 
   }).catch(() => null);
 
   await queueOpsHseUserNotification({
-    actionHref: `${HSE_COMPLIANCE_ROUTE}#audit-panel`,
+    actionHref: `${HSE_COMPLIANCE_ROUTE}?tab=risk#audit-panel`,
     actorUserId: profile.id,
     body: `${audit.audit_number} now requires HSE compliance action.`,
     idempotencyKeyPrefix: `hse-audit-action-required-owner:${audit.id}`,
@@ -2298,7 +2298,7 @@ export async function requireHseComplianceAuditActionAction(formData: FormData) 
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
   revalidatePath("/ops/notifications");
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=audit_action_required#audit-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=audit_action_required&tab=risk#audit-panel`);
 }
 
 export async function closeHseComplianceAuditAction(formData: FormData) {
@@ -2334,7 +2334,7 @@ export async function closeHseComplianceAuditAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=audit_closed#audit-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=audit_closed&tab=risk#audit-panel`);
 }
 
 export async function cancelHseComplianceAuditAction(formData: FormData) {
@@ -2370,5 +2370,5 @@ export async function cancelHseComplianceAuditAction(formData: FormData) {
   }
 
   revalidatePath(HSE_COMPLIANCE_ROUTE);
-  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=audit_cancelled#audit-panel`);
+  redirect(`${HSE_COMPLIANCE_ROUTE}?updated=audit_cancelled&tab=risk#audit-panel`);
 }

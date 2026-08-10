@@ -24,31 +24,31 @@ const PAGED_MODULES = [
   "payroll",
 ];
 
-function page(module: string) {
-  return readFileSync(join(WORKSPACE, module, "page.tsx"), "utf8");
+function page(name: string) {
+  return readFileSync(join(WORKSPACE, name, "page.tsx"), "utf8");
 }
 
 describe("ops list pagination coverage", () => {
-  for (const module of PAGED_MODULES) {
-    it(`pages /ops/${module}`, () => {
-      const source = page(module);
+  for (const name of PAGED_MODULES) {
+    it(`pages /ops/${name}`, () => {
+      const source = page(name);
 
       assert.match(
         source,
         /parseOpsListState\(/,
-        `/ops/${module} must derive its page window from parseOpsListState`,
+        `/ops/${name} must derive its page window from parseOpsListState`,
       );
       assert.match(
         source,
         /<OpsPaginationControls/,
-        `/ops/${module} must render pagination controls`,
+        `/ops/${name} must render pagination controls`,
       );
       // Without params the controls rebuild the URL from scratch and drop every
       // filter the page owns — the "next page loses my filters" bug (§1a).
       assert.match(
         source,
         /params=\{params\}/,
-        `/ops/${module} must pass params to the pagination controls`,
+        `/ops/${name} must pass params to the pagination controls`,
       );
     });
   }

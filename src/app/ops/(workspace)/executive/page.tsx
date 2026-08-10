@@ -632,7 +632,7 @@ export default async function OpsExecutivePage() {
               value={numberText(report.people.openOnboardingItems)}
             />
             <MetricRow
-              href="/ops/hse-compliance#training-panel"
+              href="/ops/hse-compliance?tab=training#training-panel"
               label="Training due soon"
               value={numberText(report.people.trainingDueSoon)}
             />

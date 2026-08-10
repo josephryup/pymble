@@ -237,21 +237,21 @@ function buildTrendSnapshots(signals: OpsHseExecutiveSafetySignals): OpsHseExecu
     },
     {
       detail: `${signals.auditsOverdue} overdue / ${signals.actionRequiredAudits} action required / ${signals.auditsDueSoon} due soon`,
-      href: "/ops/hse-compliance#audit-panel",
+      href: "/ops/hse-compliance?tab=risk#audit-panel",
       label: "Compliance watch",
       tone: signalTone(signals.actionRequiredAudits + signals.auditsOverdue, true),
       value: String(compliancePressure),
     },
     {
       detail: `${signals.expiredTraining} expired / ${signals.trainingDueSoon} due within 30 days`,
-      href: "/ops/hse-compliance#training-panel",
+      href: "/ops/hse-compliance?tab=training#training-panel",
       label: "Training readiness",
       tone: signalTone(signals.expiredTraining, true),
       value: String(trainingPressure),
     },
     {
       detail: `${signals.inspectionsActionRequired} inspections need action / ${signals.zeroStockPpeItems} PPE items at zero stock`,
-      href: "/ops/hse-compliance#inspection-panel",
+      href: "/ops/hse-compliance?tab=training#inspection-panel",
       label: "Field controls",
       tone: signalTone(
         signals.inspectionsActionRequired + signals.inspectionsOverdue + signals.zeroStockPpeItems,
@@ -319,25 +319,25 @@ export function buildOpsHseExecutiveSafetyRollup(
         value: signals.overdueCorrectiveActions,
       },
       {
-        href: "/ops/hse-compliance#audit-panel",
+        href: "/ops/hse-compliance?tab=risk#audit-panel",
         label: "Audit actions",
         tone: signalTone(signals.actionRequiredAudits + signals.auditsOverdue, true),
         value: signals.actionRequiredAudits + signals.auditsOverdue,
       },
       {
-        href: "/ops/hse-compliance#risk-assessment-panel",
+        href: "/ops/hse-compliance?tab=risk#risk-assessment-panel",
         label: "Risk reviews due",
         tone: signalTone(signals.reviewDueRiskAssessments),
         value: signals.reviewDueRiskAssessments,
       },
       {
-        href: "/ops/hse-compliance#inspection-panel",
+        href: "/ops/hse-compliance?tab=training#inspection-panel",
         label: "Inspection pressure",
         tone: signalTone(signals.inspectionsActionRequired + signals.inspectionsOverdue, true),
         value: signals.inspectionsActionRequired + signals.inspectionsOverdue,
       },
       {
-        href: "/ops/hse-compliance#training-panel",
+        href: "/ops/hse-compliance?tab=training#training-panel",
         label: "Training expired",
         tone: signalTone(signals.expiredTraining, true),
         value: signals.expiredTraining,
@@ -731,7 +731,7 @@ export async function runOpsHseScheduledEscalationSweep(
     ...reviewDueRiskAssessments.flatMap((assessment) => [
       safeQueue(() =>
         queueOpsHseUserNotification({
-          actionHref: "/ops/hse-compliance#risk-assessment-panel",
+          actionHref: "/ops/hse-compliance?tab=risk#risk-assessment-panel",
           body: `${assessment.assessment_number} is due for risk review.`,
           idempotencyKeyPrefix: `hse-sweep-risk-review-owner:${today}:${assessment.id}`,
           moduleKey: "hse_compliance",
@@ -743,7 +743,7 @@ export async function runOpsHseScheduledEscalationSweep(
       ),
       safeQueue(() =>
         queueOpsHseRoleNotifications({
-          actionHref: "/ops/hse-compliance#risk-assessment-panel",
+          actionHref: "/ops/hse-compliance?tab=risk#risk-assessment-panel",
           body: `${assessment.assessment_number} is due for risk review.`,
           idempotencyKeyPrefix: `hse-sweep-risk-review:${today}:${assessment.id}`,
           moduleKey: "hse_compliance",
@@ -757,7 +757,7 @@ export async function runOpsHseScheduledEscalationSweep(
     ...overdueAudits.flatMap((audit) => [
       safeQueue(() =>
         queueOpsHseUserNotification({
-          actionHref: "/ops/hse-compliance#audit-panel",
+          actionHref: "/ops/hse-compliance?tab=risk#audit-panel",
           body: `${audit.audit_number} is overdue for compliance audit completion.`,
           idempotencyKeyPrefix: `hse-sweep-overdue-audit-owner:${today}:${audit.id}`,
           moduleKey: "hse_compliance",
@@ -770,7 +770,7 @@ export async function runOpsHseScheduledEscalationSweep(
       ),
       safeQueue(() =>
         queueOpsHseRoleNotifications({
-          actionHref: "/ops/hse-compliance#audit-panel",
+          actionHref: "/ops/hse-compliance?tab=risk#audit-panel",
           body: `${audit.audit_number} is overdue for compliance audit completion.`,
           idempotencyKeyPrefix: `hse-sweep-overdue-audit:${today}:${audit.id}`,
           moduleKey: "hse_compliance",
@@ -785,7 +785,7 @@ export async function runOpsHseScheduledEscalationSweep(
     ...actionRequiredAudits.flatMap((audit) => [
       safeQueue(() =>
         queueOpsHseUserNotification({
-          actionHref: "/ops/hse-compliance#audit-panel",
+          actionHref: "/ops/hse-compliance?tab=risk#audit-panel",
           body: `${audit.audit_number} still requires HSE compliance action.`,
           idempotencyKeyPrefix: `hse-sweep-action-audit-owner:${today}:${audit.id}`,
           moduleKey: "hse_compliance",
@@ -798,7 +798,7 @@ export async function runOpsHseScheduledEscalationSweep(
       ),
       safeQueue(() =>
         queueOpsHseRoleNotifications({
-          actionHref: "/ops/hse-compliance#audit-panel",
+          actionHref: "/ops/hse-compliance?tab=risk#audit-panel",
           body: `${audit.audit_number} still requires HSE compliance action.`,
           idempotencyKeyPrefix: `hse-sweep-action-audit:${today}:${audit.id}`,
           moduleKey: "hse_compliance",
