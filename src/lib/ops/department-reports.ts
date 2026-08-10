@@ -1,5 +1,6 @@
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
+  canViewAllDepartmentReports,
   canViewDepartmentReport,
   canViewDepartmentReportRecord,
   listAccessibleDepartments,
@@ -7,7 +8,6 @@ import {
   type OpsDepartmentReportScope,
 } from "@/lib/ops/department-report-permissions";
 import { logOpsServerError } from "@/lib/ops/log";
-import { isLeadershipRole } from "@/lib/ops/roles";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsUserRole } from "@/lib/ops/types";
 
@@ -101,12 +101,12 @@ const REPORT_SELECT = [
 ].join(", ");
 
 /**
- * Returns the reports a viewer is allowed to see. Leadership sees all;
- * everyone else sees only their own department.
+ * Returns the reports a viewer is allowed to see. Leadership and the
+ * Operations Manager see all; everyone else sees only their own department.
  *
- * `deptOverride` allows leadership to drill into a specific department
- * from the dashboard view without loosening the data-layer isolation for
- * non-leadership callers (the override is ignored if the viewer is not leadership).
+ * `deptOverride` allows an all-departments viewer to drill into a specific
+ * department from the dashboard without loosening the data-layer isolation for
+ * everyone else (for them the override can only narrow what they already see).
  */
 export async function fetchOpsDepartmentReports(
   role: OpsUserRole,
@@ -122,8 +122,8 @@ export async function fetchOpsDepartmentReports(
     .order("period_end_date", { ascending: false })
     .limit(200);
 
-  if (isLeadershipRole(role)) {
-    // Leadership can drill into a specific dept or see all.
+  if (canViewAllDepartmentReports(role)) {
+    // Can drill into a specific dept or see all.
     if (deptOverride) query = query.eq("department", deptOverride);
   } else {
     const visibleDepartments = listAccessibleDepartments(role);
@@ -288,14 +288,14 @@ export type OpsDeptReportStat = {
 /**
  * Returns per-department summary stats for the leadership dashboard.
  *
- * This aggregates EVERY department's reports, so it self-enforces leadership
- * access as a defense-in-depth backstop: non-leadership callers receive an
+ * This aggregates EVERY department's reports, so it self-enforces the
+ * all-departments gate as a defense-in-depth backstop: other callers receive an
  * empty array rather than a cross-department leak, even if a future caller
  * forgets the page-level guard.
  */
 export async function fetchOpsDepartmentReportSummary(): Promise<OpsDeptReportStat[]> {
   const { profile } = await requireOpsUser();
-  if (!isLeadershipRole(profile.role)) {
+  if (!canViewAllDepartmentReports(profile.role)) {
     return [];
   }
   const supabase = getOpsSupabaseServiceClient();

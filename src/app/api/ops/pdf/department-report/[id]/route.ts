@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
-  canViewDepartmentReport,
+  canViewDepartmentReportRecord,
   OPS_DEPARTMENT_LABELS,
 } from "@/lib/ops/department-report-permissions";
 import {
@@ -54,9 +54,12 @@ export async function GET(_request: Request, { params }: RouteContext) {
     if (!report) {
       return NextResponse.json({ error: "Department report not found." }, { status: 404 });
     }
-    if (!canViewDepartmentReport(profile.role, report.department)) {
+    // Record-level, not department-level: the PDF must obey the same tier
+    // isolation as the detail page, or a contributor could download the
+    // compiled report their manager filed upward.
+    if (!canViewDepartmentReportRecord(profile.role, profile.id, report)) {
       return NextResponse.json(
-        { error: "Your role cannot download this department's reports." },
+        { error: "Your role cannot download this report." },
         { status: 403 },
       );
     }

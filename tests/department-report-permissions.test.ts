@@ -213,7 +213,9 @@ test("Contributors never see a colleague's individual report", () => {
 
   assert.ok(canViewDepartmentReportRecord("engineer", "user-a", mine));
   assert.equal(canViewDepartmentReportRecord("engineer", "user-a", colleagues), false);
-  assert.ok(canViewDepartmentReportRecord("engineer", "user-a", compiled));
+  // The compiled report the Projects Manager files to the MD reads upward
+  // only — the team it reports on must not see it.
+  assert.equal(canViewDepartmentReportRecord("engineer", "user-a", compiled), false);
   // The line manager sees the whole department, both tiers.
   assert.ok(canViewDepartmentReportRecord("projects_manager", "user-pm", colleagues));
   // Another department sees nothing.
@@ -221,6 +223,57 @@ test("Contributors never see a colleague's individual report", () => {
   assert.equal(canViewDepartmentReportRecord("finance_manager", "user-f", compiled), false);
   // Leadership sees everything.
   assert.ok(canViewDepartmentReportRecord("managing_director", "user-md", colleagues));
+});
+
+test("A manager's report to the MD is invisible to their own department", () => {
+  // Every tier-1 contributor, against the compiled report filed above them.
+  const cases: Array<[OpsUserRole, OpsDepartmentKey]> = [
+    ["engineer", "engineering"],
+    ["hse_officer", "hse"],
+    ["quantity_surveyor", "commercial"],
+    ["procurement", "procurement"],
+    ["supervisor", "operations"],
+  ];
+  for (const [role, department] of cases) {
+    assert.equal(
+      canViewDepartmentReportRecord(role, "user-x", {
+        created_by: "user-boss",
+        department,
+        scope: "compiled",
+        submitted_by: "user-boss",
+      }),
+      false,
+      `${role} should not see the compiled ${department} report`,
+    );
+  }
+});
+
+test("The Operations Manager reads every department but reviews none", () => {
+  const role: OpsUserRole = "operations_manager";
+  for (const dept of ALL_DEPARTMENTS) {
+    assert.ok(canViewDepartmentReport(role, dept), `OM should see ${dept} reports`);
+    // Both tiers, including reports they neither wrote nor received.
+    for (const scope of ["individual", "compiled"] as const) {
+      assert.ok(
+        canViewDepartmentReportRecord(role, "user-om", {
+          created_by: "user-other",
+          department: dept,
+          scope,
+          submitted_by: "user-other",
+        }),
+        `OM should see ${dept} ${scope} reports`,
+      );
+    }
+  }
+  assert.equal(listAccessibleDepartments(role).length, ALL_DEPARTMENTS.length);
+
+  // Reading is not reviewing, and not filing anywhere they like: the OM still
+  // files exactly one report — Operations, compiled.
+  assert.equal(canReviewDepartmentReport(role), false);
+  assert.ok(canFileDepartmentReport(role, "operations", "compiled"));
+  assert.ok(canSubmitDepartmentReport(role));
+  assert.equal(canFileDepartmentReport(role, "finance", "compiled"), false);
+  assert.equal(canFileDepartmentReport(role, "engineering", "compiled"), false);
 });
 
 test("Only MD/GM/Developer hold blanket review rights", () => {

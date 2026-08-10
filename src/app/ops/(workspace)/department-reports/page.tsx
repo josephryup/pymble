@@ -10,6 +10,7 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import {
   canReviewDepartmentReport,
   canSubmitDepartmentReport,
+  canViewAllDepartmentReports,
   OPS_DEPARTMENT_LABELS,
   type OpsDepartmentKey,
 } from "@/lib/ops/department-report-permissions";
@@ -19,7 +20,6 @@ import {
   type OpsDeptReportStat,
 } from "@/lib/ops/department-reports";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
-import { isLeadershipRole } from "@/lib/ops/roles";
 import {
   noticeFromParams,
   OPS_PRIMARY_BUTTON_CLASS,
@@ -144,12 +144,14 @@ export default async function OpsDepartmentReportsPage({ searchParams }: PagePro
   const canReview = canReviewDepartmentReport(profile.role);
   const notice = noticeFromParams(search, "report", "Department report created.");
 
-  // dept filter for leadership drill-down
+  // dept filter for the all-departments drill-down
   const deptFilter = (search.dept as string | undefined) ?? null;
-  const isLeadership = isLeadershipRole(profile.role);
+  // Leadership plus the Operations Manager get the roll-up across every
+  // department; everyone else lands on their own department's list.
+  const seesAllDepartments = canViewAllDepartmentReports(profile.role);
 
-  // Leadership with no dept filter → show the dashboard
-  if (isLeadership && !deptFilter) {
+  // All-departments viewer with no dept filter → show the dashboard
+  if (seesAllDepartments && !deptFilter) {
     const stats = await fetchOpsDepartmentReportSummary();
     const totalPending = stats.reduce((s, d) => s + d.pendingReview, 0);
     const totalRevision = stats.reduce((s, d) => s + d.revisionRequested, 0);
@@ -232,7 +234,7 @@ export default async function OpsDepartmentReportsPage({ searchParams }: PagePro
         description="Periodic department reports. Draft, submit for review, then track acknowledgement from leadership."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {isLeadership && deptFilter ? (
+            {seesAllDepartments && deptFilter ? (
               <Link
                 className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/40"
                 href="/ops/department-reports"

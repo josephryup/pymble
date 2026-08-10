@@ -1000,9 +1000,10 @@ export const OPS_MODULES: OpsModule[] = [
     group: "executive",
     href: "/ops/department-reports",
     id: "department-reports",
-    // Leadership see the all-departments roll-up here; each department's own
-    // staff reach their reports through the per-department entry in their group.
-    navigationRoles: OPS_LEADERSHIP_ROLES,
+    // Leadership and the Operations Manager see the all-departments roll-up
+    // here (canViewAllDepartmentReports); each department's own staff reach
+    // their reports through the per-department entry in their group.
+    navigationRoles: [...OPS_LEADERSHIP_ROLES, "operations_manager"],
     phase: "Phase 7",
     roles: OPS_OPERATIONAL_ROLES,
     status: "ready",

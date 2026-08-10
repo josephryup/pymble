@@ -63,6 +63,20 @@ export function departmentForRole(role: OpsUserRole): OpsDepartmentKey | null {
   return ROLE_DEPARTMENT_MAP[role] ?? null;
 }
 
+/**
+ * Non-leadership roles that still read EVERY department's reports. The
+ * Operations Manager runs the business day to day and needs the same
+ * all-departments view leadership gets — but only as a reader: reviewing
+ * (acknowledge / request revisions) stays with the MD, GM and Developer, and
+ * filing stays with their own Operations report.
+ */
+const DEPARTMENT_REPORT_OVERSIGHT_ROLES: OpsUserRole[] = ["operations_manager"];
+
+/** Leadership plus the oversight readers above — the "sees everything" set. */
+export function canViewAllDepartmentReports(role: OpsUserRole) {
+  return isLeadershipRole(role) || DEPARTMENT_REPORT_OVERSIGHT_ROLES.includes(role);
+}
+
 export type OpsDepartmentReportScope = "individual" | "compiled";
 
 export type OpsDepartmentReportingRoute = {
@@ -229,11 +243,13 @@ export function canReviewDepartmentReportRecord(
 
 /**
  * Record-level visibility — "isolated" per the reporting chain:
- * - Leadership sees everything.
+ * - Leadership (and the oversight readers) see everything.
  * - A compiler sees every report in the departments they compile (their own
  *   department included).
- * - A contributor sees their OWN individual reports plus their department's
- *   compiled reports — not their colleagues' individual reports.
+ * - A contributor sees their OWN reports and nothing else in the department.
+ *   In particular the compiled report their manager files upward (Projects
+ *   Manager → MD) is NOT visible to the team it reports on: it is written for
+ *   leadership and can name the people it covers.
  */
 export function canViewDepartmentReportRecord(
   role: OpsUserRole,
@@ -245,20 +261,17 @@ export function canViewDepartmentReportRecord(
     submitted_by: string | null;
   },
 ) {
-  if (isLeadershipRole(role)) return true;
+  if (canViewAllDepartmentReports(role)) return true;
   if (report.created_by === userId || report.submitted_by === userId) return true;
 
-  const own = departmentForRole(role);
   const compiled = departmentsCompiledBy(role);
   if (compiled.includes(report.department)) return true;
   if (report.scope === "compiled" && departmentsFinallyReviewedBy(role).includes(report.department)) {
     // Named final reviewers see the compiled reports routed to them.
     return true;
   }
-  if (own === report.department) {
-    // Department mates see the compiled report, never each other's tier-1s.
-    return report.scope === "compiled";
-  }
+  // Everything else — including your own department's compiled report and your
+  // colleagues' tier-1s — reads upward only.
   return false;
 }
 
@@ -284,7 +297,8 @@ export function canReviewDepartmentReport(role: OpsUserRole) {
 }
 
 /**
- * Department-level visibility: leadership sees all; everyone else sees their
+ * Department-level visibility: leadership and the Operations Manager see all;
+ * everyone else sees their
  * own department plus any department whose reports route THROUGH them (the
  * Projects Manager compiles Engineering and HSE, so they see both).
  * Cross-department leakage is blocked here; record-level isolation between
@@ -294,7 +308,7 @@ export function canViewDepartmentReport(
   role: OpsUserRole,
   reportDepartment: OpsDepartmentKey,
 ) {
-  if (isLeadershipRole(role)) return true;
+  if (canViewAllDepartmentReports(role)) return true;
   if (departmentsCompiledBy(role).includes(reportDepartment)) return true;
   if (departmentsFinallyReviewedBy(role).includes(reportDepartment)) return true;
   const own = departmentForRole(role);
@@ -302,12 +316,13 @@ export function canViewDepartmentReport(
 }
 
 /**
- * List of departments a viewer can browse. Leadership sees all; managers see
+ * List of departments a viewer can browse. Leadership and the Operations
+ * Manager see all; managers see
  * their own, the departments they compile, and the departments whose
  * compiled reports route to them; contributors see their own.
  */
 export function listAccessibleDepartments(role: OpsUserRole): OpsDepartmentKey[] {
-  if (isLeadershipRole(role)) {
+  if (canViewAllDepartmentReports(role)) {
     return Object.keys(OPS_DEPARTMENT_LABELS) as OpsDepartmentKey[];
   }
   const departments = new Set<OpsDepartmentKey>([
