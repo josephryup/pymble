@@ -134,7 +134,7 @@ async function queueSelfServiceLeaveNotifications(input: {
   await Promise.all(
     recipients.map((recipient) =>
       queueOpsNotification({
-        actionHref: "/ops/employees#employee-register",
+        actionHref: "/ops/employees?tab=people#employee-register",
         body: `${input.employee.employee_number} - ${input.employee.full_name} submitted ${input.leaveNumber}.`,
         idempotencyKey: `self-service-leave-submitted:${input.leaveRequestId}:${recipient.id}`,
         moduleKey: "employees",

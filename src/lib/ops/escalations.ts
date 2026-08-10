@@ -1275,7 +1275,7 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     }
 
     const queued = await queueEscalationNotifications({
-      actionHref: "/ops/equipment?status=submitted#equipment-request-register",
+      actionHref: "/ops/equipment?status=submitted&tab=fleet#equipment-request-register",
       body: `${request.request_number} - ${request.title} is ${reasonText(reason)}. Operations should approve or reject it so the crew can plan.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
         reason,
@@ -1308,7 +1308,7 @@ export async function runOpsScheduledEscalationSweep(now = new Date()): Promise<
     }
 
     const queued = await queueEscalationNotifications({
-      actionHref: "/ops/fleet-logistics?status=submitted#transport-register",
+      actionHref: "/ops/fleet-logistics?status=submitted&tab=transport#transport-register",
       body: `${request.request_number} - ${request.title} is ${reasonText(reason)}. Operations should approve or schedule the trip.`,
       idempotencyBase: buildOpsEscalationIdempotencyKey({
         reason,

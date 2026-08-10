@@ -1120,17 +1120,26 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
       boqLinesBySiteId.set(document.site_id, existing);
     }
   }
-  const budgetLineLabelById = await fetchProjectBudgetLineLabels(
-    requests.flatMap((request) => [request.budget_line_id, request.transport_budget_line_id]),
-  );
-  // The site's WBS leaves, so a requester can charge the right cost code
-  // directly. Previously the ONLY route to a cost code was the schedule-line
-  // dropdown above, which renders only when the site has a live issued
-  // schedule — with none in the system every request fell through to the
-  // unplanned/contingency leaf and no budget line ever saw its own spend.
-  const costCodeChoicesBySiteId = await fetchOpsCostCodeChoices(
-    requests.map((request) => request.site_id).filter((id): id is string => Boolean(id)),
-  ).catch(() => new Map<string, OpsCostCodeChoice[]>());
+  // These three are all keyed off `requests` and independent of each other, so
+  // they run together rather than in series (UI/UX audit §1c).
+  const [budgetLineLabelById, costCodeChoicesBySiteId, budgetPositions] = await Promise.all([
+    fetchProjectBudgetLineLabels(
+      requests.flatMap((request) => [request.budget_line_id, request.transport_budget_line_id]),
+    ),
+    // The site's WBS leaves, so a requester can charge the right cost code
+    // directly. Previously the ONLY route to a cost code was the schedule-line
+    // dropdown above, which renders only when the site has a live issued
+    // schedule — with none in the system every request fell through to the
+    // unplanned/contingency leaf and no budget line ever saw its own spend.
+    fetchOpsCostCodeChoices(
+      requests.map((request) => request.site_id).filter((id): id is string => Boolean(id)),
+    ).catch(() => new Map<string, OpsCostCodeChoice[]>()),
+    // Funds available per request, so approvers see the position at the moment
+    // of decision instead of learning about an overspend afterwards (audit D8).
+    fetchOpsRequestBudgetPositions(requests.map((request) => request.id)).catch(
+      () => new Map<string, OpsRequestBudgetPosition>(),
+    ),
+  ]);
   // Labels for codes already saved on items. Only "project" choices carry a
   // node id; library choices have no node until one is provisioned on save.
   const costCodeLabelById = new Map<string, string>();
@@ -1144,11 +1153,6 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
   // Correcting a cost code is a filing decision, not a commercial one, so it
   // stays available after approval — see canRecodeOpsSpend.
   const canRecode = canRecodeOpsSpend(auth.profile.role);
-  // Funds available per request, so approvers see the position at the moment
-  // of decision instead of learning about an overspend afterwards (audit D8).
-  const budgetPositions = await fetchOpsRequestBudgetPositions(
-    requests.map((request) => request.id),
-  ).catch(() => new Map<string, OpsRequestBudgetPosition>());
   const canCreate = canCreateOpsMaterialRequest(auth.profile.role);
   // Which requisition types this user may raise. Site scope needs at least one
   // active site; general and IT requests don't, so an empty site register must

@@ -16,6 +16,11 @@ import { notFound } from "next/navigation";
 import { OPS_CHART_COLORS, OpsStatusDonut } from "@/components/ops/OpsAnalyticsCharts";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import {
+  OpsTabs,
+  resolveOpsTab,
+  type OpsTabDefinition,
+} from "@/components/ops/OpsTabs";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -76,7 +81,7 @@ import {
   type OpsFuelLogSummary,
   type OpsMaintenanceJobSummary,
 } from "@/lib/ops/equipment";
-import { parseOpsListState } from "@/lib/ops/listing";
+import { parseOpsListState, toOpsPaginatedResult } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { formatOpsUserName } from "@/lib/ops/roles";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
@@ -1090,6 +1095,11 @@ function AllocateEquipmentForm({
   );
 }
 
+const EQUIPMENT_TABS: OpsTabDefinition[] = [
+  { id: "overview", label: "Overview" },
+  { id: "fleet", label: "Fleet, requests & jobs" },
+];
+
 export default async function OpsEquipmentPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
     searchParams ?? Promise.resolve({} as OpsSearchParams),
@@ -1102,6 +1112,11 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = statusFromParam(firstParam(params.status));
+  // Only the active tab's data is fetched (UI/UX audit §1c).
+  const tab = resolveOpsTab(params, EQUIPMENT_TABS);
+  const showOverview = tab === "overview";
+  const showFleet = tab === "fleet";
+
   const [
     requestPage,
     stats,
@@ -1115,21 +1130,23 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
     recentFuelLogs,
     recentMaintenanceJobs,
   ] = await Promise.all([
-    fetchPaginatedOpsEquipmentRequests({
-      listState,
-      query: listState.query,
-      status: status || undefined,
-    }),
+    showFleet
+      ? fetchPaginatedOpsEquipmentRequests({
+          listState,
+          query: listState.query,
+          status: status || undefined,
+        })
+      : Promise.resolve(toOpsPaginatedResult<OpsEquipmentRequestSummary>([], 0, listState)),
     fetchOpsEquipmentStats(),
-    fetchOpsEquipmentUtilizationDashboard(),
-    fetchOpsEquipmentStatusBreakdown(),
+    showOverview ? fetchOpsEquipmentUtilizationDashboard() : Promise.resolve(null),
+    showOverview ? fetchOpsEquipmentStatusBreakdown() : Promise.resolve([]),
     fetchActiveSiteOptions(),
     fetchEquipmentCategoryOptions(),
     fetchEquipmentOptions(40),
     fetchEquipmentOptions(120, "available"),
-    fetchRecentEquipmentAllocations(),
-    fetchRecentFuelLogs(),
-    fetchRecentMaintenanceJobs(),
+    showFleet ? fetchRecentEquipmentAllocations() : Promise.resolve([]),
+    showFleet ? fetchRecentFuelLogs() : Promise.resolve([]),
+    showFleet ? fetchRecentMaintenanceJobs() : Promise.resolve([]),
   ]);
   const notice = equipmentNotice(params);
   const today = todayInLusaka();
@@ -1154,9 +1171,9 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
   }
 
   createRequestParams.set("create", "request");
-  const createRequestHref = `/ops/equipment?${createRequestParams.toString()}#equipment-request-create-panel`;
-  const createFuelHref = "/ops/equipment?create=fuel_log#fuel-log-create-panel";
-  const createMaintenanceHref = "/ops/equipment?create=maintenance_job#maintenance-job-create-panel";
+  const createRequestHref = `/ops/equipment?${createRequestParams.toString()}&tab=fleet#equipment-request-create-panel`;
+  const createFuelHref = "/ops/equipment?create=fuel_log&tab=fleet#fuel-log-create-panel";
+  const createMaintenanceHref = "/ops/equipment?create=maintenance_job&tab=fleet#maintenance-job-create-panel";
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -1203,6 +1220,13 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
         </div>
       </section>
 
+      <OpsTabs
+        active={tab}
+        basePath="/ops/equipment"
+        params={params}
+        tabs={EQUIPMENT_TABS}
+      />
+
       {notice ? (
         <div
           className={`rounded-md border px-4 py-3 text-sm font-semibold ${
@@ -1216,9 +1240,11 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
         </div>
       ) : null}
 
+      {showOverview && utilizationDashboard ? (
+        <>
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <OpsKpiCard
-          href="/ops/equipment#equipment-register-panel"
+          href="/ops/equipment?tab=fleet#equipment-register-panel"
           icon={Truck}
           label="Equipment"
           tone="default"
@@ -1226,7 +1252,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           value={String(stats.equipmentCount)}
         />
         <OpsKpiCard
-          href="/ops/equipment#equipment-register-panel"
+          href="/ops/equipment?tab=fleet#equipment-register-panel"
           icon={CheckCircle2}
           label="Available"
           tone="good"
@@ -1234,7 +1260,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           value={String(stats.availableEquipment)}
         />
         <OpsKpiCard
-          href="/ops/equipment?status=submitted#equipment-request-register"
+          href="/ops/equipment?status=submitted&tab=fleet#equipment-request-register"
           icon={Clock}
           label="Open requests"
           tone={stats.openRequests > 0 ? "warn" : "default"}
@@ -1242,7 +1268,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           value={String(stats.openRequests)}
         />
         <OpsKpiCard
-          href="/ops/equipment#equipment-allocation-panel"
+          href="/ops/equipment?tab=fleet#equipment-allocation-panel"
           icon={CalendarCheck}
           label="Allocations"
           tone={stats.activeAllocations > 0 ? "warn" : "default"}
@@ -1250,7 +1276,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           value={String(stats.activeAllocations)}
         />
         <OpsKpiCard
-          href="/ops/equipment#maintenance-job-panel"
+          href="/ops/equipment?tab=fleet#maintenance-job-panel"
           icon={Wrench}
           label="Maintenance"
           tone={stats.openMaintenanceJobs > 0 ? "warn" : "default"}
@@ -1258,7 +1284,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           value={String(stats.openMaintenanceJobs)}
         />
         <OpsKpiCard
-          href="/ops/equipment#fuel-log-panel"
+          href="/ops/equipment?tab=fleet#fuel-log-panel"
           icon={Fuel}
           label="Fuel logs"
           tone="default"
@@ -1324,7 +1350,10 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
         <EquipmentUtilizationPanel dashboard={utilizationDashboard} />
         <EquipmentMaintenancePressurePanel dashboard={utilizationDashboard} />
       </section>
+        </>
+      ) : null}
 
+      {showFleet ? (
       <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
         <div className="space-y-6">
           <div id="equipment-register-panel">
@@ -1489,6 +1518,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
                 },
               ]}
               placeholder="Search request number, title, or description"
+              params={params}
               query={listState.query}
               resultLabel="equipment requests"
             />
@@ -1636,6 +1666,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
               </div>
             )}
             <OpsPaginationControls
+              anchor="equipment-request-register"
               basePath="/ops/equipment"
               filters={[
                 {
@@ -1646,6 +1677,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
                 },
               ]}
               pagination={requestPage.pagination}
+              params={params}
               query={listState.query}
               resultLabel="equipment requests"
             />
@@ -1835,6 +1867,7 @@ export default async function OpsEquipmentPage({ searchParams }: PageProps) {
           ) : null}
         </aside>
       </div>
+      ) : null}
     </div>
   );
 }

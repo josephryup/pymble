@@ -374,7 +374,7 @@ function hrError(message: string): never {
 }
 
 function employeeDocumentError(message: string, returnTo: string): never {
-  const safeReturnTo = safeOpsReturnTo(returnTo, `${HR_ROUTE}#employee-register`);
+  const safeReturnTo = safeOpsReturnTo(returnTo, `${HR_ROUTE}?tab=people#employee-register`);
   const [pathWithQuery, hash] = safeReturnTo.split("#", 2);
   const separator = pathWithQuery.includes("?") ? "&" : "?";
   redirect(
@@ -385,7 +385,7 @@ function employeeDocumentError(message: string, returnTo: string): never {
 }
 
 function redirectWithOpsParam(returnTo: string, key: "created" | "updated", value: string): never {
-  const safeReturnTo = safeOpsReturnTo(returnTo, `${HR_ROUTE}#employee-register`);
+  const safeReturnTo = safeOpsReturnTo(returnTo, `${HR_ROUTE}?tab=people#employee-register`);
   const [pathWithQuery, hash] = safeReturnTo.split("#", 2);
   const separator = pathWithQuery.includes("?") ? "&" : "?";
   redirect(`${pathWithQuery}${separator}${key}=${value}${hash ? `#${hash}` : ""}`);
@@ -640,7 +640,7 @@ export async function createEmployeeAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?created=employee`);
+  redirect(`${HR_ROUTE}?created=employee&tab=people`);
 }
 
 /**
@@ -921,7 +921,7 @@ export async function createEmployeeOnboardingItemAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?created=onboarding_item#employee-register`);
+  redirect(`${HR_ROUTE}?created=onboarding_item&tab=people#employee-register`);
 }
 
 export async function startEmployeeOnboardingItemAction(formData: FormData) {
@@ -1167,7 +1167,7 @@ export async function createRecruitmentRequisitionAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?created=recruitment`);
+  redirect(`${HR_ROUTE}?created=recruitment&tab=admin`);
 }
 
 export async function updateRecruitmentRequisitionStatusAction(formData: FormData) {
@@ -1323,7 +1323,7 @@ export async function createEmployeeContractAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?created=contract`);
+  redirect(`${HR_ROUTE}?created=contract&tab=admin`);
 }
 
 export async function updateEmployeeContractStatusAction(formData: FormData) {
@@ -1559,7 +1559,7 @@ export async function createPerformanceAppraisalAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?created=appraisal`);
+  redirect(`${HR_ROUTE}?created=appraisal&tab=admin`);
 }
 
 export async function completePerformanceAppraisalAction(formData: FormData) {
@@ -1755,7 +1755,7 @@ export async function createHrDocumentCategoryAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?created=hr_document_category`);
+  redirect(`${HR_ROUTE}?created=hr_document_category&tab=admin`);
 }
 
 export async function uploadEmployeeDocumentAction(formData: FormData) {
@@ -1764,12 +1764,12 @@ export async function uploadEmployeeDocumentAction(formData: FormData) {
     category_id: field(formData, "category_id"),
     employee_id: field(formData, "employee_id"),
     expiry_date: field(formData, "expiry_date"),
-    return_to: field(formData, "return_to") || `${HR_ROUTE}#employee-register`,
+    return_to: field(formData, "return_to") || `${HR_ROUTE}?tab=people#employee-register`,
     title: field(formData, "title"),
   });
   const returnTo = parsed.success
     ? parsed.data.return_to
-    : field(formData, "return_to") || `${HR_ROUTE}#employee-register`;
+    : field(formData, "return_to") || `${HR_ROUTE}?tab=people#employee-register`;
 
   if (!parsed.success) {
     employeeDocumentError(
@@ -1941,11 +1941,11 @@ export async function acceptEmployeeDocumentAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   const parsed = employeeDocumentIdSchema.safeParse({
     employee_document_id: field(formData, "employee_document_id"),
-    return_to: field(formData, "return_to") || `${HR_ROUTE}#employee-register`,
+    return_to: field(formData, "return_to") || `${HR_ROUTE}?tab=people#employee-register`,
   });
   const returnTo = parsed.success
     ? parsed.data.return_to
-    : field(formData, "return_to") || `${HR_ROUTE}#employee-register`;
+    : field(formData, "return_to") || `${HR_ROUTE}?tab=people#employee-register`;
 
   if (!parsed.success) {
     employeeDocumentError(parsed.error.issues[0]?.message ?? "Select an employee document.", returnTo);
@@ -1997,12 +1997,12 @@ export async function rejectEmployeeDocumentAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   const parsed = rejectEmployeeDocumentSchema.safeParse({
     employee_document_id: field(formData, "employee_document_id"),
-    return_to: field(formData, "return_to") || `${HR_ROUTE}#employee-register`,
+    return_to: field(formData, "return_to") || `${HR_ROUTE}?tab=people#employee-register`,
     review_notes: field(formData, "review_notes"),
   });
   const returnTo = parsed.success
     ? parsed.data.return_to
-    : field(formData, "return_to") || `${HR_ROUTE}#employee-register`;
+    : field(formData, "return_to") || `${HR_ROUTE}?tab=people#employee-register`;
 
   if (!parsed.success) {
     employeeDocumentError(parsed.error.issues[0]?.message ?? "Check the employee document.", returnTo);
@@ -2054,11 +2054,11 @@ export async function archiveEmployeeDocumentAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   const parsed = employeeDocumentIdSchema.safeParse({
     employee_document_id: field(formData, "employee_document_id"),
-    return_to: field(formData, "return_to") || `${HR_ROUTE}#employee-register`,
+    return_to: field(formData, "return_to") || `${HR_ROUTE}?tab=people#employee-register`,
   });
   const returnTo = parsed.success
     ? parsed.data.return_to
-    : field(formData, "return_to") || `${HR_ROUTE}#employee-register`;
+    : field(formData, "return_to") || `${HR_ROUTE}?tab=people#employee-register`;
 
   if (!parsed.success) {
     employeeDocumentError(parsed.error.issues[0]?.message ?? "Select an employee document.", returnTo);
@@ -2249,7 +2249,7 @@ export async function createLeaveRequestAction(formData: FormData) {
   });
 
   revalidatePath(HR_ROUTE);
-  redirect(`${HR_ROUTE}?created=leave`);
+  redirect(`${HR_ROUTE}?created=leave&tab=admin`);
 }
 
 export async function submitLeaveRequestAction(formData: FormData) {

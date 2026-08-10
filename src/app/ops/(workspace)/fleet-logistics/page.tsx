@@ -19,6 +19,11 @@ import { OPS_CHART_COLORS, OpsTrendChart } from "@/components/ops/OpsAnalyticsCh
 import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import {
+  OpsTabs,
+  resolveOpsTab,
+  type OpsTabDefinition,
+} from "@/components/ops/OpsTabs";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -94,7 +99,7 @@ import type {
   OpsFleetProfitabilityReport,
   OpsFleetProfitabilityRow,
 } from "@/lib/ops/fleet-logistics-reporting";
-import { parseOpsListState } from "@/lib/ops/listing";
+import { parseOpsListState, toOpsPaginatedResult } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import type {
@@ -1022,6 +1027,12 @@ function LabourActions({
   );
 }
 
+const FLEET_TABS: OpsTabDefinition[] = [
+  { id: "overview", label: "Overview" },
+  { id: "transport", label: "Transport register" },
+  { id: "logistics", label: "Accommodation & labour" },
+];
+
 export default async function FleetLogisticsPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const auth = await requireOpsUser();
@@ -1032,6 +1043,12 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
 
   const status = statusFromParam(firstParam(params.status));
   const listState = parseOpsListState(params);
+  // Only the active tab's registers are fetched (UI/UX audit §1c).
+  const tab = resolveOpsTab(params, FLEET_TABS);
+  const showOverview = tab === "overview";
+  const showTransport = tab === "transport";
+  const showLogistics = tab === "logistics";
+
   const [
     sites,
     employeeOptions,
@@ -1051,19 +1068,22 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
     fetchFleetLogisticsEmployeeOptions(),
     fetchFleetLogisticsWorkerOptions(),
     fetchFleetDispatchEquipmentOptions(),
+    // Every tab's header quotes a number from this.
     fetchOpsFleetLogisticsStats(),
-    fetchOpsFleetDispatchReport(),
-    fetchOpsFleetMobilizationDashboard(),
-    fetchOpsFleetOperatorComplianceReport(),
-    fetchOpsFleetProfitabilityReport(),
-    fetchPaginatedOpsTransportRequests({
-      listState,
-      query: listState.query,
-      status: status || undefined,
-    }),
-    fetchRecentAccommodationBookings(),
-    fetchRecentLabourAllocations(),
-    fetchOpsFleetWeeklyActivity(8),
+    showOverview ? fetchOpsFleetDispatchReport() : Promise.resolve(null),
+    showOverview ? fetchOpsFleetMobilizationDashboard() : Promise.resolve(null),
+    showOverview ? fetchOpsFleetOperatorComplianceReport() : Promise.resolve(null),
+    showOverview ? fetchOpsFleetProfitabilityReport() : Promise.resolve(null),
+    showTransport
+      ? fetchPaginatedOpsTransportRequests({
+          listState,
+          query: listState.query,
+          status: status || undefined,
+        })
+      : Promise.resolve(toOpsPaginatedResult<OpsTransportRequestSummary>([], 0, listState)),
+    showLogistics ? fetchRecentAccommodationBookings() : Promise.resolve([]),
+    showLogistics ? fetchRecentLabourAllocations() : Promise.resolve([]),
+    showOverview ? fetchOpsFleetWeeklyActivity(8) : Promise.resolve([]),
   ]);
   const notice = fleetLogisticsNotice(params);
   const today = todayInLusaka();
@@ -1076,8 +1096,9 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
   const canCreateLabour = canCreateOpsLabourAllocation(auth.profile.role);
   const canManageOperatorDocuments = canManageOpsFleetOperatorDocuments(auth.profile.role);
   const hasActiveListFilter = listState.query.length > 0 || status.length > 0;
-  const operatorDocumentAttentionCount =
-    operatorComplianceReport.expiredDocuments + operatorComplianceReport.dueSoonDocuments;
+  const operatorDocumentAttentionCount = operatorComplianceReport
+    ? operatorComplianceReport.expiredDocuments + operatorComplianceReport.dueSoonDocuments
+    : 0;
 
   return (
     <div className="grid gap-6">
@@ -1097,25 +1118,25 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           </div>
           <div className="flex flex-wrap gap-2">
             {canCreateTransport ? (
-              <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/fleet-logistics?create=transport#transport-create-panel">
+              <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/fleet-logistics?create=transport&tab=transport#transport-create-panel">
                 <Plus className="size-4" aria-hidden="true" />
                 Transport
               </Link>
             ) : null}
             {canCreateAccommodation ? (
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/fleet-logistics?create=accommodation#accommodation-create-panel">
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/fleet-logistics?create=accommodation&tab=logistics#accommodation-create-panel">
                 <BedDouble className="size-4" aria-hidden="true" />
                 Accommodation
               </Link>
             ) : null}
             {canCreateLabour ? (
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/fleet-logistics?create=labour#labour-create-panel">
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/fleet-logistics?create=labour&tab=logistics#labour-create-panel">
                 <Users className="size-4" aria-hidden="true" />
                 Labour
               </Link>
             ) : null}
             {canManageOperatorDocuments ? (
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/fleet-logistics?create=operator_document#operator-document-create-panel">
+              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/fleet-logistics?create=operator_document&tab=overview#operator-document-create-panel">
                 <FileWarning className="size-4" aria-hidden="true" />
                 Driver doc
               </Link>
@@ -1136,9 +1157,18 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
         ) : null}
       </section>
 
+      <OpsTabs
+        active={tab}
+        basePath="/ops/fleet-logistics"
+        params={params}
+        tabs={FLEET_TABS}
+      />
+
+      {showOverview && dispatchReport && mobilizationDashboard && operatorComplianceReport && profitabilityReport ? (
+        <>
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <OpsKpiCard
-          href="/ops/fleet-logistics?status=submitted#transport-register"
+          href="/ops/fleet-logistics?status=submitted&tab=transport#transport-register"
           icon={Bus}
           label="Open transport"
           tone={stats.openTransports > 0 ? "warn" : "default"}
@@ -1147,28 +1177,28 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           value={String(stats.openTransports)}
         />
         <OpsKpiCard
-          href="/ops/fleet-logistics?status=completed#transport-register"
+          href="/ops/fleet-logistics?status=completed&tab=transport#transport-register"
           icon={CheckCircle2}
           label="Completed trips"
           tone="good"
           value={String(stats.completedTransports)}
         />
         <OpsKpiCard
-          href="/ops/fleet-logistics#accommodation-panel"
+          href="/ops/fleet-logistics?tab=logistics#accommodation-panel"
           icon={BedDouble}
           label="Active stays"
           tone={stats.accommodationActive > 0 ? "warn" : "default"}
           value={String(stats.accommodationActive)}
         />
         <OpsKpiCard
-          href="/ops/fleet-logistics#labour-panel"
+          href="/ops/fleet-logistics?tab=logistics#labour-panel"
           icon={HardHat}
           label="Active labour"
           tone={stats.labourActive > 0 ? "warn" : "default"}
           value={String(stats.labourActive)}
         />
         <OpsKpiCard
-          href="/ops/fleet-logistics#operator-compliance-panel"
+          href="/ops/fleet-logistics?tab=overview#operator-compliance-panel"
           icon={FileWarning}
           label="Driver docs due"
           tone={operatorDocumentAttentionCount > 0 ? "warn" : "good"}
@@ -1217,6 +1247,8 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
         <FleetOperatorCompliancePanel report={operatorComplianceReport} />
         <FleetProfitabilityPanel report={profitabilityReport} />
       </section>
+        </>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-4">
         {canCreateTransport ? (
@@ -1577,6 +1609,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
         ) : null}
       </section>
 
+      {showTransport ? (
       <section className="rounded-lg border border-border bg-card shadow-sm" id="transport-register">
         <div className="flex flex-col gap-3 border-b border-border p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -1598,6 +1631,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
             },
           ]}
           placeholder="Search by request, title, origin, destination, or vehicle"
+          params={params}
           query={listState.query}
           resultLabel="transport requests"
         />
@@ -1682,6 +1716,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           </div>
         </div>
         <OpsPaginationControls
+          anchor="transport-register"
           basePath="/ops/fleet-logistics"
           filters={[
             {
@@ -1692,11 +1727,14 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
             },
           ]}
           pagination={transportRequests.pagination}
+          params={params}
           query={listState.query}
           resultLabel="transport requests"
         />
       </section>
+      ) : null}
 
+      {showLogistics ? (
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-lg border border-border bg-card shadow-sm" id="accommodation-panel">
           <div className="flex items-center justify-between gap-3 border-b border-border p-5">
@@ -1815,7 +1853,9 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           </div>
         </div>
       </section>
+      ) : null}
 
+      {showOverview ? (
       <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="grid gap-4 md:grid-cols-4">
           <DetailItem label="Request" value="Draft -> submitted -> approved" />
@@ -1828,6 +1868,7 @@ export default async function FleetLogisticsPage({ searchParams }: PageProps) {
           <span>Completion actions post actual cost to project budgets when a cost value exists.</span>
         </div>
       </section>
+      ) : null}
     </div>
   );
 }

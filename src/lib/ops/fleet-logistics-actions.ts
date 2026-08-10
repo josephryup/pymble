@@ -566,7 +566,7 @@ export async function createFleetOperatorDocumentAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
-  redirect(`${FLEET_LOGISTICS_ROUTE}?created=operator_document#operator-compliance-panel`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?created=operator_document&tab=overview#operator-compliance-panel`);
 }
 
 export async function createTransportRequestAction(formData: FormData) {
@@ -644,7 +644,7 @@ export async function createTransportRequestAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
-  redirect(`${FLEET_LOGISTICS_ROUTE}?created=transport_request`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?created=transport_request&tab=transport`);
 }
 
 export async function submitTransportRequestAction(formData: FormData) {
@@ -702,7 +702,7 @@ export async function submitTransportRequestAction(formData: FormData) {
   });
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_submitted`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_submitted&tab=transport`);
 }
 
 export async function approveTransportRequestAction(formData: FormData) {
@@ -777,7 +777,7 @@ export async function approveTransportRequestAction(formData: FormData) {
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_approved`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_approved&tab=transport`);
 }
 
 export async function rejectTransportRequestAction(formData: FormData) {
@@ -844,7 +844,7 @@ export async function rejectTransportRequestAction(formData: FormData) {
   });
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_rejected`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_rejected&tab=transport`);
 }
 
 export async function scheduleTransportRequestAction(formData: FormData) {
@@ -926,7 +926,7 @@ export async function scheduleTransportRequestAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_scheduled`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_scheduled&tab=transport`);
 }
 
 export async function completeTransportRequestAction(formData: FormData) {
@@ -999,7 +999,7 @@ export async function completeTransportRequestAction(formData: FormData) {
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_completed`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_completed&tab=transport`);
 }
 
 export async function cancelTransportRequestAction(formData: FormData) {
@@ -1061,7 +1061,7 @@ export async function cancelTransportRequestAction(formData: FormData) {
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_cancelled`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=transport_cancelled&tab=transport`);
 }
 
 export async function createAccommodationBookingAction(formData: FormData) {
@@ -1146,7 +1146,7 @@ export async function createAccommodationBookingAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
-  redirect(`${FLEET_LOGISTICS_ROUTE}?created=accommodation_booking`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?created=accommodation_booking&tab=logistics`);
 }
 
 export async function confirmAccommodationBookingAction(formData: FormData) {
@@ -1208,7 +1208,7 @@ export async function confirmAccommodationBookingAction(formData: FormData) {
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=accommodation_confirmed`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=accommodation_confirmed&tab=logistics`);
 }
 
 export async function checkInAccommodationBookingAction(formData: FormData) {
@@ -1254,7 +1254,7 @@ export async function checkInAccommodationBookingAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=accommodation_checked_in`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=accommodation_checked_in&tab=logistics`);
 }
 
 export async function completeAccommodationBookingAction(formData: FormData) {
@@ -1327,7 +1327,7 @@ export async function completeAccommodationBookingAction(formData: FormData) {
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=accommodation_completed`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=accommodation_completed&tab=logistics`);
 }
 
 export async function cancelAccommodationBookingAction(formData: FormData) {
@@ -1389,7 +1389,7 @@ export async function cancelAccommodationBookingAction(formData: FormData) {
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=accommodation_cancelled`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=accommodation_cancelled&tab=logistics`);
 }
 
 export async function createLabourAllocationAction(formData: FormData) {
@@ -1481,7 +1481,7 @@ export async function createLabourAllocationAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
-  redirect(`${FLEET_LOGISTICS_ROUTE}?created=labour_allocation`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?created=labour_allocation&tab=logistics`);
 }
 
 export async function startLabourAllocationAction(formData: FormData) {
@@ -1543,7 +1543,7 @@ export async function startLabourAllocationAction(formData: FormData) {
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=labour_started`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=labour_started&tab=logistics`);
 }
 
 export async function completeLabourAllocationAction(formData: FormData) {
@@ -1618,7 +1618,7 @@ export async function completeLabourAllocationAction(formData: FormData) {
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=labour_completed`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=labour_completed&tab=logistics`);
 }
 
 export async function cancelLabourAllocationAction(formData: FormData) {
@@ -1680,5 +1680,5 @@ export async function cancelLabourAllocationAction(formData: FormData) {
 
   revalidatePath(FLEET_LOGISTICS_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=labour_cancelled`);
+  redirect(`${FLEET_LOGISTICS_ROUTE}?updated=labour_cancelled&tab=logistics`);
 }

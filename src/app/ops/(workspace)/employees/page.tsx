@@ -33,7 +33,13 @@ import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton"
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
+import {
+  OpsTabs,
+  resolveOpsTab,
+  type OpsTabDefinition,
+} from "@/components/ops/OpsTabs";
 import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
@@ -565,7 +571,7 @@ function EmployeeDocumentReviewControls({
   document: OpsEmployeeDocumentSummary;
   role: OpsUserRole;
 }) {
-  const returnTo = `${HR_ROUTE}#employee-register`;
+  const returnTo = `${HR_ROUTE}?tab=people#employee-register`;
   const canReview = canReviewOpsEmployeeDocument(role, document);
 
   return (
@@ -1199,6 +1205,12 @@ async function HrTrainingRenewalSection({
   );
 }
 
+const EMPLOYEE_TABS: OpsTabDefinition[] = [
+  { id: "overview", label: "Overview" },
+  { id: "people", label: "Employee records" },
+  { id: "admin", label: "Leave, contracts & HR admin" },
+];
+
 export default async function OpsEmployeesPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
     searchParams ?? Promise.resolve({} as OpsSearchParams),
@@ -1211,28 +1223,37 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = statusFromParam(firstParam(params.status));
-  const [
-    employeePage,
-    stats,
-    siteOptions,
-    userOptions,
-    employeeOptions,
-    recruitmentRequisitions,
-    hrDocumentCategories,
-    hrDocumentCoverage,
-  ] = await Promise.all([
+  // Only the active tab's data is fetched (UI/UX audit §1c). The register and
+  // the user list stay shared: the overview's account-link coverage is computed
+  // from both, and the register itself is one paginated query.
+  const tab = resolveOpsTab(params, EMPLOYEE_TABS);
+  const showOverview = tab === "overview";
+  const showPeople = tab === "people";
+  const showAdmin = tab === "admin";
+
+  const [employeePage, userOptions] = await Promise.all([
     fetchPaginatedOpsEmployees({
       listState,
       query: listState.query,
       status: status || undefined,
     }),
-    fetchOpsHrStats(),
-    fetchActiveSiteOptions(),
     fetchHrUserOptions(),
-    fetchActiveEmployeeOptions(),
-    fetchRecentRecruitmentRequisitions(),
-    fetchHrDocumentCategories(),
-    fetchOpsHrDocumentCoverageReport(),
+  ]);
+
+  const [
+    stats,
+    siteOptions,
+    employeeOptions,
+    recruitmentRequisitions,
+    hrDocumentCategories,
+    hrDocumentCoverage,
+  ] = await Promise.all([
+    showOverview ? fetchOpsHrStats() : Promise.resolve(null),
+    showPeople || showAdmin ? fetchActiveSiteOptions() : Promise.resolve([]),
+    showAdmin ? fetchActiveEmployeeOptions() : Promise.resolve([]),
+    showAdmin ? fetchRecentRecruitmentRequisitions() : Promise.resolve([]),
+    showPeople || showAdmin ? fetchHrDocumentCategories() : Promise.resolve([]),
+    showOverview ? fetchOpsHrDocumentCoverageReport() : Promise.resolve(null),
   ]);
   const notice = hrNotice(params);
   const canCreateEmployee = canCreateOpsEmployee(auth.profile.role);
@@ -1287,80 +1308,81 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
   const openBalancePanel = createPanel === "balance";
   const openCategoryPanel = createPanel === "category";
   const openDocumentPanel = createPanel === "document";
-  const hrDashboardActions = buildOpsHrDashboardActions(stats);
+  const hrDashboardActions = stats ? buildOpsHrDashboardActions(stats) : [];
   const today = todayInLusaka();
 
   return (
     <div className="w-full max-w-none space-y-6">
-      <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-blue">
-            Admin and HR
-          </p>
-          <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
-            Employees, leave, and HR controls
-          </h1>
-          <p className="mt-3 max-w-3xl text-base leading-7 text-foreground/68">
-            Maintain employee records, recruitment, contracts, appraisals, leave balances, and HR documents.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canCreateEmployee ? (
-            <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/employees?create=employee#employee-create-panel">
-              <Plus className="size-4" aria-hidden="true" />
-              New employee
-            </Link>
-          ) : null}
-          {canCreateLeave ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=leave#leave-create-panel">
-              <CalendarCheck className="size-4" aria-hidden="true" />
-              Leave request
-            </Link>
-          ) : null}
-          {canCreateRecruitment ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=recruitment#recruitment-create-panel">
-              <FolderKanban className="size-4" aria-hidden="true" />
-              Recruitment
-            </Link>
-          ) : null}
-          {canCreateContract ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=contract#contract-create-panel">
-              <FileText className="size-4" aria-hidden="true" />
-              Contract
-            </Link>
-          ) : null}
-          {canCreateAppraisal ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=appraisal#appraisal-create-panel">
-              <Star className="size-4" aria-hidden="true" />
-              Appraisal
-            </Link>
-          ) : null}
-          {canCreateOnboarding ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=onboarding#onboarding-create-panel">
-              <ListChecks className="size-4" aria-hidden="true" />
-              Onboarding
-            </Link>
-          ) : null}
-          {canManageLeaveBalance ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=balance#leave-balance-panel">
-              <Wallet className="size-4" aria-hidden="true" />
-              Balance
-            </Link>
-          ) : null}
-          {canManageHrCategory ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=category#hr-document-category-panel">
-              <NotebookTabs className="size-4" aria-hidden="true" />
-              HR docs
-            </Link>
-          ) : null}
-          {canManageHrCategory ? (
-            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=document#employee-document-panel">
-              <Upload className="size-4" aria-hidden="true" />
-              Upload file
-            </Link>
-          ) : null}
-        </div>
-      </section>
+      <OpsPageHeader
+        eyebrow="Admin and HR"
+        title="Employees, leave, and HR controls"
+        description="Maintain employee records, recruitment, contracts, appraisals, leave balances, and HR documents."
+        actions={
+          <>
+        {canCreateEmployee ? (
+          <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/employees?create=employee&tab=people#employee-create-panel">
+            <Plus className="size-4" aria-hidden="true" />
+            New employee
+          </Link>
+        ) : null}
+        {canCreateLeave ? (
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=leave&tab=admin#leave-create-panel">
+            <CalendarCheck className="size-4" aria-hidden="true" />
+            Leave request
+          </Link>
+        ) : null}
+        {canCreateRecruitment ? (
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=recruitment&tab=admin#recruitment-create-panel">
+            <FolderKanban className="size-4" aria-hidden="true" />
+            Recruitment
+          </Link>
+        ) : null}
+        {canCreateContract ? (
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=contract&tab=admin#contract-create-panel">
+            <FileText className="size-4" aria-hidden="true" />
+            Contract
+          </Link>
+        ) : null}
+        {canCreateAppraisal ? (
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=appraisal&tab=admin#appraisal-create-panel">
+            <Star className="size-4" aria-hidden="true" />
+            Appraisal
+          </Link>
+        ) : null}
+        {canCreateOnboarding ? (
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=onboarding&tab=admin#onboarding-create-panel">
+            <ListChecks className="size-4" aria-hidden="true" />
+            Onboarding
+          </Link>
+        ) : null}
+        {canManageLeaveBalance ? (
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=balance&tab=admin#leave-balance-panel">
+            <Wallet className="size-4" aria-hidden="true" />
+            Balance
+          </Link>
+        ) : null}
+        {canManageHrCategory ? (
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=category&tab=admin#hr-document-category-panel">
+            <NotebookTabs className="size-4" aria-hidden="true" />
+            HR docs
+          </Link>
+        ) : null}
+        {canManageHrCategory ? (
+          <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/employees?create=document&tab=admin#employee-document-panel">
+            <Upload className="size-4" aria-hidden="true" />
+            Upload file
+          </Link>
+        ) : null}
+          </>
+        }
+      />
+
+      <OpsTabs
+        active={tab}
+        basePath="/ops/employees"
+        params={params}
+        tabs={EMPLOYEE_TABS}
+      />
 
       {notice ? (
         <div
@@ -1375,6 +1397,8 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
         </div>
       ) : null}
 
+      {showOverview && stats && hrDocumentCoverage ? (
+        <>
       {/* Account-link coverage (audit §2 / §5). Both directions matter and
           they are different problems: an employee with no account cannot see
           their own payslip; an account with no employee record is a person the
@@ -1414,7 +1438,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <OpsKpiCard
-          href="/ops/employees?status=active#employee-register"
+          href="/ops/employees?status=active&tab=people#employee-register"
           icon={Users}
           label="Active employees"
           tone="good"
@@ -1422,7 +1446,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           value={String(stats.activeEmployees)}
         />
         <OpsKpiCard
-          href="/ops/employees?status=on_leave#employee-register"
+          href="/ops/employees?status=on_leave&tab=people#employee-register"
           icon={CalendarCheck}
           label="On leave"
           tone={stats.onLeave > 0 ? "warn" : "default"}
@@ -1430,7 +1454,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           value={String(stats.onLeave)}
         />
         <OpsKpiCard
-          href="/ops/employees#employee-register"
+          href="/ops/employees?tab=people#employee-register"
           icon={ListChecks}
           label="Onboarding open"
           tone={stats.overdueOnboardingItems > 0 ? "warn" : "default"}
@@ -1438,7 +1462,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           value={String(stats.openOnboardingItems)}
         />
         <OpsKpiCard
-          href="/ops/employees#training-renewals"
+          href="/ops/employees?tab=admin#training-renewals"
           icon={GraduationCap}
           label="Training renewal"
           tone={stats.expiredTraining > 0 || stats.trainingDueSoon > 0 ? "warn" : "default"}
@@ -1446,7 +1470,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           value={String(stats.trainingDueSoon)}
         />
         <OpsKpiCard
-          href="/ops/employees#hr-document-coverage"
+          href="/ops/employees?tab=overview#hr-document-coverage"
           icon={FileCheck2}
           label="HR documents"
           tone={hrDocumentCoverage.missingRequiredSlots > 0 ? "warn" : "default"}
@@ -1460,7 +1484,11 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
         <HrSignalPanel stats={stats} />
         <HrDocumentCoveragePanel report={hrDocumentCoverage} />
       </section>
+        </>
+      ) : null}
 
+      {showPeople ? (
+        <>
       {canCreateEmployee ? (
         <details
           className="scroll-mt-24 rounded-lg border border-border bg-card"
@@ -1587,7 +1615,11 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           </form>
         </details>
       ) : null}
+        </>
+      ) : null}
 
+      {showAdmin ? (
+        <>
       {canCreateLeave ? (
         <details
           className="scroll-mt-24 rounded-lg border border-border bg-card"
@@ -2169,7 +2201,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 action={uploadEmployeeDocumentAction}
                 className="grid gap-4 border-t border-border p-5 min-[520px]:grid-cols-2 lg:grid-cols-4"
               >
-                <input name="return_to" type="hidden" value="/ops/employees#employee-register" />
+                <input name="return_to" type="hidden" value="/ops/employees?tab=people#employee-register" />
                 <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                   Employee
                   <select className={OPS_INPUT_CLASS} name="employee_id" required>
@@ -2221,7 +2253,11 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           </details>
         ) : null}
       </section>
+        </>
+      ) : null}
 
+      {showAdmin ? (
+        <>
       {canCreateOnboarding ? (
         <details
           className="scroll-mt-24 rounded-lg border border-border bg-card"
@@ -2404,7 +2440,10 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           </div>
         </div>
       </section>
+        </>
+      ) : null}
 
+      {showPeople ? (
       <section className="scroll-mt-24 rounded-lg border border-border bg-card" id="employee-register">
         <div className="flex items-center justify-between gap-3 border-b border-border p-5">
           <div>
@@ -2430,6 +2469,7 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
               value: status,
             },
           ]}
+          params={params}
           placeholder="Search employee number, name, job title, department, phone, or email"
           query={listState.query}
           resultLabel="employees"
@@ -2833,13 +2873,16 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
           </div>
         )}
         <OpsPaginationControls
+          anchor="employee-register"
           basePath="/ops/employees"
           filters={[{ label: "Status", name: "status", options: [], value: status }]}
           pagination={employeePage.pagination}
+          params={params}
           query={listState.query}
           resultLabel="employees"
         />
       </section>
+      ) : null}
     </div>
   );
 }

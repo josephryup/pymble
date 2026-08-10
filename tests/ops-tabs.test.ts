@@ -35,6 +35,48 @@ const TAB_SCOPED_ANCHORS: Record<string, { route: string; anchors: string[] }> =
       "audit-panel",
     ],
   },
+  employees: {
+    route: "/ops/employees|\\$\\{HR_ROUTE\\}",
+    anchors: [
+      "employee-register",
+      "employee-create-panel",
+      "training-renewals",
+      "leave-create-panel",
+      "leave-balance-panel",
+      "recruitment-create-panel",
+      "contract-create-panel",
+      "appraisal-create-panel",
+      "onboarding-create-panel",
+      "hr-document-category-panel",
+      "employee-document-panel",
+    ],
+  },
+  equipment: {
+    route: "/ops/equipment|\\$\\{EQUIPMENT_ROUTE\\}",
+    anchors: [
+      "equipment-register-panel",
+      "equipment-request-register",
+      "equipment-request-create-panel",
+      "equipment-allocation-panel",
+      "fuel-log-panel",
+      "fuel-log-create-panel",
+      "maintenance-job-panel",
+      "maintenance-job-create-panel",
+    ],
+  },
+  "fleet-logistics": {
+    route: "/ops/fleet-logistics|\\$\\{FLEET_LOGISTICS_ROUTE\\}",
+    anchors: [
+      "transport-register",
+      "transport-create-panel",
+      "accommodation-panel",
+      "accommodation-create-panel",
+      "labour-panel",
+      "labour-create-panel",
+      "operator-compliance-panel",
+      "operator-document-create-panel",
+    ],
+  },
   commercial: {
     route: "/ops/commercial|\\$\\{COMMERCIAL_ROUTE\\}",
     anchors: [
@@ -90,15 +132,47 @@ describe("ops tabbed pages", () => {
     });
   }
 
-  it("sends anchorless commercial redirects back to the register acted on", () => {
-    // Most commercial actions redirect without an anchor. Left alone they would
-    // all dump the user on Overview after every single edit.
-    const source = readFileSync(join(SRC, "lib", "ops", "commercial-actions.ts"), "utf8");
-    const offenders = [...source.matchAll(/\$\{COMMERCIAL_ROUTE\}\?((?:created|updated)=[^`]*)`/g)]
-      .filter((match) => !match[1].includes("tab="))
-      .map((match) => match[1]);
+  const ANCHORLESS_REDIRECTS: Array<[string, string, RegExp]> = [
+    ["commercial", "commercial-actions.ts", /\$\{COMMERCIAL_ROUTE\}\?((?:created|updated)=[^`]*)`/g],
+    ["employees", "hr-actions.ts", /\$\{HR_ROUTE\}\?((?:created|updated)=[^`]*)`/g],
+    [
+      "equipment",
+      "equipment-actions.ts",
+      /\$\{EQUIPMENT_ROUTE\}\?((?:created|updated)=[^`]*)`/g,
+    ],
+    [
+      "fleet-logistics",
+      "fleet-logistics-actions.ts",
+      /\$\{FLEET_LOGISTICS_ROUTE\}\?((?:created|updated)=[^`]*)`/g,
+    ],
+  ];
 
-    assert.deepEqual(offenders, []);
+  for (const [page, file, pattern] of ANCHORLESS_REDIRECTS) {
+    it(`sends anchorless ${page} redirects back to the register acted on`, () => {
+      // Many actions redirect without an anchor. Left alone they would all dump
+      // the user on the default tab after every single edit — nothing breaks,
+      // the workflow just quietly gets worse.
+      const source = readFileSync(join(SRC, "lib", "ops", file), "utf8");
+      const offenders = [...source.matchAll(pattern)]
+        .filter((match) => !match[1].includes("tab="))
+        .map((match) => match[1]);
+
+      assert.deepEqual(offenders, []);
+    });
+  }
+
+  it("routes engineering-controls notices to the tab that holds the record", () => {
+    // This page redirects through one helper rather than 24 literals, so the
+    // guard is that the helper exists and covers every record family.
+    const source = readFileSync(
+      join(SRC, "lib", "ops", "engineering-controls-actions.ts"),
+      "utf8",
+    );
+    assert.match(source, /function engineeringTabFor/);
+    for (const family of ["instruction", "follow_up", "inspection", "snag", "material_test", "drawing", "milestone"]) {
+      assert.ok(source.includes(`"${family}`), `engineeringTabFor must map ${family}`);
+    }
+    assert.match(source, /tab=\$\{engineeringTabFor\(value\)\}/);
   });
 
   it("resolves an unknown ?tab= to the first tab rather than a blank page", () => {

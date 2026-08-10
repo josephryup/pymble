@@ -578,7 +578,7 @@ export async function createEquipmentCategoryAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?created=category`);
+  redirect(`${EQUIPMENT_ROUTE}?created=category&tab=fleet`);
 }
 
 export async function createEquipmentAction(formData: FormData) {
@@ -663,7 +663,7 @@ export async function createEquipmentAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?created=equipment`);
+  redirect(`${EQUIPMENT_ROUTE}?created=equipment&tab=fleet`);
 }
 
 export async function createEquipmentRequestAction(formData: FormData) {
@@ -752,7 +752,7 @@ export async function createEquipmentRequestAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?created=request`);
+  redirect(`${EQUIPMENT_ROUTE}?created=request&tab=fleet`);
 }
 
 export async function submitEquipmentRequestAction(formData: FormData) {
@@ -802,7 +802,7 @@ export async function submitEquipmentRequestAction(formData: FormData) {
     actionNeededRoles: ["operations_manager", "projects_manager"],
     title: `Equipment request: ${request.request_number}`,
     body: `${profile.full_name} submitted ${request.request_number} — ${request.title}. Approval needed.`,
-    actionHref: `${EQUIPMENT_ROUTE}?status=submitted#equipment-request-register`,
+    actionHref: `${EQUIPMENT_ROUTE}?status=submitted&tab=fleet#equipment-request-register`,
     moduleKey: "equipment",
     sourceTable: "equipment_requests",
     sourceId: request.id,
@@ -810,7 +810,7 @@ export async function submitEquipmentRequestAction(formData: FormData) {
   });
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?updated=submitted`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=submitted&tab=fleet`);
 }
 
 export async function approveEquipmentRequestAction(formData: FormData) {
@@ -869,7 +869,7 @@ export async function approveEquipmentRequestAction(formData: FormData) {
   });
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?updated=approved`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=approved&tab=fleet`);
 }
 
 export async function rejectEquipmentRequestAction(formData: FormData) {
@@ -928,7 +928,7 @@ export async function rejectEquipmentRequestAction(formData: FormData) {
   });
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?updated=rejected`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=rejected&tab=fleet`);
 }
 
 export async function cancelEquipmentRequestAction(formData: FormData) {
@@ -974,7 +974,7 @@ export async function cancelEquipmentRequestAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?updated=cancelled`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=cancelled&tab=fleet`);
 }
 
 export async function allocateEquipmentAction(formData: FormData) {
@@ -1097,7 +1097,7 @@ export async function allocateEquipmentAction(formData: FormData) {
 
   revalidatePath(EQUIPMENT_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${EQUIPMENT_ROUTE}?updated=allocated`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=allocated&tab=fleet`);
 }
 
 export async function startEquipmentAllocationAction(formData: FormData) {
@@ -1143,7 +1143,7 @@ export async function startEquipmentAllocationAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?updated=allocation_started`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=allocation_started&tab=fleet`);
 }
 
 export async function completeEquipmentAllocationAction(formData: FormData) {
@@ -1213,7 +1213,7 @@ export async function completeEquipmentAllocationAction(formData: FormData) {
 
   revalidatePath(EQUIPMENT_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${EQUIPMENT_ROUTE}?updated=allocation_completed`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=allocation_completed&tab=fleet`);
 }
 
 export async function cancelEquipmentAllocationAction(formData: FormData) {
@@ -1284,7 +1284,7 @@ export async function cancelEquipmentAllocationAction(formData: FormData) {
 
   revalidatePath(EQUIPMENT_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${EQUIPMENT_ROUTE}?updated=allocation_cancelled`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=allocation_cancelled&tab=fleet`);
 }
 
 export async function recordFuelLogAction(formData: FormData) {
@@ -1385,7 +1385,7 @@ export async function recordFuelLogAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?created=fuel_log`);
+  redirect(`${EQUIPMENT_ROUTE}?created=fuel_log&tab=fleet`);
 }
 
 export async function createMaintenanceJobAction(formData: FormData) {
@@ -1475,7 +1475,7 @@ export async function createMaintenanceJobAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?created=maintenance_job`);
+  redirect(`${EQUIPMENT_ROUTE}?created=maintenance_job&tab=fleet`);
 }
 
 export async function startMaintenanceJobAction(formData: FormData) {
@@ -1527,7 +1527,7 @@ export async function startMaintenanceJobAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?updated=maintenance_started`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=maintenance_started&tab=fleet`);
 }
 
 export async function completeMaintenanceJobAction(formData: FormData) {
@@ -1631,7 +1631,7 @@ export async function completeMaintenanceJobAction(formData: FormData) {
 
   revalidatePath(EQUIPMENT_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${EQUIPMENT_ROUTE}?updated=maintenance_completed`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=maintenance_completed&tab=fleet`);
 }
 
 export async function cancelMaintenanceJobAction(formData: FormData) {
@@ -1687,7 +1687,7 @@ export async function cancelMaintenanceJobAction(formData: FormData) {
 
   revalidatePath(EQUIPMENT_ROUTE);
   revalidatePath("/ops/project-budgets");
-  redirect(`${EQUIPMENT_ROUTE}?updated=maintenance_cancelled`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=maintenance_cancelled&tab=fleet`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1762,7 +1762,7 @@ export async function updateEquipmentAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?updated=equipment`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=equipment&tab=fleet`);
 }
 
 export async function archiveEquipmentAction(formData: FormData) {
@@ -1803,7 +1803,7 @@ export async function archiveEquipmentAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?updated=archived`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=archived&tab=fleet`);
 }
 
 const equipmentRequestIdSchema = z.object({ id: z.string().uuid("Select an equipment request.") });
@@ -1848,5 +1848,5 @@ export async function archiveEquipmentRequestAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(EQUIPMENT_ROUTE);
-  redirect(`${EQUIPMENT_ROUTE}?updated=request_archived`);
+  redirect(`${EQUIPMENT_ROUTE}?updated=request_archived&tab=fleet`);
 }

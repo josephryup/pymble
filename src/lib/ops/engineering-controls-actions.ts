@@ -251,8 +251,29 @@ function engineeringError(message: string): never {
   redirect(`${ENGINEERING_ROUTE}?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
 }
 
+/**
+ * Which tab of /ops/engineering-controls a notice belongs to. The page is
+ * tabbed (UI/UX audit §1c), so a redirect that does not name a tab lands on the
+ * overview instead of the register the user just acted in.
+ */
+function engineeringTabFor(value: string) {
+  if (value.startsWith("instruction")) return "instructions";
+  if (value.startsWith("follow_up")) return "overview";
+  if (
+    value.startsWith("inspection") ||
+    value.startsWith("snag") ||
+    value.startsWith("material_test")
+  ) {
+    return "quality";
+  }
+  if (value.startsWith("drawing") || value.startsWith("milestone")) return "records";
+  return "overview";
+}
+
 function engineeringNotice(value: string): never {
-  redirect(`${ENGINEERING_ROUTE}?updated=${encodeURIComponent(value)}`);
+  redirect(
+    `${ENGINEERING_ROUTE}?updated=${encodeURIComponent(value)}&tab=${engineeringTabFor(value)}`,
+  );
 }
 
 async function fetchInstruction(instructionId: string) {
@@ -431,7 +452,7 @@ export async function createSiteInstructionAction(formData: FormData) {
   });
 
   revalidatePath(ENGINEERING_ROUTE);
-  redirect(`${ENGINEERING_ROUTE}?created=instruction`);
+  redirect(`${ENGINEERING_ROUTE}?created=instruction&tab=instructions`);
 }
 
 export async function issueSiteInstructionAction(formData: FormData) {
@@ -749,7 +770,7 @@ export async function createQaInspectionAction(formData: FormData) {
   });
 
   revalidatePath(ENGINEERING_ROUTE);
-  redirect(`${ENGINEERING_ROUTE}?created=inspection`);
+  redirect(`${ENGINEERING_ROUTE}?created=inspection&tab=quality`);
 }
 
 export async function addQaInspectionItemAction(formData: FormData) {
@@ -981,7 +1002,7 @@ export async function createMaterialTestAction(formData: FormData) {
   });
 
   revalidatePath(ENGINEERING_ROUTE);
-  redirect(`${ENGINEERING_ROUTE}?created=material_test`);
+  redirect(`${ENGINEERING_ROUTE}?created=material_test&tab=quality`);
 }
 
 export async function updateMaterialTestResultAction(formData: FormData) {
@@ -1092,7 +1113,7 @@ export async function createSnagItemAction(formData: FormData) {
   });
 
   revalidatePath(ENGINEERING_ROUTE);
-  redirect(`${ENGINEERING_ROUTE}?created=snag`);
+  redirect(`${ENGINEERING_ROUTE}?created=snag&tab=quality`);
 }
 
 export async function startSnagItemAction(formData: FormData) {
@@ -1287,7 +1308,7 @@ export async function createDrawingRecordAction(formData: FormData) {
   });
 
   revalidatePath(ENGINEERING_ROUTE);
-  redirect(`${ENGINEERING_ROUTE}?created=drawing`);
+  redirect(`${ENGINEERING_ROUTE}?created=drawing&tab=records`);
 }
 
 export async function supersedeDrawingRecordAction(formData: FormData) {
@@ -1385,7 +1406,7 @@ export async function createProgrammeMilestoneAction(formData: FormData) {
   });
 
   revalidatePath(ENGINEERING_ROUTE);
-  redirect(`${ENGINEERING_ROUTE}?created=milestone`);
+  redirect(`${ENGINEERING_ROUTE}?created=milestone&tab=records`);
 }
 
 export async function updateProgrammeMilestoneAction(formData: FormData) {
@@ -1537,5 +1558,5 @@ export async function archiveSiteInstructionAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(ENGINEERING_ROUTE);
-  redirect(`${ENGINEERING_ROUTE}?updated=site_instruction_archived`);
+  redirect(`${ENGINEERING_ROUTE}?updated=site_instruction_archived&tab=instructions`);
 }

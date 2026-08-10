@@ -825,7 +825,7 @@ export async function runOpsHseScheduledEscalationSweep(
       ),
       safeQueue(() =>
         queueOpsHseRoleNotifications({
-          actionHref: "/ops/employees#training-renewals",
+          actionHref: "/ops/employees?tab=admin#training-renewals",
           body: `${training.training_number} for ${training.trainee_name} is expired.`,
           idempotencyKeyPrefix: `hse-sweep-expired-training:${today}:${training.id}`,
           moduleKey: "employees",
@@ -853,7 +853,7 @@ export async function runOpsHseScheduledEscalationSweep(
       ),
       safeQueue(() =>
         queueOpsHseRoleNotifications({
-          actionHref: "/ops/employees#training-renewals",
+          actionHref: "/ops/employees?tab=admin#training-renewals",
           body: `${training.training_number} for ${training.trainee_name} expires on ${
             training.expiry_date ?? "the recorded expiry date"
           }.`,

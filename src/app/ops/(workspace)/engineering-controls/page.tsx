@@ -16,6 +16,12 @@ import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import {
+  OpsTabs,
+  resolveOpsTab,
+  type OpsTabDefinition,
+} from "@/components/ops/OpsTabs";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
@@ -109,7 +115,7 @@ import type {
   OpsEngineeringProgrammePressureReport,
   OpsEngineeringQaCategoryRow,
 } from "@/lib/ops/engineering-controls-reporting";
-import { parseOpsListState } from "@/lib/ops/listing";
+import { parseOpsListState, toOpsPaginatedResult } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchActiveSiteOptions, type OpsSiteOption } from "@/lib/ops/sites";
 import type {
@@ -132,6 +138,8 @@ import {
   type OpsSearchParams,
   opsStatusBadgeClass,
   type OpsStatusTone,
+  OPS_NOTICE_ERROR_CLASS,
+  OPS_NOTICE_SUCCESS_CLASS,
 } from "@/lib/ops/ui";
 import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate, formatOpsDateTime as formatDateTime } from "@/lib/ops/format";
 
@@ -1453,6 +1461,13 @@ function MilestoneActions({ milestone, role }: { milestone: OpsProgrammeMileston
   );
 }
 
+const ENGINEERING_TABS: OpsTabDefinition[] = [
+  { id: "overview", label: "Overview" },
+  { id: "instructions", label: "Site instructions" },
+  { id: "quality", label: "QA, tests & snags" },
+  { id: "records", label: "Drawings & programme" },
+];
+
 export default async function OpsEngineeringControlsPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
     searchParams ?? Promise.resolve({} as OpsSearchParams),
@@ -1465,6 +1480,13 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
 
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = statusFromParam(firstParam(params.status));
+  // Only the active tab's registers are fetched (UI/UX audit §1c).
+  const tab = resolveOpsTab(params, ENGINEERING_TABS);
+  const showOverview = tab === "overview";
+  const showInstructions = tab === "instructions";
+  const showQuality = tab === "quality";
+  const showRecords = tab === "records";
+
   const [
     instructionPage,
     stats,
@@ -1481,28 +1503,33 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
     drawings,
     milestones,
   ] = await Promise.all([
-    fetchPaginatedOpsSiteInstructions({
-      listState,
-      query: listState.query,
-      status: status || undefined,
-    }),
+    showInstructions
+      ? fetchPaginatedOpsSiteInstructions({
+          listState,
+          query: listState.query,
+          status: status || undefined,
+        })
+      : Promise.resolve(toOpsPaginatedResult<OpsSiteInstructionSummary>([], 0, listState)),
+    // Every tab's panels quote a headline number from this one.
     fetchOpsEngineeringControlStats(),
-    fetchOpsEngineeringProgrammePressureReport(),
-    fetchOpsEngineeringQaCategoryReport(),
+    showOverview ? fetchOpsEngineeringProgrammePressureReport() : Promise.resolve(null),
+    showOverview ? fetchOpsEngineeringQaCategoryReport() : Promise.resolve([]),
     fetchActiveSiteOptions(),
     fetchEngineeringUserOptions(),
-    fetchDrawingDocumentVersionOptions(),
-    fetchQaInspectionOptions(),
-    fetchRecentOpsSiteInstructionFollowUps(),
-    fetchRecentOpsQaInspections(),
-    fetchRecentOpsMaterialTests(),
-    fetchRecentOpsSnagItems(),
-    fetchRecentOpsDrawingRecords(),
-    fetchRecentOpsProgrammeMilestones(),
+    showQuality ? fetchDrawingDocumentVersionOptions() : Promise.resolve([]),
+    showQuality ? fetchQaInspectionOptions() : Promise.resolve([]),
+    showOverview ? fetchRecentOpsSiteInstructionFollowUps() : Promise.resolve([]),
+    showQuality ? fetchRecentOpsQaInspections() : Promise.resolve([]),
+    showQuality ? fetchRecentOpsMaterialTests() : Promise.resolve([]),
+    showQuality ? fetchRecentOpsSnagItems() : Promise.resolve([]),
+    showRecords ? fetchRecentOpsDrawingRecords() : Promise.resolve([]),
+    showRecords ? fetchRecentOpsProgrammeMilestones() : Promise.resolve([]),
   ]);
-  const followUpsByInstruction = await fetchOpsSiteInstructionFollowUpsForInstructions(
-    instructionPage.items.map((instruction) => instruction.id),
-  );
+  const followUpsByInstruction = showInstructions
+    ? await fetchOpsSiteInstructionFollowUpsForInstructions(
+        instructionPage.items.map((instruction) => instruction.id),
+      )
+    : new Map<string, OpsSiteInstructionFollowUpSummary[]>();
   const notice = engineeringNotice(params);
   const canCreate = canCreateOpsEngineeringControl(auth.profile.role);
   const filters = [
@@ -1516,42 +1543,43 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
 
   return (
     <div className="grid gap-6">
-      <section className="rounded-lg border border-border bg-card p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-blue">
-              Engineering Controls
-            </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
-              Site Instructions and Quality Assurance and Quality Control
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Control issued instructions, QA inspections, material tests, snags, drawings, and programme milestones against the active project/site master.
-            </p>
-          </div>
+      <OpsPageHeader
+        eyebrow="Engineering Controls"
+        title="Site Instructions and Quality Assurance and Quality Control"
+        description="Control issued instructions, QA inspections, material tests, snags, drawings, and programme milestones against the active project/site master."
+        actions={
           <div className="grid gap-2 text-sm text-muted-foreground min-[520px]:grid-cols-2 lg:min-w-96">
             <DetailItem label="Open instructions" value={String(stats.openInstructions)} />
             <DetailItem label="Follow-ups" value={String(stats.openFollowUps)} />
           </div>
-        </div>
-        {notice ? (
-          <p
-            className={`mt-5 rounded-md border px-3 py-2 text-sm font-semibold ${
-              notice.tone === "error"
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700"
-            }`}
-          >
-            {notice.message}
-          </p>
-        ) : null}
-      </section>
+        }
+      />
 
+      {notice ? (
+        <div
+          className={
+            notice.tone === "error" ? OPS_NOTICE_ERROR_CLASS : OPS_NOTICE_SUCCESS_CLASS
+          }
+          role={notice.tone === "error" ? "alert" : "status"}
+        >
+          {notice.message}
+        </div>
+      ) : null}
+
+      <OpsTabs
+        active={tab}
+        basePath="/ops/engineering-controls"
+        params={params}
+        tabs={ENGINEERING_TABS}
+      />
+
+      {showOverview && programmePressure ? (
+        <>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <OpsKpiCard href={`${ROUTE}?status=issued`} icon={Send} label="Issued instructions" value={String(stats.openInstructions)} />
-        <OpsKpiCard href="#qa-inspections" icon={ClipboardCheck} label="Planned QA" value={String(stats.plannedInspections)} />
-        <OpsKpiCard href="#snags" icon={AlertTriangle} label="Overdue snags" tone={stats.overdueSnags > 0 ? "warn" : "default"} value={String(stats.overdueSnags)} />
-        <OpsKpiCard href="#drawings" icon={FileText} label="Current drawings" value={String(stats.currentDrawings)} />
+        <OpsKpiCard href="?tab=quality#qa-inspections" icon={ClipboardCheck} label="Planned QA" value={String(stats.plannedInspections)} />
+        <OpsKpiCard href="?tab=quality#snags" icon={AlertTriangle} label="Overdue snags" tone={stats.overdueSnags > 0 ? "warn" : "default"} value={String(stats.overdueSnags)} />
+        <OpsKpiCard href="?tab=records#drawings" icon={FileText} label="Current drawings" value={String(stats.currentDrawings)} />
         <OpsKpiCard href="#instruction-follow-ups" icon={GitPullRequest} label="Follow-ups" tone={stats.openFollowUps > 0 ? "warn" : "default"} value={String(stats.openFollowUps)} />
       </section>
 
@@ -1564,8 +1592,14 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
           userId={auth.profile.id}
         />
       </section>
+        </>
+      ) : null}
 
+      {showInstructions ? (
       <CreateSiteInstructionForm canCreate={canCreate} sites={siteOptions} users={userOptions} />
+      ) : null}
+      {showQuality ? (
+        <>
       <CreateQaInspectionForm canCreate={canCreate} sites={siteOptions} users={userOptions} />
       <CreateLinkedRecordsForm
         canCreate={canCreate}
@@ -1575,6 +1609,10 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
         users={userOptions}
       />
 
+        </>
+      ) : null}
+      {showInstructions ? (
+        <div id="instruction-register">
       <OpsDashboardPanel
         actions={
           <span className="rounded-full border border-border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">
@@ -1586,6 +1624,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
         <OpsListControls
           action={ROUTE}
           filters={filters}
+          params={params}
           placeholder="Search instruction number, title, description, or response"
           query={listState.query}
           resultLabel="instructions"
@@ -1667,14 +1706,19 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
           )}
         </div>
         <OpsPaginationControls
+          anchor="instruction-register"
           basePath={ROUTE}
           filters={filters}
           pagination={instructionPage.pagination}
+          params={params}
           query={listState.query}
           resultLabel="instructions"
         />
       </OpsDashboardPanel>
+        </div>
+      ) : null}
 
+      {showQuality ? (
       <div className="scroll-mt-24" id="qa-inspections">
         <OpsDashboardPanel
           actions={
@@ -1734,7 +1778,9 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
           </div>
         </OpsDashboardPanel>
       </div>
+      ) : null}
 
+      {showQuality ? (
       <section className="grid gap-6 xl:grid-cols-2">
         <OpsDashboardPanel
           actions={
@@ -1847,7 +1893,9 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
           </div>
         </OpsDashboardPanel>
       </section>
+      ) : null}
 
+      {showRecords ? (
       <section className="grid gap-6 xl:grid-cols-2">
         <OpsDashboardPanel
           actions={
@@ -1979,6 +2027,7 @@ export default async function OpsEngineeringControlsPage({ searchParams }: PageP
           </div>
         </OpsDashboardPanel>
       </section>
+      ) : null}
     </div>
   );
 }

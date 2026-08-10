@@ -224,7 +224,7 @@ export async function fetchOpsMyQueue(role: OpsUserRole, userId: string): Promis
     tasks.push({
       key: "equipment_requests",
       label: "Equipment requests to approve",
-      href: "/ops/equipment?status=submitted#equipment-request-register",
+      href: "/ops/equipment?status=submitted&tab=fleet#equipment-request-register",
       tone: "warn",
       run: count(
         supabase
@@ -236,7 +236,7 @@ export async function fetchOpsMyQueue(role: OpsUserRole, userId: string): Promis
     tasks.push({
       key: "transport_requests",
       label: "Transport requests to approve",
-      href: "/ops/fleet-logistics?status=submitted#transport-register",
+      href: "/ops/fleet-logistics?status=submitted&tab=transport#transport-register",
       tone: "warn",
       run: count(
         supabase

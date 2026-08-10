@@ -255,11 +255,43 @@ hand-off.
     after every single edit, instead of back on the register they were working
     in. 29 anchored links plus 28 anchorless redirects had to be given a tab.
 
-    **Remaining: 6 pages** — employees (2,845), engineering-controls (1,984),
-    material-requests (1,877), equipment (1,840), fleet-logistics (1,833),
-    material-schedule (1,601). Same recipe. Worth doing one at a time and
-    checking the anchor/redirect fallout each time, rather than as one scripted
-    sweep.
+    `/ops/employees` (2,845 lines) converted next, into three tabs (Overview ·
+    Employee records · Leave, contracts & HR admin). Two queries stay shared —
+    the paginated register and the user list, because the overview's
+    account-link coverage is computed from both — and the other six are
+    tab-scoped. 35 anchored links and 6 anchorless redirects re-pointed.
+
+    Unlike the first two pages, employees' create panels are grouped by subject
+    rather than scattered, so they are tab-scoped here too. That is the better
+    arrangement where the page allows it: all nine "New employee / Leave /
+    Contract / …" header links now carry the tab that holds their panel.
+
+    **All eight assessed; item 10 is closed.** Converted: hse-compliance (4
+    tabs), commercial (5), employees (3), engineering-controls (4), equipment
+    (2), fleet-logistics (3).
+
+    **Two were deliberately left untabbed**, and this is the more useful
+    finding: `/ops/material-requests` (1,877 lines) and `/ops/material-schedule`
+    (1,601) are large but each renders **one dataset**. Every panel on them
+    derives from the same paginated fetch — the KPI tiles, the per-site
+    lookups and the register are all views of `requestPage` / `documents`.
+    Tabs there would hide markup, save no queries, and buy the deep-link and
+    redirect risk for nothing.
+
+    So the criterion for item 10 is **independent datasets, not line count**.
+    The audit framed it by size, which was the wrong measure; six of the eight
+    pages happened to satisfy both.
+
+    material-requests did have a real defect of its own: three lookups
+    (`fetchProjectBudgetLineLabels`, `fetchOpsCostCodeChoices`,
+    `fetchOpsRequestBudgetPositions`) were awaited **in series** even though all
+    three are independent and keyed off the same `requests` array. Now one
+    round trip instead of three.
+
+    **Mechanical note for the next one:** a section that is itself a JSX
+    expression (`{canCreateX ? (…) : null}`) cannot be dropped straight into a
+    ternary branch — it needs a fragment around it, or you get a wall of
+    "Identifier expected". Sections that are plain elements do not.
 
     `<Suspense>` per section is still outstanding. `/ops/hse-compliance` already
     streams its ageing watch that way (`HseAgeingSection`), which is the pattern
@@ -269,8 +301,10 @@ hand-off.
 11. **Partly obsolete, partly outstanding.** The bespoke `statusClass` functions
     are *already* gone — the workspace has none left; `opsStatusBadgeClass` is
     used in 36 files. The remaining piece is the **workspace pages that still
-    hand-roll their header** instead of using `OpsPageHeader` — 26 at the last
-    count, now 25 with commercial done.
+    hand-roll their header** instead of using `OpsPageHeader` — 26 at the start,
+    now 24 with commercial, employees and engineering-controls done (equipment
+    and fleet-logistics keep theirs for now; their headers carry inline stat
+    grids that want re-homing separately).
 
     That is a per-page judgement job, not a scripted sweep: each hand-rolled
     header carries different trailing content (stat tiles, action rows, an
