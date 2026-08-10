@@ -1145,9 +1145,13 @@ export async function createPaymentRequestAction(formData: FormData) {
 
   const parsed = paymentRequestSchema.safeParse({
     budget_line_id: field(formData, "budget_line_id"),
+    charge_target: field(formData, "charge_target") || "site",
+    cost_centre_id: field(formData, "cost_centre_id"),
+    cost_treatment: field(formData, "cost_treatment"),
     description: field(formData, "description"),
     due_date: field(formData, "due_date"),
     invoice_reference: field(formData, "invoice_reference"),
+    legacy_project_id: field(formData, "legacy_project_id"),
     payment_type: field(formData, "payment_type") || "supplier_invoice",
     purchase_order_id: field(formData, "purchase_order_id"),
     requested_amount: field(formData, "requested_amount"),
