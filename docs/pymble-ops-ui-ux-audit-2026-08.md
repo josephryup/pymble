@@ -242,11 +242,24 @@ hand-off.
     `params` so paging the PPE register does not bounce you to Overview.
     `tests/ops-tabs.test.ts` guards this.
 
-    **Remaining: 7 pages** — commercial (3,204), employees (2,845),
-    engineering-controls (1,984), material-requests (1,877), equipment (1,840),
-    fleet-logistics (1,833), material-schedule (1,601). Same recipe. Worth doing
-    one at a time and checking the anchor/redirect fallout each time, rather
-    than as one scripted sweep.
+    `/ops/commercial` (3,204 lines) converted next, into five tabs (Overview ·
+    IPC register · Variations & claims · Contracts, valuations & risk ·
+    Retention, cashflow & milestones) over what was a single **17-query**
+    `Promise.all`. Six of those queries are still shared (site/BOQ/contract/
+    valuation/variation options and the IPC page, which the create panels need
+    from every tab); the other eleven now run only on the tab that shows them.
+
+    Commercial exposed a *second* failure mode the HSE page did not have: most
+    of its action redirects carry **no anchor at all** (`?updated=ipc_certified`
+    and so on). Those do not break — they just quietly dump the user on Overview
+    after every single edit, instead of back on the register they were working
+    in. 29 anchored links plus 28 anchorless redirects had to be given a tab.
+
+    **Remaining: 6 pages** — employees (2,845), engineering-controls (1,984),
+    material-requests (1,877), equipment (1,840), fleet-logistics (1,833),
+    material-schedule (1,601). Same recipe. Worth doing one at a time and
+    checking the anchor/redirect fallout each time, rather than as one scripted
+    sweep.
 
     `<Suspense>` per section is still outstanding. `/ops/hse-compliance` already
     streams its ageing watch that way (`HseAgeingSection`), which is the pattern
@@ -255,13 +268,18 @@ hand-off.
 
 11. **Partly obsolete, partly outstanding.** The bespoke `statusClass` functions
     are *already* gone — the workspace has none left; `opsStatusBadgeClass` is
-    used in 36 files. The remaining piece is **25 workspace pages that still
-    hand-roll their header** instead of using `OpsPageHeader` (attendance, boq,
-    commercial, documents, employees, equipment, photos, payroll, sites, staff,
-    workers, …). That is a per-page judgement job — each hand-rolled header
-    carries different trailing content (stat tiles, action rows) that has to be
-    re-homed — so it belongs with the page-by-page work in item 10 rather than
-    as a scripted sweep.
+    used in 36 files. The remaining piece is the **workspace pages that still
+    hand-roll their header** instead of using `OpsPageHeader` — 26 at the last
+    count, now 25 with commercial done.
+
+    That is a per-page judgement job, not a scripted sweep: each hand-rolled
+    header carries different trailing content (stat tiles, action rows, an
+    inline notice banner) that has to be re-homed. So it is being done as part
+    of the page-by-page work in item 10 — convert the page's tabs and its header
+    in the same pass. Commercial's conversion also fixed a real bug the house
+    `OPS_NOTICE_*` convention exists to prevent: its inline banner carried
+    `role="status"` even for errors, so screen readers announced failures
+    politely instead of assertively.
 
 ### Phase 6 — feel
 

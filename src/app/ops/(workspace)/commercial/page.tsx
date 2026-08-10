@@ -25,6 +25,12 @@ import {
   OpsCommercialFunnel,
 } from "@/components/ops/OpsCommercialCharts";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
+import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
+import {
+  OpsTabs,
+  resolveOpsTab,
+  type OpsTabDefinition,
+} from "@/components/ops/OpsTabs";
 import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsCommercialKpiPanel } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
@@ -211,6 +217,8 @@ import {
   type OpsSearchParams,
   opsStatusBadgeClass,
   type OpsStatusTone,
+  OPS_NOTICE_ERROR_CLASS,
+  OPS_NOTICE_SUCCESS_CLASS,
 } from "@/lib/ops/ui";
 import { todayInLusaka, formatOpsLabel as formatLabel, formatOpsDate as formatDate } from "@/lib/ops/format";
 
@@ -1525,6 +1533,14 @@ async function CommercialMarginSection() {
   return <CommercialMarginPanel report={report} />;
 }
 
+const COMMERCIAL_TABS: OpsTabDefinition[] = [
+  { id: "overview", label: "Overview" },
+  { id: "ipcs", label: "IPC register" },
+  { id: "variations", label: "Variations & claims" },
+  { id: "contracts", label: "Contracts, valuations & risk" },
+  { id: "cashflow", label: "Retention, cashflow & milestones" },
+];
+
 export default async function CommercialControlsPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const auth = await requireOpsUser();
@@ -1536,15 +1552,36 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
   const status = statusFromParam(firstParam(params.status));
   const listState = parseOpsListState(params);
   const today = todayInLusaka();
+  // Only the active tab's registers are fetched. This page previously awaited
+  // all seventeen of these before rendering anything, so paging the IPC
+  // register also re-ran the contract, valuation, risk, retention, cashflow,
+  // milestone, variation and claim queries (UI/UX audit §1c).
+  const tab = resolveOpsTab(params, COMMERCIAL_TABS);
+  const showOverview = tab === "overview";
+  const showIpcs = tab === "ipcs";
+  const showContracts = tab === "contracts";
+  const showCashflow = tab === "cashflow";
+  const showVariations = tab === "variations";
+
+  const [sites, boqOptions, contractOptions, valuationOptions, variationOptions, ipcs] =
+    await Promise.all([
+      fetchActiveSiteOptions(),
+      fetchCommercialBoqOptions(),
+      fetchCommercialContractOptions(),
+      fetchCommercialValuationOptions(),
+      fetchCommercialVariationOptions(),
+      // The IPC register's own tab, and the IPC picker on the create panels,
+      // which stay available from every tab.
+      fetchPaginatedOpsCommercialIpcs({
+        listState,
+        query: listState.query,
+        status: status || undefined,
+      }),
+    ]);
+
   const [
-    sites,
-    boqOptions,
-    contractOptions,
-    valuationOptions,
-    variationOptions,
     stats,
     forecastReport,
-    ipcs,
     contracts,
     valuations,
     risks,
@@ -1555,27 +1592,17 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
     claims,
     variationCandidates,
   ] = await Promise.all([
-    fetchActiveSiteOptions(),
-    fetchCommercialBoqOptions(),
-    fetchCommercialContractOptions(),
-    fetchCommercialValuationOptions(),
-    fetchCommercialVariationOptions(),
-    fetchOpsCommercialStats(),
-    fetchOpsCommercialForecastReport(today),
-    fetchPaginatedOpsCommercialIpcs({
-      listState,
-      query: listState.query,
-      status: status || undefined,
-    }),
-    fetchRecentCommercialContracts(),
-    fetchRecentCommercialValuations(),
-    fetchRecentCommercialRisks(),
-    fetchRecentCommercialRetentionReleases(),
-    fetchRecentCommercialCashflowForecasts(),
-    fetchRecentCommercialMilestones(),
-    fetchRecentCommercialVariations(),
-    fetchRecentCommercialClaims(),
-    fetchOpsVariationCandidates().catch(() => []),
+    showOverview ? fetchOpsCommercialStats() : Promise.resolve(null),
+    showOverview ? fetchOpsCommercialForecastReport(today) : Promise.resolve(null),
+    showContracts ? fetchRecentCommercialContracts() : Promise.resolve([]),
+    showContracts ? fetchRecentCommercialValuations() : Promise.resolve([]),
+    showContracts ? fetchRecentCommercialRisks() : Promise.resolve([]),
+    showCashflow ? fetchRecentCommercialRetentionReleases() : Promise.resolve([]),
+    showCashflow ? fetchRecentCommercialCashflowForecasts() : Promise.resolve([]),
+    showCashflow ? fetchRecentCommercialMilestones() : Promise.resolve([]),
+    showVariations ? fetchRecentCommercialVariations() : Promise.resolve([]),
+    showVariations ? fetchRecentCommercialClaims() : Promise.resolve([]),
+    showOverview ? fetchOpsVariationCandidates().catch(() => []) : Promise.resolve([]),
   ]);
   const flaggedVariationCandidates = variationCandidates.filter((row) => row.isCandidate);
   const notice = commercialNotice(params);
@@ -1593,154 +1620,153 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
 
   return (
     <div className="grid gap-6">
-      <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary-blue">
-              QS and Commercial
-            </p>
-            <h1 className="mt-2 font-heading text-3xl font-bold text-foreground">
-              IPCs, Variations, and Claims
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Control valuations, client-facing changes, and commercial claim exposure before they
-              become invoices or financial risk.
-            </p>
-          </div>
-          {canCreate ? (
-            <div className="flex flex-wrap gap-2">
-              <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/commercial?create=ipc#ipc-create-panel">
-                <Plus className="size-4" aria-hidden="true" />
-                IPC
-              </Link>
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=contract#contract-create-panel">
-                <Briefcase className="size-4" aria-hidden="true" />
-                Contract
-              </Link>
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=retention#retention-create-panel">
-                <Banknote className="size-4" aria-hidden="true" />
-                Retention
-              </Link>
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=cashflow#cashflow-create-panel">
-                <TrendingUp className="size-4" aria-hidden="true" />
-                Cashflow
-              </Link>
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=milestone#milestone-create-panel">
-                <Flag className="size-4" aria-hidden="true" />
-                Milestone
-              </Link>
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=valuation#valuation-create-panel">
-                <FileSpreadsheet className="size-4" aria-hidden="true" />
-                Valuation
-              </Link>
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=variation#variation-create-panel">
-                <Gavel className="size-4" aria-hidden="true" />
-                Variation
-              </Link>
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=claim#claim-create-panel">
-                <Scale className="size-4" aria-hidden="true" />
-                Claim
-              </Link>
-              <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=risk#risk-create-panel">
-                <AlertTriangle className="size-4" aria-hidden="true" />
-                Risk
-              </Link>
-            </div>
-          ) : null}
-        </div>
-        {notice ? (
-          <div
-            className={`mt-4 rounded-md border px-4 py-3 text-sm font-semibold ${
-              notice.tone === "error"
-                ? "border-red-200 bg-red-50 text-red-700"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700"
-            }`}
-            role="status"
-          >
-            {notice.message}
-          </div>
-        ) : null}
-      </section>
+      <OpsPageHeader
+        eyebrow="QS and Commercial"
+        title="IPCs, Variations, and Claims"
+        description="Control valuations, client-facing changes, and commercial claim exposure before they become invoices or financial risk."
+        actions={
+          canCreate ? (
+            <>
+            <Link className={OPS_PRIMARY_BUTTON_CLASS} href="/ops/commercial?create=ipc#ipc-create-panel">
+              <Plus className="size-4" aria-hidden="true" />
+              IPC
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=contract#contract-create-panel">
+              <Briefcase className="size-4" aria-hidden="true" />
+              Contract
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=retention#retention-create-panel">
+              <Banknote className="size-4" aria-hidden="true" />
+              Retention
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=cashflow#cashflow-create-panel">
+              <TrendingUp className="size-4" aria-hidden="true" />
+              Cashflow
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=milestone#milestone-create-panel">
+              <Flag className="size-4" aria-hidden="true" />
+              Milestone
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=valuation#valuation-create-panel">
+              <FileSpreadsheet className="size-4" aria-hidden="true" />
+              Valuation
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=variation#variation-create-panel">
+              <Gavel className="size-4" aria-hidden="true" />
+              Variation
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=claim#claim-create-panel">
+              <Scale className="size-4" aria-hidden="true" />
+              Claim
+            </Link>
+            <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/commercial?create=risk#risk-create-panel">
+              <AlertTriangle className="size-4" aria-hidden="true" />
+              Risk
+            </Link>
+            </>
+          ) : null
+        }
+      />
 
+      {notice ? (
+        <div
+          className={
+            notice.tone === "error" ? OPS_NOTICE_ERROR_CLASS : OPS_NOTICE_SUCCESS_CLASS
+          }
+          role={notice.tone === "error" ? "alert" : "status"}
+        >
+          {notice.message}
+        </div>
+      ) : null}
+
+      <OpsTabs
+        active={tab}
+        basePath="/ops/commercial"
+        params={params}
+        tabs={COMMERCIAL_TABS}
+      />
+
+      {showOverview && stats && forecastReport ? (
+        <>
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <OpsKpiCard
-          href="/ops/commercial?status=submitted#ipc-register"
+          href="/ops/commercial?status=submitted&tab=ipcs#ipc-register"
           icon={ReceiptText}
           label="Open IPCs"
           tone={stats.openIpcs > 0 ? "warn" : "default"}
           value={String(stats.openIpcs)}
         />
         <OpsKpiCard
-          href="/ops/commercial?status=certified#ipc-register"
+          href="/ops/commercial?status=certified&tab=ipcs#ipc-register"
           icon={CheckCircle2}
           label="Certified IPCs"
           tone="good"
           value={String(stats.certifiedIpcs)}
         />
         <OpsKpiCard
-          href="/ops/commercial#contract-panel"
+          href="/ops/commercial?tab=contracts#contract-panel"
           icon={Briefcase}
           label="Active contracts"
           tone={stats.activeContracts > 0 ? "good" : "default"}
           value={String(stats.activeContracts)}
         />
         <OpsKpiCard
-          href="/ops/commercial#valuation-panel"
+          href="/ops/commercial?tab=contracts#valuation-panel"
           icon={FileSpreadsheet}
           label="Draft valuations"
           tone={stats.draftValuations > 0 ? "warn" : "default"}
           value={String(stats.draftValuations)}
         />
         <OpsKpiCard
-          href="/ops/commercial#variation-panel"
+          href="/ops/commercial?tab=variations#variation-panel"
           icon={Gavel}
           label="Open variations"
           tone={stats.openVariations > 0 ? "warn" : "default"}
           value={String(stats.openVariations)}
         />
         <OpsKpiCard
-          href="/ops/commercial#risk-panel"
+          href="/ops/commercial?tab=contracts#risk-panel"
           icon={AlertTriangle}
           label="Open risks"
           tone={stats.openRisks > 0 ? "warn" : "default"}
           value={String(stats.openRisks)}
         />
         <OpsKpiCard
-          href="/ops/commercial#claim-panel"
+          href="/ops/commercial?tab=variations#claim-panel"
           icon={BadgeDollarSign}
           label="Exposure"
           value={formatZmw(stats.totalExposureAmount)}
         />
         <OpsKpiCard
-          href="/ops/commercial#valuation-panel"
+          href="/ops/commercial?tab=contracts#valuation-panel"
           icon={ListChecks}
           label="Certified valuation"
           tone="good"
           value={formatZmw(stats.valuationCertifiedAmount)}
         />
         <OpsKpiCard
-          href="/ops/commercial#retention-panel"
+          href="/ops/commercial?tab=cashflow#retention-panel"
           icon={Banknote}
           label="Pending retention"
           tone={forecastReport.totals.retentionDueCount > 0 ? "warn" : "default"}
           value={formatZmw(forecastReport.totals.pendingRetentionAmount)}
         />
         <OpsKpiCard
-          href="/ops/commercial#cashflow-panel"
+          href="/ops/commercial?tab=cashflow#cashflow-panel"
           icon={TrendingUp}
           label="Forecast net cash"
           tone={forecastReport.totals.cashflowDangerCount > 0 ? "warn" : "good"}
           value={formatZmw(forecastReport.totals.approvedCashflowNet)}
         />
         <OpsKpiCard
-          href="/ops/commercial#milestone-panel"
+          href="/ops/commercial?tab=cashflow#milestone-panel"
           icon={Flag}
           label="Milestone overdue"
           tone={forecastReport.totals.milestoneOverdueCount > 0 ? "warn" : "default"}
           value={String(forecastReport.totals.milestoneOverdueCount)}
         />
         <OpsKpiCard
-          href="/ops/commercial#forecast-watch"
+          href="/ops/commercial?tab=overview#forecast-watch"
           icon={CalendarClock}
           label="Milestone value"
           value={formatZmw(forecastReport.totals.milestoneForecastAmount)}
@@ -1836,6 +1862,8 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
         <CommercialMarginSection />
       </Suspense>
       <CommercialForecastPanel report={forecastReport} />
+        </>
+      ) : null}
 
       {canCreate ? (
         <section className="grid gap-4 lg:grid-cols-3">
@@ -2584,6 +2612,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
         </section>
       ) : null}
 
+      {showContracts ? (
       <section className="grid gap-4 xl:grid-cols-3">
         <div className="rounded-lg border border-border bg-card shadow-sm" id="contract-panel">
           <div className="flex items-center justify-between gap-3 border-b border-border p-5">
@@ -2770,7 +2799,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </div>
         </div>
       </section>
+      ) : null}
 
+      {showCashflow ? (
       <section className="grid gap-4 xl:grid-cols-3">
         <div className="rounded-lg border border-border bg-card shadow-sm" id="retention-panel">
           <div className="flex items-center justify-between gap-3 border-b border-border p-5">
@@ -2956,7 +2987,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </div>
         </div>
       </section>
+      ) : null}
 
+      {showIpcs ? (
       <section className="rounded-lg border border-border bg-card shadow-sm" id="ipc-register">
         <div className="flex flex-col gap-3 border-b border-border p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -2977,6 +3010,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
               value: status,
             },
           ]}
+          params={params}
           placeholder="Search by IPC number, title, reference, or description"
           query={listState.query}
           resultLabel="IPCs"
@@ -3045,6 +3079,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </div>
         </div>
         <OpsPaginationControls
+          anchor="ipc-register"
           basePath="/ops/commercial"
           filters={[
             {
@@ -3055,11 +3090,14 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
             },
           ]}
           pagination={ipcs.pagination}
+          params={params}
           query={listState.query}
           resultLabel="IPCs"
         />
       </section>
+      ) : null}
 
+      {showVariations ? (
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-lg border border-border bg-card shadow-sm" id="variation-panel">
           <div className="flex items-center justify-between gap-3 border-b border-border p-5">
@@ -3184,7 +3222,9 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           </div>
         </div>
       </section>
+      ) : null}
 
+      {showOverview ? (
       <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="grid gap-4 md:grid-cols-4">
           <DetailItem label="IPC" value="Draft -> submitted -> certified" />
@@ -3199,6 +3239,7 @@ export default async function CommercialControlsPage({ searchParams }: PageProps
           <span>Invoice generation is deliberate: a certified IPC creates a draft invoice, then Finance sends and receives payment.</span>
         </div>
       </section>
+      ) : null}
     </div>
   );
 }

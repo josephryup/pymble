@@ -12,21 +12,44 @@ import { describe, it } from "node:test";
  * lands on the default tab where that anchor does not exist. The user clicks
  * "Open inspections", the page does nothing, and nothing errors.
  *
- * So: any link to an /ops/hse-compliance panel anchor must name its tab.
+ * So: any link to a panel anchor on a tabbed page must name its tab.
  */
 
 const SRC = join(import.meta.dirname, "..", "src");
 
-/** Panel anchors that live on a specific tab. Create panels are on every tab. */
-const TAB_SCOPED_ANCHORS = [
-  "ppe-stock",
-  "ppe-register",
-  "toolbox-panel",
-  "inspection-panel",
-  "training-panel",
-  "risk-assessment-panel",
-  "audit-panel",
-];
+/**
+ * Panel anchors that live on a specific tab, per tabbed page. Create panels are
+ * rendered on every tab, so they are deliberately absent — as is any anchor on
+ * the default tab, which needs no `?tab=` to reach.
+ */
+const TAB_SCOPED_ANCHORS: Record<string, { route: string; anchors: string[] }> = {
+  "hse-compliance": {
+    route: "/ops/hse-compliance|\\$\\{HSE_COMPLIANCE_ROUTE\\}",
+    anchors: [
+      "ppe-stock",
+      "ppe-register",
+      "toolbox-panel",
+      "inspection-panel",
+      "training-panel",
+      "risk-assessment-panel",
+      "audit-panel",
+    ],
+  },
+  commercial: {
+    route: "/ops/commercial|\\$\\{COMMERCIAL_ROUTE\\}",
+    anchors: [
+      "ipc-register",
+      "variation-panel",
+      "claim-panel",
+      "contract-panel",
+      "valuation-panel",
+      "risk-panel",
+      "retention-panel",
+      "cashflow-panel",
+      "milestone-panel",
+    ],
+  },
+};
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -36,29 +59,46 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-describe("ops tabbed pages", () => {
-  it("names the tab on every link into a tab-scoped panel", () => {
-    const anchors = TAB_SCOPED_ANCHORS.join("|");
-    const pattern = new RegExp(
-      `(?:/ops/hse-compliance|\\$\\{HSE_COMPLIANCE_ROUTE\\})([^\\s"'\`#]*)#(${anchors})\\b`,
-      "g",
-    );
+const SOURCES = sourceFiles(SRC).map((path) => ({ path, source: readFileSync(path, "utf8") }));
 
-    const offenders: string[] = [];
-    for (const path of sourceFiles(SRC)) {
-      const source = readFileSync(path, "utf8");
-      for (const match of source.matchAll(pattern)) {
-        if (!match[1].includes("tab=")) {
-          offenders.push(`${path} -> #${match[2]}`);
+describe("ops tabbed pages", () => {
+  it("scanned the workspace", () => {
+    assert.ok(SOURCES.length > 100, `only found ${SOURCES.length} source files`);
+  });
+
+  for (const [page, { route, anchors }] of Object.entries(TAB_SCOPED_ANCHORS)) {
+    it(`names the tab on every link into a ${page} panel`, () => {
+      const pattern = new RegExp(
+        `(?:${route})([^\\s"'\`#]*)#(${anchors.join("|")})\\b`,
+        "g",
+      );
+
+      const offenders: string[] = [];
+      for (const { path, source } of SOURCES) {
+        for (const match of source.matchAll(pattern)) {
+          if (!match[1].includes("tab=")) {
+            offenders.push(`${path} -> #${match[2]}`);
+          }
         }
       }
-    }
 
-    assert.deepEqual(
-      offenders,
-      [],
-      "these links land on the default tab, where the anchor does not render",
-    );
+      assert.deepEqual(
+        offenders,
+        [],
+        "these links land on the default tab, where the anchor does not render",
+      );
+    });
+  }
+
+  it("sends anchorless commercial redirects back to the register acted on", () => {
+    // Most commercial actions redirect without an anchor. Left alone they would
+    // all dump the user on Overview after every single edit.
+    const source = readFileSync(join(SRC, "lib", "ops", "commercial-actions.ts"), "utf8");
+    const offenders = [...source.matchAll(/\$\{COMMERCIAL_ROUTE\}\?((?:created|updated)=[^`]*)`/g)]
+      .filter((match) => !match[1].includes("tab="))
+      .map((match) => match[1]);
+
+    assert.deepEqual(offenders, []);
   });
 
   it("resolves an unknown ?tab= to the first tab rather than a blank page", () => {

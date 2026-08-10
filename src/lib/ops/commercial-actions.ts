@@ -993,7 +993,7 @@ export async function createCommercialIpcAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?created=ipc`);
+  redirect(`${COMMERCIAL_ROUTE}?created=ipc&tab=ipcs`);
 }
 
 export async function submitCommercialIpcAction(formData: FormData) {
@@ -1051,7 +1051,7 @@ export async function submitCommercialIpcAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_submitted`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_submitted&tab=ipcs`);
 }
 
 export async function certifyCommercialIpcAction(formData: FormData) {
@@ -1128,7 +1128,7 @@ export async function certifyCommercialIpcAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_certified`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_certified&tab=ipcs`);
 }
 
 export async function rejectCommercialIpcAction(formData: FormData) {
@@ -1195,7 +1195,7 @@ export async function rejectCommercialIpcAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_rejected`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_rejected&tab=ipcs`);
 }
 
 export async function markCommercialIpcInvoicedAction(formData: FormData) {
@@ -1242,7 +1242,7 @@ export async function markCommercialIpcInvoicedAction(formData: FormData) {
 
   revalidatePath(COMMERCIAL_ROUTE);
   revalidatePath("/ops/invoices");
-  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_invoiced`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_invoiced&tab=ipcs`);
 }
 
 export async function markCommercialIpcPaidAction(formData: FormData) {
@@ -1288,7 +1288,7 @@ export async function markCommercialIpcPaidAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_paid`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_paid&tab=ipcs`);
 }
 
 export async function cancelCommercialIpcAction(formData: FormData) {
@@ -1334,7 +1334,7 @@ export async function cancelCommercialIpcAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_cancelled`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_cancelled&tab=ipcs`);
 }
 
 export async function createCommercialVariationAction(formData: FormData) {
@@ -1403,7 +1403,7 @@ export async function createCommercialVariationAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?created=variation`);
+  redirect(`${COMMERCIAL_ROUTE}?created=variation&tab=variations`);
 }
 
 export async function submitCommercialVariationAction(formData: FormData) {
@@ -1461,7 +1461,7 @@ export async function submitCommercialVariationAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=variation_submitted`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=variation_submitted&tab=variations`);
 }
 
 export async function priceCommercialVariationAction(formData: FormData) {
@@ -1529,7 +1529,7 @@ export async function priceCommercialVariationAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=variation_priced`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=variation_priced&tab=variations`);
 }
 
 export async function approveCommercialVariationAction(formData: FormData) {
@@ -1598,7 +1598,7 @@ export async function approveCommercialVariationAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=variation_approved`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=variation_approved&tab=variations`);
 }
 
 export async function rejectCommercialVariationAction(formData: FormData) {
@@ -1665,7 +1665,7 @@ export async function rejectCommercialVariationAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=variation_rejected`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=variation_rejected&tab=variations`);
 }
 
 export async function closeCommercialVariationAction(formData: FormData) {
@@ -1711,7 +1711,7 @@ export async function closeCommercialVariationAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=variation_closed`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=variation_closed&tab=variations`);
 }
 
 export async function cancelCommercialVariationAction(formData: FormData) {
@@ -1757,7 +1757,7 @@ export async function cancelCommercialVariationAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=variation_cancelled`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=variation_cancelled&tab=variations`);
 }
 
 export async function createCommercialClaimAction(formData: FormData) {
@@ -1835,7 +1835,7 @@ export async function createCommercialClaimAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?created=claim`);
+  redirect(`${COMMERCIAL_ROUTE}?created=claim&tab=variations`);
 }
 
 export async function submitCommercialClaimAction(formData: FormData) {
@@ -1893,7 +1893,7 @@ export async function submitCommercialClaimAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=claim_submitted`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=claim_submitted&tab=variations`);
 }
 
 export async function reviewCommercialClaimAction(formData: FormData) {
@@ -1939,7 +1939,7 @@ export async function reviewCommercialClaimAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=claim_review`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=claim_review&tab=variations`);
 }
 
 export async function agreeCommercialClaimAction(formData: FormData) {
@@ -2008,7 +2008,7 @@ export async function agreeCommercialClaimAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=claim_agreed`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=claim_agreed&tab=variations`);
 }
 
 export async function rejectCommercialClaimAction(formData: FormData) {
@@ -2075,7 +2075,7 @@ export async function rejectCommercialClaimAction(formData: FormData) {
   });
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=claim_rejected`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=claim_rejected&tab=variations`);
 }
 
 export async function closeCommercialClaimAction(formData: FormData) {
@@ -2121,7 +2121,7 @@ export async function closeCommercialClaimAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=claim_closed`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=claim_closed&tab=variations`);
 }
 
 export async function cancelCommercialClaimAction(formData: FormData) {
@@ -2167,7 +2167,7 @@ export async function cancelCommercialClaimAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=claim_cancelled`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=claim_cancelled&tab=variations`);
 }
 
 export async function createCommercialContractAction(formData: FormData) {
@@ -2250,7 +2250,7 @@ export async function createCommercialContractAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?created=contract`);
+  redirect(`${COMMERCIAL_ROUTE}?created=contract&tab=contracts`);
 }
 
 async function updateCommercialContractStatus(
@@ -2310,7 +2310,7 @@ async function updateCommercialContractStatus(
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=contract_${status}`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=contract_${status}&tab=contracts`);
 }
 
 export async function activateCommercialContractAction(formData: FormData) {
@@ -2443,7 +2443,7 @@ export async function createCommercialValuationAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?created=valuation`);
+  redirect(`${COMMERCIAL_ROUTE}?created=valuation&tab=contracts`);
 }
 
 export async function addCommercialValuationLineAction(formData: FormData) {
@@ -2511,7 +2511,7 @@ export async function addCommercialValuationLineAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=valuation_line_added#valuation-panel`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=valuation_line_added&tab=contracts#valuation-panel`);
 }
 
 export async function updateCommercialValuationLineAction(formData: FormData) {
@@ -2583,7 +2583,7 @@ export async function updateCommercialValuationLineAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=valuation_line_updated#valuation-panel`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=valuation_line_updated&tab=contracts#valuation-panel`);
 }
 
 export async function deleteCommercialValuationLineAction(formData: FormData) {
@@ -2648,7 +2648,7 @@ export async function deleteCommercialValuationLineAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=valuation_line_deleted#valuation-panel`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=valuation_line_deleted&tab=contracts#valuation-panel`);
 }
 
 async function updateCommercialValuationStatus(
@@ -2771,7 +2771,7 @@ async function updateCommercialValuationStatus(
   }
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=valuation_${status}`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=valuation_${status}&tab=contracts`);
 }
 
 export async function submitCommercialValuationAction(formData: FormData) {
@@ -2859,7 +2859,7 @@ export async function createCommercialRiskAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?created=risk`);
+  redirect(`${COMMERCIAL_ROUTE}?created=risk&tab=contracts`);
 }
 
 async function updateCommercialRiskStatus(
@@ -2919,7 +2919,7 @@ async function updateCommercialRiskStatus(
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=risk_${status}`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=risk_${status}&tab=contracts`);
 }
 
 export async function mitigateCommercialRiskAction(formData: FormData) {
@@ -3024,7 +3024,7 @@ export async function createCommercialRetentionReleaseAction(formData: FormData)
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?created=retention_release#retention-panel`);
+  redirect(`${COMMERCIAL_ROUTE}?created=retention_release&tab=cashflow#retention-panel`);
 }
 
 async function updateCommercialRetentionReleaseStatus(
@@ -3181,7 +3181,7 @@ async function updateCommercialRetentionReleaseStatus(
   }
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=retention_${status}#retention-panel`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=retention_${status}&tab=cashflow#retention-panel`);
 }
 
 export async function submitCommercialRetentionReleaseAction(formData: FormData) {
@@ -3284,7 +3284,7 @@ export async function createCommercialCashflowForecastAction(formData: FormData)
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?created=cashflow_forecast#cashflow-panel`);
+  redirect(`${COMMERCIAL_ROUTE}?created=cashflow_forecast&tab=cashflow#cashflow-panel`);
 }
 
 async function updateCommercialCashflowForecastStatus(
@@ -3357,7 +3357,7 @@ async function updateCommercialCashflowForecastStatus(
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=cashflow_${status}#cashflow-panel`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=cashflow_${status}&tab=cashflow#cashflow-panel`);
 }
 
 export async function approveCommercialCashflowForecastAction(formData: FormData) {
@@ -3461,7 +3461,7 @@ export async function createCommercialMilestoneAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?created=milestone#milestone-panel`);
+  redirect(`${COMMERCIAL_ROUTE}?created=milestone&tab=cashflow#milestone-panel`);
 }
 
 async function updateCommercialMilestoneStatus(
@@ -3565,7 +3565,7 @@ async function updateCommercialMilestoneStatus(
   }).catch(() => null);
 
   revalidatePath(COMMERCIAL_ROUTE);
-  redirect(`${COMMERCIAL_ROUTE}?updated=milestone_${status}#milestone-panel`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=milestone_${status}&tab=cashflow#milestone-panel`);
 }
 
 export async function markCommercialMilestoneDueAction(formData: FormData) {
@@ -3726,5 +3726,5 @@ export async function createInvoiceFromCommercialIpcAction(formData: FormData) {
 
   revalidatePath(COMMERCIAL_ROUTE);
   revalidatePath("/ops/invoices");
-  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_invoice_created`);
+  redirect(`${COMMERCIAL_ROUTE}?updated=ipc_invoice_created&tab=ipcs`);
 }

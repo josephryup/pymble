@@ -141,14 +141,14 @@ export default async function OpsSite360Page({ params }: PageProps) {
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <OpsKpiCard
-          href="/ops/commercial#contract-panel"
+          href="/ops/commercial?tab=contracts#contract-panel"
           icon={Briefcase}
           label="Contract value"
           hint={`${commercial.contracts} active contract${commercial.contracts === 1 ? "" : "s"}`}
           value={formatZmw(commercial.contractSum || site.contract_value || 0)}
         />
         <OpsKpiCard
-          href="/ops/commercial#ipc-register"
+          href="/ops/commercial?tab=ipcs#ipc-register"
           icon={ReceiptText}
           label="Certified to date"
           tone="good"
@@ -227,35 +227,35 @@ export default async function OpsSite360Page({ params }: PageProps) {
         >
           <div className="grid gap-2 min-[520px]:grid-cols-2">
             <StatRow
-              href="/ops/commercial#ipc-register"
+              href="/ops/commercial?tab=ipcs#ipc-register"
               label="Open IPCs"
               tone={commercial.ipcsOpen > 0 ? "warn" : undefined}
               value={String(commercial.ipcsOpen)}
             />
             <StatRow
-              href="/ops/commercial#variation-panel"
+              href="/ops/commercial?tab=variations#variation-panel"
               label="Open variations"
               tone={commercial.variationsOpen > 0 ? "warn" : undefined}
               value={String(commercial.variationsOpen)}
             />
             <StatRow
-              href="/ops/commercial#variation-panel"
+              href="/ops/commercial?tab=variations#variation-panel"
               label="Approved variations"
               value={formatZmw(commercial.variationsApprovedAmount)}
             />
             <StatRow
-              href="/ops/commercial#claim-panel"
+              href="/ops/commercial?tab=variations#claim-panel"
               label="Open claims"
               tone={commercial.claimsOpen > 0 ? "warn" : undefined}
               value={String(commercial.claimsOpen)}
             />
             <StatRow
-              href="/ops/commercial#claim-panel"
+              href="/ops/commercial?tab=variations#claim-panel"
               label="Claim value"
               value={formatZmw(commercial.claimsClaimedAmount)}
             />
             <StatRow
-              href="/ops/commercial#retention-panel"
+              href="/ops/commercial?tab=cashflow#retention-panel"
               label="Retention held"
               value={formatZmw(commercial.retentionHeld)}
             />
