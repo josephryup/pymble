@@ -66,6 +66,11 @@ export type OpsInvoiceForPosting = {
   subtotal: number;
   vat_amount: number;
   total_amount: number;
+  /**
+   * `opening_balance` means the debt predates this system. Mirrors the payables
+   * side's cost_treatment; see buildInvoiceIssueJournal for what it changes.
+   */
+  revenue_treatment?: "current_period" | "opening_balance" | null;
 };
 
 /**
@@ -73,11 +78,32 @@ export type OpsInvoiceForPosting = {
  *   Dr Accounts Receivable (gross)
  *     Cr Contract Revenue (net)
  *     Cr Output VAT (tax) — omitted when zero so every line stays single-sided.
+ *
+ * Unless the invoice is an OPENING BALANCE, in which case the credit goes to
+ * **Retained Earnings** instead:
+ *   Dr Accounts Receivable (gross)
+ *     Cr Retained Earnings (gross)
+ *
+ * The distinction is not presentational. A debt carried in from before the
+ * system was earned in a period that is already closed; crediting revenue
+ * would invent that much current-year income, so K800,000 of old client debt
+ * would show up as K800,000 of trading. Under `opening_balance` the entry
+ * touches the balance sheet only: the receivable appears, profit does not move.
+ *
+ * The exact mirror of the payables side, where `cost_treatment:
+ * "opening_balance"` debits retained earnings rather than an expense. And no
+ * VAT line, ever — decision D7: the original invoice already declared the
+ * output VAT, and declaring it again would double-count it to ZRA. The
+ * database enforces vat_amount = 0 on these
+ * (invoices_opening_balance_no_vat), so the branch below cannot silently drop
+ * a VAT figure that was actually present.
  */
 export function buildInvoiceIssueJournal(
   invoice: OpsInvoiceForPosting,
   entryDate: string,
 ): OpsGlPostingInput {
+  const isOpeningBalance = invoice.revenue_treatment === "opening_balance";
+
   const lines: OpsGlPostingLine[] = [
     {
       account_code: OPS_GL_ACCOUNTS.accountsReceivable,
@@ -85,15 +111,22 @@ export function buildInvoiceIssueJournal(
       site_id: invoice.site_id,
       description: `Receivable ${invoice.invoice_number}`,
     },
-    {
-      account_code: OPS_GL_ACCOUNTS.contractRevenueCertified,
-      credit: invoice.subtotal,
-      site_id: invoice.site_id,
-      description: `Revenue ${invoice.invoice_number}`,
-    },
+    isOpeningBalance
+      ? {
+          account_code: OPS_GL_ACCOUNTS.retainedEarnings,
+          credit: invoice.total_amount,
+          site_id: invoice.site_id,
+          description: `Opening balance ${invoice.invoice_number}`,
+        }
+      : {
+          account_code: OPS_GL_ACCOUNTS.contractRevenueCertified,
+          credit: invoice.subtotal,
+          site_id: invoice.site_id,
+          description: `Revenue ${invoice.invoice_number}`,
+        },
   ];
 
-  if (invoice.vat_amount > 0) {
+  if (!isOpeningBalance && invoice.vat_amount > 0) {
     lines.push({
       account_code: OPS_GL_ACCOUNTS.outputVat,
       credit: invoice.vat_amount,
@@ -103,7 +136,9 @@ export function buildInvoiceIssueJournal(
 
   return {
     entryDate,
-    memo: `Invoice ${invoice.invoice_number} — ${invoice.client_name}`,
+    memo: isOpeningBalance
+      ? `Opening balance ${invoice.invoice_number} — ${invoice.client_name}`
+      : `Invoice ${invoice.invoice_number} — ${invoice.client_name}`,
     sourceTable: "invoices",
     sourceId: invoice.id,
     sourceEvent: "invoice_issued",

@@ -195,6 +195,7 @@ type RawInvoiceForPosting = {
   subtotal: number | string;
   vat_amount: number | string;
   total_amount: number | string;
+  revenue_treatment: "current_period" | "opening_balance" | null;
 };
 
 /**
@@ -211,7 +212,9 @@ export async function postInvoiceJournalSafe(
     const supabase = getOpsSupabaseServiceClient();
     const { data, error } = await supabase
       .from("invoices")
-      .select("id, invoice_number, client_name, site_id, subtotal, vat_amount, total_amount")
+      .select(
+        "id, invoice_number, client_name, site_id, subtotal, vat_amount, total_amount, revenue_treatment",
+      )
       .eq("id", invoiceId)
       .maybeSingle<RawInvoiceForPosting>();
 
@@ -230,6 +233,9 @@ export async function postInvoiceJournalSafe(
       subtotal: Number(data.subtotal ?? 0),
       vat_amount: Number(data.vat_amount ?? 0),
       total_amount: Number(data.total_amount ?? 0),
+      // Without this the opening-balance branch in the builder could never
+      // fire, and a pre-system debt would credit revenue.
+      revenue_treatment: data.revenue_treatment,
     };
 
     if (invoice.total_amount <= 0) {

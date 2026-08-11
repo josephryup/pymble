@@ -3,6 +3,7 @@ import {
   Banknote,
   Check,
   HandCoins,
+  History,
   Clock3,
   FileText,
   Plus,
@@ -31,6 +32,7 @@ import {
   archiveInvoiceAction,
   cancelInvoiceReceiptAction,
   createInvoiceAction,
+  createOpeningBalanceInvoiceAction,
   markInvoicePaidAction,
   recordInvoiceReceiptAction,
   sendInvoiceAction,
@@ -94,6 +96,21 @@ function invoiceNotice(params: OpsSearchParams) {
 
   if (created) {
     return created;
+  }
+
+  if (firstParam(params.created) === "opening_balance") {
+    return {
+      tone: "success" as const,
+      message:
+        "Opening balance loaded. It is now an outstanding receivable, aged from its original date, and posted against retained earnings rather than revenue.",
+    };
+  }
+
+  if (firstParam(params.created) === "from_quotation") {
+    return {
+      tone: "success" as const,
+      message: "Draft invoice raised from the accepted quotation. Review it, then send it.",
+    };
   }
 
   if (firstParam(params.updated) === "sent") {
@@ -505,6 +522,125 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
           </div>
         </OpsDashboardPanel>
       </div>
+
+      {canManage && customerOptions.length > 0 ? (
+        <details className="rounded-lg border border-border bg-card" id="opening-balance-panel">
+          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
+                <History className="size-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-heading text-lg font-bold text-foreground">
+                  Load a debt from before this system
+                </span>
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  Money a client already owes from an invoice raised outside Pymble Ops.
+                </span>
+              </span>
+            </span>
+            <Plus className="size-5 shrink-0 text-primary-blue" aria-hidden="true" />
+          </summary>
+          <div className="border-t border-border p-5">
+            <div className="mb-4 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm leading-6 text-muted-foreground">
+              <p className="font-bold text-foreground">How this differs from a normal invoice</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5">
+                <li>
+                  Enter the <strong>gross still owed, VAT included</strong>. No output VAT is
+                  declared — the original invoice already accounted for it, and declaring it
+                  again would double-count it to ZRA.
+                </li>
+                <li>
+                  It credits <strong>retained earnings, not revenue</strong>, so bringing old
+                  debt onto the books does not invent this year&rsquo;s income.
+                </li>
+                <li>
+                  Date it when the <strong>original</strong> invoice was raised, so the ageing
+                  shows how long the money has really been outstanding.
+                </li>
+              </ul>
+            </div>
+            <form
+              action={createOpeningBalanceInvoiceAction}
+              className="grid gap-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
+            >
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                Customer
+                <select className={OPS_INPUT_CLASS} defaultValue="" name="customer_id" required>
+                  <option value="" disabled>
+                    Select the customer
+                  </option>
+                  {customerOptions.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.customer_code} - {customer.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                Client name as invoiced
+                <input className={OPS_INPUT_CLASS} name="client_name" required />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Amount still owed (gross)
+                <input
+                  className={OPS_INPUT_CLASS}
+                  min="0.01"
+                  name="amount_owed"
+                  required
+                  step="0.01"
+                  type="number"
+                />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Originally issued
+                <input
+                  className={OPS_INPUT_CLASS}
+                  max={todayInLusaka()}
+                  name="issued_at"
+                  required
+                  type="date"
+                />
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Due date
+                <input className={OPS_INPUT_CLASS} name="due_date" type="date" />
+                <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
+                  Leave blank to use the customer&rsquo;s payment terms.
+                </span>
+              </label>
+              <label className={OPS_LABEL_CLASS}>
+                Original invoice reference
+                <input className={OPS_INPUT_CLASS} name="original_reference" placeholder="Optional" />
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                Site
+                <select className={OPS_INPUT_CLASS} defaultValue="" name="site_id">
+                  <option value="">No site — general work</option>
+                  {siteOptions.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.code} - {site.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                Notes
+                <input className={OPS_INPUT_CLASS} name="notes" placeholder="Optional" />
+              </label>
+              <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4 lg:justify-end">
+                <OpsConfirmSubmitButton
+                  className={`${OPS_SECONDARY_BUTTON_CLASS} w-full min-[520px]:w-auto`}
+                  confirmText="Confirm — load this debt"
+                >
+                  <History className="size-4" aria-hidden="true" />
+                  Load opening balance
+                </OpsConfirmSubmitButton>
+              </div>
+            </form>
+          </div>
+        </details>
+      ) : null}
 
       {canManage ? (
         <details

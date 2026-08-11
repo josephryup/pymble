@@ -311,6 +311,314 @@ export async function sendInvoiceAction(formData: FormData) {
 }
 
 // ---------------------------------------------------------------------------
+// Accepted quotation → invoice (R7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Bill an accepted quotation.
+ *
+ * The second of the three ways an invoice comes into being. Only an accepted
+ * quotation qualifies: a sent one has not been agreed, and billing a draft
+ * would invoice a price nobody has seen.
+ *
+ * `source` / `source_id` carry the link the old `boq_id` was reaching for, so
+ * the invoice can always be traced back to what was agreed. The VAT rate comes
+ * from the QUOTATION rather than today's organisation setting — the client
+ * accepted a specific figure, and re-deriving it from a rate that has since
+ * changed would bill a different number from the one they agreed to.
+ *
+ * Idempotent: a quotation that already has an invoice returns it rather than
+ * raising a second one, which is what makes a double-click harmless.
+ */
+export async function createInvoiceFromQuotationAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canCreateInvoice(profile.role)) {
+    invoiceError("Only Finance and leadership can raise an invoice.");
+  }
+
+  const quotationId = field(formData, "quotation_id");
+
+  if (!/^[0-9a-f-]{36}$/i.test(quotationId)) {
+    invoiceError("Select a quotation.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { data: quotation, error: quotationError } = await supabase
+    .from("quotations")
+    .select(
+      "id, quotation_number, title, client_name, client_tpin, customer_id, site_id, status, vat_rate",
+    )
+    .eq("id", quotationId)
+    .maybeSingle<{
+      id: string;
+      quotation_number: string;
+      title: string;
+      client_name: string;
+      client_tpin: string | null;
+      customer_id: string | null;
+      site_id: string | null;
+      status: string;
+      vat_rate: number | string | null;
+    }>();
+
+  if (quotationError) {
+    invoiceError(quotationError.message);
+  }
+  if (!quotation) {
+    invoiceError("Quotation was not found.");
+  }
+  if (quotation.status !== "accepted") {
+    invoiceError("Only an accepted quotation can be invoiced.");
+  }
+
+  const { data: existing } = await supabase
+    .from("invoices")
+    .select("id, invoice_number")
+    .eq("source", "quotation")
+    .eq("source_id", quotation.id)
+    .is("deleted_at", null)
+    .maybeSingle<{ id: string; invoice_number: string }>();
+
+  if (existing) {
+    redirect(`/ops/invoices?error=${encodeURIComponent(
+      `${quotation.quotation_number} has already been invoiced as ${existing.invoice_number}.`,
+    )}`);
+  }
+
+  const { data: itemRows, error: itemError } = await supabase
+    .from("quotation_items")
+    .select("quantity, unit_rate")
+    .eq("quotation_id", quotation.id);
+
+  if (itemError) {
+    invoiceError(itemError.message);
+  }
+
+  const subtotal = roundToTwo(
+    ((itemRows ?? []) as Array<{ quantity: number | string; unit_rate: number | string }>).reduce(
+      (sum, row) => sum + Number(row.quantity ?? 0) * Number(row.unit_rate ?? 0),
+      0,
+    ),
+  );
+
+  if (subtotal <= 0) {
+    invoiceError("That quotation has no priced lines to invoice.");
+  }
+
+  const { data: organization } = await supabase
+    .from("organization_profile")
+    .select("invoice_prefix")
+    .eq("id", 1)
+    .single<Pick<OrganizationProfile, "invoice_prefix">>();
+
+  if (!organization) {
+    invoiceError("Pymble organization profile was not found.");
+  }
+
+  const vatRate = Number(quotation.vat_rate ?? 0);
+  const vatAmount = roundToTwo(subtotal * vatRate);
+  const issuedAt = todayInLusaka();
+  const invoiceNumber = await nextInvoiceNumber(organization.invoice_prefix);
+  const dueDate = await resolveInvoiceDueDate(quotation.customer_id, issuedAt);
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .insert({
+      client_name: quotation.client_name,
+      created_by: profile.id,
+      customer_id: quotation.customer_id,
+      due_date: dueDate,
+      invoice_number: invoiceNumber,
+      issued_at: issuedAt,
+      site_id: quotation.site_id,
+      source: "quotation",
+      source_id: quotation.id,
+      // Draft, so someone checks it before it goes to the client. Unlike an
+      // opening balance, this has never been demanded.
+      status: "draft",
+      subtotal,
+      total_amount: roundToTwo(subtotal + vatAmount),
+      tpin: quotation.client_tpin || null,
+      vat_amount: vatAmount,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !data) {
+    invoiceError(error?.message ?? "The invoice could not be created.");
+  }
+
+  await supabase
+    .from("quotations")
+    .update({ converted_at: new Date().toISOString(), converted_by: profile.id })
+    .eq("id", quotation.id)
+    .is("converted_at", null);
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "invoice.created_from_quotation",
+    entity_type: "invoice",
+    entity_id: data.id,
+    module_key: "invoices",
+    source_table: "invoices",
+    source_id: data.id,
+    metadata: {
+      invoice_number: invoiceNumber,
+      quotation_id: quotation.id,
+      quotation_number: quotation.quotation_number,
+      subtotal,
+      vat_amount: vatAmount,
+    },
+  });
+
+  revalidatePath("/ops/invoices");
+  revalidatePath("/ops/quotations");
+  revalidatePath("/ops/receivables");
+  redirect("/ops/invoices?created=from_quotation");
+}
+
+// ---------------------------------------------------------------------------
+// Opening balances — debt carried in from before the system (R7)
+// ---------------------------------------------------------------------------
+
+const openingBalanceSchema = z.object({
+  amount_owed: z.coerce.number().positive("Enter the amount still owed."),
+  client_name: z.string().trim().min(2, "Client name is required.").max(160),
+  customer_id: z.string().uuid("Choose the customer this debt belongs to."),
+  due_date: z.string().trim().default(""),
+  original_reference: z.string().trim().max(120).default(""),
+  /** When the original invoice was raised, so the debt ages truthfully. */
+  issued_at: dateSchema,
+  notes: z.string().trim().max(400).default(""),
+  site_id: z.string().trim().default(""),
+});
+
+/**
+ * Load a debt that predates this system.
+ *
+ * The manual way into receivables, and deliberately not a separate
+ * "manual receivable" record — it is an invoice, so it ages, appears in the
+ * debtor list and gets chased like any other. Decision D6 / §4c.
+ *
+ * Three things make it different from an ordinary invoice, and all three are
+ * accounting rather than presentation:
+ *
+ *   • **Gross owed, zero VAT** (decision D7). The original invoice already
+ *     declared the output VAT; declaring it again would double-count it to
+ *     ZRA. The amount entered is what is still owed, VAT included, and no
+ *     output VAT is recognised. A database check enforces this.
+ *   • **Credits retained earnings, not revenue.** The work was earned in a
+ *     closed period. Crediting revenue would invent that much current-year
+ *     income — the whole reason `revenue_treatment` exists.
+ *   • **Issued at the ORIGINAL date**, not today, so the ageing tells the
+ *     truth about how long the money has been outstanding. A backlog keyed in
+ *     today and dated today would read as entirely current, which is the
+ *     opposite of the point.
+ *
+ * Sent immediately rather than left as a draft: the client was invoiced long
+ * ago. A draft would mean "not yet demanded", which is false.
+ */
+export async function createOpeningBalanceInvoiceAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canCreateInvoice(profile.role)) {
+    invoiceError("Only Finance and leadership can load an opening balance.");
+  }
+
+  const parsed = openingBalanceSchema.safeParse({
+    amount_owed: field(formData, "amount_owed"),
+    client_name: field(formData, "client_name"),
+    customer_id: field(formData, "customer_id"),
+    due_date: field(formData, "due_date"),
+    issued_at: field(formData, "issued_at"),
+    notes: field(formData, "notes"),
+    original_reference: field(formData, "original_reference"),
+    site_id: field(formData, "site_id"),
+  });
+
+  if (!parsed.success) {
+    invoiceError(parsed.error.issues[0]?.message ?? "Check the opening balance details.");
+  }
+
+  if (parsed.data.issued_at > todayInLusaka()) {
+    invoiceError("An opening balance cannot be dated in the future.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { data: organization, error: organizationError } = await supabase
+    .from("organization_profile")
+    .select("invoice_prefix")
+    .eq("id", 1)
+    .single<Pick<OrganizationProfile, "invoice_prefix">>();
+
+  if (organizationError || !organization) {
+    invoiceError(organizationError?.message ?? "Pymble organization profile was not found.");
+  }
+
+  const invoiceNumber = await nextInvoiceNumber(organization.invoice_prefix);
+  const amount = roundToTwo(parsed.data.amount_owed);
+  // Terms are usually long past on an old debt, so an explicit due date wins;
+  // otherwise derive from the customer's terms against the ORIGINAL date.
+  const dueDate =
+    parsed.data.due_date ||
+    (await resolveInvoiceDueDate(parsed.data.customer_id, parsed.data.issued_at));
+
+  const { data, error } = await supabase
+    .from("invoices")
+    .insert({
+      client_name: parsed.data.client_name,
+      created_by: profile.id,
+      customer_id: parsed.data.customer_id,
+      due_date: dueDate,
+      invoice_number: invoiceNumber,
+      issued_at: parsed.data.issued_at,
+      revenue_treatment: "opening_balance",
+      // Already demanded, long ago. A draft would claim otherwise.
+      sent_at: new Date().toISOString(),
+      site_id: parsed.data.site_id || null,
+      source: "opening_balance",
+      status: "sent",
+      // Gross owed with no VAT split — see D7 above.
+      subtotal: amount,
+      total_amount: amount,
+      vat_amount: 0,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !data) {
+    invoiceError(error?.message ?? "The opening balance could not be recorded.");
+  }
+
+  // Dr Accounts Receivable / Cr Retained Earnings.
+  await postInvoiceJournalSafe(data.id, "issued", profile.id);
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "invoice.opening_balance_loaded",
+    entity_type: "invoice",
+    entity_id: data.id,
+    module_key: "invoices",
+    source_table: "invoices",
+    source_id: data.id,
+    metadata: {
+      amount,
+      client_name: parsed.data.client_name,
+      due_date: dueDate,
+      invoice_number: invoiceNumber,
+      notes: parsed.data.notes,
+      original_reference: parsed.data.original_reference,
+      originally_issued: parsed.data.issued_at,
+    },
+  });
+
+  revalidatePath("/ops/invoices");
+  revalidatePath("/ops/receivables");
+  redirect("/ops/invoices?created=opening_balance");
+}
+
+// ---------------------------------------------------------------------------
 // Receipts — money actually received (R6)
 // ---------------------------------------------------------------------------
 
