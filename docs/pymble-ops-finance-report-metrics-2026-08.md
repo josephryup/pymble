@@ -155,8 +155,32 @@ reports mislead.
 4. **Phase 3 — DONE 2026-08-11.** §4.C period-scoped budget consumption:
    `fetchOpsBudgetConsumption` (the new date-filtered position query), six scalar metrics,
    and the per-budget table on `/ops/finance`. No schema change.
-5. **Phase 4:** §4.D unplanned spend and §4.E payroll.
+5. **Phase 4 — DONE 2026-08-11.** §4.D unplanned spend and §4.E payroll, plus decision D2
+   step 1: labour finally enters the cost spine, and staff payroll gets the GL journal it
+   never had. One schema change (`20260815090300`, NHIMA Payable).
 6. **Phase 5:** the §6 additions worth having.
+
+### Phase 4 note — labour was never in the ledger
+
+Two write-side gaps closed alongside the metrics.
+
+**Staff payroll posted nothing to the GL.** `postPayrollRunJournalSafe` only ever handled
+the casual engine, so K149,486 of disbursed salary left no accounting trace.
+`postStaffPayrollRunJournalSafe` now posts it, debiting **Office Salaries (6010)** rather
+than Direct Labour (5030) — salaried staff are not chargeable to a contract and posting
+them to cost of sales would inflate it and flatter overheads. NHIMA needed an account of
+its own (2230): it is remitted to a different authority on its own return, so folding it
+into NAPSA would have been wrong.
+
+**Labour never reached `project_cost_entries` at all.** Per D2 step 1, casual wages now
+split across sites by attendance (`attendance_records` already carries `site_id` and
+`amount_earned`), staff pay charges the HR cost centre as overhead, and **both write
+`budget_line_id: null`** — visible as unbudgeted labour, consuming no project budget until
+the labour lines are confirmed to cover the wage bill. That is step 2.
+
+August 2026, verified: **employer cost K157,497 · staff net K118,511 · statutory due
+K38,986 · 13 people paid.** July reads zero and that is correct — the July run was
+disbursed on 1 August, and the metric follows the cash, not the period label.
 
 ### Phase 3 note — what the budget table exposed
 

@@ -3,6 +3,8 @@ import {
   fetchOpsBudgetConsumption,
   fetchOpsMaterialRequestFunnel,
   fetchOpsPayableRelease,
+  fetchOpsPayrollPeriod,
+  fetchOpsUnplannedSpend,
 } from "@/lib/ops/finance-period-metrics";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
@@ -273,15 +275,61 @@ async function budgetConsumptionMetrics(start: string, end: string) {
   }
 }
 
+/**
+ * Unplanned and off-budget spend. Four distinct failures, kept apart — see
+ * OpsUnplannedSpend for why summing them would be meaningless.
+ */
+async function unplannedSpendMetrics(
+  start: string,
+  end: string,
+): Promise<Record<string, number>> {
+  try {
+    const spend = await fetchOpsUnplannedSpend(start, end);
+    return {
+      contingency_spend_zmw: spend.contingency_value,
+      escalated_approvals_zmw: spend.escalated_value,
+      general_request_value_zmw: spend.general_request_value,
+      it_request_value_zmw: spend.it_request_value,
+      overhead_spend_zmw: spend.overhead_value,
+      unbudgeted_spend_zmw: spend.unbudgeted_value,
+      uncoded_spend_zmw: spend.uncoded_value,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Payroll, straight off the payroll tables — it does not reach the spine. */
+async function payrollMetrics(
+  start: string,
+  end: string,
+): Promise<Record<string, number>> {
+  try {
+    const payroll = await fetchOpsPayrollPeriod(start, end);
+    return {
+      advances_outstanding_zmw: payroll.advances_outstanding,
+      headcount_paid: payroll.headcount_paid,
+      payroll_casual_paid_zmw: payroll.casual_net,
+      payroll_employer_cost_zmw: payroll.employer_cost,
+      payroll_staff_paid_zmw: payroll.staff_net,
+      payroll_statutory_due_zmw: payroll.statutory_due,
+    };
+  } catch {
+    return {};
+  }
+}
+
 async function financeMetrics(supabase: ServiceClient, start: string, end: string) {
-  const [base, funnel, release, budgets] = await Promise.all([
+  const [base, funnel, release, budgets, unplanned, payroll] = await Promise.all([
     baseFinanceMetrics(supabase, start, end),
     materialRequestFunnelMetrics(start, end),
     payableReleaseMetrics(start, end),
     budgetConsumptionMetrics(start, end),
+    unplannedSpendMetrics(start, end),
+    payrollMetrics(start, end),
   ]);
 
-  return { ...base, ...funnel, ...release, ...budgets };
+  return { ...base, ...funnel, ...release, ...budgets, ...unplanned, ...payroll };
 }
 
 function baseFinanceMetrics(supabase: ServiceClient, start: string, end: string) {

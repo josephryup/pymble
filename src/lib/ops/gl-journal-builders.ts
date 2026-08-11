@@ -20,10 +20,12 @@ export const OPS_GL_ACCOUNTS = {
   payePayable: "2200",
   napsaPayable: "2210",
   wcfPayable: "2220",
+  nhimaPayable: "2230",
   contractRevenueCertified: "4010",
   materials: "5010",
   subcontractorCosts: "5020",
   directLabour: "5030",
+  officeSalaries: "6010",
   otherDirectCosts: "5090",
   employerStatutory: "6110",
 } as const;
@@ -364,6 +366,101 @@ export function buildPayrollDisbursementJournal(
     sourceTable: "payroll_runs",
     sourceId: run.id,
     sourceEvent: "payroll_disbursed",
+    lines,
+  };
+}
+
+export type OpsStaffPayrollRunForPosting = OpsPayrollRunForPosting & {
+  nhima_employee: number;
+  nhima_employer: number;
+};
+
+/**
+ * Staff payroll disbursed.
+ *
+ * Structurally the same as the casual wages journal, with two differences that
+ * are not cosmetic:
+ *
+ *   • the debit goes to **Office Salaries (6010)**, an operating expense, not
+ *     Direct Labour (5030), which is cost of sales. Salaried staff are not
+ *     chargeable to a contract; casual site workers are. Posting both to 5030
+ *     would inflate cost of sales and flatter overheads.
+ *   • NHIMA is deducted from staff pay and matched by the employer. Casual
+ *     payroll has no NHIMA line at all, which is why the casual builder has no
+ *     account for it.
+ *
+ * Until now staff payroll posted NOTHING — `postPayrollRunJournalSafe` handles
+ * only the casual engine, so K149,486 of disbursed salary never reached the
+ * general ledger.
+ *
+ *   Dr Office Salaries (gross)
+ *     Cr Bank (net) · Cr PAYE · Cr NAPSA (employee) · Cr NHIMA (employee)
+ *     Cr Staff Advances
+ *   Dr Employer Statutory (employer NAPSA + WCF + NHIMA)
+ *     Cr NAPSA Payable · Cr WCF Payable · Cr NHIMA Payable
+ */
+export function buildStaffPayrollDisbursementJournal(
+  run: OpsStaffPayrollRunForPosting,
+  entryDate: string,
+): OpsGlPostingInput {
+  const lines: OpsGlPostingLine[] = [
+    {
+      account_code: OPS_GL_ACCOUNTS.officeSalaries,
+      debit: run.gross,
+      description: `Staff salaries ${run.period_label}`,
+    },
+  ];
+
+  const credit = (account_code: string, amount: number, description: string) => {
+    if (amount > 0) {
+      lines.push({ account_code, credit: amount, description });
+    }
+  };
+
+  credit(OPS_GL_ACCOUNTS.bankMain, run.net, `Net pay ${run.period_label}`);
+  credit(OPS_GL_ACCOUNTS.payePayable, run.paye, `PAYE ${run.period_label}`);
+  credit(
+    OPS_GL_ACCOUNTS.napsaPayable,
+    run.napsa_employee,
+    `NAPSA employee ${run.period_label}`,
+  );
+  credit(
+    OPS_GL_ACCOUNTS.nhimaPayable,
+    run.nhima_employee,
+    `NHIMA employee ${run.period_label}`,
+  );
+  credit(
+    OPS_GL_ACCOUNTS.staffAdvances,
+    run.advances,
+    `Advance recovery ${run.period_label}`,
+  );
+
+  const employer = round2(run.napsa_employer + run.wcf + run.nhima_employer);
+  if (employer > 0) {
+    lines.push({
+      account_code: OPS_GL_ACCOUNTS.employerStatutory,
+      debit: employer,
+      description: `Employer NAPSA/WCF/NHIMA ${run.period_label}`,
+    });
+    credit(
+      OPS_GL_ACCOUNTS.napsaPayable,
+      run.napsa_employer,
+      `NAPSA employer ${run.period_label}`,
+    );
+    credit(OPS_GL_ACCOUNTS.wcfPayable, run.wcf, `WCF ${run.period_label}`);
+    credit(
+      OPS_GL_ACCOUNTS.nhimaPayable,
+      run.nhima_employer,
+      `NHIMA employer ${run.period_label}`,
+    );
+  }
+
+  return {
+    entryDate,
+    memo: `Staff payroll ${run.period_label} disbursed`,
+    sourceTable: "staff_payroll_runs",
+    sourceId: run.id,
+    sourceEvent: "staff_payroll_disbursed",
     lines,
   };
 }

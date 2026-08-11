@@ -5,10 +5,17 @@ import {
   summariseMaterialRequestFunnel,
   summariseBudgetConsumption,
   summarisePayableRelease,
+  summarisePayrollPeriod,
+  summariseUnplannedSpend,
   type OpsBudgetForConsumption,
   type OpsCostEntryForConsumption,
+  type OpsEscalationForUnplanned,
   type OpsMaterialRequestForFunnel,
+  type OpsOverheadPayableForUnplanned,
   type OpsPayableForRelease,
+  type OpsPayrollRunForPeriod,
+  type OpsRequestItemForUnplanned,
+  type OpsSpendEntryForUnplanned,
 } from "../src/lib/ops/finance-period-metrics";
 
 /**
@@ -620,5 +627,246 @@ describe("the roll-up covers active budgets only", () => {
 
     // Nothing consumed, so both sit in the ok band.
     assert.equal(consumption.budgets_over_threshold, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unplanned spend
+// ---------------------------------------------------------------------------
+
+const CONTINGENCY = "cc-contingency";
+
+describe("unplanned spend keeps four different failures apart", () => {
+  const base = {
+    contingencyCostCodeIds: new Set([CONTINGENCY]),
+    entries: [] as OpsSpendEntryForUnplanned[],
+    escalations: [] as OpsEscalationForUnplanned[],
+    items: [] as OpsRequestItemForUnplanned[],
+    payables: [] as OpsOverheadPayableForUnplanned[],
+  };
+
+  it("counts contingency and unbudgeted separately even for one entry", () => {
+    // The same K5,000 is both off-schedule AND unbudgeted. Summing the two
+    // figures would double-count it, which is why they are never summed.
+    const spend = summariseUnplannedSpend(
+      {
+        ...base,
+        entries: [
+          {
+            amount: 5_000,
+            budget_line_id: null,
+            cost_code_id: CONTINGENCY,
+            cost_date: "2026-07-10",
+            lifecycle_state: "actual",
+          },
+        ],
+      },
+      JULY,
+    );
+
+    assert.equal(spend.contingency_value, 5_000);
+    assert.equal(spend.unbudgeted_value, 5_000);
+  });
+
+  it("ignores released entries and anything outside the window", () => {
+    const spend = summariseUnplannedSpend(
+      {
+        ...base,
+        entries: [
+          {
+            amount: 1_000,
+            budget_line_id: null,
+            cost_code_id: null,
+            cost_date: "2026-07-10",
+            lifecycle_state: "released",
+          },
+          {
+            amount: 2_000,
+            budget_line_id: null,
+            cost_code_id: null,
+            cost_date: "2026-06-30",
+            lifecycle_state: "actual",
+          },
+        ],
+      },
+      JULY,
+    );
+
+    assert.equal(spend.unbudgeted_value, 0);
+  });
+
+  it("counts uncoded request value only once the cost is approved", () => {
+    const spend = summariseUnplannedSpend(
+      {
+        ...base,
+        items: [
+          {
+            cost_approved_at: "2026-07-13T00:00:00Z",
+            cost_code_id: null,
+            scope: "site",
+            value: 4_000,
+          },
+          { cost_approved_at: null, cost_code_id: null, scope: "site", value: 90_000 },
+        ],
+      },
+      JULY,
+    );
+
+    assert.equal(spend.uncoded_value, 4_000);
+    assert.equal(spend.uncoded_item_count, 1);
+    assert.equal(spend.total_item_count, 1);
+  });
+
+  it("separates general and IT scope from site work", () => {
+    const spend = summariseUnplannedSpend(
+      {
+        ...base,
+        items: [
+          { cost_approved_at: "2026-07-13T00:00:00Z", cost_code_id: "x", scope: "general", value: 3_392 },
+          { cost_approved_at: "2026-07-13T00:00:00Z", cost_code_id: "x", scope: "it", value: 7_500 },
+          { cost_approved_at: "2026-07-13T00:00:00Z", cost_code_id: "x", scope: "site", value: 287_211 },
+        ],
+      },
+      JULY,
+    );
+
+    assert.equal(spend.general_request_value, 3_392);
+    assert.equal(spend.it_request_value, 7_500);
+  });
+
+  it("counts only overhead-charged payables", () => {
+    const spend = summariseUnplannedSpend(
+      {
+        ...base,
+        payables: [
+          { amount: 9_000, approved_at: "2026-07-05T00:00:00Z", charge_target: "overhead" },
+          { amount: 13_500, approved_at: "2026-07-05T00:00:00Z", charge_target: "site" },
+        ],
+      },
+      JULY,
+    );
+
+    assert.equal(spend.overhead_value, 9_000);
+  });
+
+  it("counts only the escalate band, not warnings", () => {
+    const spend = summariseUnplannedSpend(
+      {
+        ...base,
+        escalations: [
+          { amount: 50_000, band: "escalate", decided_at: "2026-07-10T00:00:00Z" },
+          { amount: 20_000, band: "reason_required", decided_at: "2026-07-11T00:00:00Z" },
+          { amount: 10_000, band: "ok", decided_at: "2026-07-12T00:00:00Z" },
+          { amount: 99_000, band: null, decided_at: "2026-07-13T00:00:00Z" },
+        ],
+      },
+      JULY,
+    );
+
+    assert.equal(spend.escalated_value, 50_000);
+    assert.equal(spend.escalated_count, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Payroll
+// ---------------------------------------------------------------------------
+
+const payrollItem = (
+  overrides: Partial<OpsPayrollRunForPeriod> = {},
+): OpsPayrollRunForPeriod => ({
+  advances: 0,
+  disbursed_at: "2026-07-31T00:00:00Z",
+  employee_statutory: 0,
+  employer_statutory: 0,
+  gross: 0,
+  headcount: 1,
+  net: 0,
+  ...overrides,
+});
+
+describe("payroll reports cost to company, not net pay", () => {
+  it("adds the employer burden on top of gross", () => {
+    // Net understates labour by the whole employer statutory load, which is
+    // real cash with a filing deadline.
+    const summary = summarisePayrollPeriod(
+      {
+        advances: [],
+        casual: [],
+        staff: [
+          payrollItem({
+            employee_statutory: 24_000,
+            employer_statutory: 7_500,
+            gross: 149_486,
+            net: 118_510,
+          }),
+        ],
+      },
+      JULY,
+    );
+
+    assert.equal(summary.staff_net, 118_510);
+    assert.equal(summary.employer_cost, 156_986, "gross plus employer statutory");
+    assert.equal(summary.statutory_due, 31_500, "both sides of the remittance");
+  });
+
+  it("keeps casual and staff net apart but pools the employer cost", () => {
+    const summary = summarisePayrollPeriod(
+      {
+        advances: [],
+        casual: [payrollItem({ gross: 300, net: 269 })],
+        staff: [payrollItem({ gross: 149_486, net: 118_510 })],
+      },
+      JULY,
+    );
+
+    assert.equal(summary.casual_net, 269);
+    assert.equal(summary.staff_net, 118_510);
+    assert.equal(summary.employer_cost, 149_786);
+    assert.equal(summary.headcount_paid, 2);
+  });
+
+  it("counts a run only in the period it was disbursed", () => {
+    const summary = summarisePayrollPeriod(
+      {
+        advances: [],
+        casual: [],
+        staff: [payrollItem({ disbursed_at: "2026-08-03T00:00:00Z", gross: 100, net: 90 })],
+      },
+      JULY,
+    );
+
+    assert.equal(summary.staff_net, 0);
+    assert.equal(summary.employer_cost, 0);
+  });
+
+  it("never counts an undisbursed run — a draft is not a payment", () => {
+    const summary = summarisePayrollPeriod(
+      {
+        advances: [],
+        casual: [],
+        staff: [payrollItem({ disbursed_at: null, gross: 1_732_838, net: 1_310_964 })],
+      },
+      JULY,
+    );
+
+    assert.equal(summary.staff_net, 0);
+  });
+
+  it("shows advances still outstanding at the period end", () => {
+    const summary = summarisePayrollPeriod(
+      {
+        advances: [
+          { amount: 2_000, issued_at: "2026-07-05", recovered: false },
+          { amount: 1_500, issued_at: "2026-07-06", recovered: true },
+          { amount: 900, issued_at: "2026-08-02", recovered: false },
+        ],
+        casual: [],
+        staff: [],
+      },
+      JULY,
+    );
+
+    assert.equal(summary.advances_outstanding, 2_000);
   });
 });

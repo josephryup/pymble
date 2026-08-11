@@ -211,6 +211,77 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
         downIsGood: true,
         hint: "Charged to a budget with nothing budgeted, so no percentage can express it.",
       },
+      // Unplanned spend. Four separate failures, never summed — see
+      // OpsUnplannedSpend. They overlap: one entry can be both uncoded and
+      // unbudgeted, so a total would double-count and mean nothing.
+      {
+        key: "unbudgeted_spend_zmw",
+        label: "Spend with no budget line (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "No budget answers for this money at all.",
+      },
+      {
+        key: "uncoded_spend_zmw",
+        label: "Spend with no cost code (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "Cannot be attributed to the work it was for.",
+      },
+      {
+        key: "contingency_spend_zmw",
+        label: "Contingency spend (ZMW)",
+        auto: true,
+        hint: "Off-schedule but anticipated — charged to a contingency leaf.",
+      },
+      {
+        key: "general_request_value_zmw",
+        label: "Office / general purchases (ZMW)",
+        auto: true,
+        hint: "Material requests scoped general — overhead, not project work.",
+      },
+      {
+        key: "it_request_value_zmw",
+        label: "IT purchases (ZMW)",
+        auto: true,
+        hint: "Aggregate only. Line detail stays inside the IT visibility circle.",
+      },
+      {
+        key: "overhead_spend_zmw",
+        label: "Overhead payables (ZMW)",
+        auto: true,
+        hint: "Payables charged to a cost centre rather than a project.",
+      },
+      {
+        key: "escalated_approvals_zmw",
+        label: "Approvals escalated to the MD (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "Crossed the escalate band — unfunded or well over budget.",
+      },
+      // Payroll. Employer cost leads, not net pay: net understates labour by
+      // the whole statutory employer burden.
+      {
+        key: "payroll_employer_cost_zmw",
+        label: "Total labour cost to company (ZMW)",
+        auto: true,
+        hint: "Gross plus employer NAPSA and WCF. The real cost, not the net paid.",
+      },
+      { key: "payroll_staff_paid_zmw", label: "Staff net pay (ZMW)", auto: true },
+      { key: "payroll_casual_paid_zmw", label: "Casual worker net pay (ZMW)", auto: true },
+      {
+        key: "payroll_statutory_due_zmw",
+        label: "Statutory due (ZMW)",
+        auto: true,
+        hint: "PAYE, NAPSA both sides, NHIMA and WCF — remittable with a deadline.",
+      },
+      { key: "headcount_paid", label: "People paid", auto: true },
+      {
+        key: "advances_outstanding_zmw",
+        label: "Advances not yet recovered (ZMW)",
+        auto: true,
+        downIsGood: true,
+      },
       { key: "cash_position_zmw", label: "Cash position (ZMW)", hint: "Bank balances at period end." },
     ],
   },

@@ -7,7 +7,9 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { postStaffPayrollRunJournalSafe } from "@/lib/ops/gl-posting";
 import { logOpsServerError, swallowOpsError } from "@/lib/ops/log";
+import { writeStaffPayrollCostEntry } from "@/lib/ops/payroll-cost-entries";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { canManageOpsStaffPayroll } from "@/lib/ops/staff-payroll";
 import { computeStaffPayslip } from "@/lib/ops/statutory/calculator";
@@ -607,6 +609,52 @@ export async function completeStaffPayrollRunAction(formData: FormData) {
   // `already_completed` is not an error — it is what a retry after a timeout
   // looks like. Fall through so the payslip emails below still go out; they
   // are idempotent, so a genuine duplicate press costs nothing.
+
+  // Post to the general ledger and the cost spine. Staff payroll did neither
+  // until now: `postPayrollRunJournalSafe` only ever handled the casual
+  // engine, so a completed staff run left no accounting trace at all.
+  //
+  // Both are best-effort and both are idempotent — the run is already marked
+  // paid above, and neither a GL outage nor a ledger hiccup may roll back a
+  // disbursement that has happened.
+  await postStaffPayrollRunJournalSafe(parsed.data.id, profile.id);
+
+  const { data: runTotals } = await supabase
+    .from("staff_payroll_runs")
+    .select("period_label, total_gross")
+    .eq("id", parsed.data.id)
+    .maybeSingle<{ period_label: string; total_gross: number | string | null }>();
+
+  if (runTotals) {
+    const { data: employerRows } = await supabase
+      .from("staff_payroll_items")
+      .select("napsa_employer, nhima_employer, wcf_employer")
+      .eq("staff_payroll_run_id", parsed.data.id);
+
+    const employerStatutory = (
+      (employerRows ?? []) as Array<{
+        napsa_employer: number | string | null;
+        nhima_employer: number | string | null;
+        wcf_employer: number | string | null;
+      }>
+    ).reduce(
+      (sum, row) =>
+        sum +
+        Number(row.napsa_employer ?? 0) +
+        Number(row.nhima_employer ?? 0) +
+        Number(row.wcf_employer ?? 0),
+      0,
+    );
+
+    await writeStaffPayrollCostEntry({
+      actorUserId: profile.id,
+      costDate: new Date().toISOString().slice(0, 10),
+      // Cost to company, not net pay — the employer burden is real money.
+      employerCost: Number(runTotals.total_gross ?? 0) + employerStatutory,
+      periodLabel: runTotals.period_label,
+      runId: parsed.data.id,
+    }).catch(() => null);
+  }
 
   // Email each person their own payslip (audit §10). Marked paid is the right
   // trigger: it is the point at which the money has actually moved, so the

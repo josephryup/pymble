@@ -5,6 +5,7 @@ import {
   buildPaymentRequestAccrualJournal,
   buildPaymentRequestSettlementJournal,
   buildPayrollDisbursementJournal,
+  buildStaffPayrollDisbursementJournal,
   type OpsGlPostingInput,
   type OpsInvoiceForPosting,
   type OpsPaymentRequestForPosting,
@@ -19,6 +20,7 @@ export {
   buildPaymentRequestAccrualJournal,
   buildPaymentRequestSettlementJournal,
   buildPayrollDisbursementJournal,
+  buildStaffPayrollDisbursementJournal,
   opsPaymentExpenseAccount,
 } from "@/lib/ops/gl-journal-builders";
 export type {
@@ -27,6 +29,7 @@ export type {
   OpsInvoiceForPosting,
   OpsPaymentRequestForPosting,
   OpsPayrollRunForPosting,
+  OpsStaffPayrollRunForPosting,
 } from "@/lib/ops/gl-journal-builders";
 
 /**
@@ -316,6 +319,93 @@ export async function postPayrollRunJournalSafe(
       entityType: "payroll_run",
       sourceTable: "payroll_runs",
       detail: `payroll run ${runId}`,
+      error,
+    });
+  }
+}
+
+type RawStaffPayrollItem = RawPayrollItem & {
+  nhima_employee: number | string | null;
+  nhima_employer: number | string | null;
+};
+
+/**
+ * Post the staff payroll journal.
+ *
+ * The sibling of postPayrollRunJournalSafe, for the salaried engine, which
+ * until now posted nothing at all: `staff_payroll_runs` had no journal path,
+ * so every completed staff run was invisible to the general ledger.
+ *
+ * Same failure contract as the rest of this module — the run has already been
+ * marked paid by the time this is called, so a posting failure is logged and
+ * swallowed rather than rolling back a disbursement that really happened.
+ */
+export async function postStaffPayrollRunJournalSafe(
+  runId: string,
+  actorUserId: string,
+): Promise<void> {
+  try {
+    const supabase = getOpsSupabaseServiceClient();
+    const { data: run, error: runError } = await supabase
+      .from("staff_payroll_runs")
+      .select("id, period_label")
+      .eq("id", runId)
+      .maybeSingle<{ id: string; period_label: string }>();
+
+    if (runError) {
+      throw runError;
+    }
+    if (!run) {
+      return;
+    }
+
+    const { data: itemData, error: itemError } = await supabase
+      .from("staff_payroll_items")
+      .select(
+        "gross_pay, advance_deduction, net_pay, paye_amount, napsa_employee, napsa_employer, nhima_employee, nhima_employer, wcf_employer",
+      )
+      .eq("staff_payroll_run_id", runId);
+
+    if (itemError) {
+      throw itemError;
+    }
+
+    const items = (itemData ?? []) as RawStaffPayrollItem[];
+    if (items.length === 0) {
+      return;
+    }
+
+    const sum = (key: keyof RawStaffPayrollItem) =>
+      round2(items.reduce((total, item) => total + Number(item[key] ?? 0), 0));
+
+    const summary = {
+      id: run.id,
+      period_label: run.period_label,
+      gross: sum("gross_pay"),
+      net: sum("net_pay"),
+      paye: sum("paye_amount"),
+      napsa_employee: sum("napsa_employee"),
+      napsa_employer: sum("napsa_employer"),
+      nhima_employee: sum("nhima_employee"),
+      nhima_employer: sum("nhima_employer"),
+      wcf: sum("wcf_employer"),
+      advances: sum("advance_deduction"),
+    };
+
+    if (summary.gross <= 0) {
+      return;
+    }
+
+    const entryDate = new Date().toISOString().slice(0, 10);
+    const journal = buildStaffPayrollDisbursementJournal(summary, entryDate);
+    await postOpsJournalEntry({ ...journal, createdBy: actorUserId });
+  } catch (error: unknown) {
+    await logPostingFailure({
+      actorUserId,
+      entityId: runId,
+      entityType: "staff_payroll_run",
+      sourceTable: "staff_payroll_runs",
+      detail: `staff payroll run ${runId}`,
       error,
     });
   }

@@ -1,3 +1,4 @@
+import { fetchOpsContingencyCostCodeIdsFor } from "@/lib/ops/cost-code-picker";
 import {
   computeBudgetAvailability,
   decideBudgetControl,
@@ -774,5 +775,498 @@ export async function fetchOpsBudgetConsumption(
       })),
     window,
     thresholds,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Unplanned and off-budget spend
+// ---------------------------------------------------------------------------
+
+/**
+ * Money that never met a plan.
+ *
+ * Four different failures, deliberately not summed into one "unplanned" total:
+ * spend routed to the contingency leaf was PLANNED to be unplanned, spend with
+ * no budget line answers to nothing, spend with no cost code cannot be
+ * attributed at all, and overhead legitimately belongs to no project. Adding
+ * them would produce a number nobody could act on, and they overlap — one
+ * entry can be both uncoded and unbudgeted.
+ */
+export type OpsUnplannedSpend = {
+  /** Charged to a contingency leaf — off-schedule but anticipated. */
+  contingency_value: number;
+  /** No budget line at all: no budget answers for this money. */
+  unbudgeted_value: number;
+  /** Request items carrying no cost code — cannot be attributed to work. */
+  uncoded_value: number;
+  uncoded_item_count: number;
+  total_item_count: number;
+  /** Office/overhead purchases: material requests scoped `general`. */
+  general_request_value: number;
+  /** Confidential IT purchases: scope `it`. Aggregate only — see D7. */
+  it_request_value: number;
+  /** Payables charged to a cost centre rather than a project. */
+  overhead_value: number;
+  /** Approvals that crossed into the escalate band in the window. */
+  escalated_value: number;
+  escalated_count: number;
+};
+
+export type OpsSpendEntryForUnplanned = {
+  amount: number;
+  budget_line_id: string | null;
+  cost_code_id: string | null;
+  cost_date: string;
+  lifecycle_state: string;
+};
+
+export type OpsRequestItemForUnplanned = {
+  cost_code_id: string | null;
+  /** The request's cost approval instant, for period scoping. */
+  cost_approved_at: string | null;
+  scope: string;
+  value: number;
+};
+
+export type OpsOverheadPayableForUnplanned = {
+  amount: number;
+  approved_at: string | null;
+  charge_target: string;
+};
+
+export type OpsEscalationForUnplanned = {
+  amount: number;
+  band: string | null;
+  decided_at: string;
+};
+
+export function summariseUnplannedSpend(
+  input: {
+    contingencyCostCodeIds: Set<string>;
+    entries: OpsSpendEntryForUnplanned[];
+    escalations: OpsEscalationForUnplanned[];
+    items: OpsRequestItemForUnplanned[];
+    payables: OpsOverheadPayableForUnplanned[];
+  },
+  window: OpsReportWindow,
+): OpsUnplannedSpend {
+  let contingency = 0;
+  let unbudgeted = 0;
+
+  for (const entry of input.entries) {
+    if (entry.lifecycle_state === "released") continue;
+    if (entry.cost_date < window.startDate || entry.cost_date > window.endDate) continue;
+
+    if (entry.cost_code_id && input.contingencyCostCodeIds.has(entry.cost_code_id)) {
+      contingency = roundMoney(contingency + entry.amount);
+    }
+    if (!entry.budget_line_id) {
+      unbudgeted = roundMoney(unbudgeted + entry.amount);
+    }
+  }
+
+  let uncoded = 0;
+  let uncodedCount = 0;
+  let totalCount = 0;
+  let generalValue = 0;
+  let itValue = 0;
+
+  for (const item of input.items) {
+    if (!withinWindow(item.cost_approved_at, window)) continue;
+
+    totalCount += 1;
+    if (!item.cost_code_id) {
+      uncoded = roundMoney(uncoded + item.value);
+      uncodedCount += 1;
+    }
+    if (item.scope === "general") {
+      generalValue = roundMoney(generalValue + item.value);
+    }
+    if (item.scope === "it") {
+      itValue = roundMoney(itValue + item.value);
+    }
+  }
+
+  let overhead = 0;
+  for (const payable of input.payables) {
+    if (payable.charge_target !== "overhead") continue;
+    if (!withinWindow(payable.approved_at, window)) continue;
+    overhead = roundMoney(overhead + payable.amount);
+  }
+
+  let escalated = 0;
+  let escalatedCount = 0;
+  for (const escalation of input.escalations) {
+    if (escalation.band !== "escalate") continue;
+    if (!withinWindow(escalation.decided_at, window)) continue;
+    escalated = roundMoney(escalated + escalation.amount);
+    escalatedCount += 1;
+  }
+
+  return {
+    contingency_value: contingency,
+    unbudgeted_value: unbudgeted,
+    uncoded_value: uncoded,
+    uncoded_item_count: uncodedCount,
+    total_item_count: totalCount,
+    general_request_value: generalValue,
+    it_request_value: itValue,
+    overhead_value: overhead,
+    escalated_value: escalated,
+    escalated_count: escalatedCount,
+  };
+}
+
+type RawUnplannedItem = {
+  cost_code_id: string | null;
+  actual_total: number | string | null;
+  estimated_total: number | string | null;
+  request_id: string;
+  request: { cost_approved_at: string | null; scope: string } | null;
+};
+
+/**
+ * Unplanned and off-budget spend for the period.
+ *
+ * The escalation figure is read out of `audit_events`, which is unusual for a
+ * finance number and worth saying why: the budget control band is decided at
+ * approval time and recorded only in the approval's audit metadata — there is
+ * no column for it. The audit log is append-only and already the record of
+ * what an approver was shown, so it is the honest source. It reads zero for
+ * everything approved before `budget_band` started being written.
+ */
+export async function fetchOpsUnplannedSpend(
+  periodStart: string,
+  periodEnd: string,
+): Promise<OpsUnplannedSpend> {
+  const supabase = getOpsSupabaseServiceClient();
+  const window = opsReportWindow(periodStart, periodEnd);
+
+  const [entryResult, itemResult, payableResult, escalationResult] = await Promise.all([
+    supabase
+      .from("project_cost_entries")
+      .select("amount, budget_line_id, cost_code_id, cost_date, lifecycle_state")
+      .neq("lifecycle_state", "released")
+      .gte("cost_date", window.startDate)
+      .lte("cost_date", window.endDate),
+    supabase
+      .from("material_request_items")
+      .select(
+        "request_id, cost_code_id, actual_total, estimated_total, request:material_requests!material_request_items_request_id_fkey(cost_approved_at, scope)",
+      ),
+    supabase
+      .from("payment_requests")
+      .select("requested_amount, approved_at, charge_target")
+      .is("archived_at", null)
+      .eq("charge_target", "overhead"),
+    supabase
+      .from("audit_events")
+      .select("entity_id, metadata, created_at")
+      .eq("action", "material_request.cost_approved")
+      .gte("created_at", window.startIso)
+      .lte("created_at", window.endIso),
+  ]);
+
+  if (entryResult.error) {
+    throw entryResult.error;
+  }
+  if (itemResult.error) {
+    throw itemResult.error;
+  }
+  if (payableResult.error) {
+    throw payableResult.error;
+  }
+
+  const entries = ((entryResult.data ?? []) as Array<{
+    amount: number | string | null;
+    budget_line_id: string | null;
+    cost_code_id: string | null;
+    cost_date: string;
+    lifecycle_state: string;
+  }>).map((row) => ({
+    amount: toNumber(row.amount),
+    budget_line_id: row.budget_line_id,
+    cost_code_id: row.cost_code_id,
+    cost_date: row.cost_date,
+    lifecycle_state: row.lifecycle_state,
+  }));
+
+  const contingencyCostCodeIds = await fetchOpsContingencyCostCodeIdsFor(
+    entries.map((entry) => entry.cost_code_id).filter((id): id is string => Boolean(id)),
+  ).catch(() => new Set<string>());
+
+  const rawItems = (itemResult.data ?? []) as unknown as RawUnplannedItem[];
+  const valueByRequest = new Map<string, number>();
+
+  const items = rawItems.map((row) => {
+    const request = relation(row.request);
+    const priced = toNumber(row.actual_total);
+    const value = priced > 0 ? priced : toNumber(row.estimated_total);
+    valueByRequest.set(
+      row.request_id,
+      roundMoney((valueByRequest.get(row.request_id) ?? 0) + value),
+    );
+    return {
+      cost_approved_at: request?.cost_approved_at ?? null,
+      cost_code_id: row.cost_code_id,
+      scope: request?.scope ?? "site",
+      value,
+    };
+  });
+
+  const payables = ((payableResult.data ?? []) as Array<{
+    requested_amount: number | string | null;
+    approved_at: string | null;
+    charge_target: string;
+  }>).map((row) => ({
+    amount: toNumber(row.requested_amount),
+    approved_at: row.approved_at,
+    charge_target: row.charge_target,
+  }));
+
+  // A failed audit read must not blank the other figures — the escalation
+  // count is the least of the four and the only one sourced from the log.
+  //
+  // The band carries no amount of its own, so the value comes from the
+  // request it was decided on. That is the same figure the approver was
+  // looking at when the band fired.
+  const escalations = escalationResult.error
+    ? []
+    : ((escalationResult.data ?? []) as Array<{
+        entity_id: string | null;
+        metadata: Record<string, unknown> | null;
+        created_at: string;
+      }>).map((row) => ({
+        amount: row.entity_id ? (valueByRequest.get(row.entity_id) ?? 0) : 0,
+        band: (row.metadata?.budget_band as string | null) ?? null,
+        decided_at: row.created_at,
+      }));
+
+  return summariseUnplannedSpend(
+    { contingencyCostCodeIds, entries, escalations, items, payables },
+    window,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Payroll
+// ---------------------------------------------------------------------------
+
+/**
+ * What labour cost, and what of it left the bank.
+ *
+ * Read straight off the payroll tables rather than the cost spine, because
+ * payroll does not reach the spine — decision D2 step 1 puts wage cost entries
+ * in with a null budget line, so they report as unbudgeted labour and consume
+ * no project budget until the labour lines are confirmed to cover them.
+ *
+ * The headline is EMPLOYER COST, not net pay. Net understates labour by the
+ * whole statutory employer burden, and that burden is real cash with a filing
+ * deadline attached.
+ */
+export type OpsPayrollPeriodSummary = {
+  /** Net pay disbursed to casual site workers in the window. */
+  casual_net: number;
+  /** Net pay disbursed to salaried staff in the window. */
+  staff_net: number;
+  /** Gross + employer NAPSA + WCF: what the company actually spent. */
+  employer_cost: number;
+  /** PAYE + NAPSA both sides + NHIMA + WCF — the ZRA/NAPSA remittance. */
+  statutory_due: number;
+  /** Advances recovered from pay in the window. */
+  advances_recovered: number;
+  /** Advances issued and not yet recovered, at the window's end. */
+  advances_outstanding: number;
+  /** Distinct people paid across both engines. */
+  headcount_paid: number;
+};
+
+export type OpsPayrollRunForPeriod = {
+  disbursed_at: string | null;
+  /** Employer-side statutory on top of gross. */
+  employer_statutory: number;
+  gross: number;
+  headcount: number;
+  net: number;
+  /** Employee-side statutory withheld from gross. */
+  employee_statutory: number;
+  advances: number;
+};
+
+export type OpsAdvanceForPeriod = {
+  amount: number;
+  issued_at: string;
+  recovered: boolean;
+};
+
+export function summarisePayrollPeriod(
+  input: {
+    casual: OpsPayrollRunForPeriod[];
+    staff: OpsPayrollRunForPeriod[];
+    advances: OpsAdvanceForPeriod[];
+  },
+  window: OpsReportWindow,
+): OpsPayrollPeriodSummary {
+  let casualNet = 0;
+  let staffNet = 0;
+  let employerCost = 0;
+  let statutory = 0;
+  let advancesRecovered = 0;
+  let headcount = 0;
+
+  const fold = (runs: OpsPayrollRunForPeriod[], onNet: (value: number) => void) => {
+    for (const run of runs) {
+      if (!withinWindow(run.disbursed_at, window)) continue;
+      onNet(run.net);
+      employerCost = roundMoney(employerCost + run.gross + run.employer_statutory);
+      statutory = roundMoney(statutory + run.employer_statutory + run.employee_statutory);
+      advancesRecovered = roundMoney(advancesRecovered + run.advances);
+      headcount += run.headcount;
+    }
+  };
+
+  fold(input.casual, (net) => {
+    casualNet = roundMoney(casualNet + net);
+  });
+  fold(input.staff, (net) => {
+    staffNet = roundMoney(staffNet + net);
+  });
+
+  let advancesOutstanding = 0;
+  for (const advance of input.advances) {
+    if (advance.recovered) continue;
+    if (advance.issued_at > window.endDate) continue;
+    advancesOutstanding = roundMoney(advancesOutstanding + advance.amount);
+  }
+
+  return {
+    casual_net: casualNet,
+    staff_net: staffNet,
+    employer_cost: employerCost,
+    statutory_due: statutory,
+    advances_recovered: advancesRecovered,
+    advances_outstanding: advancesOutstanding,
+    headcount_paid: headcount,
+  };
+}
+
+type RawCasualItem = {
+  payroll_run_id: string;
+  gross_pay: number | string | null;
+  net_pay: number | string | null;
+  advance_deduction: number | string | null;
+  paye_amount: number | string | null;
+  napsa_employee: number | string | null;
+  napsa_employer: number | string | null;
+  wcf_employer: number | string | null;
+};
+
+type RawStaffItem = RawCasualItem & {
+  staff_payroll_run_id: string;
+  nhima_employee: number | string | null;
+  nhima_employer: number | string | null;
+};
+
+/**
+ * Payroll for the period, from both engines.
+ *
+ * Totals are summed from the ITEMS rather than the run headers: the headers
+ * carry gross/net/advances but no statutory split, and the employer burden is
+ * the figure that matters most here.
+ */
+export async function fetchOpsPayrollPeriod(
+  periodStart: string,
+  periodEnd: string,
+): Promise<OpsPayrollPeriodSummary> {
+  const supabase = getOpsSupabaseServiceClient();
+  const window = opsReportWindow(periodStart, periodEnd);
+
+  const [casualRuns, staffRuns, casualItems, staffItems, cashAdvances, staffAdvances] =
+    await Promise.all([
+      supabase.from("payroll_runs").select("id, disbursed_at").not("disbursed_at", "is", null),
+      supabase
+        .from("staff_payroll_runs")
+        .select("id, disbursed_at")
+        .not("disbursed_at", "is", null),
+      supabase
+        .from("payroll_run_items")
+        .select(
+          "payroll_run_id, gross_pay, net_pay, advance_deduction, paye_amount, napsa_employee, napsa_employer, wcf_employer",
+        ),
+      supabase
+        .from("staff_payroll_items")
+        .select(
+          "staff_payroll_run_id, gross_pay, net_pay, advance_deduction, paye_amount, napsa_employee, napsa_employer, wcf_employer, nhima_employee, nhima_employer",
+        ),
+      supabase.from("cash_advances").select("amount, issued_at, deducted_in_run_id").is("archived_at", null),
+      supabase.from("staff_advances").select("amount, issued_at, deducted_in_run_id").is("archived_at", null),
+    ]);
+
+  const disbursedById = (rows: unknown) =>
+    new Map(
+      ((rows ?? []) as Array<{ id: string; disbursed_at: string | null }>).map((row) => [
+        row.id,
+        row.disbursed_at,
+      ]),
+    );
+
+  const casualDisbursed = disbursedById(casualRuns.data);
+  const staffDisbursed = disbursedById(staffRuns.data);
+
+  const foldItems = <T extends RawCasualItem>(
+    rows: T[],
+    runIdOf: (row: T) => string,
+    disbursed: Map<string, string | null>,
+    nhima: (row: T) => number,
+  ): OpsPayrollRunForPeriod[] =>
+    rows.map((row) => ({
+      advances: toNumber(row.advance_deduction),
+      disbursed_at: disbursed.get(runIdOf(row)) ?? null,
+      employee_statutory: roundMoney(
+        toNumber(row.paye_amount) + toNumber(row.napsa_employee) + nhima(row),
+      ),
+      employer_statutory: roundMoney(
+        toNumber(row.napsa_employer) + toNumber(row.wcf_employer),
+      ),
+      gross: toNumber(row.gross_pay),
+      // One item is one person paid.
+      headcount: 1,
+      net: toNumber(row.net_pay),
+    }));
+
+  const advances = [
+    ...((cashAdvances.data ?? []) as Array<{
+      amount: number | string | null;
+      issued_at: string;
+      deducted_in_run_id: string | null;
+    }>),
+    ...((staffAdvances.data ?? []) as Array<{
+      amount: number | string | null;
+      issued_at: string;
+      deducted_in_run_id: string | null;
+    }>),
+  ].map((row) => ({
+    amount: toNumber(row.amount),
+    issued_at: row.issued_at.slice(0, 10),
+    recovered: Boolean(row.deducted_in_run_id),
+  }));
+
+  return summarisePayrollPeriod(
+    {
+      advances,
+      casual: foldItems(
+        (casualItems.data ?? []) as RawCasualItem[],
+        (row) => row.payroll_run_id,
+        casualDisbursed,
+        () => 0,
+      ),
+      staff: foldItems(
+        (staffItems.data ?? []) as RawStaffItem[],
+        (row) => row.staff_payroll_run_id,
+        staffDisbursed,
+        (row) => toNumber(row.nhima_employee),
+      ),
+    },
+    window,
   );
 }

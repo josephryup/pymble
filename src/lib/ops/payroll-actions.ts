@@ -6,6 +6,7 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { postPayrollRunJournalSafe } from "@/lib/ops/gl-posting";
+import { writeCasualPayrollCostEntries } from "@/lib/ops/payroll-cost-entries";
 import { canManagePayrollRun } from "@/lib/ops/permissions";
 import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import { computePayslip } from "@/lib/ops/statutory/calculator";
@@ -412,9 +413,9 @@ export async function completePayrollRunAction(formData: FormData) {
   const supabase = await createOpsServerSessionClient();
   const { data: run, error: runLoadError } = await supabase
     .from("payroll_runs")
-    .select("id, status")
+    .select("id, status, period_label")
     .eq("id", parsed.data.id)
-    .single<{ id: string; status: string }>();
+    .single<{ id: string; status: string; period_label: string }>();
 
   if (runLoadError || !run) {
     payrollError(runLoadError?.message ?? "Payroll run not found.");
@@ -470,6 +471,16 @@ export async function completePayrollRunAction(formData: FormData) {
   }
 
   await postPayrollRunJournalSafe(run.id, profile.id);
+
+  // Labour into the cost spine (D2 step 1). Split across sites by attendance,
+  // with no budget line — see payroll-cost-entries.ts. Best-effort: the run is
+  // already paid, so a ledger hiccup must not undo a disbursement.
+  await writeCasualPayrollCostEntries({
+    actorUserId: profile.id,
+    costDate: new Date().toISOString().slice(0, 10),
+    periodLabel: run.period_label,
+    runId: run.id,
+  }).catch(() => null);
 
   await supabase.from("audit_events").insert({
     actor_user_id: profile.id,
