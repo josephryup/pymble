@@ -35,7 +35,11 @@ import {
   canSubmitOpsPaymentRequest,
 } from "@/lib/ops/finance-permissions";
 import { postPaymentRequestJournalSafe } from "@/lib/ops/gl-posting";
-import { upsertProjectCostEntry } from "@/lib/ops/project-cost-entries";
+import {
+  type OpsCostLifecycleState,
+  statusForLifecycleState,
+  upsertProjectCostEntry,
+} from "@/lib/ops/project-cost-entries";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsPaymentRequestStatus,
@@ -401,11 +405,28 @@ async function nextBudgetLineNumber(budgetId: string) {
   return (data?.line_number ?? 0) + 1;
 }
 
+/**
+ * Move a payable's ledger entry to a station.
+ *
+ * Takes the station, not the coarse status: the status is derived from it by
+ * the same mapping the database CHECK enforces, so the two cannot be passed in
+ * disagreeing with each other. Before this, callers passed only `status` and
+ * `upsertProjectCostEntry` guessed the station from it — which meant a paid
+ * payable derived `actual` and was indistinguishable from one merely accrued.
+ * The GL has always posted `accrued` at approval and `paid` at settlement
+ * (see postPaymentRequestJournalSafe); this is the cost ledger catching up to
+ * the GL it is supposed to mirror.
+ *
+ * There is exactly one ledger row per payable — the match is on
+ * `payment_request_id` alone — so advancing a station rewrites that row in
+ * place. Nothing double-counts and no relief pass is needed, unlike material
+ * requests, which hold one row per station.
+ */
 async function upsertPaymentCostEntry(input: {
   actorUserId: string;
+  lifecycleState: OpsCostLifecycleState;
   paymentReference?: string;
   paymentRequest: PaymentRequestForMutation;
-  status: "committed" | "posted" | "cancelled";
 }) {
   return upsertProjectCostEntry({
     actorUserId: input.actorUserId,
@@ -428,7 +449,8 @@ async function upsertPaymentCostEntry(input: {
       source_table: "payment_requests",
       supplier_id: input.paymentRequest.supplier_id,
     },
-    status: input.status,
+    lifecycleState: input.lifecycleState,
+    status: statusForLifecycleState(input.lifecycleState),
   });
 }
 
@@ -1421,10 +1443,12 @@ export async function approvePaymentRequestAction(formData: FormData) {
     paymentError(error.message);
   }
 
+  // Approval is the accrual: the obligation is real and dated, but no cash has
+  // moved. Matches the `accrued` journal posted immediately below.
   await upsertPaymentCostEntry({
     actorUserId: profile.id,
+    lifecycleState: "accrued",
     paymentRequest,
-    status: "committed",
   }).catch((error: unknown) =>
     recordOpsAuditEvent({
       action: "payment_request.cost_entry_sync_failed",
@@ -1506,8 +1530,8 @@ export async function rejectPaymentRequestAction(formData: FormData) {
 
   await upsertPaymentCostEntry({
     actorUserId: profile.id,
+    lifecycleState: "released",
     paymentRequest,
-    status: "cancelled",
   }).catch(() => null);
 
   await recordOpsAuditEvent({
@@ -1565,11 +1589,13 @@ export async function markPaymentRequestPaidAction(formData: FormData) {
     paymentError(error.message);
   }
 
+  // Cash has left the bank. This is the only station that means that, and it is
+  // what every "money actually released" figure counts.
   await upsertPaymentCostEntry({
     actorUserId: profile.id,
+    lifecycleState: "paid",
     paymentReference: parsed.data.payment_reference,
     paymentRequest,
-    status: "posted",
   });
 
   await postPaymentRequestJournalSafe(
@@ -1641,8 +1667,8 @@ export async function cancelPaymentRequestAction(formData: FormData) {
 
   await upsertPaymentCostEntry({
     actorUserId: profile.id,
+    lifecycleState: "released",
     paymentRequest,
-    status: "cancelled",
   }).catch(() => null);
 
   await recordOpsAuditEvent({

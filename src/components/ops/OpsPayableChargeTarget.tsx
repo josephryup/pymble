@@ -19,7 +19,9 @@ type LegacyOption = Option & { cost_treatment: "opening_balance" | "current_peri
  * posts a stale site id alongside a legacy project id.
  */
 export function OpsPayableChargeTarget({
+  budgetLineOptions,
   costCentreOptions,
+  defaultBudgetLineId = "",
   defaultChargeTarget = "site",
   defaultCostCentreId = "",
   defaultCostTreatment = "",
@@ -28,7 +30,14 @@ export function OpsPayableChargeTarget({
   legacyProjectOptions,
   siteOptions,
 }: {
+  /**
+   * Omitted by forms that do not offer a budget line at all (the edit form).
+   * When given, the selector is rendered only under the site target — see the
+   * site branch below.
+   */
+  budgetLineOptions?: Option[];
   costCentreOptions: Option[];
+  defaultBudgetLineId?: string;
   defaultChargeTarget?: string;
   defaultCostCentreId?: string;
   defaultCostTreatment?: string;
@@ -118,24 +127,49 @@ export function OpsPayableChargeTarget({
 
       <div className="mt-3 grid gap-4 lg:grid-cols-2">
         {target === "site" ? (
-          <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-            Site
-            <select
-              className={OPS_INPUT_CLASS}
-              defaultValue={defaultSiteId}
-              name="site_id"
-              required
-            >
-              <option disabled value="">
-                Select site
-              </option>
-              {siteOptions.map((site) => (
-                <option key={site.id} value={site.id}>
-                  {site.code} - {site.name}
+          <>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Site
+              <select
+                className={OPS_INPUT_CLASS}
+                defaultValue={defaultSiteId}
+                name="site_id"
+                required
+              >
+                <option disabled value="">
+                  Select site
                 </option>
-              ))}
-            </select>
-          </label>
+                {siteOptions.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.code} - {site.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Only live site work consumes a project budget. Under the other
+                two targets the resolver refuses a budget line outright, so
+                showing the selector there offers a choice that can only ever
+                be wrong — and unmounting it means the browser cannot post a
+                stale line id if the target is changed after picking one. */}
+            {budgetLineOptions ? (
+              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+                Budget line
+                <select
+                  className={OPS_INPUT_CLASS}
+                  defaultValue={defaultBudgetLineId}
+                  name="budget_line_id"
+                >
+                  <option value="">No budget line</option>
+                  {budgetLineOptions.map((line) => (
+                    <option key={line.id} value={line.id}>
+                      {line.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </>
         ) : null}
 
         {target === "legacy_project" ? (

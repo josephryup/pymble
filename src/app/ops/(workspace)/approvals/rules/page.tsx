@@ -39,27 +39,27 @@ export default async function OpsApprovalRulesPage() {
   // drift from the chain people actually get.
   const chains = materialRequest
     ? ([
-        {
-          label: "Site material request",
-          below: materialRequestApprovalSteps("normal", 0, "site", materialRequest),
-          above: materialRequestApprovalSteps(
-            "normal",
-            materialRequest.threshold_amount,
-            "site",
-            materialRequest,
-          ),
-        },
-        {
-          label: "IT / general material request",
-          below: materialRequestApprovalSteps("normal", 0, "it", materialRequest),
-          above: materialRequestApprovalSteps(
-            "normal",
-            materialRequest.threshold_amount,
-            "it",
-            materialRequest,
-          ),
-        },
-      ] as const)
+      {
+        label: "Site material request",
+        below: materialRequestApprovalSteps("normal", 0, "site", materialRequest),
+        above: materialRequestApprovalSteps(
+          "normal",
+          materialRequest.threshold_amount,
+          "site",
+          materialRequest,
+        ),
+      },
+      {
+        label: "IT / general material request",
+        below: materialRequestApprovalSteps("normal", 0, "it", materialRequest),
+        above: materialRequestApprovalSteps(
+          "normal",
+          materialRequest.threshold_amount,
+          "it",
+          materialRequest,
+        ),
+      },
+    ] as const)
     : [];
 
   return (
@@ -212,7 +212,7 @@ export default async function OpsApprovalRulesPage() {
         </div>
         <div className="mt-4">
           <OpsInlineEmpty>
-            Thresholds are edited by Leadership only. 
+            Thresholds are edited by Leadership only.
           </OpsInlineEmpty>
         </div>
       </section>

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
   statusForLifecycleState,
@@ -103,5 +105,88 @@ describe("relief keeps exposure honest", () => {
 
     assert.equal(delivered.consumed, 287_211);
     assert.equal(delivered.usedPercent, 95.7);
+  });
+});
+
+/**
+ * Guard: each payable action books the station its event actually means.
+ *
+ * The stations are only worth having if the right one is written. Before this,
+ * every payable action passed the coarse `status` alone and let
+ * `upsertProjectCostEntry` infer the station — so approval booked `reserved`
+ * and settlement booked `actual`, leaving "money actually released"
+ * unanswerable because a paid payable looked exactly like an accrued one.
+ *
+ * Source-level because the mistake is silent: the wrong station is a perfectly
+ * valid row, it passes the CHECK constraint, and it consumes budget identically.
+ * Nothing fails. The figures just quietly mean something else. Only reading the
+ * call site tells you which event was recorded.
+ */
+describe("payable actions book the station their event means", () => {
+  const source = readFileSync(
+    join(import.meta.dirname, "..", "src", "lib", "ops", "finance-actions.ts"),
+    "utf8",
+  );
+
+  /**
+   * Body of `function name(...)`, by brace matching.
+   *
+   * The parameter list is walked by paren depth first. Taking the next `{`
+   * after the function name instead would find the brace of an inline
+   * parameter type — `input: { … }` — and return the signature rather than
+   * the body.
+   */
+  function bodyOf(name: string) {
+    const start = source.search(new RegExp(`function\\s+${name}\\s*\\(`));
+    assert.notEqual(start, -1, `${name} not found in finance-actions.ts`);
+
+    const paramsOpen = source.indexOf("(", start);
+    let parens = 0;
+    let cursor = paramsOpen;
+    for (; cursor < source.length; cursor++) {
+      if (source[cursor] === "(") parens++;
+      else if (source[cursor] === ")" && --parens === 0) break;
+    }
+
+    const open = source.indexOf("{", cursor);
+    let depth = 0;
+    for (let scan = open; scan < source.length; scan++) {
+      if (source[scan] === "{") depth++;
+      else if (source[scan] === "}" && --depth === 0) {
+        return source.slice(open, scan + 1);
+      }
+    }
+    throw new Error(`unbalanced braces in ${name}`);
+  }
+
+  const expected: Array<[action: string, station: string, why: string]> = [
+    [
+      "approvePaymentRequestAction",
+      "accrued",
+      "the obligation is real and dated, but no cash has moved",
+    ],
+    ["markPaymentRequestPaidAction", "paid", "cash has left the bank"],
+    ["rejectPaymentRequestAction", "released", "the money goes back to the budget"],
+    ["cancelPaymentRequestAction", "released", "the money goes back to the budget"],
+  ];
+
+  for (const [action, station, why] of expected) {
+    it(`${action} books ${station} — ${why}`, () => {
+      assert.match(
+        bodyOf(action),
+        new RegExp(`lifecycleState:\\s*"${station}"`),
+        `${action} must pass lifecycleState: "${station}"`,
+      );
+    });
+  }
+
+  it("derives status from the station rather than accepting both", () => {
+    const helper = bodyOf("upsertPaymentCostEntry");
+
+    assert.match(
+      helper,
+      /status:\s*statusForLifecycleState\(/,
+      "status must be derived, so a caller cannot pass a station and status that disagree",
+    );
   });
 });

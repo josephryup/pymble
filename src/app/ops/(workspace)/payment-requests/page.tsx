@@ -292,6 +292,13 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
     fetchOpsLegacyProjectOptions(),
     fetchOpsCostCentreOptions(),
   ]);
+  // Flattened here rather than in the client component so the label stays a
+  // server concern and the component takes the same {id, label} shape as the
+  // other two charge targets.
+  const budgetLineChoices = budgetLineOptions.map((line) => ({
+    id: line.id,
+    label: `${line.budget?.budget_number ?? "Budget"} / ${line.cost_code || line.category} - ${line.description}`,
+  }));
   const notice = paymentRequestNotice(params);
   const canCreate = canCreateOpsPaymentRequest(auth.profile.role);
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
@@ -595,6 +602,7 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                 </select>
               </label>
               <OpsPayableChargeTarget
+                budgetLineOptions={budgetLineChoices}
                 costCentreOptions={costCentreOptions}
                 legacyProjectOptions={legacyProjectOptions}
                 siteOptions={siteOptions}
@@ -606,18 +614,6 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                   {supplierOptions.map((supplier) => (
                     <option key={supplier.id} value={supplier.id}>
                       {supplier.supplier_code} - {supplier.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                Budget line
-                <select className={OPS_INPUT_CLASS} defaultValue="" name="budget_line_id">
-                  <option value="">No budget line</option>
-                  {budgetLineOptions.map((line) => (
-                    <option key={line.id} value={line.id}>
-                      {line.budget?.budget_number ?? "Budget"} / {line.cost_code || line.category} -{" "}
-                      {line.description}
                     </option>
                   ))}
                 </select>

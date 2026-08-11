@@ -1393,12 +1393,20 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
   const update: {
     status: OpsMaterialRequestStatus;
     approved_at?: string | null;
+    cost_approved_at?: string | null;
+    cost_approved_by?: string | null;
     rejected_at?: string | null;
   } = {
     status: decisionIsApprove ? (movesToMdReview ? "md_review" : "approved") : "rejected",
   };
   if (isFinalApproval) {
     update.approved_at = nowIso;
+    // The authority to spend, in its own column. `approved_at` is also written
+    // when the Operations chain completes, so on its own it cannot say whether
+    // Finance has decided — a report reading it counted requests still out for
+    // pricing as approved spend.
+    update.cost_approved_at = nowIso;
+    update.cost_approved_by = profile.id;
     update.rejected_at = null;
   } else if (!decisionIsApprove) {
     update.rejected_at = nowIso;

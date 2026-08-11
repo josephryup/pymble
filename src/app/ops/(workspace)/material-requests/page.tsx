@@ -10,6 +10,7 @@ import {
   PackagePlus,
   Pencil,
   Plus,
+  Receipt,
   Save,
   Send,
   Target,
@@ -51,7 +52,10 @@ import {
   updateMaterialRequestHeaderAction,
   updateMaterialRequestItemAction,
 } from "@/lib/ops/material-request-actions";
-import { procureMaterialRequestAction } from "@/lib/ops/procure-actions";
+import {
+  procureMaterialRequestAction,
+  recordDirectPurchaseAction,
+} from "@/lib/ops/procure-actions";
 import {
   canApproveMaterialRequestCost,
   canApproveMaterialRequestMdReview,
@@ -89,7 +93,10 @@ import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { formatOpsUserName } from "@/lib/ops/roles";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
 import { fetchActiveSupplierOptions } from "@/lib/ops/suppliers";
-import { OpsSupplierPicker } from "@/components/ops/OpsSupplierPicker";
+import {
+  OpsSupplierPicker,
+  type OpsSupplierOption,
+} from "@/components/ops/OpsSupplierPicker";
 import { OpsLineItemsEditor } from "@/components/ops/OpsLineItemsEditor";
 import { OpsScopeSitePicker } from "@/components/ops/OpsScopeSitePicker";
 import { OpsImportTemplateLinks } from "@/components/ops/OpsImportTemplateLinks";
@@ -185,6 +192,14 @@ function materialRequestNotice(params: OpsSearchParams) {
       message: `Procurement recorded. ${pos} draft purchase order${
         pos === "1" ? "" : "s"
       } raised — review and issue when ready. Nothing has been sent to a supplier yet.`,
+      tone: "success" as const,
+    };
+  }
+
+  if (firstParam(params.updated) === "direct_purchase") {
+    return {
+      message:
+        "Purchase recorded. The request is now procured and the amounts paid have replaced the estimates.",
       tone: "success" as const,
     };
   }
@@ -574,6 +589,116 @@ function ProcureForm({
           >
             <PackageCheck className="size-4" aria-hidden="true" />
             Raise draft purchase orders
+          </OpsConfirmSubmitButton>
+        </div>
+      </form>
+    </details>
+  );
+}
+
+/**
+ * Recording a purchase that already happened — cash, mobile money, or a
+ * walk-in account buy (decision D1).
+ *
+ * Separate from ProcureForm rather than a mode of it, because the two ask
+ * genuinely different questions. Procurement asks "what shall we order, and
+ * from whom?"; this asks "what did you buy, and what did it cost?" — past
+ * tense, with a receipt in hand. Folding them together would mean one form
+ * where half the fields are wrong whichever way you came in.
+ */
+function DirectPurchaseForm({
+  request,
+  supplierOptions,
+}: {
+  request: OpsMaterialRequestSummary;
+  supplierOptions: OpsSupplierOption[];
+}) {
+  return (
+    <details className="rounded-md border border-border bg-muted/30">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-foreground/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
+        <Receipt className="size-4" aria-hidden="true" />
+        Record a purchase already made
+      </summary>
+      <form action={recordDirectPurchaseAction} className="border-t border-border p-3">
+        <OpsReturnToField />
+        <input name="request_id" type="hidden" value={request.id} />
+        <p className="mb-3 text-xs leading-5 text-muted-foreground">
+          For material bought over the counter — cash, mobile money, or on account —
+          where there was no purchase order. The amount you enter is what was actually
+          paid, and it replaces the estimate. Finance is told if the total comes in
+          above what was approved.
+        </p>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <OpsSupplierPicker
+            helperText="Type the name if they are not on the supplier list."
+            label="Bought from"
+            required
+            suppliers={supplierOptions}
+          />
+          <label className={OPS_LABEL_CLASS}>
+            Date of purchase
+            <input
+              className={OPS_INPUT_CLASS}
+              max={new Date().toISOString().slice(0, 10)}
+              name="purchased_on"
+              required
+              type="date"
+            />
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Receipt number
+            <input
+              className={OPS_INPUT_CLASS}
+              name="receipt_reference"
+              placeholder="Till slip or invoice number"
+            />
+          </label>
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {request.items.map((item) => (
+            <div
+              className="grid gap-2 rounded-md border border-border bg-background p-2 min-[640px]:grid-cols-[auto_1fr_10rem] min-[640px]:items-center"
+              key={item.id}
+            >
+              <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <input
+                  className="size-4 accent-[var(--primary-blue,#1d4ed8)]"
+                  name={`purchased::${item.id}`}
+                  type="checkbox"
+                />
+                <span className="sr-only">Bought {item.item_name}</span>
+              </label>
+              <div>
+                <p className="text-sm font-semibold text-foreground">{item.item_name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {item.quantity} {item.unit}
+                  {item.actual_total > 0
+                    ? ` · estimated ${formatZmw(item.actual_total)}`
+                    : ""}
+                </p>
+              </div>
+              <input
+                aria-label={`Amount paid for ${item.item_name}`}
+                className={OPS_INPUT_CLASS}
+                min="0"
+                name={`amount::${item.id}`}
+                placeholder="Amount paid"
+                step="0.01"
+                type="number"
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 flex justify-end">
+          <OpsConfirmSubmitButton
+            className={OPS_SECONDARY_BUTTON_CLASS}
+            confirmText="Confirm — record this purchase"
+          >
+            <Receipt className="size-4" aria-hidden="true" />
+            Record purchase
           </OpsConfirmSubmitButton>
         </div>
       </form>
@@ -1670,8 +1795,12 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                   {canProcure &&
                   (request.status === "approved" ||
                     request.status === "partially_ordered") ? (
-                    <div className="mt-3">
+                    <div className="mt-3 grid gap-2">
                       <ProcureForm request={request} />
+                      <DirectPurchaseForm
+                        request={request}
+                        supplierOptions={supplierOptions}
+                      />
                     </div>
                   ) : null}
 

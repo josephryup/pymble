@@ -75,6 +75,60 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
       { key: "payment_request_value_zmw", label: "Payment request value (ZMW)", auto: true },
       { key: "invoices_issued", label: "Invoices issued", auto: true },
       { key: "invoice_value_zmw", label: "Invoice value (ZMW)", auto: true },
+      // The procurement funnel. Read the first three together: what Finance
+      // authorised, what was actually bought, and what is authorised but
+      // unspent. The gap is the finding, and the coverage percent stops a zero
+      // being misread as "no activity".
+      {
+        key: "mr_approved_value_zmw",
+        label: "Material spend approved (ZMW)",
+        auto: true,
+        hint: "Cost approved by Finance or the MD in this period.",
+      },
+      {
+        key: "mr_procured_value_zmw",
+        label: "Material spend procured (ZMW)",
+        auto: true,
+        hint: "Reached a purchase order or a recorded direct purchase in this period.",
+      },
+      {
+        key: "mr_procured_coverage_pct",
+        label: "Approved value procured (%)",
+        auto: true,
+        hint: "Procured as a share of approved. Low means authorised money is not being spent.",
+      },
+      {
+        key: "mr_approved_not_procured_zmw",
+        label: "Approved but not yet bought (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "Position at period end, not a flow — includes requests approved earlier.",
+      },
+      {
+        key: "mr_delivered_value_zmw",
+        label: "Material delivered (ZMW)",
+        auto: true,
+        hint: "Goods confirmed received on site in this period.",
+      },
+      {
+        key: "mr_procurement_days_avg",
+        label: "Days approved to bought",
+        auto: true,
+        downIsGood: true,
+      },
+      {
+        key: "mr_awaiting_finance_zmw",
+        label: "Priced, awaiting Finance (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "Position at period end — priced requests with no cost decision yet.",
+      },
+      {
+        key: "mr_awaiting_finance_days_max",
+        label: "Longest wait for Finance (days)",
+        auto: true,
+        downIsGood: true,
+      },
       { key: "cash_position_zmw", label: "Cash position (ZMW)", hint: "Bank balances at period end." },
     ],
   },

@@ -1,4 +1,5 @@
 import type { OpsDepartmentKey } from "@/lib/ops/department-report-permissions";
+import { fetchOpsMaterialRequestFunnel } from "@/lib/ops/finance-period-metrics";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 /**
@@ -173,7 +174,53 @@ function procurementMetrics(supabase: ServiceClient, start: string, end: string)
   ]);
 }
 
-function financeMetrics(supabase: ServiceClient, start: string, end: string) {
+/**
+ * The material request funnel, folded into the flat metric map.
+ *
+ * One query set behind eight figures, so it is fetched once rather than as
+ * eight independent `resolveEntries` rows. Best-effort like everything else
+ * here: a failure yields no suggestions rather than a broken report page.
+ */
+async function materialRequestFunnelMetrics(start: string, end: string) {
+  try {
+    const funnel = await fetchOpsMaterialRequestFunnel(start, end);
+    const metrics: Record<string, number> = {
+      mr_approved_value_zmw: funnel.approved_value,
+      mr_approved_not_procured_zmw: funnel.approved_not_procured_value,
+      mr_awaiting_finance_zmw: funnel.awaiting_finance_value,
+      mr_delivered_value_zmw: funnel.delivered_value,
+      mr_procured_value_zmw: funnel.procured_value,
+    };
+
+    // Null means "nothing to measure", which is not the same as zero and must
+    // not be suggested as one — an empty queue and a queue waiting zero days
+    // would otherwise read alike.
+    if (funnel.procured_coverage_percent !== null) {
+      metrics.mr_procured_coverage_pct = funnel.procured_coverage_percent;
+    }
+    if (funnel.procurement_days_avg !== null) {
+      metrics.mr_procurement_days_avg = funnel.procurement_days_avg;
+    }
+    if (funnel.awaiting_finance_days_max !== null) {
+      metrics.mr_awaiting_finance_days_max = funnel.awaiting_finance_days_max;
+    }
+
+    return metrics;
+  } catch {
+    return {};
+  }
+}
+
+async function financeMetrics(supabase: ServiceClient, start: string, end: string) {
+  const [base, funnel] = await Promise.all([
+    baseFinanceMetrics(supabase, start, end),
+    materialRequestFunnelMetrics(start, end),
+  ]);
+
+  return { ...base, ...funnel };
+}
+
+function baseFinanceMetrics(supabase: ServiceClient, start: string, end: string) {
   return resolveEntries([
     [
       "payment_requests_received",
