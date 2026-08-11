@@ -149,11 +149,40 @@ reports mislead.
 2. **Phase 1 — DONE 2026-08-11.** §4.A, the procurement funnel, plus the direct-purchase
    path that makes it reachable (D1) and the Finance-queue metrics (D6). Two schema
    changes were needed after all — see §9.
-3. **Phase 2:** §4.B cash release — now unblocked by Phase 0.
-4. **Phase 3:** §4.C period-scoped budget consumption (new fetcher + a per-budget table;
-   see §5 on why this cannot be a single number).
+3. **Phase 2 — DONE 2026-08-11.** §4.B cash release, plus the payables approval queue —
+   the same backlog problem D6 found on material requests, on the other side of the desk.
+   No schema change.
+4. **Phase 3 — DONE 2026-08-11.** §4.C period-scoped budget consumption:
+   `fetchOpsBudgetConsumption` (the new date-filtered position query), six scalar metrics,
+   and the per-budget table on `/ops/finance`. No schema change.
 5. **Phase 4:** §4.D unplanned spend and §4.E payroll.
 6. **Phase 5:** the §6 additions worth having.
+
+### Phase 3 note — what the budget table exposed
+
+Scalars roll up **active** budgets only, as asked. The table shows draft and locked too,
+because filtering them out would have hidden the finding: of six open budgets, only two are
+active, and **BUD-20260703-0CD14D on site 0003 carries K133,850 of spend against K0
+budgeted.** It is titled "Budget generated from Unplanned spend" and has sat in `draft`
+since 3 July.
+
+That is why `unfunded_budget_spend_zmw` is a value-and-count metric rather than a
+percentage: there is no denominator. A "% used" column would render it as `—` and it would
+disappear.
+
+Active position at 2026-08-11: **K17,317,723 budgeted · K840 consumed · 0.0% used.** The
+spend is real but almost none of it is reaching an active budget — which is the same
+finding as §2.2 and §4.D seen from the budget side.
+
+### Phase 2 note — no coverage ratio for cash
+
+The funnel carries a `procured ÷ approved` percent; cash release deliberately does not.
+Approved and released are different cohorts rather than two stages of one, so a payable
+approved in June and paid in July would push July's ratio above 100% while saying nothing.
+The honest reading is the pair plus the two waiting positions.
+
+Measured over August 2026: **approved K13,500 · released K0 · K13,500 owed and unpaid,
+26 days · K159,890 submitted with no Finance decision, 26 days.**
 
 ---
 

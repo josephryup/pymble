@@ -31,6 +31,12 @@ import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { OpsProjectPnlPanel } from "@/components/ops/OpsProjectPnlPanel";
 import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsTableShell } from "@/components/ops/OpsTableShell";
+import { OpsBudgetConsumptionPanel } from "@/components/ops/OpsBudgetConsumptionPanel";
+import { fetchOpsBudgetConsumption } from "@/lib/ops/finance-period-metrics";
+import {
+  getOpsFinanceMonthStartIso,
+  getOpsFinanceTodayIso,
+} from "@/lib/ops/finance-reporting";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
 import { canViewOpsChartOfAccounts } from "@/lib/ops/chart-of-accounts-permissions";
@@ -73,6 +79,9 @@ export const dynamic = "force-dynamic";
 
 export default async function OpsFinanceOverviewPage() {
   const { profile } = await requireOpsUser();
+  const today = getOpsFinanceTodayIso();
+  const monthStart = getOpsFinanceMonthStartIso(today);
+  const monthEnd = today;
 
   if (!canAccessOpsHref(profile.role, "/ops/finance", await fetchOpsModuleAccessOverrides())) {
     notFound();
@@ -94,6 +103,7 @@ export default async function OpsFinanceOverviewPage() {
     leakReport,
     reservations,
     glReconciliation,
+    budgetConsumption,
   ] = await Promise.all([
     fetchOpsFinanceCashflowDashboard(),
     fetchOpsPaymentRequestStats(),
@@ -114,6 +124,9 @@ export default async function OpsFinanceOverviewPage() {
       totalReservedAmount: 0,
     })),
     fetchOpsGlReconciliation().catch(() => null),
+    // Current calendar month, so the panel answers "where has the money gone
+    // this month" without asking the reader to pick a period first.
+    fetchOpsBudgetConsumption(monthStart, monthEnd).catch(() => null),
   ]);
   const staleReservations = reservations.rows.filter((row) => row.isStale);
   const hasGlActivity = glTrend.some(
@@ -176,6 +189,16 @@ export default async function OpsFinanceOverviewPage() {
           value={String(subcontractorPaymentsPendingCount)}
         />
       </section>
+
+      {/* Budget consumption, month to date. Sits above the leak detector
+          because the two answer adjacent questions — this one is "where did
+          the money go", the next is "did any of it escape the chain". */}
+      {budgetConsumption ? (
+        <OpsBudgetConsumptionPanel
+          consumption={budgetConsumption}
+          periodLabel="this month"
+        />
+      ) : null}
 
       {/* Leak detector: reconciliation of the request → budget → cost-ledger
           chain. When every count is zero the chain reconciles — this panel is

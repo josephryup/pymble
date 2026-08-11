@@ -1,5 +1,9 @@
 import type { OpsDepartmentKey } from "@/lib/ops/department-report-permissions";
-import { fetchOpsMaterialRequestFunnel } from "@/lib/ops/finance-period-metrics";
+import {
+  fetchOpsBudgetConsumption,
+  fetchOpsMaterialRequestFunnel,
+  fetchOpsPayableRelease,
+} from "@/lib/ops/finance-period-metrics";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 /**
@@ -211,13 +215,73 @@ async function materialRequestFunnelMetrics(start: string, end: string) {
   }
 }
 
+/**
+ * Cash release. Same best-effort contract as the funnel: one query behind
+ * seven figures, and a failure suggests nothing rather than breaking the page.
+ */
+async function payableReleaseMetrics(start: string, end: string) {
+  try {
+    const release = await fetchOpsPayableRelease(start, end);
+    const metrics: Record<string, number> = {
+      payments_approved_zmw: release.approved_value,
+      payments_awaiting_approval_zmw: release.awaiting_approval_value,
+      payments_awaiting_release_zmw: release.awaiting_release_value,
+      payments_released_zmw: release.released_value,
+    };
+
+    // Null is "no queue", which must not be suggested as a zero-day wait.
+    if (release.awaiting_release_days_max !== null) {
+      metrics.payments_awaiting_release_days_max = release.awaiting_release_days_max;
+    }
+    if (release.awaiting_approval_days_max !== null) {
+      metrics.payments_awaiting_approval_days_max = release.awaiting_approval_days_max;
+    }
+    if (release.release_days_avg !== null) {
+      metrics.payment_release_days_avg = release.release_days_avg;
+    }
+
+    return metrics;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Budget consumption. The scalars only; the per-budget breakdown is a table
+ * and lives on /ops/finance, not in six more numeric fields.
+ */
+async function budgetConsumptionMetrics(start: string, end: string) {
+  try {
+    const consumption = await fetchOpsBudgetConsumption(start, end);
+    const metrics: Record<string, number> = {
+      active_budget_total_zmw: consumption.active_budgeted,
+      budget_consumed_period_zmw: consumption.active_consumed_period,
+      budget_remaining_zmw: consumption.active_remaining,
+      budgets_over_threshold: consumption.budgets_over_threshold,
+      unfunded_budget_spend_zmw: consumption.unfunded_budget_value,
+    };
+
+    // Null when nothing is budgeted — a 0% "used" against no budget would read
+    // as healthy when it is the opposite.
+    if (consumption.active_used_percent !== null) {
+      metrics.budget_used_pct = consumption.active_used_percent;
+    }
+
+    return metrics;
+  } catch {
+    return {};
+  }
+}
+
 async function financeMetrics(supabase: ServiceClient, start: string, end: string) {
-  const [base, funnel] = await Promise.all([
+  const [base, funnel, release, budgets] = await Promise.all([
     baseFinanceMetrics(supabase, start, end),
     materialRequestFunnelMetrics(start, end),
+    payableReleaseMetrics(start, end),
+    budgetConsumptionMetrics(start, end),
   ]);
 
-  return { ...base, ...funnel };
+  return { ...base, ...funnel, ...release, ...budgets };
 }
 
 function baseFinanceMetrics(supabase: ServiceClient, start: string, end: string) {

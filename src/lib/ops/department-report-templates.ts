@@ -75,6 +75,53 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
       { key: "payment_request_value_zmw", label: "Payment request value (ZMW)", auto: true },
       { key: "invoices_issued", label: "Invoices issued", auto: true },
       { key: "invoice_value_zmw", label: "Invoice value (ZMW)", auto: true },
+      // Cash. Approved and released are two different cohorts, not two stages
+      // of one, so there is no ratio between them — the pair plus the two
+      // waiting positions is the honest reading.
+      {
+        key: "payments_approved_zmw",
+        label: "Payments approved (ZMW)",
+        auto: true,
+        hint: "Authorised by Finance in this period. Not the same as paid.",
+      },
+      {
+        key: "payments_released_zmw",
+        label: "Payments released (ZMW)",
+        auto: true,
+        hint: "Cash that actually left the bank in this period.",
+      },
+      {
+        key: "payments_awaiting_release_zmw",
+        label: "Approved, awaiting payment (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "Position at period end — approved and still unpaid. What suppliers are owed.",
+      },
+      {
+        key: "payments_awaiting_release_days_max",
+        label: "Longest wait for payment (days)",
+        auto: true,
+        downIsGood: true,
+      },
+      {
+        key: "payments_awaiting_approval_zmw",
+        label: "Submitted, awaiting Finance (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "Position at period end — payables with no Finance decision yet.",
+      },
+      {
+        key: "payments_awaiting_approval_days_max",
+        label: "Longest wait for a decision (days)",
+        auto: true,
+        downIsGood: true,
+      },
+      {
+        key: "payment_release_days_avg",
+        label: "Days approved to paid",
+        auto: true,
+        downIsGood: true,
+      },
       // The procurement funnel. Read the first three together: what Finance
       // authorised, what was actually bought, and what is authorised but
       // unspent. The gap is the finding, and the coverage percent stops a zero
@@ -128,6 +175,41 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
         label: "Longest wait for Finance (days)",
         auto: true,
         downIsGood: true,
+      },
+      // Budgets. "Used this period" is a flow and "remaining" is a position at
+      // period end — different time bases, so they do not reconcile and the
+      // labels say which is which.
+      {
+        key: "active_budget_total_zmw",
+        label: "Active project budgets (ZMW)",
+        auto: true,
+        hint: "Total budgeted across budgets in the active state.",
+      },
+      {
+        key: "budget_consumed_period_zmw",
+        label: "Budget used this period (ZMW)",
+        auto: true,
+        hint: "Spend dated inside the period. A flow — does not reconcile to remaining.",
+      },
+      {
+        key: "budget_remaining_zmw",
+        label: "Budget remaining (ZMW)",
+        auto: true,
+        hint: "Position at period end: budgeted less everything consumed to date.",
+      },
+      { key: "budget_used_pct", label: "Budget used (%)", auto: true, downIsGood: true },
+      {
+        key: "budgets_over_threshold",
+        label: "Budgets past the warning band",
+        auto: true,
+        downIsGood: true,
+      },
+      {
+        key: "unfunded_budget_spend_zmw",
+        label: "Spend on unfunded budgets (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "Charged to a budget with nothing budgeted, so no percentage can express it.",
       },
       { key: "cash_position_zmw", label: "Cash position (ZMW)", hint: "Bank balances at period end." },
     ],
