@@ -13,7 +13,9 @@ import {
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
+import { OpsAgeingPanel } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
+import { fetchOpsReceivablesAgeing } from "@/lib/ops/finance-kpis";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
@@ -42,7 +44,6 @@ import {
 } from "@/lib/ops/invoices";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
 import { requireOpsUser } from "@/lib/ops/auth";
-import { fetchOpsBoqOptions } from "@/lib/ops/boq";
 import { fetchActiveCustomerOptions } from "@/lib/ops/customers";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -151,18 +152,23 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
 
   const listState = parseOpsListState(params, { defaultPageSize: 10 });
   const status = invoiceStatusFromParam(firstParam(params.status));
-  const [invoicePage, siteOptions, boqOptions, invoiceStatusCounts, customerOptions] =
-    await Promise.all([
-      fetchPaginatedOpsInvoices({
-        listState,
-        query: listState.query,
-        status: status || undefined,
-      }),
-      fetchActiveSiteOptions(),
-      fetchOpsBoqOptions(),
-      fetchOpsInvoiceStatusCounts(),
-      fetchActiveCustomerOptions(),
-    ]);
+  const [
+    invoicePage,
+    siteOptions,
+    invoiceStatusCounts,
+    customerOptions,
+    receivablesAgeing,
+  ] = await Promise.all([
+    fetchPaginatedOpsInvoices({
+      listState,
+      query: listState.query,
+      status: status || undefined,
+    }),
+    fetchActiveSiteOptions(),
+    fetchOpsInvoiceStatusCounts(),
+    fetchActiveCustomerOptions(),
+    fetchOpsReceivablesAgeing(),
+  ]);
   const invoices = invoicePage.items;
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const canCreate = canCreateInvoice(auth.profile.role);
@@ -197,9 +203,9 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
     <div className="w-full max-w-none space-y-6">
       <OpsRealtimeRefresh tables={["invoices", "approval_requests"]} />
       <OpsPageHeader
-        eyebrow="Commercial / Finance"
-        title="Invoices"
-        description="Value-Added Tax invoices, material schedule links, client TPIN records, receivables status, and invoice evidence."
+        eyebrow="Finance and Accounts"
+        title="Invoices and receivables"
+        description="What clients owe Pymble: raise VAT invoices, track what is outstanding, and see receivables ageing."
         actions={
           <>
             <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/material-schedule">
@@ -266,6 +272,21 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
         />
       </section>
 
+      {/* Receivables ageing, moved here from the Payables page. This is the
+          register the invoices actually live in, so it is where "who owes us,
+          and for how long" belongs.
+          Caveat worth knowing while reading it: invoices carry no due date yet,
+          so these buckets measure AGE since issue, not lateness against terms
+          — see docs/pymble-ops-payables-receivables-split-2026-08.md §4. The
+          panel's own description says so rather than implying otherwise. */}
+      <OpsAgeingPanel
+        description="Outstanding sent client invoices by days since issue. Not lateness — invoices have no payment terms yet."
+        emptyMessage="No outstanding receivables."
+        eyebrow="Receivables ageing"
+        summary={receivablesAgeing}
+        title="Receivables ageing 0/30/60/90"
+      />
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(19rem,0.75fr)]">
         <OpsDashboardPanel eyebrow="Visible values" title="Current invoice selection">
           <dl className="grid gap-3 min-[520px]:grid-cols-2 xl:grid-cols-4">
@@ -313,7 +334,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                   Create invoice
                 </span>
                 <span className="mt-1 block text-sm text-muted-foreground">
-                  Value Added Tax invoice intake for site work, BOQ-linked billing, and client TPIN records.
+                  Raise client invoices for site work, with VAT and client TPIN records.
                 </span>
               </span>
             </span>
@@ -343,17 +364,6 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                   ))}
                 </select>
               </label>
-              <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
-                BOQ link
-                <select className={OPS_INPUT_CLASS} defaultValue="" name="boq_id">
-                  <option value="">Invoice without BOQ link</option>
-                  {boqOptions.map((boq) => (
-                    <option key={boq.id} value={boq.id}>
-                      {boq.title} - {formatZmw(boq.budgeted_total)}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className={OPS_LABEL_CLASS}>
                 Issued at
                 <input
@@ -364,10 +374,10 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                   type="date"
                 />
               </label>
-              <label className={OPS_LABEL_CLASS}>
-                Invoice no.
-                <input className={OPS_INPUT_CLASS} name="invoice_number" />
-              </label>
+              {/* No invoice number field. It is generated by
+                  ops_next_invoice_number from the organisation prefix, and a
+                  typed number bypassed that counter — which is how two
+                  invoices end up sharing a number. */}
               <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
                 Customer (optional)
                 <select className={OPS_INPUT_CLASS} defaultValue="" name="customer_id">
@@ -456,8 +466,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                         {formatDate(invoice.issued_at)}
                       </p>
                       <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                        {invoice.boq?.title ?? "Invoice without BOQ link"}{" "}
-                        {invoice.tpin ? `- TPIN ${invoice.tpin}` : ""}
+                        {invoice.tpin ? `TPIN ${invoice.tpin}` : "No TPIN recorded"}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -545,7 +554,16 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                         <input name="id" type="hidden" value={invoice.id} />
                         <label className={OPS_LABEL_CLASS}>
                           Invoice number
-                          <input className={OPS_INPUT_CLASS} defaultValue={invoice.invoice_number} name="invoice_number" required />
+                          <input
+                            className={`${OPS_INPUT_CLASS} bg-muted/40`}
+                            defaultValue={invoice.invoice_number}
+                            name="invoice_number"
+                            readOnly
+                          />
+                          <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
+                            Generated when the invoice was raised. A tax document&rsquo;s
+                            number is not something to edit.
+                          </span>
                         </label>
                         <label className={OPS_LABEL_CLASS}>
                           Client name

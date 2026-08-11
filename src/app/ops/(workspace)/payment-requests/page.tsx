@@ -71,7 +71,6 @@ import {
 } from "@/lib/ops/finance";
 import {
   fetchOpsCashflowChart,
-  fetchOpsReceivablesAgeing,
   fetchOpsSupplierAgeing,
 } from "@/lib/ops/finance-kpis";
 import type { OpsFinanceAgeingBucket } from "@/lib/ops/finance-reporting";
@@ -270,7 +269,6 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
     purchaseOrderOptions,
     cashflowChart,
     supplierAgeing,
-    receivablesAgeing,
     legacyProjectOptions,
     costCentreOptions,
   ] = await Promise.all([
@@ -288,7 +286,6 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
     fetchFinancePurchaseOrderOptions(),
     fetchOpsCashflowChart(),
     fetchOpsSupplierAgeing(),
-    fetchOpsReceivablesAgeing(),
     fetchOpsLegacyProjectOptions(),
     fetchOpsCostCentreOptions(),
   ]);
@@ -321,8 +318,8 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
       <OpsRealtimeRefresh tables={["payment_requests", "approval_requests"]} />
       <OpsPageHeader
         eyebrow="Finance and Accounts"
-        title="Payment requests"
-        description="Supplier bills, expenses, approval handoff, payment status, and project cost posting."
+        title="Payables"
+        description="What Pymble owes: supplier bills, expenses, approval handoff, payment status, and project cost posting."
         actions={
           <>
             <Link className={OPS_SECONDARY_BUTTON_CLASS} href="/ops/project-budgets">
@@ -393,22 +390,17 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
 
       <OpsCashflowChartPanel data={cashflowChart} />
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <OpsAgeingPanel
-          description="Outstanding supplier payment requests by days since submission."
-          emptyMessage="No outstanding payment requests."
-          eyebrow="Supplier ageing"
-          summary={supplierAgeing}
-          title="Payables ageing 0/30/60/90"
-        />
-        <OpsAgeingPanel
-          description="Outstanding sent client invoices by days since issue."
-          emptyMessage="No outstanding receivables."
-          eyebrow="Receivables ageing"
-          summary={receivablesAgeing}
-          title="Receivables ageing 0/30/60/90"
-        />
-      </div>
+      {/* Payables only. The receivables ageing panel that used to sit beside
+          this one has moved to the Invoices register — this page is what Pymble
+          owes, and mixing in what clients owe is what made the two impossible
+          to read apart. */}
+      <OpsAgeingPanel
+        description="Outstanding supplier payment requests by days since submission."
+        emptyMessage="No outstanding payment requests."
+        eyebrow="Supplier ageing"
+        summary={supplierAgeing}
+        title="Payables ageing 0/30/60/90"
+      />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <OpsDashboardPanel
@@ -495,50 +487,34 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
         </OpsDashboardPanel>
 
         <OpsDashboardPanel eyebrow="Cashflow" title="Next 30 day signal">
+          {/* Outflow only. "Open receivables" and "Received this month" moved
+              to the invoice register with the rest of the receivables view;
+              the net signal stays because a cash signal that shows only one
+              side of the ledger is not a signal. */}
           <dl className="grid gap-3 min-[520px]:grid-cols-2">
-            <PaymentMetric
-              label="Open receivables"
-              value={formatMoney(cashflowDashboard.openReceivables)}
-            />
             <PaymentMetric
               label="Payables due"
               value={formatMoney(cashflowDashboard.next30Payables)}
-            />
-            <PaymentMetric
-              label="Net signal"
-              value={formatMoney(cashflowDashboard.netNext30)}
             />
             <PaymentMetric
               label="Overdue payables"
               value={formatMoney(cashflowDashboard.overduePayables)}
             />
             <PaymentMetric
-              label="Received this month"
-              value={formatMoney(cashflowDashboard.receivedThisMonth)}
-            />
-            <PaymentMetric
               label="Paid this month"
               value={formatMoney(cashflowDashboard.paidThisMonth)}
+            />
+            <PaymentMetric
+              label="Net 30-day signal"
+              value={formatMoney(cashflowDashboard.netNext30)}
             />
           </dl>
           <div className="mt-4 rounded-md border border-border px-3 py-3">
             <div className="flex items-center gap-2 text-sm font-bold text-foreground">
               <TrendingUp className="size-4 text-primary-blue" aria-hidden="true" />
-              Receivables mix
+              Approved and awaiting payment
             </div>
             <dl className="mt-3 grid gap-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Draft invoices</dt>
-                <dd className="font-bold text-foreground">
-                  {formatMoney(cashflowDashboard.draftReceivables)}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Sent invoices</dt>
-                <dd className="font-bold text-foreground">
-                  {formatMoney(cashflowDashboard.sentReceivables)}
-                </dd>
-              </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Approved payables</dt>
                 <dd className="font-bold text-foreground">
@@ -546,6 +522,13 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
                 </dd>
               </div>
             </dl>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              What clients owe Pymble now lives with the{" "}
+              <Link className="font-semibold underline-offset-2 hover:underline" href="/ops/invoices">
+                invoice register
+              </Link>
+              .
+            </p>
           </div>
         </OpsDashboardPanel>
       </section>

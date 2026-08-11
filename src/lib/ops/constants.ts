@@ -519,8 +519,13 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Quotations",
   },
   {
-    description: "Create client invoices, apply Value Added Tax details, track status, and prepare PDF outputs.",
-    group: "commercial",
+    // Finance, not Commercial. Receivables is Finance's work, and filing the
+    // invoice register under Commercial is why receivables panels ended up
+    // bolted onto the Payables page — the finance side had no home of its own
+    // (docs/pymble-ops-payables-receivables-split-2026-08.md §1).
+    description:
+      "What clients owe Pymble: raise client invoices, apply VAT, track status, and prepare PDF outputs.",
+    group: "finance",
     href: "/ops/invoices",
     id: "invoices",
     navigationRoles: [...OPS_FINANCE_ROLES, "quantity_surveyor"],
@@ -530,8 +535,11 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Invoices",
   },
   {
+    // Follows Invoices into Finance: the customer master exists to serve the
+    // invoice register, and payment terms on the customer are what make an
+    // invoice due date — and therefore ageing — mean anything.
     description: "The customer master behind client invoices — legal identity, TPIN, and contact details.",
-    group: "commercial",
+    group: "finance",
     href: "/ops/customers",
     id: "customers",
     navigationRoles: [...OPS_LEADERSHIP_ROLES, "manager", "finance_manager", "accountant", "quantity_surveyor"],
@@ -797,7 +805,14 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Project Budgets",
   },
   {
-    description: "Submit payment requests, review supplier ageing, and track cashflow impact.",
+    // Titled "Payables" but still served from /ops/payment-requests. The route
+    // is load-bearing: notification actionHrefs already delivered point at it,
+    // module_access and canAccessOpsHref key permissions on it, and every audit
+    // event carries module_key/source_table "payment_requests". Renaming the
+    // label costs nothing; renaming the route breaks delivered links and splits
+    // the audit history in two.
+    description:
+      "What Pymble owes: supplier bills and expenses, approval, payment, and supplier ageing.",
     group: "finance",
     href: "/ops/payment-requests",
     id: "payment-requests",
@@ -805,7 +820,7 @@ export const OPS_MODULES: OpsModule[] = [
     phase: "Phase 3",
     roles: OPS_FINANCE_BRIDGE_ROLES,
     status: "ready",
-    title: "Payment Requests",
+    title: "Payables",
   },
   {
     description: "The general ledger chart of accounts — asset, liability, equity, income, and expense accounts.",
