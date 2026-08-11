@@ -122,6 +122,74 @@ describe("payables and receivables stay apart", () => {
   });
 });
 
+describe("payment terms reach the database", () => {
+  const CUSTOMER_ACTIONS = read("lib", "ops", "customer-actions.ts");
+  const CUSTOMERS = read("lib", "ops", "customers.ts");
+
+  /**
+   * Wiring, end to end. A field can be added to a schema, rendered on a form,
+   * and still never be read off the FormData or written to the row — that
+   * exact omission cost the payables charge-target form its entire completed-
+   * project path earlier in this work. Terms decide what "overdue" means for
+   * every invoice a customer holds, so the whole path is pinned.
+   */
+  it("is validated, with bounds", () => {
+    assert.match(CUSTOMER_ACTIONS, /payment_terms_days: z\.coerce/);
+    assert.match(CUSTOMER_ACTIONS, /\.max\(365,/);
+  });
+
+  it("is read off the form by both create and update", () => {
+    const reads =
+      CUSTOMER_ACTIONS.match(/field\(formData, "payment_terms_days"\)/g) ?? [];
+    assert.equal(reads.length, 2, "both createCustomerAction and updateCustomerAction");
+  });
+
+  it("is written by both create and update", () => {
+    // Scoped per action rather than counted across the file: the update action
+    // also records the new terms in its audit metadata — deliberately, since
+    // changing them moves the overdue line on every unpaid invoice the
+    // customer holds — and a global count trips over that third occurrence.
+    const between = (from: string, to: string) =>
+      CUSTOMER_ACTIONS.slice(
+        CUSTOMER_ACTIONS.indexOf(from),
+        to ? CUSTOMER_ACTIONS.indexOf(to) : undefined,
+      );
+
+    const create = between(
+      "export async function createCustomerAction",
+      "export async function updateCustomerAction",
+    );
+    const update = between(
+      "export async function updateCustomerAction",
+      "export async function archiveCustomerAction",
+    );
+
+    for (const [name, body] of [
+      ["createCustomerAction", create],
+      ["updateCustomerAction", update],
+    ] as const) {
+      assert.match(
+        body,
+        /payment_terms_days: parsed\.data\.payment_terms_days/,
+        `${name} must write payment_terms_days to the row`,
+      );
+    }
+  });
+
+  it("is selected on the read path, so the form can show the real value", () => {
+    assert.match(CUSTOMERS, /"payment_terms_days"/);
+    assert.match(CUSTOMERS, /payment_terms_days: number/);
+  });
+
+  it("can be changed after the fact", () => {
+    // The customers recovered from the quotation register all carry the
+    // default. Without an edit path the terms field is a wrong number with a
+    // label on it.
+    assert.match(CUSTOMER_ACTIONS, /export async function updateCustomerAction/);
+    assert.match(CUSTOMER_ACTIONS, /canEditOpsCustomer\(profile\.role, customer\)/);
+  });
+});
+
 describe("nav placement", () => {
   /** The nav entry object for a module id, by brace matching backwards. */
   function navEntry(id: string) {
@@ -156,5 +224,30 @@ describe("nav placement", () => {
     // The route is load-bearing: delivered notification hrefs, module_access
     // keys, and every audit event's module_key point at it.
     assert.match(entry, /href: "\/ops\/payment-requests"/);
+  });
+});
+
+describe("an invoice can now be a receivable", () => {
+  const INVOICE_ACTIONS_R4 = read("lib", "ops", "invoice-actions.ts");
+
+  it("gets a due date from the customer's terms when it is raised", () => {
+    // Ageing without a due date measures AGE, not lateness — a 45-day invoice
+    // on 60-day terms is not late but bucketed as 31-60. This is the wiring
+    // that makes the difference.
+    assert.match(INVOICE_ACTIONS_R4, /async function resolveInvoiceDueDate\(/);
+    assert.match(INVOICE_ACTIONS_R4, /const dueDate = await resolveInvoiceDueDate\(/);
+    assert.match(INVOICE_ACTIONS_R4, /due_date: dueDate,/);
+  });
+
+  it("takes no due date rather than inventing one when there is no customer", () => {
+    // A guessed deadline is worse than none: it produces a debtor chased for a
+    // date nobody agreed to.
+    const resolver = INVOICE_ACTIONS_R4.slice(
+      INVOICE_ACTIONS_R4.indexOf("async function resolveInvoiceDueDate"),
+      INVOICE_ACTIONS_R4.indexOf("export async function createInvoiceAction"),
+    );
+
+    assert.match(resolver, /if \(!customerId\) \{\s*return null;/);
+    assert.match(resolver, /payment_terms_days/);
   });
 });

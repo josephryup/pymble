@@ -79,3 +79,29 @@ export function canArchiveInvoice(role: OpsUserRole, invoice: OpsInvoiceMutation
 export function canDeleteInvoice(role: OpsUserRole) {
   return isDeveloperRole(role);
 }
+
+/**
+ * Who may record money received against an invoice (decision D5).
+ *
+ * The same set that marks an invoice paid, because recording a receipt IS how
+ * an invoice gets paid now — `markInvoicePaidAction` writes a receipt for the
+ * whole outstanding balance rather than flipping a flag. One cash path, one
+ * gate.
+ *
+ * Only a sent invoice can receive money: a draft has not been demanded, and a
+ * settled one has nothing left owing.
+ */
+export function canRecordInvoiceReceipt(role: OpsUserRole, invoice: OpsInvoiceMutationTarget) {
+  if (invoice.status !== "sent") return false;
+  if (invoice.cancelled_at || invoice.archived_at || invoice.deleted_at) return false;
+  return INVOICE_SEND_PAY_ROLES.includes(role);
+}
+
+/**
+ * Cancelling a receipt reverses cash out of the ledger, so it sits with the
+ * void roles rather than the wider pay roles — the same reasoning that keeps
+ * voiding an invoice narrow.
+ */
+export function canCancelInvoiceReceipt(role: OpsUserRole) {
+  return INVOICE_VOID_ROLES.includes(role);
+}

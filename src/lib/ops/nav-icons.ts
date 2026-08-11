@@ -55,6 +55,7 @@ import {
   ShoppingCart,
   UserPlus,
   Users,
+  HandCoins,
   Wallet,
   Warehouse,
   Wrench,
@@ -112,6 +113,9 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   "/ops/cost-codes": Layers,
   "/ops/project-budgets": Wallet,
   "/ops/payment-requests": Banknote,
+  // Money coming the other way — HandCoins reads as receiving, against the
+  // Banknote used for what we pay out.
+  "/ops/receivables": HandCoins,
   "/ops/finance/accounts": BookOpen,
   "/ops/finance/trial-balance": ChartNoAxesCombined,
   "/ops/finance/journal": ScrollText,

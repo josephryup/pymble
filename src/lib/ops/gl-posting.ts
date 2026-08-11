@@ -4,6 +4,7 @@ import {
   buildInvoicePaymentJournal,
   buildPaymentRequestAccrualJournal,
   buildPaymentRequestSettlementJournal,
+  buildInvoiceReceiptJournal,
   buildPayrollDisbursementJournal,
   buildStaffPayrollDisbursementJournal,
   type OpsGlPostingInput,
@@ -86,6 +87,76 @@ export async function postOpsJournalEntry(
   }
 
   return { entryId: (data as string) ?? null, duplicate: false };
+}
+
+/**
+ * Post the cash for one receipt. Best-effort, like every other posting hook:
+ * the money has already been received and recorded, and a GL hiccup must not
+ * roll that back.
+ */
+export async function postInvoiceReceiptJournalSafe(
+  receiptId: string,
+  actorUserId: string,
+): Promise<void> {
+  try {
+    const supabase = getOpsSupabaseServiceClient();
+    const { data, error } = await supabase
+      .from("invoice_receipts")
+      .select(
+        "id, amount, received_on, invoice:invoices!invoice_receipts_invoice_id_fkey(invoice_number, site_id)",
+      )
+      .eq("id", receiptId)
+      .maybeSingle<{
+        id: string;
+        amount: number | string;
+        received_on: string;
+        invoice:
+          | { invoice_number: string; site_id: string | null }
+          | { invoice_number: string; site_id: string | null }[]
+          | null;
+      }>();
+
+    if (error) {
+      throw error;
+    }
+    if (!data) {
+      return;
+    }
+
+    const invoice = Array.isArray(data.invoice) ? (data.invoice[0] ?? null) : data.invoice;
+    const amount = round2(Number(data.amount ?? 0));
+
+    if (!invoice || amount <= 0) {
+      return;
+    }
+
+    const journal = buildInvoiceReceiptJournal({
+      amount,
+      id: data.id,
+      invoice_number: invoice.invoice_number,
+      received_on: data.received_on,
+      site_id: invoice.site_id,
+    });
+
+    const result = await postOpsJournalEntry({ ...journal, createdBy: actorUserId });
+
+    // Stamped back so the receipt can show, and reverse, its own entry.
+    if (result.entryId) {
+      await supabase
+        .from("invoice_receipts")
+        .update({ journal_entry_id: result.entryId })
+        .eq("id", receiptId);
+    }
+  } catch (error: unknown) {
+    await logPostingFailure({
+      actorUserId,
+      entityId: receiptId,
+      entityType: "invoice_receipt",
+      sourceTable: "invoice_receipts",
+      detail: `invoice receipt ${receiptId}`,
+      error,
+    });
+  }
 }
 
 async function logPostingFailure(input: {

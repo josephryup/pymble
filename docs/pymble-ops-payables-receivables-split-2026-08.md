@@ -361,11 +361,50 @@ original invoice already accounted for the VAT.
 
 - **R1 — DONE 2026-08-11.** Payables/receivables page split, label rename, nav regroup.
 - **R2 — DONE 2026-08-11.** Invoice clean-up: BOQ and manual invoice number removed.
-- R3 — customer master + payment terms (the gate).
-- R4 — schema: `due_date`, `retention_amount`, `revenue_treatment`, `source`,
-  `invoice_receipts`.
-- R5 — receivables view + `/ops/receivables`.
-- R6 — receipts UI, GL per receipt.
+- **R3 — DONE 2026-08-11.** Customer master recovered from the quotation register:
+  **2 customers, all 15 quotations linked, 0 unlinked.** Lusaka City Council deduped from
+  two address spellings into one. `payment_terms_days` added (default **30**), plus
+  `updateCustomerAction` — without an edit path the recovered customers would have been
+  stuck on the default forever.
+- **R4 — DONE 2026-08-11.** `invoices.due_date` (**stored, not derived** — see below),
+  `retention_amount`, `revenue_treatment`, `source`/`source_id`, and the
+  `invoice_receipts` table. Due date is written from the customer's terms at creation.
+  Three check constraints: valid `source`, retention within the total, and
+  **opening-balance invoices must carry zero VAT** (D7, enforced in the database).
+
+  *Correction to R3:* because `due_date` is stored, changing a customer's payment terms
+  affects **future invoices only**. The R3 form copy said it moved every unpaid invoice;
+  that was wrong and has been fixed. A stored date is right — it is printed on the copy the
+  client holds, and re-deriving it live would restate every past ageing report the day
+  somebody renegotiated.
+- **R5 — DONE 2026-08-11.** `src/lib/ops/receivables.ts` derives everything from invoices
+  and their receipts; `/ops/receivables` renders it, in the finance nav group beside
+  Payables. 17 tests pin the arithmetic.
+
+  *Derived in TypeScript, not a SQL view* — same reason as budget-availability.ts and
+  procurement-fulfilment.ts: the arithmetic stays testable without a database, which is the
+  only way to prove it while the register is empty. The D6 guarantee is unaffected: nothing
+  is stored, nothing syncs, nothing can drift.
+
+  Behaviours worth knowing: a **draft is not a receivable** (nobody has been asked to pay,
+  so it is counted apart); **retention is capped at what is still owed**, so once a client
+  has paid all but the retention nothing is collectable; an invoice with **no due date is
+  current, not overdue** — a guessed deadline produces a debtor chased for a date nobody
+  agreed; **cancelled receipts do not reduce the debt** but stay on file; and an
+  **overpayment floors at zero** rather than reporting a negative balance.
+- **R6 — DONE 2026-08-11.** Receipts UI on the invoice register, `Dr Bank / Cr AR` posted
+  **per receipt** on the day the money landed, and reversal by contra rather than deletion.
+
+  The change that mattered most was not additive: **"Mark paid" now writes a receipt for
+  the whole outstanding balance** instead of flipping a status. Both entry points go
+  through `writeInvoiceReceipt`, so there is exactly one way cash reaches the ledger.
+  `updateInvoiceStatus` was narrowed to `"sent"` at the type level — it previously accepted
+  `"paid"` and posted the full invoice, which alongside per-receipt posting would have
+  booked every payment twice.
+
+  Also: an **over-payment is refused**, not absorbed (it is nearly always a keying error,
+  and a genuine one needs a credit note); reversing a receipt that had settled an invoice
+  **reopens it**; and a reversal requires a written reason.
 - R7 — the three invoice sources, opening-balance first.
 
 ### Still open

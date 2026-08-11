@@ -30,6 +30,14 @@ export type OpsInvoice = {
   total_amount: number;
   status: OpsInvoiceStatus;
   issued_at: string;
+  /** Null when the invoice has no customer, so no terms to derive it from. */
+  due_date: string | null;
+  /** Invoiced but not collectable until released. Reported apart from overdue. */
+  retention_amount: number;
+  /** opening_balance = a debt predating the system; credits retained earnings. */
+  revenue_treatment: "current_period" | "opening_balance";
+  /** manual | quotation | ipc | opening_balance — replaces the old boq link. */
+  source: string;
   sent_at: string | null;
   paid_at: string | null;
   cancelled_at: string | null;
@@ -42,9 +50,13 @@ export type OpsInvoice = {
 
 type Relation<T> = T | T[] | null;
 
-type RawInvoice = Omit<OpsInvoice, "boq" | "site" | "subtotal" | "total_amount" | "vat_amount"> & {
+type RawInvoice = Omit<
+  OpsInvoice,
+  "boq" | "site" | "subtotal" | "total_amount" | "vat_amount" | "retention_amount"
+> & {
   boq: Relation<OpsInvoiceBoq>;
   site: Relation<OpsInvoiceSite>;
+  retention_amount: number | string;
   subtotal: number | string;
   total_amount: number | string;
   vat_amount: number | string;
@@ -86,6 +98,10 @@ async function fetchOpsInvoiceItems(options: FetchOpsInvoicesOptions = {}, listS
         total_amount,
         status,
         issued_at,
+        due_date,
+        retention_amount,
+        revenue_treatment,
+        source,
         sent_at,
         paid_at,
         cancelled_at,
@@ -127,6 +143,7 @@ async function fetchOpsInvoiceItems(options: FetchOpsInvoicesOptions = {}, listS
   const items = ((data ?? []) as unknown as RawInvoice[]).map((invoice) => ({
     ...invoice,
     boq: normalizeRelation(invoice.boq),
+    retention_amount: normalizeMoney(invoice.retention_amount),
     site: normalizeRelation(invoice.site),
     subtotal: normalizeMoney(invoice.subtotal),
     total_amount: normalizeMoney(invoice.total_amount),

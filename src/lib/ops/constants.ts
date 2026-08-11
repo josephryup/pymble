@@ -519,6 +519,21 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Quotations",
   },
   {
+    // The counterpart to Payables, and the home receivables never had. Sits
+    // next to the invoice register: that raises the demand, this tracks what
+    // came back.
+    description:
+      "What clients owe Pymble: outstanding invoices, ageing against agreed terms, and who to chase.",
+    group: "finance",
+    href: "/ops/receivables",
+    id: "receivables",
+    navigationRoles: OPS_FINANCE_BRIDGE_ROLES,
+    phase: "Phase 14",
+    roles: OPS_FINANCE_BRIDGE_ROLES,
+    status: "ready",
+    title: "Receivables",
+  },
+  {
     // Finance, not Commercial. Receivables is Finance's work, and filing the
     // invoice register under Commercial is why receivables panels ended up
     // bolted onto the Payables page — the finance side had no home of its own

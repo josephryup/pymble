@@ -464,3 +464,55 @@ export function buildStaffPayrollDisbursementJournal(
     lines,
   };
 }
+
+export type OpsInvoiceReceiptForPosting = {
+  amount: number;
+  id: string;
+  invoice_number: string;
+  received_on: string;
+  site_id: string | null;
+};
+
+/**
+ * Cash received against an invoice.
+ *
+ * Posted PER RECEIPT rather than once when an invoice flips to paid, which is
+ * what `buildInvoicePaymentJournal` did. Two consequences, both wanted:
+ *
+ *   • a part payment posts the cash it actually was, on the day it arrived,
+ *     rather than nothing until the balance happens to clear;
+ *   • the entry date is the day the money landed, not the day someone got
+ *     round to recording it — which is what makes a bank reconciliation
+ *     possible at all.
+ *
+ * Keyed on the receipt, so each one posts exactly once and a cancellation can
+ * contra that receipt alone (reverseOpsJournalSafe) without disturbing the
+ * others against the same invoice.
+ *
+ *   Dr Bank · Cr Accounts Receivable
+ */
+export function buildInvoiceReceiptJournal(
+  receipt: OpsInvoiceReceiptForPosting,
+): OpsGlPostingInput {
+  return {
+    entryDate: receipt.received_on,
+    memo: `Receipt against invoice ${receipt.invoice_number}`,
+    sourceTable: "invoice_receipts",
+    sourceId: receipt.id,
+    sourceEvent: "invoice_receipt_received",
+    lines: [
+      {
+        account_code: OPS_GL_ACCOUNTS.bankMain,
+        debit: receipt.amount,
+        site_id: receipt.site_id,
+        description: `Receipt ${receipt.invoice_number}`,
+      },
+      {
+        account_code: OPS_GL_ACCOUNTS.accountsReceivable,
+        credit: receipt.amount,
+        site_id: receipt.site_id,
+        description: `Clear receivable ${receipt.invoice_number}`,
+      },
+    ],
+  };
+}

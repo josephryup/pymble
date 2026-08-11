@@ -35,6 +35,14 @@ export function canCreateOpsCustomer(role: OpsUserRole) {
   return CUSTOMER_MANAGE_ROLES.includes(role);
 }
 
+/**
+ * Editing a customer. Same roles as creating one, and refused once archived —
+ * an archived customer is history, and history does not get corrected quietly.
+ */
+export function canEditOpsCustomer(role: OpsUserRole, customer: OpsCustomerMutationTarget) {
+  return CUSTOMER_MANAGE_ROLES.includes(role) && customer.status !== "archived";
+}
+
 export function canArchiveOpsCustomer(role: OpsUserRole, customer: OpsCustomerMutationTarget) {
   return CUSTOMER_MANAGE_ROLES.includes(role) && customer.status !== "archived";
 }

@@ -21,6 +21,8 @@ export type OpsCustomerSummary = {
   id: string;
   legal_name: string;
   notes: string;
+  /** Days from invoice issue to due date. Drives receivables ageing. */
+  payment_terms_days: number;
   phone: string;
   status: OpsCustomerStatus;
   tpin: string;
@@ -67,6 +69,7 @@ const CUSTOMER_COLUMNS = [
   "city",
   "country",
   "notes",
+  "payment_terms_days",
   "created_by",
   "archived_at",
   "created_at",

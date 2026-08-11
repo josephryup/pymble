@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, Plus, Receipt, ShieldCheck, Users } from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, Plus, Receipt, Save, ShieldCheck, Users } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
@@ -13,15 +13,18 @@ import {
   archiveCustomerAction,
   createCustomerAction,
   reactivateCustomerAction,
+  updateCustomerAction,
 } from "@/lib/ops/customer-actions";
 import {
   canArchiveOpsCustomer,
   canCreateOpsCustomer,
+  canEditOpsCustomer,
   canReactivateOpsCustomer,
 } from "@/lib/ops/customer-permissions";
 import {
   fetchOpsCustomerStats,
   fetchPaginatedOpsCustomers,
+  type OpsCustomerSummary,
 } from "@/lib/ops/customers";
 import { parseOpsListState } from "@/lib/ops/listing";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
@@ -63,6 +66,9 @@ function customerNotice(params: OpsSearchParams) {
     return created;
   }
 
+  if (firstParam(params.updated) === "customer") {
+    return { message: "Customer details updated.", tone: "success" as const };
+  }
   if (firstParam(params.updated) === "archived") {
     return { message: "Customer archived.", tone: "success" as const };
   }
@@ -71,6 +77,108 @@ function customerNotice(params: OpsSearchParams) {
   }
 
   return null;
+}
+
+/**
+ * Editing a customer in place.
+ *
+ * Exists mainly for payment terms (R3): the customers recovered from the
+ * quotation register all carry the default 30 days, and a terms field nobody
+ * can change is a wrong number with a label on it. The other fields come along
+ * because a master record you cannot correct grows stale in exactly the way a
+ * master record is supposed to prevent.
+ */
+function EditCustomerForm({ customer }: { customer: OpsCustomerSummary }) {
+  return (
+    <details className="mt-4 rounded-md border border-border">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-bold text-foreground transition hover:text-primary-blue [&::-webkit-details-marker]:hidden">
+        <Pencil className="size-4" aria-hidden="true" />
+        Edit customer
+      </summary>
+      <form
+        action={updateCustomerAction}
+        className="grid gap-4 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
+      >
+        <input name="customer_id" type="hidden" value={customer.id} />
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Legal name
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={customer.legal_name}
+            name="legal_name"
+            required
+          />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Trading name
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={customer.trading_name}
+            name="trading_name"
+          />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          TPIN
+          <input className={OPS_INPUT_CLASS} defaultValue={customer.tpin} name="tpin" />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Payment terms (days)
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={customer.payment_terms_days}
+            max={365}
+            min={0}
+            name="payment_terms_days"
+            type="number"
+          />
+          <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
+            Applies to invoices raised from now on. Invoices already issued keep the due
+            date printed on the client&rsquo;s copy — change one of those on the invoice
+            itself.
+          </span>
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Email
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={customer.email}
+            name="email"
+            type="email"
+          />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Phone
+          <input className={OPS_INPUT_CLASS} defaultValue={customer.phone} name="phone" />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+          Address
+          <input
+            className={OPS_INPUT_CLASS}
+            defaultValue={customer.address_line}
+            name="address_line"
+          />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          City
+          <input className={OPS_INPUT_CLASS} defaultValue={customer.city} name="city" />
+        </label>
+        <label className={OPS_LABEL_CLASS}>
+          Country
+          <input className={OPS_INPUT_CLASS} defaultValue={customer.country} name="country" />
+        </label>
+        <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
+          Notes
+          <input className={OPS_INPUT_CLASS} defaultValue={customer.notes} name="notes" />
+        </label>
+        <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4 lg:justify-end">
+          <button className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`} type="submit">
+            <Save className="size-4" aria-hidden="true" />
+            Save changes
+          </button>
+        </div>
+      </form>
+    </details>
+  );
 }
 
 export default async function OpsCustomersPage({ searchParams }: PageProps) {
@@ -214,6 +322,21 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
               Country
               <input className={OPS_INPUT_CLASS} defaultValue="Zambia" name="country" />
             </label>
+            <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+              Payment terms (days)
+              <input
+                className={OPS_INPUT_CLASS}
+                defaultValue={30}
+                max={365}
+                min={0}
+                name="payment_terms_days"
+                type="number"
+              />
+              <span className="mt-1 block text-xs font-normal leading-5 text-muted-foreground">
+                How long this customer has to pay. Sets the due date on their invoices, and
+                therefore when a debt counts as overdue.
+              </span>
+            </label>
             <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
               Notes
               <input className={OPS_INPUT_CLASS} name="notes" />
@@ -259,6 +382,7 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
               {customers.map((customer) => {
                 const canMutate = canArchiveOpsCustomer(auth.profile.role, customer);
                 const canReactivate = canReactivateOpsCustomer(auth.profile.role, customer);
+                const canEdit = canEditOpsCustomer(auth.profile.role, customer);
 
                 return (
                   <article className="p-5" key={customer.id}>
@@ -340,6 +464,14 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
                           {customer.phone || "Not recorded"}
                         </dd>
                       </div>
+                      <div className="rounded-md border border-border px-3 py-2">
+                        <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Payment terms
+                        </dt>
+                        <dd className="mt-1 font-bold text-foreground">
+                          {customer.payment_terms_days} days
+                        </dd>
+                      </div>
                     </dl>
 
                     {customer.notes ? (
@@ -347,6 +479,8 @@ export default async function OpsCustomersPage({ searchParams }: PageProps) {
                         {customer.notes}
                       </p>
                     ) : null}
+
+                    {canEdit ? <EditCustomerForm customer={customer} /> : null}
                   </article>
                 );
               })}

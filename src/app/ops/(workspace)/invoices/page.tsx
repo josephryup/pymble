@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Banknote,
   Check,
+  HandCoins,
   Clock3,
   FileText,
   Plus,
@@ -16,6 +17,11 @@ import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsAgeingPanel } from "@/components/ops/OpsFinanceKpiPanels";
 import { OpsKpiCard } from "@/components/ops/OpsKpiCard";
 import { fetchOpsReceivablesAgeing } from "@/lib/ops/finance-kpis";
+import {
+  fetchOpsInvoiceReceipts,
+  receivedTotal,
+  type OpsInvoiceReceipt,
+} from "@/lib/ops/receivables";
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsListControls, OpsPaginationControls } from "@/components/ops/OpsListControls";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
@@ -23,17 +29,21 @@ import { OpsRealtimeRefresh } from "@/components/ops/OpsRealtimeRefresh";
 import { OpsRecordActivityPanel } from "@/components/ops/OpsRecordActivityPanel";
 import {
   archiveInvoiceAction,
+  cancelInvoiceReceiptAction,
   createInvoiceAction,
   markInvoicePaidAction,
+  recordInvoiceReceiptAction,
   sendInvoiceAction,
   updateInvoiceAction,
   voidInvoiceAction,
 } from "@/lib/ops/invoice-actions";
 import {
   canArchiveInvoice,
+  canCancelInvoiceReceipt,
   canCreateInvoice,
   canEditInvoice,
   canMarkInvoicePaid,
+  canRecordInvoiceReceipt,
   canSendInvoice,
   canVoidInvoice,
 } from "@/lib/ops/invoice-permissions";
@@ -100,6 +110,20 @@ function invoiceNotice(params: OpsSearchParams) {
     };
   }
 
+  if (firstParam(params.updated) === "receipt") {
+    return {
+      tone: "success" as const,
+      message: "Receipt recorded and posted to the ledger.",
+    };
+  }
+
+  if (firstParam(params.updated) === "receipt_reversed") {
+    return {
+      tone: "success" as const,
+      message: "Receipt reversed. The ledger entry has been contra'd and the invoice reopened.",
+    };
+  }
+
   if (firstParam(params.updated) === "attachment") {
     return {
       tone: "success" as const,
@@ -128,6 +152,165 @@ type InvoiceValueMetricProps = {
   label: string;
   value: string;
 };
+
+const RECEIPT_METHODS: Array<{ label: string; value: string }> = [
+  { label: "Bank transfer", value: "bank_transfer" },
+  { label: "Cash", value: "cash" },
+  { label: "Mobile money", value: "mobile_money" },
+  { label: "Cheque", value: "cheque" },
+  { label: "Other", value: "other" },
+];
+
+/**
+ * Money in, against one invoice.
+ *
+ * A part payment is the normal case on a construction contract, and the old
+ * draft/sent/paid status could not express one at all — the only option was
+ * "paid", for the whole amount, whether or not that had happened.
+ *
+ * The receipt history stays visible including reversed rows: a cancelled
+ * receipt has already posted and contra'd a journal, and hiding it would leave
+ * ledger entries with no visible cause.
+ */
+function InvoiceReceipts({
+  canCancel,
+  canRecord,
+  invoice,
+  outstanding,
+  receipts,
+}: {
+  canCancel: boolean;
+  canRecord: boolean;
+  invoice: OpsInvoice;
+  outstanding: number;
+  receipts: OpsInvoiceReceipt[];
+}) {
+  if (receipts.length === 0 && !canRecord) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 rounded-md border border-border">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <p className="text-sm font-bold text-foreground">
+          <HandCoins className="mr-1.5 inline size-4" aria-hidden="true" />
+          Receipts
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {formatZmw(outstanding)} outstanding of {formatZmw(invoice.total_amount)}
+        </p>
+      </div>
+
+      {receipts.length > 0 ? (
+        <ul className="divide-y divide-border">
+          {receipts.map((receipt) => (
+            <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3" key={receipt.id}>
+              <div className="min-w-0">
+                <p
+                  className={`text-sm font-bold ${
+                    receipt.cancelled_at
+                      ? "text-muted-foreground line-through"
+                      : "text-foreground"
+                  }`}
+                >
+                  {formatZmw(receipt.amount)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDate(receipt.received_on)} ·{" "}
+                  {RECEIPT_METHODS.find((entry) => entry.value === receipt.method)?.label ??
+                    receipt.method}
+                  {receipt.bank_reference ? ` · ${receipt.bank_reference}` : ""}
+                  {receipt.recorded_by_name ? ` · ${receipt.recorded_by_name}` : ""}
+                </p>
+                {receipt.cancelled_at ? (
+                  <p className="mt-1 text-xs font-semibold text-red-700 dark:text-red-300">
+                    Reversed — {receipt.cancellation_reason || "no reason recorded"}
+                  </p>
+                ) : null}
+              </div>
+              {canCancel && !receipt.cancelled_at ? (
+                <form action={cancelInvoiceReceiptAction} className="flex items-center gap-2">
+                  <input name="receipt_id" type="hidden" value={receipt.id} />
+                  <input
+                    aria-label="Reason for reversing this receipt"
+                    className={`${OPS_INPUT_CLASS} w-48`}
+                    name="reason"
+                    placeholder="Reason"
+                    required
+                  />
+                  <OpsConfirmSubmitButton
+                    className="inline-flex items-center gap-1.5 rounded-md border border-red-300 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40"
+                    confirmText="Confirm reversal"
+                  >
+                    Reverse
+                  </OpsConfirmSubmitButton>
+                </form>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-4 py-3 text-sm text-muted-foreground">
+          Nothing received yet.
+        </p>
+      )}
+
+      {canRecord ? (
+        <form
+          action={recordInvoiceReceiptAction}
+          className="grid gap-3 border-t border-border p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
+        >
+          <input name="invoice_id" type="hidden" value={invoice.id} />
+          <label className={OPS_LABEL_CLASS}>
+            Amount received
+            <input
+              className={OPS_INPUT_CLASS}
+              max={outstanding}
+              min="0.01"
+              name="amount"
+              required
+              step="0.01"
+              type="number"
+            />
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Date received
+            <input
+              className={OPS_INPUT_CLASS}
+              defaultValue={todayInLusaka()}
+              name="received_on"
+              required
+              type="date"
+            />
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Method
+            <select className={OPS_INPUT_CLASS} defaultValue="bank_transfer" name="method">
+              {RECEIPT_METHODS.map((entry) => (
+                <option key={entry.value} value={entry.value}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={OPS_LABEL_CLASS}>
+            Bank reference
+            <input className={OPS_INPUT_CLASS} name="bank_reference" placeholder="Optional" />
+          </label>
+          <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4 lg:justify-end">
+            <button
+              className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`}
+              type="submit"
+            >
+              <HandCoins className="size-4" aria-hidden="true" />
+              Record receipt
+            </button>
+          </div>
+        </form>
+      ) : null}
+    </div>
+  );
+}
 
 function InvoiceValueMetric({ label, value }: InvoiceValueMetricProps) {
   return (
@@ -170,6 +353,11 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
     fetchOpsReceivablesAgeing(),
   ]);
   const invoices = invoicePage.items;
+  // Receipts for the invoices on this page only — the register is paginated,
+  // and the balances shown must match the rows shown.
+  const receiptsByInvoice = await fetchOpsInvoiceReceipts(
+    invoices.map((invoice) => invoice.id),
+  );
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
   const canCreate = canCreateInvoice(auth.profile.role);
   // canManage gates legacy "global" UI like the create form and the Activity
@@ -446,7 +634,12 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
           />
           {invoices.length > 0 ? (
             <div className="divide-y divide-border">
-              {invoices.map((invoice) => (
+              {invoices.map((invoice) => {
+                const receipts = receiptsByInvoice.get(invoice.id) ?? [];
+                const outstanding =
+                  Math.round((invoice.total_amount - receivedTotal(receipts)) * 100) / 100;
+
+                return (
                 <article className="p-5" key={invoice.id}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
@@ -589,18 +782,32 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
                       </form>
                     </details>
                   ) : null}
-                  <dl className="mt-4 grid gap-3 min-[520px]:grid-cols-3">
+                  <dl className="mt-4 grid gap-3 min-[520px]:grid-cols-4">
                     <InvoiceValueMetric label="Subtotal" value={formatZmw(invoice.subtotal)} />
                     <InvoiceValueMetric label="VAT" value={formatZmw(invoice.vat_amount)} />
                     <InvoiceValueMetric label="Total" value={formatZmw(invoice.total_amount)} />
+                    <InvoiceValueMetric
+                      label={invoice.due_date ? `Due ${formatDate(invoice.due_date)}` : "No due date"}
+                      value={formatZmw(outstanding)}
+                    />
                   </dl>
+
+                  <InvoiceReceipts
+                    canCancel={canCancelInvoiceReceipt(auth.profile.role)}
+                    canRecord={canRecordInvoiceReceipt(auth.profile.role, invoice)}
+                    invoice={invoice}
+                    outstanding={outstanding}
+                    receipts={receipts}
+                  />
+
                   <OpsRecordActivityPanel
                     canManage={canManage}
                     sourceId={invoice.id}
                     sourceTable="invoices"
                   />
                 </article>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <OpsEmptyState

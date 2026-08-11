@@ -11,12 +11,19 @@ import {
   canCreateInvoice,
   canDeleteInvoice,
   canEditInvoice,
+  canCancelInvoiceReceipt,
   canMarkInvoicePaid,
+  canRecordInvoiceReceipt,
   canSendInvoice,
   canVoidInvoice,
   type OpsInvoiceMutationTarget,
 } from "@/lib/ops/invoice-permissions";
-import { postInvoiceJournalSafe, reverseOpsJournalSafe } from "@/lib/ops/gl-posting";
+import {
+  postInvoiceJournalSafe,
+  postInvoiceReceiptJournalSafe,
+  reverseOpsJournalSafe,
+} from "@/lib/ops/gl-posting";
+import { todayInLusaka } from "@/lib/ops/format";
 import type { OrganizationProfile } from "@/lib/ops/organization";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -90,6 +97,40 @@ async function nextInvoiceNumber(prefix: string) {
   return data;
 }
 
+/**
+ * When this invoice falls due.
+ *
+ * Stored on the invoice rather than looked up through the customer at read
+ * time: the due date is printed on the copy the client holds, so it is a fact
+ * about the invoice. Reading it live would silently re-date history — and
+ * restate every past ageing report — the moment somebody renegotiated terms.
+ *
+ * Null when there is no customer to take terms from. Ageing treats an invoice
+ * with no due date as "current" rather than guessing, because an invented
+ * deadline is worse than an absent one: it produces a debtor chased for a date
+ * nobody agreed.
+ */
+async function resolveInvoiceDueDate(customerId: string | null, issuedAt: string) {
+  if (!customerId) {
+    return null;
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { data, error } = await supabase
+    .from("customers")
+    .select("payment_terms_days")
+    .eq("id", customerId)
+    .maybeSingle<{ payment_terms_days: number }>();
+
+  if (error || !data) {
+    return null;
+  }
+
+  const due = new Date(`${issuedAt}T00:00:00Z`);
+  due.setUTCDate(due.getUTCDate() + Number(data.payment_terms_days ?? 0));
+  return due.toISOString().slice(0, 10);
+}
+
 export async function createInvoiceAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
@@ -127,6 +168,10 @@ export async function createInvoiceAction(formData: FormData) {
   const invoiceNumber = await nextInvoiceNumber(organization.invoice_prefix);
   const vatAmount = roundToTwo(parsed.data.subtotal * Number(organization.vat_rate));
   const totalAmount = roundToTwo(parsed.data.subtotal + vatAmount);
+  const dueDate = await resolveInvoiceDueDate(
+    parsed.data.customer_id,
+    parsed.data.issued_at,
+  );
 
   const { data, error } = await supabase
     .from("invoices")
@@ -134,6 +179,7 @@ export async function createInvoiceAction(formData: FormData) {
       client_name: parsed.data.client_name,
       created_by: profile.id,
       customer_id: parsed.data.customer_id,
+      due_date: dueDate,
       invoice_number: invoiceNumber,
       issued_at: parsed.data.issued_at,
       site_id: parsed.data.site_id,
@@ -165,6 +211,7 @@ export async function createInvoiceAction(formData: FormData) {
     source_table: "invoices",
     source_id: data.id,
     metadata: {
+      due_date: dueDate,
       invoice_number: invoiceNumber,
       total_amount: totalAmount,
     },
@@ -190,9 +237,18 @@ async function fetchInvoiceMutationTarget(
   return data;
 }
 
-async function updateInvoiceStatus(id: string, status: "paid" | "sent", userId: string) {
+/**
+ * Sending an invoice: recognise the revenue and the receivable.
+ *
+ * Narrowed to "sent" only. It used to take "paid" as well and post the cash
+ * journal for the whole invoice — which, now that every payment posts per
+ * receipt, would book the same money twice. Settling happens through
+ * writeInvoiceReceipt, and the type stops that path being re-opened by
+ * accident.
+ */
+async function updateInvoiceStatus(id: string, status: "sent", userId: string) {
   const supabase = await createOpsServerSessionClient();
-  const timestampColumn = status === "sent" ? "sent_at" : "paid_at";
+  const timestampColumn = "sent_at";
   const { data, error } = await supabase
     .from("invoices")
     .update({
@@ -214,9 +270,8 @@ async function updateInvoiceStatus(id: string, status: "paid" | "sent", userId: 
     entity_id: data.id,
   });
 
-  // Post the matching GL journal (revenue recognition on send, cash receipt on
-  // paid). Best-effort + idempotent — never blocks the status change.
-  await postInvoiceJournalSafe(data.id, status === "sent" ? "issued" : "paid", userId);
+  // Revenue recognition. Best-effort + idempotent — never blocks the send.
+  await postInvoiceJournalSafe(data.id, "issued", userId);
 
   await notifyOpsWorkflowEvent({
     actorId: userId,
@@ -255,6 +310,329 @@ export async function sendInvoiceAction(formData: FormData) {
   redirect("/ops/invoices?updated=sent");
 }
 
+// ---------------------------------------------------------------------------
+// Receipts — money actually received (R6)
+// ---------------------------------------------------------------------------
+
+const receiptSchema = z.object({
+  amount: z.coerce.number().positive("Enter the amount received."),
+  bank_reference: z.string().trim().max(120).default(""),
+  invoice_id: z.string().uuid("Select an invoice."),
+  method: z.enum(["bank_transfer", "cash", "mobile_money", "cheque", "other"]),
+  notes: z.string().trim().max(400).default(""),
+  received_on: dateSchema,
+});
+
+type InvoiceForReceipt = {
+  id: string;
+  invoice_number: string;
+  status: "draft" | "sent" | "paid";
+  total_amount: number | string;
+  cancelled_at: string | null;
+  archived_at: string | null;
+  deleted_at: string | null;
+};
+
+/**
+ * What is still owed on an invoice, from its receipts.
+ *
+ * Computed every time rather than stored (decision D6). A cached balance and a
+ * list of receipts are two records of one fact, and the cached one is always
+ * the one that goes stale.
+ */
+async function outstandingFor(invoice: InvoiceForReceipt) {
+  const supabase = await createOpsServerSessionClient();
+  const { data, error } = await supabase
+    .from("invoice_receipts")
+    .select("amount")
+    .eq("invoice_id", invoice.id)
+    .is("cancelled_at", null);
+
+  if (error) {
+    throw error;
+  }
+
+  const received = ((data ?? []) as Array<{ amount: number | string }>).reduce(
+    (sum, row) => sum + Number(row.amount ?? 0),
+    0,
+  );
+
+  return {
+    outstanding: roundToTwo(Number(invoice.total_amount ?? 0) - received),
+    received: roundToTwo(received),
+  };
+}
+
+async function fetchInvoiceForReceipt(invoiceId: string) {
+  const supabase = await createOpsServerSessionClient();
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, invoice_number, status, total_amount, cancelled_at, archived_at, deleted_at")
+    .eq("id", invoiceId)
+    .maybeSingle<InvoiceForReceipt>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Write a receipt, post its cash, and settle the invoice if that clears it.
+ *
+ * The single place money-in is recorded — both `recordInvoiceReceiptAction`
+ * and `markInvoicePaidAction` come through here, so there is exactly one way
+ * cash reaches the ledger and one place the settled decision is made.
+ */
+async function writeInvoiceReceipt(input: {
+  actorUserId: string;
+  amount: number;
+  bankReference: string;
+  invoice: InvoiceForReceipt;
+  method: string;
+  notes: string;
+  receivedOn: string;
+}) {
+  const supabase = await createOpsServerSessionClient();
+  const { data: receipt, error } = await supabase
+    .from("invoice_receipts")
+    .insert({
+      amount: input.amount,
+      bank_reference: input.bankReference,
+      invoice_id: input.invoice.id,
+      method: input.method,
+      notes: input.notes,
+      received_on: input.receivedOn,
+      recorded_by: input.actorUserId,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !receipt) {
+    invoiceError(error?.message ?? "The receipt could not be recorded.");
+  }
+
+  await postInvoiceReceiptJournalSafe(receipt.id, input.actorUserId);
+
+  // Recomputed after the insert rather than predicted from it, so a concurrent
+  // receipt cannot leave the invoice open when the balance is actually clear.
+  const { outstanding } = await outstandingFor(input.invoice);
+
+  if (outstanding <= 0 && input.invoice.status !== "paid") {
+    await supabase
+      .from("invoices")
+      .update({ paid_at: new Date().toISOString(), status: "paid" })
+      .eq("id", input.invoice.id);
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: input.actorUserId,
+    action: "invoice.receipt_recorded",
+    entity_type: "invoice",
+    entity_id: input.invoice.id,
+    module_key: "invoices",
+    source_table: "invoice_receipts",
+    source_id: receipt.id,
+    metadata: {
+      amount: input.amount,
+      bank_reference: input.bankReference,
+      invoice_number: input.invoice.invoice_number,
+      method: input.method,
+      outstanding_after: Math.max(outstanding, 0),
+      received_on: input.receivedOn,
+    },
+  });
+
+  return { outstanding, receiptId: receipt.id };
+}
+
+/** Settle the whole remaining balance in one receipt. */
+async function settleInvoiceByReceipt(input: {
+  actorUserId: string;
+  bankReference: string;
+  invoiceId: string;
+  method: string;
+  receivedOn: string;
+}) {
+  const invoice = await fetchInvoiceForReceipt(input.invoiceId);
+
+  if (!invoice) {
+    invoiceError("Invoice was not found.");
+  }
+
+  const { outstanding } = await outstandingFor(invoice);
+
+  if (outstanding <= 0) {
+    invoiceError("There is nothing outstanding on this invoice.");
+  }
+
+  await writeInvoiceReceipt({
+    actorUserId: input.actorUserId,
+    amount: outstanding,
+    bankReference: input.bankReference,
+    invoice,
+    method: input.method,
+    notes: "Settled in full.",
+    receivedOn: input.receivedOn,
+  });
+}
+
+/**
+ * Record a payment received against an invoice.
+ *
+ * Part payments are the normal case on a construction contract, which the old
+ * draft/sent/paid status could not express at all. An over-payment is refused
+ * rather than absorbed: it is usually a keying error, and when it is genuine it
+ * needs a credit note rather than a silent surplus.
+ */
+export async function recordInvoiceReceiptAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const parsed = receiptSchema.safeParse({
+    amount: field(formData, "amount"),
+    bank_reference: field(formData, "bank_reference"),
+    invoice_id: field(formData, "invoice_id"),
+    method: field(formData, "method") || "bank_transfer",
+    notes: field(formData, "notes"),
+    received_on: field(formData, "received_on") || todayInLusaka(),
+  });
+
+  if (!parsed.success) {
+    invoiceError(parsed.error.issues[0]?.message ?? "Check the receipt details.");
+  }
+
+  const invoice = await fetchInvoiceForReceipt(parsed.data.invoice_id);
+
+  if (!invoice) {
+    invoiceError("Invoice was not found.");
+  }
+
+  if (!canRecordInvoiceReceipt(profile.role, invoice)) {
+    invoiceError(
+      "Only Finance and leadership can record a receipt, and only against a sent invoice.",
+    );
+  }
+
+  const { outstanding } = await outstandingFor(invoice);
+
+  if (parsed.data.amount > outstanding) {
+    invoiceError(
+      `That is more than the ${outstanding.toFixed(2)} still outstanding on ${invoice.invoice_number}. Record the outstanding amount, or raise a credit note for the difference.`,
+    );
+  }
+
+  await writeInvoiceReceipt({
+    actorUserId: profile.id,
+    amount: parsed.data.amount,
+    bankReference: parsed.data.bank_reference,
+    invoice,
+    method: parsed.data.method,
+    notes: parsed.data.notes,
+    receivedOn: parsed.data.received_on,
+  });
+
+  revalidatePath("/ops/invoices");
+  revalidatePath("/ops/receivables");
+  redirect("/ops/invoices?updated=receipt");
+}
+
+/**
+ * Reverse a receipt keyed in error.
+ *
+ * Cancelled, never deleted: the cash has already posted a journal, and the
+ * record has to show the correction rather than lose the original. Contra-ing
+ * the entry keeps the immutable original intact, as everywhere else in the
+ * ledger.
+ */
+export async function cancelInvoiceReceiptAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canCancelInvoiceReceipt(profile.role)) {
+    invoiceError("Only Finance leadership can reverse a receipt.");
+  }
+
+  const receiptId = field(formData, "receipt_id");
+  const reason = field(formData, "reason").trim();
+
+  if (!/^[0-9a-f-]{36}$/i.test(receiptId)) {
+    invoiceError("Select a receipt.");
+  }
+  if (reason.length === 0) {
+    invoiceError("Give a reason — a reversed receipt without one cannot be explained later.");
+  }
+
+  const supabase = await createOpsServerSessionClient();
+  const { data: receipt, error } = await supabase
+    .from("invoice_receipts")
+    .select("id, invoice_id, amount, cancelled_at")
+    .eq("id", receiptId)
+    .maybeSingle<{
+      id: string;
+      invoice_id: string;
+      amount: number | string;
+      cancelled_at: string | null;
+    }>();
+
+  if (error) {
+    invoiceError(error.message);
+  }
+  if (!receipt) {
+    invoiceError("Receipt was not found.");
+  }
+  if (receipt.cancelled_at) {
+    invoiceError("That receipt has already been reversed.");
+  }
+
+  const { error: cancelError } = await supabase
+    .from("invoice_receipts")
+    .update({
+      cancellation_reason: reason.slice(0, 400),
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: profile.id,
+    })
+    .eq("id", receipt.id)
+    .is("cancelled_at", null);
+
+  if (cancelError) {
+    invoiceError(cancelError.message);
+  }
+
+  await reverseOpsJournalSafe(
+    "invoice_receipts",
+    receipt.id,
+    "invoice_receipt_received",
+    profile.id,
+  );
+
+  // The invoice owes money again, so it is no longer settled.
+  const invoice = await fetchInvoiceForReceipt(receipt.invoice_id);
+  if (invoice) {
+    const { outstanding } = await outstandingFor(invoice);
+    if (outstanding > 0 && invoice.status === "paid") {
+      await supabase
+        .from("invoices")
+        .update({ paid_at: null, status: "sent" })
+        .eq("id", invoice.id);
+    }
+  }
+
+  await supabase.from("audit_events").insert({
+    actor_user_id: profile.id,
+    action: "invoice.receipt_reversed",
+    entity_type: "invoice",
+    entity_id: receipt.invoice_id,
+    module_key: "invoices",
+    source_table: "invoice_receipts",
+    source_id: receipt.id,
+    metadata: { amount: Number(receipt.amount ?? 0), reason },
+  });
+
+  revalidatePath("/ops/invoices");
+  revalidatePath("/ops/receivables");
+  redirect("/ops/invoices?updated=receipt_reversed");
+}
+
 export async function markInvoicePaidAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
@@ -272,9 +650,21 @@ export async function markInvoicePaidAction(formData: FormData) {
     invoiceError("Only Finance and leadership can mark an invoice paid, and only once it has been sent.");
   }
 
-  await updateInvoiceStatus(parsed.data.id, "paid", profile.id);
+  // Settling in full is now a RECEIPT for the whole outstanding balance, not a
+  // status flip. Two reasons it has to be: the cash event is what collections,
+  // DSO and the bank reconciliation are computed from, and posting the GL both
+  // here and per receipt would double-count every payment. One cash path.
+  await settleInvoiceByReceipt({
+    actorUserId: profile.id,
+    invoiceId: parsed.data.id,
+    method: field(formData, "method") || "bank_transfer",
+    bankReference: field(formData, "bank_reference"),
+    receivedOn: field(formData, "received_on") || todayInLusaka(),
+  });
+
   revalidatePath("/ops");
   revalidatePath("/ops/invoices");
+  revalidatePath("/ops/receivables");
   redirect("/ops/invoices?updated=paid");
 }
 
