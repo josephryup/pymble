@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   CreditCard,
   FileText,
+  Landmark,
   PackageCheck,
   Pencil,
   Plus,
@@ -37,6 +38,8 @@ import {
   fetchOpsLegacyProjectOptions,
 } from "@/lib/ops/legacy-projects";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
+import { canViewOpsLoans } from "@/lib/ops/loan-permissions";
+import { fetchOpsLoanRegister } from "@/lib/ops/loans";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   approvePaymentRequestAction,
@@ -296,6 +299,12 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
     id: line.id,
     label: `${line.budget?.budget_number ?? "Budget"} / ${line.cost_code || line.category} - ${line.description}`,
   }));
+  // Debt service, for the cash signal only — and only for people who may see
+  // the loan register at all. Fetched separately rather than folded into the
+  // Promise.all above so a role without loan access does not query it.
+  const loanSignal = canViewOpsLoans(auth.profile.role)
+    ? await fetchOpsLoanRegister().catch(() => null)
+    : null;
   const notice = paymentRequestNotice(params);
   const canCreate = canCreateOpsPaymentRequest(auth.profile.role);
   const hasActiveListFilter = listState.query.length > 0 || Boolean(status);
@@ -509,6 +518,52 @@ export default async function OpsPaymentRequestsPage({ searchParams }: PageProps
               value={formatMoney(cashflowDashboard.netNext30)}
             />
           </dl>
+
+          {/* Debt service competes with supplier bills for the same cash, so it
+              belongs in this picture (loans design §2). It is NOT a payable —
+              the instalments are not payment_requests rows and never appear in
+              the register below; only the cash number is shared.
+
+              Gated on canViewOpsLoans, which is narrower than this page: the
+              payables view is open to Operations, Projects, Procurement and the
+              QS, and the company's debt position is not theirs to see. */}
+          {loanSignal ? (
+            <div className="mt-4 rounded-md border border-border px-3 py-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+                <Landmark className="size-4 text-primary-blue" aria-hidden="true" />
+                Debt service
+              </div>
+              <dl className="mt-3 grid gap-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Loan instalments due</dt>
+                  <dd className="font-bold text-foreground">
+                    {formatMoney(loanSignal.due_next_30_days)}
+                  </dd>
+                </div>
+                {loanSignal.total_arrears > 0 ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-red-700 dark:text-red-300">Instalments overdue</dt>
+                    <dd className="font-bold text-red-700 dark:text-red-300">
+                      {formatMoney(loanSignal.total_arrears)}
+                    </dd>
+                  </div>
+                ) : null}
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Total borrowing outstanding</dt>
+                  <dd className="font-bold text-foreground">
+                    {formatMoney(loanSignal.total_outstanding)}
+                  </dd>
+                </div>
+              </dl>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                Shown here because it competes for the same cash.{" "}
+                <Link className="font-semibold underline-offset-2 hover:underline" href="/ops/loans">
+                  Loan register
+                </Link>
+                .
+              </p>
+            </div>
+          ) : null}
           <div className="mt-4 rounded-md border border-border px-3 py-3">
             <div className="flex items-center gap-2 text-sm font-bold text-foreground">
               <TrendingUp className="size-4 text-primary-blue" aria-hidden="true" />

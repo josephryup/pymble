@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
   opsReportWindow,
   summariseMaterialRequestFunnel,
   summariseBudgetConsumption,
   summarisePayableRelease,
+  summariseBorrowing,
+  type OpsLoanRepaymentForPeriod,
   summarisePayrollPeriod,
   summariseUnplannedSpend,
   type OpsBudgetForConsumption,
@@ -868,5 +872,154 @@ describe("payroll reports cost to company, not net pay", () => {
     );
 
     assert.equal(summary.advances_outstanding, 2_000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Borrowing in the finance report (L5)
+// ---------------------------------------------------------------------------
+
+const AUG = opsReportWindow("2026-08-01", "2026-08-31");
+
+const instalment = (
+  overrides: Partial<OpsLoanRepaymentForPeriod> = {},
+): OpsLoanRepaymentForPeriod => ({
+  due_date: "2026-08-15",
+  fees: 0,
+  interest_portion: 0,
+  paid_on: null,
+  principal_portion: 0,
+  status: "scheduled",
+  total_amount: 0,
+  ...overrides,
+});
+
+describe("borrowing separates the cost from the capital", () => {
+  it("reports interest as the cost and principal as not one", () => {
+    // The distinction the whole loans module exists for. A reader seeing only
+    // debt service would take K22,222 of expense where only K8,333 is.
+    const summary = summariseBorrowing(
+      [
+        instalment({
+          fees: 0,
+          interest_portion: 8_333.33,
+          paid_on: "2026-08-05",
+          principal_portion: 13_888.89,
+          status: "paid",
+          total_amount: 22_222.22,
+        }),
+      ],
+      486_111.11,
+      AUG,
+    );
+
+    assert.equal(summary.interest_paid, 8_333.33);
+    assert.equal(summary.principal_repaid, 13_888.89);
+    assert.equal(summary.debt_service, 22_222.22);
+    assert.equal(summary.outstanding, 486_111.11);
+  });
+
+  it("counts a payment in the month the money left, not the month it was due", () => {
+    const summary = summariseBorrowing(
+      [
+        instalment({
+          due_date: "2026-07-15",
+          interest_portion: 500,
+          paid_on: "2026-08-03",
+          principal_portion: 4_500,
+          status: "paid",
+          total_amount: 5_000,
+        }),
+      ],
+      0,
+      AUG,
+    );
+
+    assert.equal(summary.debt_service, 5_000);
+  });
+
+  it("keeps lender fees out of interest", () => {
+    // Fees are bank charges, not the cost of the money.
+    const summary = summariseBorrowing(
+      [
+        instalment({
+          fees: 150,
+          interest_portion: 1_000,
+          paid_on: "2026-08-10",
+          principal_portion: 9_000,
+          status: "paid",
+          total_amount: 10_150,
+        }),
+      ],
+      0,
+      AUG,
+    );
+
+    assert.equal(summary.interest_paid, 1_000);
+    assert.equal(summary.fees_paid, 150);
+    assert.equal(summary.debt_service, 10_150);
+  });
+
+  it("counts an instalment missed months ago as still in arrears", () => {
+    // Arrears is a position at the window's end, so an old miss must appear —
+    // it is still owed.
+    const summary = summariseBorrowing(
+      [
+        instalment({ due_date: "2026-05-15", status: "missed", total_amount: 5_000 }),
+        instalment({ due_date: "2026-08-15", status: "scheduled", total_amount: 5_000 }),
+      ],
+      100_000,
+      AUG,
+    );
+
+    assert.equal(summary.arrears, 10_000);
+    assert.equal(summary.arrears_count, 2);
+  });
+
+  it("does not count a future instalment as arrears", () => {
+    const summary = summariseBorrowing(
+      [instalment({ due_date: "2026-10-15", status: "scheduled", total_amount: 5_000 })],
+      100_000,
+      AUG,
+    );
+
+    assert.equal(summary.arrears, 0);
+  });
+
+  it("does not count a waived instalment as owed", () => {
+    const summary = summariseBorrowing(
+      [instalment({ due_date: "2026-05-15", status: "waived", total_amount: 5_000 })],
+      0,
+      AUG,
+    );
+
+    assert.equal(summary.arrears, 0);
+  });
+});
+
+describe("the arrears sweep", () => {
+  const LOANS = readFileSync(
+    join(import.meta.dirname, "..", "src", "lib", "ops", "loans.ts"),
+    "utf8",
+  );
+
+  it("only sweeps facilities that have been drawn down", () => {
+    assert.match(LOANS, /loan\?\.status === "active"/);
+  });
+
+  it("marks the instalment missed rather than deleting or auto-paying it", () => {
+    // It is still owed; the status only records that the date went by.
+    assert.match(LOANS, /update\(\{ status: "missed" \}\)/);
+  });
+
+  it("sends one notice per facility, not one per instalment", () => {
+    // Three missed months on one loan is a single conversation with the bank.
+    assert.match(LOANS, /const byLoan = new Map/);
+  });
+
+  it("keys the notice on the arrears count so it does not repeat daily", () => {
+    // The dated-key mistake the notification audit found: a fresh key every
+    // morning means it can never dedupe.
+    assert.match(LOANS, /idempotencyKey: `loan-arrears:\$\{loanId\}:\$\{entry\.count\}/);
   });
 });

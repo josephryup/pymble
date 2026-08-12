@@ -5,6 +5,7 @@ import {
   FileText,
   HardHat,
   Plus,
+  ReceiptText,
   Send,
   Trash2,
   XCircle,
@@ -28,6 +29,7 @@ import {
   setQuotationStatusAction,
 } from "@/lib/ops/quotation-actions";
 import { convertQuotationToProjectAction } from "@/lib/ops/quotation-conversion-actions";
+import { createInvoiceFromQuotationAction } from "@/lib/ops/invoice-actions";
 import {
   canArchiveOpsQuotation,
   canEditOpsQuotation,
@@ -239,6 +241,22 @@ function QuotationCard({
               </div>
             </form>
           </details>
+        ) : null}
+        {/* Bill the job. The second of the three ways an invoice comes into
+            being (R7) — the quotation's own VAT rate is used, because the
+            client accepted a specific figure and re-deriving it from today's
+            organisation setting would bill a different number. */}
+        {canManage && quotation.status === "accepted" ? (
+          <form action={createInvoiceFromQuotationAction}>
+            <input name="quotation_id" type="hidden" value={quotation.id} />
+            <OpsConfirmSubmitButton
+              className={OPS_SECONDARY_BUTTON_CLASS}
+              confirmText="Confirm — raise a draft invoice"
+            >
+              <ReceiptText className="size-4" aria-hidden="true" />
+              Raise invoice
+            </OpsConfirmSubmitButton>
+          </form>
         ) : null}
         {canArchiveOpsQuotation(role) && !quotation.archived_at ? (
           <form action={archiveQuotationAction}>

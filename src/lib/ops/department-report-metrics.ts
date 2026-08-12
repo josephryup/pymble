@@ -1,6 +1,7 @@
 import type { OpsDepartmentKey } from "@/lib/ops/department-report-permissions";
 import {
   fetchOpsBudgetConsumption,
+  fetchOpsBorrowing,
   fetchOpsMaterialRequestFunnel,
   fetchOpsPayableRelease,
   fetchOpsPayrollPeriod,
@@ -319,17 +320,50 @@ async function payrollMetrics(
   }
 }
 
+/**
+ * Borrowing. Interest is a real operating cost that nothing could report until
+ * loans were modelled — it was simply absent from the P&L. Principal repaid is
+ * reported beside it because it is NOT a cost, and a reader seeing only the
+ * cash out on debt would otherwise take the whole figure for expense.
+ */
+async function borrowingMetrics(
+  start: string,
+  end: string,
+): Promise<Record<string, number>> {
+  try {
+    const borrowing = await fetchOpsBorrowing(start, end);
+    return {
+      debt_service_zmw: borrowing.debt_service,
+      interest_paid_zmw: borrowing.interest_paid,
+      loan_arrears_zmw: borrowing.arrears,
+      loan_principal_repaid_zmw: borrowing.principal_repaid,
+      total_borrowing_zmw: borrowing.outstanding,
+    };
+  } catch {
+    return {};
+  }
+}
+
 async function financeMetrics(supabase: ServiceClient, start: string, end: string) {
-  const [base, funnel, release, budgets, unplanned, payroll] = await Promise.all([
+  const [base, funnel, release, budgets, unplanned, payroll, borrowing] = await Promise.all([
     baseFinanceMetrics(supabase, start, end),
     materialRequestFunnelMetrics(start, end),
     payableReleaseMetrics(start, end),
     budgetConsumptionMetrics(start, end),
     unplannedSpendMetrics(start, end),
     payrollMetrics(start, end),
+    borrowingMetrics(start, end),
   ]);
 
-  return { ...base, ...funnel, ...release, ...budgets, ...unplanned, ...payroll };
+  return {
+    ...base,
+    ...funnel,
+    ...release,
+    ...budgets,
+    ...unplanned,
+    ...payroll,
+    ...borrowing,
+  };
 }
 
 function baseFinanceMetrics(supabase: ServiceClient, start: string, end: string) {

@@ -116,6 +116,9 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   // Money coming the other way — HandCoins reads as receiving, against the
   // Banknote used for what we pay out.
   "/ops/receivables": HandCoins,
+  // Landmark reads as "the bank" — borrowing, against HandCoins for money
+  // coming in and Banknote for money going out.
+  "/ops/loans": Landmark,
   "/ops/finance/accounts": BookOpen,
   "/ops/finance/trial-balance": ChartNoAxesCombined,
   "/ops/finance/journal": ScrollText,

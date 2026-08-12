@@ -13,6 +13,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { notFound } from "next/navigation";
+import { OpsCollapsible } from "@/components/ops/OpsCollapsible";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
 import { OpsDashboardPanel } from "@/components/ops/OpsDashboardPanel";
 import { OpsAgeingPanel } from "@/components/ops/OpsFinanceKpiPanels";
@@ -524,24 +525,13 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
       </div>
 
       {canManage && customerOptions.length > 0 ? (
-        <details className="rounded-lg border border-border bg-card" id="opening-balance-panel">
-          <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 transition hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-blue [&::-webkit-details-marker]:hidden">
-            <span className="flex min-w-0 items-center gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
-                <History className="size-5" aria-hidden="true" />
-              </span>
-              <span className="min-w-0">
-                <span className="block font-heading text-lg font-bold text-foreground">
-                  Load a debt from before this system
-                </span>
-                <span className="mt-1 block text-sm text-muted-foreground">
-                  Money a client already owes from an invoice raised outside Pymble Ops.
-                </span>
-              </span>
-            </span>
-            <Plus className="size-5 shrink-0 text-primary-blue" aria-hidden="true" />
-          </summary>
-          <div className="border-t border-border p-5">
+        <OpsCollapsible
+          icon={History}
+          id="opening-balance-panel"
+          title="Load a debt from before this system"
+          variant="panel"
+        >
+          <div className="p-5">
             <div className="mb-4 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm leading-6 text-muted-foreground">
               <p className="font-bold text-foreground">How this differs from a normal invoice</p>
               <ul className="mt-1 list-disc space-y-1 pl-5">
@@ -639,7 +629,7 @@ export default async function OpsInvoicesPage({ searchParams }: PageProps) {
               </div>
             </form>
           </div>
-        </details>
+        </OpsCollapsible>
       ) : null}
 
       {canManage ? (

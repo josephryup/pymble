@@ -405,7 +405,21 @@ original invoice already accounted for the VAT.
   Also: an **over-payment is refused**, not absorbed (it is nearly always a keying error,
   and a genuine one needs a credit note); reversing a receipt that had settled an invoice
   **reopens it**; and a reversal requires a written reason.
-- R7 — the three invoice sources, opening-balance first.
+- **R7 — DONE 2026-08-11.** Opening-balance loading and accepted-quotation → invoice.
+
+  The opening-balance path is the one that matters: it credits **retained earnings, not
+  revenue** (`buildInvoiceIssueJournal` branches on `revenue_treatment`), carries **zero
+  VAT** per D7, and is dated when the ORIGINAL invoice was raised so a years-old backlog
+  ages truthfully instead of reporting as entirely current. It is written `sent`, not
+  draft — the client was invoiced long ago.
+
+  Quotation → invoice uses the **quotation's own VAT rate**, not today's organisation
+  setting: the client accepted a specific figure. Idempotent, so a quotation cannot be
+  invoiced twice.
+
+  The IPC → invoice path is deliberately not built: `commercial_ipcs` has zero rows and the
+  contract module is unused, so it would be a conversion with nothing to convert. It stays
+  in the design for when IPCs are in use.
 
 ### Still open
 

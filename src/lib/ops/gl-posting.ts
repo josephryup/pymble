@@ -5,6 +5,8 @@ import {
   buildPaymentRequestAccrualJournal,
   buildPaymentRequestSettlementJournal,
   buildInvoiceReceiptJournal,
+  buildLoanDrawdownJournal,
+  buildLoanRepaymentJournal,
   buildPayrollDisbursementJournal,
   buildStaffPayrollDisbursementJournal,
   type OpsGlPostingInput,
@@ -154,6 +156,151 @@ export async function postInvoiceReceiptJournalSafe(
       entityType: "invoice_receipt",
       sourceTable: "invoice_receipts",
       detail: `invoice receipt ${receiptId}`,
+      error,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Loans
+// ---------------------------------------------------------------------------
+
+type RawLoanForPosting = {
+  id: string;
+  loan_number: string;
+  principal: number | string;
+  provider: { name: string } | { name: string }[] | null;
+  account: { code: string } | { code: string }[] | null;
+};
+
+function relationOf<T>(value: T | T[] | null) {
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+/** Dr Bank / Cr the facility's liability account. Never an expense. */
+export async function postLoanDrawdownJournalSafe(
+  loanId: string,
+  actorUserId: string,
+): Promise<void> {
+  try {
+    const supabase = getOpsSupabaseServiceClient();
+    const { data, error } = await supabase
+      .from("loans")
+      .select(
+        "id, loan_number, principal, provider:loan_providers!loans_provider_id_fkey(name), account:chart_of_accounts!loans_gl_liability_account_id_fkey(code)",
+      )
+      .eq("id", loanId)
+      .maybeSingle<RawLoanForPosting>();
+
+    if (error) {
+      throw error;
+    }
+    if (!data) {
+      return;
+    }
+
+    const account = relationOf(data.account);
+    const principal = round2(Number(data.principal ?? 0));
+
+    // No account means nowhere truthful to put the liability. Better to log
+    // and stop than to guess at 2510 and quietly misfile asset finance.
+    if (!account?.code || principal <= 0) {
+      throw new Error(`Loan ${data.loan_number} has no liability account mapped.`);
+    }
+
+    const journal = buildLoanDrawdownJournal(
+      {
+        id: data.id,
+        liability_account_code: account.code,
+        loan_number: data.loan_number,
+        principal,
+        provider_name: relationOf(data.provider)?.name ?? "lender",
+      },
+      new Date().toISOString().slice(0, 10),
+    );
+
+    await postOpsJournalEntry({ ...journal, createdBy: actorUserId });
+  } catch (error: unknown) {
+    await logPostingFailure({
+      actorUserId,
+      entityId: loanId,
+      entityType: "loan",
+      sourceTable: "loans",
+      detail: `loan drawdown ${loanId}`,
+      error,
+    });
+  }
+}
+
+/**
+ * The split posting: principal against the liability, interest to expense,
+ * fees to bank charges, and the whole amount out of the bank.
+ */
+export async function postLoanRepaymentJournalSafe(
+  repaymentId: string,
+  actorUserId: string,
+): Promise<void> {
+  try {
+    const supabase = getOpsSupabaseServiceClient();
+    const { data, error } = await supabase
+      .from("loan_repayments")
+      .select(
+        "id, paid_on, total_amount, principal_portion, interest_portion, fees, loan:loans!loan_repayments_loan_id_fkey(loan_number, account:chart_of_accounts!loans_gl_liability_account_id_fkey(code))",
+      )
+      .eq("id", repaymentId)
+      .maybeSingle<{
+        id: string;
+        paid_on: string | null;
+        total_amount: number | string;
+        principal_portion: number | string;
+        interest_portion: number | string;
+        fees: number | string;
+        loan:
+          | { loan_number: string; account: { code: string } | { code: string }[] | null }
+          | Array<{ loan_number: string; account: { code: string } | { code: string }[] | null }>
+          | null;
+      }>();
+
+    if (error) {
+      throw error;
+    }
+    if (!data || !data.paid_on) {
+      return;
+    }
+
+    const loan = relationOf(data.loan);
+    const account = relationOf(loan?.account ?? null);
+
+    if (!loan || !account?.code) {
+      throw new Error(`Repayment ${repaymentId} has no liability account mapped.`);
+    }
+
+    const journal = buildLoanRepaymentJournal({
+      fees: round2(Number(data.fees ?? 0)),
+      id: data.id,
+      interest: round2(Number(data.interest_portion ?? 0)),
+      liability_account_code: account.code,
+      loan_number: loan.loan_number,
+      paid_on: data.paid_on,
+      principal: round2(Number(data.principal_portion ?? 0)),
+      total: round2(Number(data.total_amount ?? 0)),
+    });
+
+    const result = await postOpsJournalEntry({ ...journal, createdBy: actorUserId });
+
+    if (result.entryId) {
+      await supabase
+        .from("loan_repayments")
+        .update({ journal_entry_id: result.entryId })
+        .eq("id", repaymentId);
+    }
+  } catch (error: unknown) {
+    await logPostingFailure({
+      actorUserId,
+      entityId: repaymentId,
+      entityType: "loan_repayment",
+      sourceTable: "loan_repayments",
+      detail: `loan repayment ${repaymentId}`,
       error,
     });
   }

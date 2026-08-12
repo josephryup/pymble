@@ -282,6 +282,41 @@ export const OPS_DEPARTMENT_REPORT_TEMPLATES: Record<
         auto: true,
         downIsGood: true,
       },
+      // Borrowing. Interest leads because it is the only part that is a cost;
+      // principal repaid sits beside it precisely so the cash figure is not
+      // mistaken for expense.
+      {
+        key: "interest_paid_zmw",
+        label: "Interest paid (ZMW)",
+        auto: true,
+        hint: "The cost of borrowing. The only part of a repayment that reaches the P&L.",
+      },
+      {
+        key: "loan_principal_repaid_zmw",
+        label: "Loan principal repaid (ZMW)",
+        auto: true,
+        hint: "Not a cost — it reduces the liability. Shown so debt service is not read as expense.",
+      },
+      {
+        key: "debt_service_zmw",
+        label: "Total debt service (ZMW)",
+        auto: true,
+        hint: "Cash out on loans in the period: principal, interest and fees together.",
+      },
+      {
+        key: "total_borrowing_zmw",
+        label: "Borrowing outstanding (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "Position at period end — principal still owed across live facilities.",
+      },
+      {
+        key: "loan_arrears_zmw",
+        label: "Loan instalments overdue (ZMW)",
+        auto: true,
+        downIsGood: true,
+        hint: "Missed repayments usually carry penalty interest.",
+      },
       { key: "cash_position_zmw", label: "Cash position (ZMW)", hint: "Bank balances at period end." },
     ],
   },

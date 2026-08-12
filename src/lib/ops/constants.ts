@@ -519,6 +519,22 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Quotations",
   },
   {
+    // Borrowing. Sits with Payables and Receivables because it is the third
+    // thing Finance owes or is owed — but a loan is NOT a payable: the
+    // principal is a balance-sheet liability, and only the interest is a cost
+    // (docs/pymble-ops-loans-design-2026-08.md §1).
+    description:
+      "What Pymble owes its lenders: outstanding principal, interest cost, repayment schedules, and arrears.",
+    group: "finance",
+    href: "/ops/loans",
+    id: "loans",
+    navigationRoles: OPS_FINANCE_ROLES,
+    phase: "Phase 14",
+    roles: OPS_FINANCE_ROLES,
+    status: "ready",
+    title: "Loans",
+  },
+  {
     // The counterpart to Payables, and the home receivables never had. Sits
     // next to the invoice register: that raises the demand, this tracks what
     // came back.

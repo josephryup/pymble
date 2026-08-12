@@ -316,3 +316,73 @@ describe("there is exactly one path for money in", () => {
     assert.match(ACTIONS, /reason\.length === 0/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Opening balances credit equity, not revenue (R7)
+// ---------------------------------------------------------------------------
+
+const BUILDERS = readFileSync(
+  join(import.meta.dirname, "..", "src", "lib", "ops", "gl-journal-builders.ts"),
+  "utf8",
+);
+
+describe("an opening balance must not invent revenue", () => {
+  it("credits retained earnings instead of contract revenue", () => {
+    // The whole reason revenue_treatment exists. Crediting revenue would turn
+    // K800,000 of old client debt into K800,000 of this year's trading.
+    assert.match(BUILDERS, /const isOpeningBalance = invoice\.revenue_treatment === "opening_balance"/);
+    assert.match(
+      BUILDERS,
+      /isOpeningBalance\s*\?\s*\{\s*account_code: OPS_GL_ACCOUNTS\.retainedEarnings/,
+    );
+  });
+
+  it("declares no output VAT on one", () => {
+    // Decision D7: the original invoice already declared it, and declaring it
+    // again would double-count it to ZRA.
+    assert.match(BUILDERS, /if \(!isOpeningBalance && invoice\.vat_amount > 0\)/);
+  });
+
+  it("is carried through from the row, or the branch could never fire", () => {
+    // The wiring failure that has bitten this codebase repeatedly: a correct
+    // builder fed a field nobody selected.
+    const posting = readFileSync(
+      join(import.meta.dirname, "..", "src", "lib", "ops", "gl-posting.ts"),
+      "utf8",
+    );
+
+    assert.match(posting, /total_amount, revenue_treatment/);
+    assert.match(posting, /revenue_treatment: data\.revenue_treatment/);
+  });
+
+  it("is loaded as sent, dated when the original was raised", () => {
+    // Dating it today would report a years-old backlog as entirely current,
+    // which is the opposite of why it is being loaded.
+    assert.match(ACTIONS, /revenue_treatment: "opening_balance"/);
+    assert.match(ACTIONS, /source: "opening_balance"/);
+    assert.match(ACTIONS, /status: "sent"/);
+    assert.match(ACTIONS, /vat_amount: 0/);
+    assert.match(ACTIONS, /cannot be dated in the future/);
+  });
+});
+
+describe("billing an accepted quotation", () => {
+  it("refuses anything that has not been accepted", () => {
+    assert.match(ACTIONS, /quotation\.status !== "accepted"/);
+  });
+
+  it("uses the quotation's own VAT rate, not today's org setting", () => {
+    // The client agreed a specific figure; re-deriving it from a rate that has
+    // since changed would bill a different number.
+    assert.match(ACTIONS, /const vatRate = Number\(quotation\.vat_rate \?\? 0\)/);
+  });
+
+  it("will not raise a second invoice for the same quotation", () => {
+    assert.match(ACTIONS, /\.eq\("source", "quotation"\)/);
+    assert.match(ACTIONS, /has already been invoiced as/);
+  });
+
+  it("raises a draft, so someone checks it before the client sees it", () => {
+    assert.match(ACTIONS, /source: "quotation",/);
+  });
+});

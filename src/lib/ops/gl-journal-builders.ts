@@ -28,6 +28,8 @@ export const OPS_GL_ACCOUNTS = {
   officeSalaries: "6010",
   otherDirectCosts: "5090",
   employerStatutory: "6110",
+  interestExpense: "6120",
+  bankCharges: "6090",
 } as const;
 
 export type OpsGlPostingLine = {
@@ -549,5 +551,121 @@ export function buildInvoiceReceiptJournal(
         description: `Clear receivable ${receipt.invoice_number}`,
       },
     ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Loans
+// ---------------------------------------------------------------------------
+
+export type OpsLoanForPosting = {
+  id: string;
+  loan_number: string;
+  /** 2510 Bank Loans, or 2520 for asset finance. */
+  liability_account_code: string;
+  principal: number;
+  provider_name: string;
+};
+
+/**
+ * Loan drawn down → cash in, liability up.
+ *
+ *   Dr Bank · Cr Bank Loans (or Asset Finance)
+ *
+ * Note what is NOT here: no expense line. Borrowing is not a cost, and the
+ * whole reason loans are modelled separately from payables is that keying a
+ * drawdown as a payable would book the entire principal against profit.
+ */
+export function buildLoanDrawdownJournal(
+  loan: OpsLoanForPosting,
+  entryDate: string,
+): OpsGlPostingInput {
+  return {
+    entryDate,
+    memo: `Loan ${loan.loan_number} drawn from ${loan.provider_name}`,
+    sourceTable: "loans",
+    sourceId: loan.id,
+    sourceEvent: "loan_drawdown",
+    lines: [
+      {
+        account_code: OPS_GL_ACCOUNTS.bankMain,
+        debit: loan.principal,
+        description: `Drawdown ${loan.loan_number}`,
+      },
+      {
+        account_code: loan.liability_account_code,
+        credit: loan.principal,
+        description: `Liability ${loan.loan_number}`,
+      },
+    ],
+  };
+}
+
+export type OpsLoanRepaymentForPosting = {
+  fees: number;
+  id: string;
+  interest: number;
+  liability_account_code: string;
+  loan_number: string;
+  paid_on: string;
+  principal: number;
+  total: number;
+};
+
+/**
+ * Loan instalment paid → the split that is the whole point of this module.
+ *
+ *   Dr Bank Loans        (principal — reduces the liability, NOT a cost)
+ *   Dr Interest 6120     (interest — the only part that reaches the P&L)
+ *   Dr Bank Charges 6090 (fees, when the lender adds any)
+ *     Cr Bank            (what actually left the account)
+ *
+ * A payment request could never express this: it carries one amount against
+ * one account, so the principal and the interest would have to be booked to
+ * the same place, and whichever place that was would be wrong for the other.
+ *
+ * Keyed on the repayment, so each instalment posts exactly once and reversing
+ * one does not disturb the rest of the schedule.
+ */
+export function buildLoanRepaymentJournal(
+  repayment: OpsLoanRepaymentForPosting,
+): OpsGlPostingInput {
+  const lines: OpsGlPostingLine[] = [
+    {
+      account_code: repayment.liability_account_code,
+      debit: repayment.principal,
+      description: `Principal ${repayment.loan_number}`,
+    },
+  ];
+
+  if (repayment.interest > 0) {
+    lines.push({
+      account_code: OPS_GL_ACCOUNTS.interestExpense,
+      debit: repayment.interest,
+      description: `Interest ${repayment.loan_number}`,
+    });
+  }
+
+  if (repayment.fees > 0) {
+    lines.push({
+      account_code: OPS_GL_ACCOUNTS.bankCharges,
+      debit: repayment.fees,
+      description: `Charges ${repayment.loan_number}`,
+    });
+  }
+
+  lines.push({
+    account_code: OPS_GL_ACCOUNTS.bankMain,
+    credit: repayment.total,
+    description: `Repayment ${repayment.loan_number}`,
+  });
+
+  return {
+    entryDate: repayment.paid_on,
+    memo: `Loan repayment ${repayment.loan_number}`,
+    sourceTable: "loan_repayments",
+    sourceId: repayment.id,
+    sourceEvent: "loan_repayment",
+    lines,
   };
 }

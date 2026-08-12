@@ -8,6 +8,7 @@ import {
   type BudgetPositionInput,
   type OpsBudgetControlThresholds,
 } from "@/lib/ops/budget-availability";
+import { fetchOpsLoanRegister } from "@/lib/ops/loans";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 /**
@@ -1269,4 +1270,139 @@ export async function fetchOpsPayrollPeriod(
     },
     window,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Borrowing
+// ---------------------------------------------------------------------------
+
+/**
+ * Debt service and the cost of borrowing.
+ *
+ * Interest is a real operating cost that nothing in this system could report
+ * until loans were modelled — it was simply absent from the P&L. The principal
+ * repaid is reported beside it precisely because it is NOT a cost: it moves
+ * between two balance-sheet accounts, and a reader who sees only the total
+ * cash going out on debt would otherwise mistake the whole thing for expense.
+ */
+export type OpsBorrowingSummary = {
+  /** FLOW — interest charged on instalments paid in the window. The P&L cost. */
+  interest_paid: number;
+  /** FLOW — principal repaid in the window. Not a cost; reduces the liability. */
+  principal_repaid: number;
+  /** FLOW — lender fees and penalties in the window. */
+  fees_paid: number;
+  /** FLOW — total cash out on debt service. */
+  debt_service: number;
+  /** STOCK at the window's end — principal still owed across live facilities. */
+  outstanding: number;
+  /** STOCK — instalments past due and unpaid at the window's end. */
+  arrears: number;
+  arrears_count: number;
+};
+
+export type OpsLoanRepaymentForPeriod = {
+  fees: number;
+  interest_portion: number;
+  paid_on: string | null;
+  principal_portion: number;
+  status: string;
+  total_amount: number;
+  due_date: string;
+};
+
+export function summariseBorrowing(
+  repayments: OpsLoanRepaymentForPeriod[],
+  outstanding: number,
+  window: OpsReportWindow,
+): OpsBorrowingSummary {
+  let interest = 0;
+  let principal = 0;
+  let fees = 0;
+  let debtService = 0;
+  let arrears = 0;
+  let arrearsCount = 0;
+
+  for (const repayment of repayments) {
+    if (
+      repayment.status === "paid" &&
+      repayment.paid_on &&
+      repayment.paid_on >= window.startDate &&
+      repayment.paid_on <= window.endDate
+    ) {
+      interest = roundMoney(interest + repayment.interest_portion);
+      principal = roundMoney(principal + repayment.principal_portion);
+      fees = roundMoney(fees + repayment.fees);
+      debtService = roundMoney(debtService + repayment.total_amount);
+    }
+
+    // Unpaid and past due AT the window's end. `waived` is excluded — a
+    // forgiven instalment is not owed.
+    if (
+      (repayment.status === "scheduled" || repayment.status === "missed") &&
+      repayment.due_date <= window.endDate
+    ) {
+      arrears = roundMoney(arrears + repayment.total_amount);
+      arrearsCount += 1;
+    }
+  }
+
+  return {
+    arrears,
+    arrears_count: arrearsCount,
+    debt_service: debtService,
+    fees_paid: fees,
+    interest_paid: interest,
+    outstanding,
+    principal_repaid: principal,
+  };
+}
+
+/**
+ * Borrowing for the period.
+ *
+ * Repayments are read unfiltered by date because arrears is a position at the
+ * window's end — an instalment missed months ago is still owed and must appear.
+ * The outstanding balance comes from the register, which derives it from the
+ * principal actually repaid.
+ */
+export async function fetchOpsBorrowing(
+  periodStart: string,
+  periodEnd: string,
+): Promise<OpsBorrowingSummary> {
+  const supabase = getOpsSupabaseServiceClient();
+  const window = opsReportWindow(periodStart, periodEnd);
+
+  const [{ data, error }, register] = await Promise.all([
+    supabase
+      .from("loan_repayments")
+      .select(
+        "due_date, paid_on, status, total_amount, principal_portion, interest_portion, fees",
+      ),
+    fetchOpsLoanRegister(),
+  ]);
+
+  if (error) {
+    throw error;
+  }
+
+  const repayments = ((data ?? []) as Array<{
+    due_date: string;
+    paid_on: string | null;
+    status: string;
+    total_amount: number | string | null;
+    principal_portion: number | string | null;
+    interest_portion: number | string | null;
+    fees: number | string | null;
+  }>).map((row) => ({
+    due_date: row.due_date,
+    fees: toNumber(row.fees),
+    interest_portion: toNumber(row.interest_portion),
+    paid_on: row.paid_on,
+    principal_portion: toNumber(row.principal_portion),
+    status: row.status,
+    total_amount: toNumber(row.total_amount),
+  }));
+
+  return summariseBorrowing(repayments, register.total_outstanding, window);
 }
