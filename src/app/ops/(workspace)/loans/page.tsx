@@ -5,6 +5,7 @@ import {
   Landmark,
   Pencil,
   Plus,
+  Trash2,
   TrendingDown,
 } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -20,9 +21,11 @@ import { formatOpsDate as formatDate, formatOpsLabel as formatLabel } from "@/li
 import {
   createLoanAction,
   createLoanProviderAction,
+  discardLoanAction,
   recordLoanDrawdownAction,
   recordLoanRepaymentAction,
   reverseLoanRepaymentAction,
+  updateLoanAction,
   updateLoanScheduleEntryAction,
 } from "@/lib/ops/loan-actions";
 import {
@@ -34,6 +37,7 @@ import {
   fetchOpsLoanProviderOptions,
   fetchOpsLoanRegister,
   type OpsLoanPosition,
+  type OpsLoanProviderOption,
   type OpsLoanRepayment,
 } from "@/lib/ops/loans";
 import { fetchOpsModuleAccessOverrides } from "@/lib/ops/module-access";
@@ -80,6 +84,10 @@ function loanNotice(params: OpsSearchParams) {
 
   const updated = firstParam(params.updated);
   const messages: Record<string, string> = {
+    amended:
+      "Terms corrected and the schedule re-laid from them. Nothing had posted to the ledger, so there is nothing to reverse.",
+    withdrawn:
+      "Draft facility withdrawn. It has left the register and stays on file as cancelled, with the reason recorded.",
     drawn_down:
       "Drawdown posted. The cash is in the bank and the liability is on the balance sheet — no cost was recognised.",
     repaid:
@@ -273,14 +281,187 @@ function ScheduleEditForm({ repayment }: { repayment: OpsLoanRepayment }) {
   );
 }
 
+/**
+ * Correcting a facility before the money arrives.
+ *
+ * Every field the create form takes, pre-filled with what was recorded. A
+ * draft is terms typed off an agreement, and the two that get typed wrong most
+ * — the principal and the interest basis — are the two that decide what the
+ * loan actually costs. Once the drawdown is posted this panel disappears: the
+ * ledger then holds a figure, and the way to change a live facility is to
+ * amend its instalments against the lender's paper.
+ */
+function DraftLoanEditForm({
+  loan,
+  providers,
+}: {
+  loan: OpsLoanPosition;
+  providers: OpsLoanProviderOption[];
+}) {
+  return (
+    <form
+      action={updateLoanAction}
+      className="grid gap-4 p-4 min-[520px]:grid-cols-2 lg:grid-cols-4"
+    >
+      <input name="loan_id" type="hidden" value={loan.id} />
+      <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+        Lender
+        <select
+          className={OPS_INPUT_CLASS}
+          defaultValue={loan.provider_id}
+          name="provider_id"
+          required
+        >
+          {providers.map((provider) => (
+            <option key={provider.id} value={provider.id}>
+              {provider.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={OPS_LABEL_CLASS}>
+        Facility type
+        <select className={OPS_INPUT_CLASS} defaultValue={loan.kind} name="kind">
+          <option value="term_loan">Bank term loan</option>
+          <option value="asset_finance">Asset finance / lease</option>
+          <option value="shareholder">Shareholder / director loan</option>
+        </select>
+      </label>
+      <label className={OPS_LABEL_CLASS}>
+        Agreement reference
+        <input className={OPS_INPUT_CLASS} defaultValue={loan.reference} name="reference" />
+      </label>
+      <label className={OPS_LABEL_CLASS}>
+        Amount borrowed
+        <input
+          className={OPS_INPUT_CLASS}
+          defaultValue={loan.principal}
+          min="0.01"
+          name="principal"
+          required
+          step="0.01"
+          type="number"
+        />
+      </label>
+      <label className={OPS_LABEL_CLASS}>
+        Interest rate (% a year)
+        <input
+          className={OPS_INPUT_CLASS}
+          defaultValue={loan.interest_rate}
+          min="0"
+          name="interest_rate"
+          step="0.01"
+          type="number"
+        />
+      </label>
+      <label className={OPS_LABEL_CLASS}>
+        Interest basis
+        <select className={OPS_INPUT_CLASS} defaultValue={loan.rate_basis} name="rate_basis">
+          <option value="reducing_balance">Reducing balance</option>
+          <option value="flat">Flat rate</option>
+        </select>
+      </label>
+      <label className={OPS_LABEL_CLASS}>
+        Repayment frequency
+        <select
+          className={OPS_INPUT_CLASS}
+          defaultValue={loan.repayment_frequency}
+          name="repayment_frequency"
+        >
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
+        </select>
+      </label>
+      <label className={OPS_LABEL_CLASS}>
+        Term (months)
+        <input
+          className={OPS_INPUT_CLASS}
+          defaultValue={loan.term_months}
+          min="0"
+          name="term_months"
+          type="number"
+        />
+      </label>
+      <label className={OPS_LABEL_CLASS}>
+        Drawdown date
+        <input
+          className={OPS_INPUT_CLASS}
+          defaultValue={loan.drawdown_date ?? ""}
+          name="drawdown_date"
+          type="date"
+        />
+      </label>
+      <label className={OPS_LABEL_CLASS}>
+        First payment date
+        <input
+          className={OPS_INPUT_CLASS}
+          defaultValue={loan.first_payment_date ?? ""}
+          name="first_payment_date"
+          type="date"
+        />
+      </label>
+      <label className={`${OPS_LABEL_CLASS} lg:col-span-2`}>
+        What it funded
+        <input className={OPS_INPUT_CLASS} defaultValue={loan.purpose} name="purpose" />
+      </label>
+      <label className={`${OPS_LABEL_CLASS} lg:col-span-4`}>
+        Security pledged
+        <input
+          className={OPS_INPUT_CLASS}
+          defaultValue={loan.security_notes}
+          name="security_notes"
+        />
+      </label>
+      <div className="flex items-end min-[520px]:col-span-2 lg:col-span-4 lg:justify-end">
+        <OpsConfirmSubmitButton
+          className={`${OPS_PRIMARY_BUTTON_CLASS} w-full min-[520px]:w-auto`}
+          confirmText="Confirm — save the corrected terms"
+        >
+          <Pencil className="size-4" aria-hidden="true" />
+          Save terms and re-lay the schedule
+        </OpsConfirmSubmitButton>
+      </div>
+    </form>
+  );
+}
+
+/** Dropping a draft that should not have been recorded. */
+function DraftLoanDiscardForm({ loan }: { loan: OpsLoanPosition }) {
+  return (
+    <form action={discardLoanAction} className="grid gap-3 p-4 min-[520px]:grid-cols-[1fr_auto]">
+      <input name="loan_id" type="hidden" value={loan.id} />
+      <label className={OPS_LABEL_CLASS}>
+        Why is it being withdrawn?
+        <input
+          className={OPS_INPUT_CLASS}
+          name="reason"
+          placeholder="Entered twice / facility never taken up"
+          required
+        />
+      </label>
+      <div className="flex items-end">
+        <OpsConfirmSubmitButton
+          className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-md border border-red-300 px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-50 min-[520px]:w-auto dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40"
+          confirmText={`Confirm — withdraw ${loan.loan_number}`}
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+          Withdraw this draft
+        </OpsConfirmSubmitButton>
+      </div>
+    </form>
+  );
+}
+
 function LoanCard({
   canManage,
   canRepay,
   loan,
+  providers,
 }: {
   canManage: boolean;
   canRepay: boolean;
   loan: OpsLoanPosition;
+  providers: OpsLoanProviderOption[];
 }) {
   const scheduled = loan.repayments.filter((repayment) => repayment.status === "scheduled");
   const paid = loan.repayments.filter((repayment) => repayment.status === "paid");
@@ -400,6 +581,45 @@ function LoanCard({
             </OpsConfirmSubmitButton>
           </div>
         </form>
+      ) : null}
+
+      {/* Nothing has posted against a draft, so its terms are still safe to
+          restate in full. After the drawdown they are not, and both panels
+          go — a live facility is corrected instalment by instalment. */}
+      {canManage && loan.status === "draft" ? (
+        <>
+          <OpsCollapsible
+            className="mt-4"
+            icon={Pencil}
+            title="Correct these terms before the drawdown"
+            variant="panel"
+          >
+            <div>
+              <p className="px-4 pt-3 text-xs leading-5 text-muted-foreground">
+                Nothing has reached the ledger yet, so the whole agreement can be restated.
+                Saving re-lays the instalments from the corrected terms — the old schedule was
+                computed from figures that are being replaced.
+              </p>
+              <DraftLoanEditForm loan={loan} providers={providers} />
+            </div>
+          </OpsCollapsible>
+
+          <OpsCollapsible
+            className="mt-4"
+            icon={Trash2}
+            title="Withdraw this draft"
+            variant="panel"
+          >
+            <div>
+              <p className="px-4 pt-3 text-xs leading-5 text-muted-foreground">
+                For a facility recorded in error or never taken up. It leaves the register and
+                stays on file as cancelled, with the reason and who withdrew it — a facility
+                this size is worth being able to account for later.
+              </p>
+              <DraftLoanDiscardForm loan={loan} />
+            </div>
+          </OpsCollapsible>
+        </>
       ) : null}
 
       {loan.repayments.length > 0 ? (
@@ -836,6 +1056,7 @@ export default async function OpsLoansPage({ searchParams }: PageProps) {
                 canRepay={canRepay}
                 key={loan.id}
                 loan={loan}
+                providers={providers}
               />
             ))}
           </div>

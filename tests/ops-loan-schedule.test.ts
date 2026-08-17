@@ -22,6 +22,21 @@ import { summariseLoanRegister, type OpsLoan, type OpsLoanRepayment } from "../s
  * be a better time to pin the arithmetic than before the first one is keyed.
  */
 
+/**
+ * One exported action's source, from its signature to the next export.
+ *
+ * The loan actions are asserted against as text because they are server
+ * actions over a live client — there is nothing to call without a database.
+ * Slicing to one action keeps those assertions honest: a rule that holds for
+ * the reversal path is not a rule about the whole file.
+ */
+function actionBody(source: string, name: string) {
+  const start = source.indexOf(`export async function ${name}(`);
+  assert.ok(start >= 0, `${name} was not found in loan-actions.ts`);
+  const next = source.indexOf("\nexport ", start + 1);
+  return source.slice(start, next === -1 ? source.length : next);
+}
+
 describe("flat rate", () => {
   // K500,000 at 20% over 3 years, monthly.
   //   interest = 500,000 × 0.20 × 3 = 300,000
@@ -571,6 +586,62 @@ describe("the repayment action", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Correcting a facility that has not been drawn down
+// ---------------------------------------------------------------------------
+
+describe("amending and withdrawing a draft facility", () => {
+  const ACTIONS = readFileSync(
+    join(import.meta.dirname, "..", "src", "lib", "ops", "loan-actions.ts"),
+    "utf8",
+  );
+  const amend = actionBody(ACTIONS, "updateLoanAction");
+  const withdraw = actionBody(ACTIONS, "discardLoanAction");
+
+  it("only amends a draft, and re-checks that in SQL", () => {
+    // Read-then-write: the drawdown could be posted in between, which would
+    // leave the ledger holding one principal and the register another.
+    assert.match(amend, /loan\.status !== "draft"/);
+    assert.match(amend, /\.eq\("status", "draft"\)/);
+  });
+
+  it("re-lays the schedule from the corrected terms", () => {
+    // A schedule computed from superseded terms is the kind of wrong number
+    // nobody re-checks, because it looks generated rather than typed.
+    assert.match(amend, /replaceLoanSchedule\(/);
+    assert.match(ACTIONS, /async function replaceLoanSchedule\(/);
+  });
+
+  it("records what the terms were as well as what they became", () => {
+    assert.match(amend, /action: "loan\.amended"/);
+    assert.match(amend, /was: \{/);
+    assert.match(amend, /rate_basis: loan\.rate_basis/);
+  });
+
+  it("moves the liability account when the facility type changes", () => {
+    // Asset finance sits in 2520, bank borrowing in 2510. Leaving the old
+    // account would post the drawdown to the wrong line of the balance sheet.
+    assert.match(amend, /kind === "asset_finance" \? "2520" : "2510"/);
+  });
+
+  it("cancels a withdrawn draft rather than deleting the facility", () => {
+    assert.match(withdraw, /status: "cancelled"/);
+    assert.match(withdraw, /archived_at: new Date\(\)\.toISOString\(\)/);
+    assert.doesNotMatch(withdraw, /from\("loans"\)\s*\n?\s*\.delete\(/);
+  });
+
+  it("demands a reason and refuses anything drawn down", () => {
+    assert.match(withdraw, /reason\.length < 3/);
+    assert.match(withdraw, /loan\.status !== "draft"/);
+    assert.match(withdraw, /settle it or write it off instead/);
+  });
+
+  it("keeps both to the roles that may commit the company", () => {
+    assert.match(amend, /canManageOpsLoans\(profile\.role\)/);
+    assert.match(withdraw, /canManageOpsLoans\(profile\.role\)/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Reversal, and the payables boundary (L4)
 // ---------------------------------------------------------------------------
 
@@ -584,7 +655,12 @@ describe("reversing a repayment", () => {
     // An entry that simply vanished would leave the bank reconciliation with
     // an unexplained gap.
     assert.match(ACTIONS, /reverseOpsJournalSafe\(\s*"loan_repayments",/);
-    assert.doesNotMatch(ACTIONS, /from\("loan_repayments"\)\s*\.delete\(/);
+    // Scoped to the reversal itself rather than the whole file: clearing
+    // instalments IS legitimate on a draft, where nothing can have been paid
+    // and the schedule is only a projection of terms still being corrected.
+    // On a live facility it would erase the cause of a posted journal.
+    assert.doesNotMatch(actionBody(ACTIONS, "reverseLoanRepaymentAction"), /\.delete\(/);
+    assert.doesNotMatch(actionBody(ACTIONS, "recordLoanRepaymentAction"), /\.delete\(/);
   });
 
   it("puts the instalment back on the schedule", () => {

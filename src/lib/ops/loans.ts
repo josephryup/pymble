@@ -316,7 +316,9 @@ export async function fetchOpsLoanRegister(
   return summariseLoanRegister(loans, repaymentsByLoan, today);
 }
 
-export async function fetchOpsLoanProviderOptions() {
+export type OpsLoanProviderOption = { id: string; kind: string; name: string };
+
+export async function fetchOpsLoanProviderOptions(): Promise<OpsLoanProviderOption[]> {
   const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase
     .from("loan_providers")
@@ -328,7 +330,7 @@ export async function fetchOpsLoanProviderOptions() {
     throw error;
   }
 
-  return (data ?? []) as Array<{ id: string; name: string; kind: string }>;
+  return (data ?? []) as OpsLoanProviderOption[];
 }
 
 // ---------------------------------------------------------------------------

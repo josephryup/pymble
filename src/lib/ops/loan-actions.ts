@@ -131,6 +131,65 @@ export async function createLoanProviderAction(formData: FormData) {
  * director's loan repayable on demand is a real liability; refusing to record
  * it would push it out of the system entirely.
  */
+/**
+ * Lays out (or re-lays) the instalments for a facility.
+ *
+ * Every existing row is cleared first rather than patched. Changing the
+ * principal, rate or term changes every instalment after the first, and a
+ * partial rewrite would leave a schedule that is half the old terms and half
+ * the new — which reads as a lender's amendment rather than a correction.
+ *
+ * Only ever called against a draft, where no instalment can have been paid.
+ */
+async function replaceLoanSchedule(
+  supabase: ReturnType<typeof getOpsSupabaseServiceClient>,
+  loanId: string,
+  terms: {
+    firstPaymentDate: string;
+    frequency: "monthly" | "quarterly";
+    interestRate: number;
+    principal: number;
+    rateBasis: "flat" | "reducing_balance";
+    termMonths: number;
+  },
+) {
+  const { error: clearError } = await supabase
+    .from("loan_repayments")
+    .delete()
+    .eq("loan_id", loanId);
+
+  if (clearError) {
+    return { error: clearError.message, schedule: null };
+  }
+
+  const schedule = buildOpsLoanSchedule({
+    annualRatePercent: terms.interestRate,
+    firstPaymentDate: terms.firstPaymentDate || new Date().toISOString().slice(0, 10),
+    frequency: terms.frequency,
+    principal: terms.principal,
+    rateBasis: terms.rateBasis,
+    termMonths: terms.termMonths,
+  });
+
+  if (schedule.entries.length === 0) {
+    return { error: null, schedule };
+  }
+
+  const { error: scheduleError } = await supabase.from("loan_repayments").insert(
+    schedule.entries.map((entry) => ({
+      due_date: entry.dueDate,
+      instalment_number: entry.instalment,
+      interest_portion: entry.interest,
+      loan_id: loanId,
+      principal_portion: entry.principal,
+      status: "scheduled",
+      total_amount: entry.total,
+    })),
+  );
+
+  return { error: scheduleError?.message ?? null, schedule };
+}
+
 export async function createLoanAction(formData: FormData) {
   const { profile } = await requireOpsUser();
 
@@ -200,34 +259,20 @@ export async function createLoanAction(formData: FormData) {
     loanError(error?.message ?? "Could not record the loan.");
   }
 
-  const schedule = buildOpsLoanSchedule({
-    annualRatePercent: parsed.data.interest_rate,
-    firstPaymentDate: parsed.data.first_payment_date || new Date().toISOString().slice(0, 10),
+  const { error: scheduleError, schedule } = await replaceLoanSchedule(supabase, loan.id, {
+    firstPaymentDate: parsed.data.first_payment_date,
     frequency: parsed.data.repayment_frequency,
+    interestRate: parsed.data.interest_rate,
     principal: parsed.data.principal,
     rateBasis: parsed.data.rate_basis,
     termMonths: parsed.data.term_months,
   });
 
-  if (schedule.entries.length > 0) {
-    const { error: scheduleError } = await supabase.from("loan_repayments").insert(
-      schedule.entries.map((entry) => ({
-        due_date: entry.dueDate,
-        instalment_number: entry.instalment,
-        interest_portion: entry.interest,
-        loan_id: loan.id,
-        principal_portion: entry.principal,
-        status: "scheduled",
-        total_amount: entry.total,
-      })),
-    );
-
-    if (scheduleError) {
-      // A facility with no schedule is worse than none at all — it would
-      // silently report zero due, forever. Undo rather than half-record.
-      await supabase.from("loans").delete().eq("id", loan.id);
-      loanError(scheduleError.message);
-    }
+  if (scheduleError || !schedule) {
+    // A facility with no schedule is worse than none at all — it would
+    // silently report zero due, forever. Undo rather than half-record.
+    await supabase.from("loans").delete().eq("id", loan.id);
+    loanError(scheduleError ?? "The repayment schedule could not be laid out.");
   }
 
   await recordOpsAuditEvent({
@@ -257,6 +302,257 @@ export async function createLoanAction(formData: FormData) {
 
   revalidatePath(LOANS_ROUTE);
   redirect(`${LOANS_ROUTE}?created=loan`);
+}
+
+/**
+ * Correct a facility that has not been drawn down yet.
+ *
+ * A draft is a record of terms being agreed, and terms get typed wrong — the
+ * rate basis in particular, which changes the total interest by roughly 80% at
+ * Zambian rates. Until the drawdown is posted nothing has reached the ledger
+ * and no instalment can have been paid, so the whole agreement is still safe
+ * to restate; after it, it is not, and this action refuses.
+ *
+ * The schedule is rebuilt from the corrected terms rather than left alone,
+ * because a schedule computed from superseded terms is exactly the kind of
+ * wrong number nobody re-checks.
+ */
+export async function updateLoanAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageOpsLoans(profile.role)) {
+    loanError("Your role cannot amend a loan.");
+  }
+
+  const loanId = field(formData, "loan_id");
+
+  if (!UUID.test(loanId)) {
+    loanError("Select a loan.");
+  }
+
+  const parsed = loanSchema.safeParse({
+    drawdown_date: field(formData, "drawdown_date"),
+    first_payment_date: field(formData, "first_payment_date"),
+    interest_rate: field(formData, "interest_rate") || "0",
+    kind: field(formData, "kind") || "term_loan",
+    principal: field(formData, "principal"),
+    provider_id: field(formData, "provider_id"),
+    purpose: field(formData, "purpose"),
+    rate_basis: field(formData, "rate_basis") || "reducing_balance",
+    reference: field(formData, "reference"),
+    repayment_frequency: field(formData, "repayment_frequency") || "monthly",
+    security_notes: field(formData, "security_notes"),
+    term_months: field(formData, "term_months") || "0",
+  });
+
+  if (!parsed.success) {
+    loanError(parsed.error.issues[0]?.message ?? "Check the loan details.");
+  }
+
+  if (parsed.data.term_months > 0 && !parsed.data.first_payment_date) {
+    loanError("Give the first payment date so the schedule can be laid out.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: loan, error } = await supabase
+    .from("loans")
+    .select("id, loan_number, status, principal, kind, interest_rate, rate_basis, term_months")
+    .eq("id", loanId)
+    .maybeSingle<{
+      id: string;
+      loan_number: string;
+      status: string;
+      principal: number;
+      kind: string;
+      interest_rate: number;
+      rate_basis: string;
+      term_months: number;
+    }>();
+
+  if (error) {
+    loanError(error.message);
+  }
+  if (!loan) {
+    loanError("Loan was not found.");
+  }
+  if (loan.status !== "draft") {
+    loanError(
+      "Only a draft facility can be amended. This one is drawn down — amend the instalments instead, so the ledger and the schedule stay in step.",
+    );
+  }
+
+  // The liability account follows the kind: asset finance sits apart from bank
+  // borrowing on the balance sheet, so changing the kind has to move it.
+  const liabilityCode = parsed.data.kind === "asset_finance" ? "2520" : "2510";
+  const { data: account } = await supabase
+    .from("chart_of_accounts")
+    .select("id")
+    .eq("code", liabilityCode)
+    .maybeSingle<{ id: string }>();
+
+  const { error: updateError } = await supabase
+    .from("loans")
+    .update({
+      drawdown_date: parsed.data.drawdown_date || null,
+      first_payment_date: parsed.data.first_payment_date || null,
+      gl_liability_account_id: account?.id ?? null,
+      interest_rate: parsed.data.interest_rate,
+      kind: parsed.data.kind,
+      principal: parsed.data.principal,
+      provider_id: parsed.data.provider_id,
+      purpose: parsed.data.purpose,
+      rate_basis: parsed.data.rate_basis,
+      reference: parsed.data.reference,
+      repayment_frequency: parsed.data.repayment_frequency,
+      security_notes: parsed.data.security_notes,
+      term_months: parsed.data.term_months,
+    })
+    .eq("id", loan.id)
+    // Re-checked in SQL: the drawdown could have been posted between the read
+    // above and this write, and that would leave the ledger holding one
+    // principal and the register another.
+    .eq("status", "draft");
+
+  if (updateError) {
+    loanError(updateError.message);
+  }
+
+  const { error: scheduleError, schedule } = await replaceLoanSchedule(supabase, loan.id, {
+    firstPaymentDate: parsed.data.first_payment_date,
+    frequency: parsed.data.repayment_frequency,
+    interestRate: parsed.data.interest_rate,
+    principal: parsed.data.principal,
+    rateBasis: parsed.data.rate_basis,
+    termMonths: parsed.data.term_months,
+  });
+
+  if (scheduleError || !schedule) {
+    loanError(scheduleError ?? "The repayment schedule could not be re-laid.");
+  }
+
+  await recordOpsAuditEvent({
+    action: "loan.amended",
+    actorUserId: profile.id,
+    entityId: loan.id,
+    entityType: "loan",
+    metadata: {
+      instalments: schedule.instalments,
+      loan_number: loan.loan_number,
+      // Both sides recorded: an amendment is only readable against what it
+      // replaced, and these four are what move the money.
+      was: {
+        interest_rate: Number(loan.interest_rate),
+        kind: loan.kind,
+        principal: Number(loan.principal),
+        rate_basis: loan.rate_basis,
+        term_months: Number(loan.term_months),
+      },
+      now: {
+        interest_rate: parsed.data.interest_rate,
+        kind: parsed.data.kind,
+        principal: parsed.data.principal,
+        rate_basis: parsed.data.rate_basis,
+        term_months: parsed.data.term_months,
+      },
+      total_interest: schedule.totalInterest,
+      total_payable: schedule.totalPayable,
+    },
+    moduleKey: "loans",
+    sourceId: loan.id,
+    sourceTable: "loans",
+    summary: `Amended ${loan.loan_number} before drawdown: ${loan.principal} to ${parsed.data.principal}`,
+  }).catch(() => null);
+
+  revalidatePath(LOANS_ROUTE);
+  redirect(`${LOANS_ROUTE}?updated=amended`);
+}
+
+/**
+ * Drop a draft that should never have been recorded.
+ *
+ * Cancelled and archived rather than deleted: the facility was entered by
+ * somebody, and "who recorded a K6.5m facility against Stanbic and then
+ * withdrew it" is a question the audit trail should be able to answer. It
+ * leaves the register either way, because `archived_at` is what the register
+ * filters on.
+ *
+ * Restricted to drafts. Once drawn down there is cash and a journal behind the
+ * facility, and the way out is settlement or write-off, not a delete.
+ */
+export async function discardLoanAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageOpsLoans(profile.role)) {
+    loanError("Your role cannot withdraw a loan.");
+  }
+
+  const loanId = field(formData, "loan_id");
+  const reason = field(formData, "reason");
+
+  if (!UUID.test(loanId)) {
+    loanError("Select a loan.");
+  }
+  if (reason.length < 3) {
+    loanError("Say why the facility is being withdrawn.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: loan, error } = await supabase
+    .from("loans")
+    .select("id, loan_number, status, principal")
+    .eq("id", loanId)
+    .maybeSingle<{ id: string; loan_number: string; status: string; principal: number }>();
+
+  if (error) {
+    loanError(error.message);
+  }
+  if (!loan) {
+    loanError("Loan was not found.");
+  }
+  if (loan.status !== "draft") {
+    loanError(
+      "Only a draft facility can be withdrawn. This one has been drawn down — settle it or write it off instead.",
+    );
+  }
+
+  const { error: discardError } = await supabase
+    .from("loans")
+    .update({
+      archived_at: new Date().toISOString(),
+      archived_by: profile.id,
+      notes: reason,
+      status: "cancelled",
+    })
+    .eq("id", loan.id)
+    .eq("status", "draft");
+
+  if (discardError) {
+    loanError(discardError.message);
+  }
+
+  // The instalments were only ever a projection of terms that were never
+  // taken up, and leaving them behind would keep the facility showing in
+  // "due next 30 days" arithmetic that reads loans by id.
+  await supabase.from("loan_repayments").delete().eq("loan_id", loan.id);
+
+  await recordOpsAuditEvent({
+    action: "loan.withdrawn",
+    actorUserId: profile.id,
+    entityId: loan.id,
+    entityType: "loan",
+    metadata: {
+      loan_number: loan.loan_number,
+      principal: Number(loan.principal),
+      reason,
+    },
+    moduleKey: "loans",
+    sourceId: loan.id,
+    sourceTable: "loans",
+    summary: `Withdrew draft ${loan.loan_number}: ${reason}`,
+  }).catch(() => null);
+
+  revalidatePath(LOANS_ROUTE);
+  redirect(`${LOANS_ROUTE}?updated=withdrawn`);
 }
 
 // ---------------------------------------------------------------------------

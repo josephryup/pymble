@@ -25,6 +25,7 @@ import {
 } from "@/lib/ops/gl-posting";
 import { todayInLusaka } from "@/lib/ops/format";
 import type { OrganizationProfile } from "@/lib/ops/organization";
+import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -79,9 +80,18 @@ function roundToTwo(value: number) {
  * monotonic and gap-free per (prefix, year). Per ZRA requirements, a consumed
  * number that ends up cancelled or voided must remain on file — the function
  * does NOT recycle gaps.
+ *
+ * Called with the SERVICE client, not the cookie session client. Migration
+ * 20260805091000 (audit finding S5) revoked EXECUTE from `authenticated`,
+ * because a SECURITY DEFINER function reachable from any browser session via
+ * /rest/v1/rpc/ lets any signed-in user burn invoice numbers. The revoke
+ * assumed the server already called it as the service role; it did not, so
+ * every invoice creation has failed with 42501 since that migration ran.
+ * Calling as service_role is the side of that mismatch worth keeping — the
+ * caller has already checked the role (canCreateInvoice) before getting here.
  */
 async function nextInvoiceNumber(prefix: string) {
-  const supabase = await createOpsServerSessionClient();
+  const supabase = getOpsSupabaseServiceClient();
   const { data, error } = await supabase.rpc("ops_next_invoice_number", {
     p_prefix: prefix,
   });
