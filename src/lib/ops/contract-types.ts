@@ -67,6 +67,9 @@ export type OpsContractTemplate = {
   default_defects_liability_months: number;
   default_variation_threshold_percent: number;
   default_payment_terms_days: number;
+  requires_legal_review: boolean;
+  legal_reviewed_at: string | null;
+  legal_review_note: string;
   created_at: string;
   updated_at: string;
 };
@@ -231,6 +234,13 @@ export type OpsContract = {
   /** Joined for the register list. */
   counterparty_name: string;
   site: { id: string; code: string; name: string } | null;
+  template_name: string;
+  /**
+   * True while the template's clause wording has not been reviewed by counsel.
+   * Such a contract can be drafted and previewed but never approved, so it
+   * cannot reach signature on unvetted terms.
+   */
+  template_requires_legal_review: boolean;
 };
 
 export type OpsContractDetail = OpsContract & {

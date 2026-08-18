@@ -496,6 +496,98 @@ export async function addOpsContractScopeItemAction(formData: FormData) {
   redirect(`${ROUTE}/${contract.id}?updated=scope`);
 }
 
+export async function updateOpsContractScopeItemAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+  const itemId = field(formData, "item_id");
+
+  const heading = field(formData, "heading").trim();
+  if (heading.length < 2) {
+    contractError("Give the scope item a heading.", contract.id);
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase
+    .from("contract_scope_items")
+    .update({ heading, detail: field(formData, "detail").trim().slice(0, 4000) })
+    .eq("id", itemId)
+    .eq("contract_id", contract.id);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=scope`);
+}
+
+/**
+ * Move a row up or down within its contract.
+ *
+ * Order is meaningful on a contract — scope items are referred to by number and
+ * milestones are a sequence of events — so it has to be changeable without
+ * deleting and re-adding, which would lose a certified milestone's history.
+ *
+ * Implemented as a swap of two `sort_order` values rather than a renumber, so
+ * two people reordering at once cannot collapse the list into a single index.
+ */
+async function moveOpsContractRow(input: {
+  contractId: string;
+  direction: "up" | "down";
+  rowId: string;
+  table: "contract_scope_items" | "contract_lines" | "contract_milestones";
+}) {
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: rows } = await supabase
+    .from(input.table)
+    .select("id, sort_order")
+    .eq("contract_id", input.contractId)
+    .order("sort_order", { ascending: true });
+
+  const ordered = rows ?? [];
+  const index = ordered.findIndex((row) => row.id === input.rowId);
+  if (index < 0) return;
+
+  const swapWith = input.direction === "up" ? index - 1 : index + 1;
+  if (swapWith < 0 || swapWith >= ordered.length) return;
+
+  const current = ordered[index];
+  const neighbour = ordered[swapWith];
+
+  // Equal sort_orders would make the swap a no-op and silently strand the row,
+  // so fall back to positional indices when the data has duplicates.
+  const currentOrder = Number(current.sort_order ?? index);
+  const neighbourOrder = Number(neighbour.sort_order ?? swapWith);
+  const [nextCurrent, nextNeighbour] =
+    currentOrder === neighbourOrder
+      ? [swapWith + 1, index + 1]
+      : [neighbourOrder, currentOrder];
+
+  await Promise.all([
+    supabase.from(input.table).update({ sort_order: nextCurrent }).eq("id", current.id),
+    supabase
+      .from(input.table)
+      .update({ sort_order: nextNeighbour })
+      .eq("id", neighbour.id),
+  ]);
+}
+
+function moveDirection(formData: FormData): "up" | "down" {
+  return field(formData, "direction") === "up" ? "up" : "down";
+}
+
+export async function moveOpsContractScopeItemAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+
+  await moveOpsContractRow({
+    contractId: contract.id,
+    direction: moveDirection(formData),
+    rowId: field(formData, "item_id"),
+    table: "contract_scope_items",
+  });
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=scope`);
+}
+
 export async function deleteOpsContractScopeItemAction(formData: FormData) {
   const contractId = field(formData, "contract_id");
   const { contract } = await loadEditableContract(contractId);
@@ -562,6 +654,63 @@ export async function addOpsContractLineAction(formData: FormData) {
   });
 
   await recomputeOpsContractTotals(contract.id);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=line`);
+}
+
+export async function updateOpsContractLineAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+  const lineId = field(formData, "line_id");
+
+  const parsed = lineSchema.safeParse({
+    description: field(formData, "description"),
+    quantity: field(formData, "quantity") || 0,
+    uom: field(formData, "uom") || "Item",
+    rate: field(formData, "rate") || 0,
+    cost_code_id: field(formData, "cost_code_id"),
+  });
+
+  if (!parsed.success) {
+    contractError(
+      parsed.error.issues[0]?.message ?? "Check the line and try again.",
+      contract.id,
+    );
+  }
+
+  const input = parsed.data;
+
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase
+    .from("contract_lines")
+    .update({
+      description: input.description,
+      quantity: input.quantity,
+      uom: input.uom,
+      rate: input.rate,
+      // Recomputed here too, never taken from the form.
+      amount: roundOpsMoney(input.quantity * input.rate),
+    })
+    .eq("id", lineId)
+    .eq("contract_id", contract.id);
+
+  await recomputeOpsContractTotals(contract.id);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=line`);
+}
+
+export async function moveOpsContractLineAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+
+  await moveOpsContractRow({
+    contractId: contract.id,
+    direction: moveDirection(formData),
+    rowId: field(formData, "line_id"),
+    table: "contract_lines",
+  });
 
   revalidateContract(contract.id);
   redirect(`${ROUTE}/${contract.id}?updated=line`);
@@ -641,6 +790,77 @@ export async function addOpsContractMilestoneAction(formData: FormData) {
     payable_within_days: input.payable_within_days,
     is_retention: input.is_retention,
     sort_order: contract.milestones.length + 1,
+  });
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=milestone`);
+}
+
+export async function updateOpsContractMilestoneAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+  const milestoneId = field(formData, "milestone_id");
+
+  const existing = contract.milestones.find((row) => row.id === milestoneId);
+  if (!existing) contractError("That milestone is not on this contract.", contract.id);
+
+  const parsed = milestoneSchema.safeParse({
+    label: field(formData, "label"),
+    percent: field(formData, "percent") || 0,
+    trigger_description: field(formData, "trigger_description"),
+    payable_within_days: field(formData, "payable_within_days") || 14,
+    is_retention: formData.get("is_retention") === "on",
+  });
+
+  if (!parsed.success) {
+    contractError(
+      parsed.error.issues[0]?.message ?? "Check the milestone and try again.",
+      contract.id,
+    );
+  }
+
+  const input = parsed.data;
+
+  // The running total excludes this milestone's own current share, or editing
+  // 30% to 31% would read as 131% and be refused.
+  const othersTotal = contract.milestones
+    .filter((row) => row.id !== milestoneId)
+    .reduce((sum, row) => sum + Number(row.percent ?? 0), 0);
+
+  if (othersTotal + input.percent > 100.01) {
+    contractError(
+      `That would take the payment plan to ${(othersTotal + input.percent).toFixed(1)}%. ${(100 - othersTotal).toFixed(1)}% is available for this stage.`,
+      contract.id,
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase
+    .from("contract_milestones")
+    .update({
+      label: input.label,
+      percent: input.percent,
+      amount: opsContractMilestoneAmount(Number(contract.total_value ?? 0), input.percent),
+      trigger_description: input.trigger_description,
+      payable_within_days: input.payable_within_days,
+      is_retention: input.is_retention,
+    })
+    .eq("id", milestoneId)
+    .eq("contract_id", contract.id);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=milestone`);
+}
+
+export async function moveOpsContractMilestoneAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+
+  await moveOpsContractRow({
+    contractId: contract.id,
+    direction: moveDirection(formData),
+    rowId: field(formData, "milestone_id"),
+    table: "contract_milestones",
   });
 
   revalidateContract(contract.id);
@@ -959,6 +1179,16 @@ export async function approveOpsContractAction(formData: FormData) {
     contractError("Only a contract in review can be approved.", contract.id);
   }
 
+  // The hard gate. Approval is the last door before signature, so an
+  // unreviewed clause set stops here rather than reaching an employee's desk
+  // looking finished. A warning banner would not do — people stop seeing those.
+  if (contract.template_requires_legal_review) {
+    contractError(
+      `The "${contract.template_name}" template has not been reviewed by counsel, so contracts on it cannot be approved. Record the review on the template first.`,
+      contract.id,
+    );
+  }
+
   const supabase = getOpsSupabaseServiceClient();
 
   // Freeze the parties at approval.
@@ -1046,6 +1276,60 @@ export async function approveOpsContractAction(formData: FormData) {
 
   revalidateContract(contract.id);
   redirect(`${ROUTE}/${contract.id}?updated=approved`);
+}
+
+/**
+ * Record that counsel has reviewed a template's wording, lifting the gate.
+ *
+ * Leadership only, and it asks for a note naming who reviewed it and when —
+ * "approved by someone, at some point" is not a record anybody can rely on
+ * later. Lifting the gate affects every future contract on the template, which
+ * is why it is a deliberate act on the template rather than a per-contract
+ * override somebody could click past.
+ */
+export async function recordOpsContractTemplateReviewAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const templateId = field(formData, "template_id");
+  const note = field(formData, "legal_review_note").trim();
+
+  if (!canApproveOpsContract(profile.role)) {
+    contractError("Your role cannot record a legal review.");
+  }
+  if (note.length < 8) {
+    contractError("Say who reviewed the wording and when.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: template, error } = await supabase
+    .from("contract_templates")
+    .update({
+      requires_legal_review: false,
+      legal_reviewed_at: new Date().toISOString(),
+      legal_reviewed_by: profile.id,
+      legal_review_note: note,
+    })
+    .eq("id", templateId)
+    .select("template_code, name")
+    .single<{ template_code: string; name: string }>();
+
+  if (error || !template) {
+    contractError(error?.message ?? "That template could not be updated.");
+  }
+
+  await recordOpsAuditEvent({
+    action: "contract_template.legal_reviewed",
+    actorUserId: profile.id,
+    entityId: templateId,
+    entityType: "contract_template",
+    metadata: { template_code: template.template_code, note },
+    moduleKey: MODULE,
+    sourceId: templateId,
+    sourceTable: "contract_templates",
+    summary: `${profile.full_name} recorded legal review of the ${template.name} template`,
+  }).catch(() => null);
+
+  revalidateContract();
+  redirect(`${ROUTE}?updated=template_reviewed`);
 }
 
 // ---------------------------------------------------------------------------

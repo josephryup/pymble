@@ -12,6 +12,10 @@ const INVOICE_CREATE_ROLES: OpsUserRole[] = [
   "finance_manager",
   "accountant",
   "quantity_surveyor",
+  // Operations raises and edits invoices (2026-08-18). Sending and marking paid
+  // stay with Finance below: raising a claim and settling it are different
+  // acts, and one role doing both is the control this split exists to keep.
+  "operations_manager",
 ];
 
 const INVOICE_EDIT_ROLES: OpsUserRole[] = INVOICE_CREATE_ROLES;

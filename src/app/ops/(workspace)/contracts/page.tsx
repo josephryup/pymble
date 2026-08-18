@@ -1,12 +1,16 @@
-import { FileSignature, PenLine, Plus, ShieldCheck } from "lucide-react";
+import { FileSignature, PenLine, Plus, ShieldAlert, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { OpsEmptyState } from "@/components/ops/OpsEmptyState";
 import { OpsPageHeader } from "@/components/ops/OpsPageHeader";
 import { requireOpsUser } from "@/lib/ops/auth";
-import { createOpsContractDraftAction } from "@/lib/ops/contract-actions";
 import {
+  createOpsContractDraftAction,
+  recordOpsContractTemplateReviewAction,
+} from "@/lib/ops/contract-actions";
+import {
+  canApproveOpsContract,
   canDraftOpsContractKind,
   canViewOpsContracts,
 } from "@/lib/ops/contract-permissions";
@@ -31,6 +35,7 @@ import {
   OPS_NOTICE_ERROR_CLASS,
   OPS_NOTICE_SUCCESS_CLASS,
   OPS_PRIMARY_BUTTON_CLASS,
+  OPS_SECONDARY_BUTTON_CLASS,
   OPS_TABLE_CLASS,
   OPS_TABLE_SCROLL_CLASS,
   OPS_TD_CLASS,
@@ -64,11 +69,11 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
   const canDraftEmployment = canDraftOpsContractKind(profile.role, "employment");
   const canDraft = canDraftSubcontract || canDraftEmployment;
 
-  const [contracts, stats, templates, subcontractors, sites, employees] =
+  const [contracts, stats, allTemplates, subcontractors, sites, employees] =
     await Promise.all([
       fetchOpsContracts({ limit: 200 }),
       fetchOpsContractStats(),
-      canDraft ? fetchOpsContractTemplates() : Promise.resolve([]),
+      fetchOpsContractTemplates(),
       canDraft ? fetchOpsSubcontractors() : Promise.resolve([]),
       canDraft ? fetchOpsSites() : Promise.resolve([]),
       // Only loaded for someone who can actually draft an employment contract —
@@ -79,8 +84,15 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
   const notice = noticeFromParams(search, "contract", "Contract created.");
   const error = firstParam(search.error);
 
-  const visibleTemplates = templates.filter((template) =>
+  const visibleTemplates = allTemplates.filter((template) =>
     template.kind === "employment" ? canDraftEmployment : canDraftSubcontract,
+  );
+
+  const canRecordReview = canApproveOpsContract(profile.role);
+  // Always fetched, not gated on canDraft: a reviewer needs to see the blocked
+  // templates even if their own role never drafts a contract.
+  const unreviewedTemplates = allTemplates.filter(
+    (template) => template.requires_legal_review,
   );
 
   return (
@@ -138,6 +150,72 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
           </p>
         </div>
       </section>
+
+      {unreviewedTemplates.length > 0 ? (
+        <section
+          className="rounded-lg border border-border bg-card p-5 shadow-sm"
+          id="template-review"
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-red-50 text-red-600">
+              <ShieldAlert className="size-5" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="font-heading text-lg font-bold text-foreground">
+                Templates awaiting legal review
+              </h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Contracts on these templates can be drafted and previewed, but cannot be
+                approved or signed. The employment wording was drafted from the
+                Employment Code rather than transcribed from a signed instrument, so
+                nobody qualified has checked it.
+              </p>
+            </div>
+          </div>
+
+          <ul className="mt-4 grid gap-3">
+            {unreviewedTemplates.map((template) => (
+              <li className="rounded-md border border-border p-4" key={template.id}>
+                <p className="font-semibold text-foreground">
+                  {template.name} (v{template.version})
+                </p>
+                {canRecordReview ? (
+                  <form
+                    action={recordOpsContractTemplateReviewAction}
+                    className="mt-3 grid gap-3 sm:max-w-xl"
+                  >
+                    <input type="hidden" name="template_id" value={template.id} />
+                    <div>
+                      <label
+                        className={OPS_LABEL_CLASS}
+                        htmlFor={`review-${template.id}`}
+                      >
+                        Who reviewed it, and when
+                      </label>
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        id={`review-${template.id}`}
+                        name="legal_review_note"
+                        placeholder="Reviewed by M. Zulu, Zulu &amp; Co, 18 August 2026 — no changes required."
+                        required
+                      />
+                    </div>
+                    <div>
+                      <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                        Record legal review
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Leadership records the review once counsel has signed off.
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {canDraft ? (
         <section className="rounded-lg border border-border bg-card p-5 shadow-sm">

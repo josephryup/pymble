@@ -182,6 +182,14 @@ const OPS_FINANCE_ROLES: OpsUserRole[] = [
   "accountant",
 ];
 
+// Finance plus Operations. Operations was given payables, receivables,
+// invoices, customers and loans on 2026-08-18; settlement authority (approve,
+// pay, send, void) stays with OPS_FINANCE_ROLES.
+const OPS_FINANCE_WITH_OPERATIONS_ROLES: OpsUserRole[] = [
+  ...OPS_FINANCE_ROLES,
+  "operations_manager",
+];
+
 const OPS_FINANCE_BRIDGE_ROLES: OpsUserRole[] = [
   ...OPS_FINANCE_ROLES,
   "operations_manager",
@@ -528,9 +536,9 @@ export const OPS_MODULES: OpsModule[] = [
     group: "finance",
     href: "/ops/loans",
     id: "loans",
-    navigationRoles: OPS_FINANCE_ROLES,
+    navigationRoles: OPS_FINANCE_WITH_OPERATIONS_ROLES,
     phase: "Phase 14",
-    roles: OPS_FINANCE_ROLES,
+    roles: OPS_FINANCE_WITH_OPERATIONS_ROLES,
     status: "ready",
     title: "Loans",
   },
@@ -559,7 +567,7 @@ export const OPS_MODULES: OpsModule[] = [
     group: "finance",
     href: "/ops/invoices",
     id: "invoices",
-    navigationRoles: [...OPS_FINANCE_ROLES, "quantity_surveyor"],
+    navigationRoles: [...OPS_FINANCE_WITH_OPERATIONS_ROLES, "quantity_surveyor"],
     phase: "Foundation",
     roles: OPS_OPERATIONAL_ROLES,
     status: "ready",
@@ -573,9 +581,9 @@ export const OPS_MODULES: OpsModule[] = [
     group: "finance",
     href: "/ops/customers",
     id: "customers",
-    navigationRoles: [...OPS_LEADERSHIP_ROLES, "manager", "finance_manager", "accountant", "quantity_surveyor"],
+    navigationRoles: [...OPS_LEADERSHIP_ROLES, "manager", "finance_manager", "accountant", "quantity_surveyor", "operations_manager"],
     phase: "Phase 13",
-    roles: [...OPS_LEADERSHIP_ROLES, "manager", "finance_manager", "accountant", "quantity_surveyor"],
+    roles: [...OPS_LEADERSHIP_ROLES, "manager", "finance_manager", "accountant", "quantity_surveyor", "operations_manager"],
     status: "ready",
     title: "Customers",
   },

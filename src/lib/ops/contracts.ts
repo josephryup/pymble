@@ -54,6 +54,9 @@ const TEMPLATE_SELECT = [
   "default_defects_liability_months",
   "default_variation_threshold_percent",
   "default_payment_terms_days",
+  "requires_legal_review",
+  "legal_reviewed_at",
+  "legal_review_note",
   "created_at",
   "updated_at",
 ].join(", ");
@@ -115,12 +118,17 @@ const CONTRACT_SELECT = [
   "updated_at",
   "archived_at",
   "site:sites!contracts_site_id_fkey(id, code, name)",
+  "template:contract_templates!contracts_template_id_fkey(id, name, requires_legal_review)",
   "subcontractor:subcontractors!contracts_subcontractor_id_fkey(id, company_name)",
   "employee:employees!contracts_employee_id_fkey(id, full_name)",
 ].join(", ");
 
-type RawContract = Omit<OpsContract, "site" | "counterparty_name"> & {
+type RawContract = Omit<
+  OpsContract,
+  "site" | "counterparty_name" | "template_requires_legal_review" | "template_name"
+> & {
   site: Relation<NonNullable<OpsContract["site"]>>;
+  template: Relation<{ id: string; name: string; requires_legal_review: boolean }>;
   subcontractor: Relation<{ id: string; company_name: string }>;
   employee: Relation<{ id: string; full_name: string }>;
 };
@@ -128,6 +136,7 @@ type RawContract = Omit<OpsContract, "site" | "counterparty_name"> & {
 function mapContract(row: RawContract): OpsContract {
   const subcontractor = pickRel(row.subcontractor);
   const employee = pickRel(row.employee);
+  const template = pickRel(row.template);
 
   // Snapshot first: an issued contract must show the name as it was written on
   // the document, not whatever the register says today.
@@ -137,6 +146,8 @@ function mapContract(row: RawContract): OpsContract {
     ...row,
     counterparty_snapshot: row.counterparty_snapshot ?? {},
     site: pickRel(row.site),
+    template_name: template?.name ?? "",
+    template_requires_legal_review: Boolean(template?.requires_legal_review),
     counterparty_name:
       snapshotName ||
       subcontractor?.company_name ||

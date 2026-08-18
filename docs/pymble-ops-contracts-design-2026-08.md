@@ -43,7 +43,7 @@ These are transcription errors in the sample, not design choices — they should
 5. **VAT shows "16%" but the amount is "-"**, while TOTAL = 258,000 = the net sum. Either the party is not VAT-registered (then say "VAT not applicable — supplier not VAT registered") or VAT is due. The template must compute this, not leave it ambiguous.
 6. `TOTAL 258,000 .00` — stray space.
 7. The counterparty's Plot No., TPIN and Email are blank. If we require KYC before issue (recommended), the register enforces this.
-8. Company address on the cover is *Plot No. 28, Muzovu Street, Kabwata* but `organization_profile` holds *31 Harry Mwangakumbula Rd, Woodlands*, and **`organization_profile.tpin` is NULL** while the template shows TPIN 2596001511. One of these is stale — the org profile must be corrected first, because every generated contract will pull from it (same source the quotation/invoice PDFs use).
+8. ~~Company address on the cover is *Plot No. 28, Muzovu Street, Kabwata* but `organization_profile` holds *31 Harry Mwangakumbula Rd, Woodlands*, and `organization_profile.tpin` is NULL while the template shows TPIN 2596001511.~~ **RESOLVED 2026-08-18:** the Woodlands address in `organization_profile` is current and the Kabwata address on the template cover is stale; TPIN 2596001511 confirmed and written to `organization_profile`. Contracts, quotations and invoices all snapshot from that record, so they now carry both.
 
 ---
 

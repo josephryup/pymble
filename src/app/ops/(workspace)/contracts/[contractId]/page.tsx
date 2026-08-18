@@ -1,6 +1,8 @@
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   CheckCircle2,
   Download,
   FileCheck2,
@@ -31,6 +33,9 @@ import {
   deleteOpsContractLineAction,
   deleteOpsContractMilestoneAction,
   deleteOpsContractScopeItemAction,
+  moveOpsContractLineAction,
+  moveOpsContractMilestoneAction,
+  moveOpsContractScopeItemAction,
   recordOpsContractCountersignatureAction,
   releaseOpsContractRetentionAction,
   resetOpsContractClauseAction,
@@ -38,6 +43,9 @@ import {
   submitOpsContractForReviewAction,
   terminateOpsContractAction,
   updateOpsContractClauseAction,
+  updateOpsContractLineAction,
+  updateOpsContractMilestoneAction,
+  updateOpsContractScopeItemAction,
   updateOpsContractTermsAction,
 } from "@/lib/ops/contract-actions";
 import {
@@ -89,6 +97,62 @@ type PageProps = {
   params: Promise<{ contractId: string }>;
   searchParams?: Promise<OpsSearchParams>;
 };
+
+/**
+ * Up/down controls for an orderable row.
+ *
+ * Order is meaningful here — scope items are referred to by number and
+ * milestones are a sequence of events — so it has to be changeable without
+ * deleting and re-adding, which on a milestone would discard its certification
+ * history. Ends are disabled rather than hidden so the control does not shift
+ * position as rows move.
+ */
+function RowMoveButtons({
+  action,
+  contractId,
+  idField,
+  index,
+  rowId,
+  total,
+}: {
+  action: (formData: FormData) => Promise<void>;
+  contractId: string;
+  idField: string;
+  index: number;
+  rowId: string;
+  total: number;
+}) {
+  return (
+    <>
+      <form action={action}>
+        <input type="hidden" name="contract_id" value={contractId} />
+        <input type="hidden" name={idField} value={rowId} />
+        <input type="hidden" name="direction" value="up" />
+        <button
+          aria-label={`Move item ${index + 1} up`}
+          className={OPS_SECONDARY_BUTTON_CLASS}
+          disabled={index === 0}
+          type="submit"
+        >
+          <ArrowUp className="size-4" aria-hidden="true" />
+        </button>
+      </form>
+      <form action={action}>
+        <input type="hidden" name="contract_id" value={contractId} />
+        <input type="hidden" name={idField} value={rowId} />
+        <input type="hidden" name="direction" value="down" />
+        <button
+          aria-label={`Move item ${index + 1} down`}
+          className={OPS_SECONDARY_BUTTON_CLASS}
+          disabled={index === total - 1}
+          type="submit"
+        >
+          <ArrowDown className="size-4" aria-hidden="true" />
+        </button>
+      </form>
+    </>
+  );
+}
 
 export default async function OpsContractDetailPage({ params, searchParams }: PageProps) {
   const { contractId } = await params;
@@ -229,6 +293,27 @@ export default async function OpsContractDetailPage({ params, searchParams }: Pa
           </p>
         </div>
       </section>
+
+      {contract.template_requires_legal_review ? (
+        <div className={OPS_NOTICE_ERROR_CLASS}>
+          <AlertTriangle className="mr-1.5 inline size-4" aria-hidden="true" />
+          The <strong>{contract.template_name}</strong> template has not been reviewed by
+          counsel. This contract can be drafted and previewed, but it cannot be approved
+          or signed until the review is recorded on the template — so it can never reach
+          an employee on unvetted wording.
+          {canApproveOpsContract(profile.role) ? (
+            <>
+              {" "}
+              <Link
+                className="font-semibold underline underline-offset-2"
+                href="/ops/contracts#template-review"
+              >
+                Record the review
+              </Link>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {contract.milestones.length > 0 && Math.abs(milestoneTotal - 100) > 0.01 ? (
         <div className={OPS_NOTICE_WARNING_CLASS}>
@@ -569,28 +654,80 @@ export default async function OpsContractDetailPage({ params, searchParams }: Pa
           ) : (
             <ul className="divide-y divide-border">
               {contract.scope_items.map((item, index) => (
-                <li className="flex items-start justify-between gap-4 p-5" key={item.id}>
-                  <div>
-                    <p className="font-semibold text-foreground">
-                      {index + 1}. {item.heading}
-                    </p>
-                    {item.detail ? (
-                      <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
-                    ) : null}
-                  </div>
+                <li className="p-5" key={item.id}>
                   {canEdit ? (
-                    <form action={deleteOpsContractScopeItemAction}>
-                      <input type="hidden" name="contract_id" value={contract.id} />
-                      <input type="hidden" name="item_id" value={item.id} />
-                      <button
-                        aria-label={`Remove scope item ${index + 1}`}
-                        className={OPS_SECONDARY_BUTTON_CLASS}
-                        type="submit"
+                    <div className="grid gap-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Item {index + 1}
+                        </p>
+                        <div className="flex gap-1">
+                          <RowMoveButtons
+                            contractId={contract.id}
+                            action={moveOpsContractScopeItemAction}
+                            idField="item_id"
+                            index={index}
+                            rowId={item.id}
+                            total={contract.scope_items.length}
+                          />
+                          <form action={deleteOpsContractScopeItemAction}>
+                            <input type="hidden" name="contract_id" value={contract.id} />
+                            <input type="hidden" name="item_id" value={item.id} />
+                            <button
+                              aria-label={`Remove scope item ${index + 1}`}
+                              className={OPS_SECONDARY_BUTTON_CLASS}
+                              type="submit"
+                            >
+                              <Trash2 className="size-4" aria-hidden="true" />
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                      <form
+                        action={updateOpsContractScopeItemAction}
+                        className="grid gap-3 md:grid-cols-[1fr_2fr_auto] md:items-end"
                       >
-                        <Trash2 className="size-4" aria-hidden="true" />
-                      </button>
-                    </form>
-                  ) : null}
+                        <input type="hidden" name="contract_id" value={contract.id} />
+                        <input type="hidden" name="item_id" value={item.id} />
+                        <div>
+                          <label className={OPS_LABEL_CLASS} htmlFor={`sh-${item.id}`}>
+                            Heading
+                          </label>
+                          <input
+                            className={OPS_INPUT_CLASS}
+                            defaultValue={item.heading}
+                            id={`sh-${item.id}`}
+                            maxLength={200}
+                            name="heading"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className={OPS_LABEL_CLASS} htmlFor={`sd-${item.id}`}>
+                            Detail
+                          </label>
+                          <input
+                            className={OPS_INPUT_CLASS}
+                            defaultValue={item.detail}
+                            id={`sd-${item.id}`}
+                            name="detail"
+                          />
+                        </div>
+                        <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                          Save
+                        </button>
+                      </form>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="font-semibold text-foreground">
+                        {index + 1}. {item.heading}
+                      </p>
+                      {item.detail ? (
+                        <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
+                      ) : null}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -647,6 +784,108 @@ export default async function OpsContractDetailPage({ params, searchParams }: Pa
               Value of works
             </h2>
           </div>
+          {/* Editing renders cards rather than table rows: a form cannot span
+              table cells in valid HTML, and one form per row is what makes each
+              line independently saveable. */}
+          {canEdit ? (
+            <ul className="divide-y divide-border">
+              {contract.lines.map((line, index) => (
+                <li className="p-5" key={line.id}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Line {index + 1} · {formatZmw(Number(line.amount ?? 0))}
+                    </p>
+                    <div className="flex gap-1">
+                      <RowMoveButtons
+                        action={moveOpsContractLineAction}
+                        contractId={contract.id}
+                        idField="line_id"
+                        index={index}
+                        rowId={line.id}
+                        total={contract.lines.length}
+                      />
+                      <form action={deleteOpsContractLineAction}>
+                        <input type="hidden" name="contract_id" value={contract.id} />
+                        <input type="hidden" name="line_id" value={line.id} />
+                        <button
+                          aria-label={`Remove line ${index + 1}`}
+                          className={OPS_SECONDARY_BUTTON_CLASS}
+                          type="submit"
+                        >
+                          <Trash2 className="size-4" aria-hidden="true" />
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                  <form
+                    action={updateOpsContractLineAction}
+                    className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 lg:items-end"
+                  >
+                    <input type="hidden" name="contract_id" value={contract.id} />
+                    <input type="hidden" name="line_id" value={line.id} />
+                    <div className="lg:col-span-2">
+                      <label className={OPS_LABEL_CLASS} htmlFor={`ld-${line.id}`}>
+                        Description
+                      </label>
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={line.description}
+                        id={`ld-${line.id}`}
+                        maxLength={500}
+                        name="description"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className={OPS_LABEL_CLASS} htmlFor={`lq-${line.id}`}>
+                        Qty
+                      </label>
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={Number(line.quantity)}
+                        id={`lq-${line.id}`}
+                        min={0}
+                        name="quantity"
+                        step="0.001"
+                        type="number"
+                      />
+                    </div>
+                    <div>
+                      <label className={OPS_LABEL_CLASS} htmlFor={`lu-${line.id}`}>
+                        Unit
+                      </label>
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={line.uom}
+                        id={`lu-${line.id}`}
+                        maxLength={40}
+                        name="uom"
+                      />
+                    </div>
+                    <div>
+                      <label className={OPS_LABEL_CLASS} htmlFor={`lr-${line.id}`}>
+                        Rate
+                      </label>
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={Number(line.rate)}
+                        id={`lr-${line.id}`}
+                        min={0}
+                        name="rate"
+                        step="0.01"
+                        type="number"
+                      />
+                    </div>
+                    <div className="lg:col-span-4">
+                      <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                        Save line
+                      </button>
+                    </div>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
           <div className={OPS_TABLE_SCROLL_CLASS}>
             <table className={OPS_TABLE_CLASS}>
               <thead className={OPS_THEAD_CLASS}>
@@ -657,7 +896,6 @@ export default async function OpsContractDetailPage({ params, searchParams }: Pa
                   <th className={OPS_TH_CLASS}>UoM</th>
                   <th className={OPS_TH_NUM_CLASS}>Rate</th>
                   <th className={OPS_TH_NUM_CLASS}>Amount</th>
-                  {canEdit ? <th className={OPS_TH_CLASS}>&nbsp;</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -669,26 +907,12 @@ export default async function OpsContractDetailPage({ params, searchParams }: Pa
                     <td className={OPS_TD_CLASS}>{line.uom}</td>
                     <td className={OPS_TD_NUM_CLASS}>{formatZmw(Number(line.rate))}</td>
                     <td className={OPS_TD_NUM_CLASS}>{formatZmw(Number(line.amount))}</td>
-                    {canEdit ? (
-                      <td className={OPS_TD_CLASS}>
-                        <form action={deleteOpsContractLineAction}>
-                          <input type="hidden" name="contract_id" value={contract.id} />
-                          <input type="hidden" name="line_id" value={line.id} />
-                          <button
-                            aria-label={`Remove line ${index + 1}`}
-                            className={OPS_SECONDARY_BUTTON_CLASS}
-                            type="submit"
-                          >
-                            <Trash2 className="size-4" aria-hidden="true" />
-                          </button>
-                        </form>
-                      </td>
-                    ) : null}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          )}
 
           <div className="border-t border-border p-5">
             <dl className="ml-auto grid max-w-xs gap-1 text-sm">
@@ -810,7 +1034,7 @@ export default async function OpsContractDetailPage({ params, searchParams }: Pa
                   <th className={OPS_TH_CLASS}>Trigger</th>
                   <th className={OPS_TH_CLASS}>Payable</th>
                   <th className={OPS_TH_CLASS}>Status</th>
-                  {canEdit ? <th className={OPS_TH_CLASS}>&nbsp;</th> : null}
+
                 </tr>
               </thead>
               <tbody>
@@ -876,26 +1100,122 @@ export default async function OpsContractDetailPage({ params, searchParams }: Pa
                         </Link>
                       ) : null}
                     </td>
-                    {canEdit ? (
-                      <td className={OPS_TD_CLASS}>
-                        <form action={deleteOpsContractMilestoneAction}>
-                          <input type="hidden" name="contract_id" value={contract.id} />
-                          <input type="hidden" name="milestone_id" value={milestone.id} />
-                          <button
-                            aria-label={`Remove ${milestone.label}`}
-                            className={OPS_SECONDARY_BUTTON_CLASS}
-                            type="submit"
-                          >
-                            <Trash2 className="size-4" aria-hidden="true" />
-                          </button>
-                        </form>
-                      </td>
-                    ) : null}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {canEdit ? (
+            <ul className="divide-y divide-border border-t border-border">
+              {contract.milestones.map((milestone, index) => (
+                <li className="p-5" key={`edit-${milestone.id}`}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      Stage {index + 1} · {formatZmw(Number(milestone.amount ?? 0))}
+                    </p>
+                    <div className="flex gap-1">
+                      <RowMoveButtons
+                        action={moveOpsContractMilestoneAction}
+                        contractId={contract.id}
+                        idField="milestone_id"
+                        index={index}
+                        rowId={milestone.id}
+                        total={contract.milestones.length}
+                      />
+                      <form action={deleteOpsContractMilestoneAction}>
+                        <input type="hidden" name="contract_id" value={contract.id} />
+                        <input type="hidden" name="milestone_id" value={milestone.id} />
+                        <button
+                          aria-label={`Remove ${milestone.label}`}
+                          className={OPS_SECONDARY_BUTTON_CLASS}
+                          type="submit"
+                        >
+                          <Trash2 className="size-4" aria-hidden="true" />
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                  <form
+                    action={updateOpsContractMilestoneAction}
+                    className="grid gap-3 md:grid-cols-2 lg:grid-cols-4 lg:items-end"
+                  >
+                    <input type="hidden" name="contract_id" value={contract.id} />
+                    <input type="hidden" name="milestone_id" value={milestone.id} />
+                    <div>
+                      <label className={OPS_LABEL_CLASS} htmlFor={`ml-${milestone.id}`}>
+                        Stage
+                      </label>
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={milestone.label}
+                        id={`ml-${milestone.id}`}
+                        maxLength={200}
+                        name="label"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className={OPS_LABEL_CLASS} htmlFor={`mp-${milestone.id}`}>
+                        Percent
+                      </label>
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={Number(milestone.percent)}
+                        id={`mp-${milestone.id}`}
+                        max={100}
+                        min={0}
+                        name="percent"
+                        step="0.001"
+                        type="number"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className={OPS_LABEL_CLASS} htmlFor={`md-${milestone.id}`}>
+                        Payable within (days)
+                      </label>
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={milestone.payable_within_days}
+                        id={`md-${milestone.id}`}
+                        min={0}
+                        name="payable_within_days"
+                        type="number"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2 pb-2 text-sm font-semibold text-foreground">
+                        <input
+                          defaultChecked={milestone.is_retention}
+                          name="is_retention"
+                          type="checkbox"
+                        />
+                        Retention
+                      </label>
+                    </div>
+                    <div className="md:col-span-2 lg:col-span-4">
+                      <label className={OPS_LABEL_CLASS} htmlFor={`mt-${milestone.id}`}>
+                        Trigger
+                      </label>
+                      <input
+                        className={OPS_INPUT_CLASS}
+                        defaultValue={milestone.trigger_description}
+                        id={`mt-${milestone.id}`}
+                        maxLength={1000}
+                        name="trigger_description"
+                      />
+                    </div>
+                    <div className="lg:col-span-4">
+                      <button className={OPS_SECONDARY_BUTTON_CLASS} type="submit">
+                        Save stage
+                      </button>
+                    </div>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           {canEdit ? (
             <form

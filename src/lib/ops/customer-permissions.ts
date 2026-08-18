@@ -11,8 +11,12 @@ const CUSTOMER_VIEW_ROLES: OpsUserRole[] = [
   "finance_manager",
   "accountant",
   "quantity_surveyor",
+  "operations_manager",
 ];
 
+// Operations added 2026-08-18: they raise invoices, and an invoice needs a
+// customer, so withholding the register would have left them able to bill only
+// counterparties somebody else had already created.
 const CUSTOMER_MANAGE_ROLES: OpsUserRole[] = [
   "developer",
   "managing_director",
@@ -21,6 +25,7 @@ const CUSTOMER_MANAGE_ROLES: OpsUserRole[] = [
   "manager",
   "finance_manager",
   "accountant",
+  "operations_manager",
 ];
 
 export type OpsCustomerMutationTarget = {
