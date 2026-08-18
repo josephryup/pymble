@@ -127,6 +127,7 @@ export const OPS_STATUS_TONES: Record<string, OpsStatusTone> = {
   accredited: "positive",
   achieved: "positive",
   agreed: "positive",
+  signed: "positive",
   certified: "positive",
   checked_in: "positive",
   confirmed: "positive",
@@ -202,6 +203,7 @@ export const OPS_STATUS_TONES: Record<string, OpsStatusTone> = {
   watch: "attention",
   // Bad
   rejected: "negative",
+  declined: "negative",
   cancelled: "negative",
   blocked: "negative",
   danger: "negative",

@@ -5,6 +5,8 @@ import {
   FileCheck2,
   GraduationCap,
   KeyRound,
+  Lock,
+  PenLine,
   Plus,
   ShieldCheck,
   Upload,
@@ -15,15 +17,19 @@ import { OpsAvatar } from "@/components/ops/OpsAvatar";
 import { OpsLogoutButton } from "@/components/ops/OpsLogoutButton";
 import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { fetchMyOpsSignatureSpecimenMeta } from "@/lib/ops/contract-signatures";
+import { formatOpsDateTime } from "@/lib/ops/format";
 import { uploadEmployeeDocumentAction } from "@/lib/ops/hr-actions";
 import { fetchMyOpsEmployeeSelfServiceProfile, type OpsEmployeeDocumentSummary } from "@/lib/ops/hr";
 import { fetchMyPayslipAccess, fetchMyStaffPayslips } from "@/lib/ops/staff-payroll";
 import {
   createMyLeaveRequestAction,
   removeMyAvatarAction,
+  removeMySignatureAction,
   updateMyAvatarAction,
   updateMyPasswordAction,
   updateMyProfileAction,
+  updateMySignatureAction,
 } from "@/lib/ops/profile-actions";
 import {
   firstParam,
@@ -155,13 +161,17 @@ function formatZmwShort(value: number) {
 }
 
 export default async function OpsProfilePage({ searchParams }: PageProps) {
-  const [params, auth, selfService, myPayslips, payslipAccess] = await Promise.all([
-    searchParams ?? Promise.resolve({}),
-    requireOpsUser(),
-    fetchMyOpsEmployeeSelfServiceProfile(),
-    fetchMyStaffPayslips(),
-    fetchMyPayslipAccess(),
-  ]);
+  const [params, auth, selfService, myPayslips, payslipAccess, signatureSpecimen] =
+    await Promise.all([
+      searchParams ?? Promise.resolve({}),
+      requireOpsUser(),
+      fetchMyOpsEmployeeSelfServiceProfile(),
+      fetchMyStaffPayslips(),
+      fetchMyPayslipAccess(),
+      // Metadata only — no key, no bytes. The image itself comes from
+      // /api/ops/signature/me, which serves your own specimen and nobody else's.
+      fetchMyOpsSignatureSpecimenMeta(),
+    ]);
   const notice = profileNotice(params);
   const profileName = formatOpsProfileName(auth.profile.full_name, auth.profile.role);
   const today = todayInLusaka();
@@ -671,6 +681,98 @@ export default async function OpsProfilePage({ searchParams }: PageProps) {
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           JPEG, PNG or WebP, up to 5 MB.
+        </p>
+      </section>
+
+      {/* Signature specimen. Deliberately NOT merged into the profile photo
+          card: a photo is shared with every colleague, a signature is shared
+          with nobody. Putting them under one heading would teach people that
+          both have the same audience, which is the misunderstanding most likely
+          to end with someone uploading a signature they think is public. */}
+      <section className="rounded-lg border border-border bg-card p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary-blue text-white">
+            <PenLine className="size-5" aria-hidden="true" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-heading text-xl font-bold text-foreground">
+              My signature
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Used when you sign a contract in the workspace. Upload a clear image of
+              your signature — a scan or photo on white, or a transparent PNG.
+            </p>
+            <p className="mt-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-foreground">
+              <Lock className="mr-1.5 inline size-4 align-text-bottom" aria-hidden="true" />
+              <strong className="font-semibold">Only you can see this.</strong> Not HR,
+              not the Managing Director, not a system administrator. It becomes visible
+              to others only where you have applied it to a contract yourself.
+            </p>
+          </div>
+        </div>
+
+        {signatureSpecimen.has_specimen ? (
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            {/* Served from /api/ops/signature/me — a route with no user
+                parameter, so this tag can only ever render your own mark. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              alt="Your signature specimen"
+              className="h-16 max-w-[240px] rounded-md border border-border bg-white object-contain p-2"
+              src="/api/ops/signature/me"
+            />
+            <div className="text-sm text-muted-foreground">
+              <p className="font-semibold text-foreground">
+                {signatureSpecimen.specimen_name}
+              </p>
+              <p>Updated {formatOpsDateTime(signatureSpecimen.updated_at)}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-4 rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            No signature on file. You will not be able to sign contracts until you add
+            one.
+          </p>
+        )}
+
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <form action={updateMySignatureAction} className="flex flex-wrap items-end gap-3">
+            <label className={OPS_LABEL_CLASS}>
+              Signature image
+              <input
+                accept="image/jpeg,image/png,image/webp"
+                className={OPS_INPUT_CLASS}
+                name="signature"
+                required
+                type="file"
+              />
+            </label>
+            <label className={OPS_LABEL_CLASS}>
+              Name to print beneath it
+              <input
+                className={OPS_INPUT_CLASS}
+                defaultValue={signatureSpecimen.specimen_name || profileName}
+                maxLength={140}
+                name="specimen_name"
+                type="text"
+              />
+            </label>
+            <OpsSubmitButton className={OPS_PRIMARY_BUTTON_CLASS} pendingLabel="Uploading...">
+              <Upload className="size-4" aria-hidden="true" />
+              Save signature
+            </OpsSubmitButton>
+          </form>
+          {signatureSpecimen.has_specimen ? (
+            <form action={removeMySignatureAction}>
+              <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS} pendingLabel="Removing...">
+                Remove signature
+              </OpsSubmitButton>
+            </form>
+          ) : null}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          PNG, WebP or JPEG, up to 2 MB. Removing it does not affect contracts you have
+          already signed — those keep the mark as it was at the time.
         </p>
       </section>
 

@@ -127,6 +127,38 @@ export async function createOpsR2ReadUrl(key: string) {
   );
 }
 
+/**
+ * Read an object's bytes on the server.
+ *
+ * Exists for content that must never reach a browser as a fetchable asset —
+ * signature specimens above all. A presigned read URL would be a URL, and a URL
+ * can be copied out of a page, forwarded, or logged; these bytes get composited
+ * into a PDF server-side and are never addressable from outside.
+ *
+ * Returns null rather than throwing when the object is missing, so a deleted
+ * specimen degrades to "no mark" instead of taking a document render down.
+ */
+export async function getOpsR2ObjectBytes(key: string) {
+  try {
+    const object = await getOpsR2Client().send(
+      new GetObjectCommand({
+        Bucket: getOpsR2BucketName(),
+        Key: key,
+      }),
+    );
+
+    const bytes = await object.Body?.transformToByteArray();
+    if (!bytes) return null;
+
+    return {
+      bytes,
+      contentType: object.ContentType ?? "application/octet-stream",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteOpsR2Object(key: string) {
   await getOpsR2Client().send(
     new DeleteObjectCommand({

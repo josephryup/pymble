@@ -1042,6 +1042,27 @@ export const OPS_MODULES: OpsModule[] = [
     title: "Subcontractors",
   },
   {
+    description:
+      "Generate subcontractor works orders and employment contracts from the standard templates, edit clauses per contract, route them for approval, and sign them with your own signature.",
+    group: "operations",
+    href: "/ops/contracts",
+    id: "contracts",
+    navigationRoles: [
+      ...OPS_LEADERSHIP_ROLES,
+      "human_resource",
+      "hr",
+      "operations_manager",
+      "projects_manager",
+      "procurement_manager",
+      "quantity_surveyor",
+      "finance_manager",
+    ],
+    phase: "Phase 12",
+    roles: OPS_OPERATIONAL_ROLES,
+    status: "ready",
+    title: "Contracts",
+  },
+  {
     description: "All department reports routed up for leadership review. Departments with pending reviews are surfaced first; drill into any department from here.",
     group: "executive",
     href: "/ops/department-reports",

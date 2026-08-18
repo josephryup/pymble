@@ -6,6 +6,11 @@ import { z } from "zod";
 import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { createOpsServerSessionClient, requireOpsUser } from "@/lib/ops/auth";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
+import {
+  clearMyOpsSignatureSpecimen,
+  OPS_SIGNATURE_ALLOWED_TYPES,
+  storeMyOpsSignatureSpecimen,
+} from "@/lib/ops/contract-signatures";
 import { canCreateOpsSelfServiceLeaveRequest } from "@/lib/ops/hr-permissions";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { logOpsServerError } from "@/lib/ops/log";
@@ -288,6 +293,99 @@ export async function removeMyAvatarAction() {
   revalidatePath("/ops");
   revalidatePath("/ops/profile");
   redirect("/ops/profile?updated=avatar_removed");
+}
+
+/**
+ * Upload or replace YOUR OWN signature specimen.
+ *
+ * Scoped to the signed-in user the same way updateMyAvatarAction is: the user
+ * id comes from the session and there is no parameter for whose signature to
+ * set. Unlike an avatar, this one is private to you — nobody else can view it,
+ * including HR, the MD and a developer. See contract-signatures.ts for the full
+ * rule and the layers that enforce it.
+ *
+ * A signature image is small, so this goes through a Server Action rather than
+ * the presigned direct-to-R2 path attachments use; the 4.5 MB Vercel body cap
+ * is nowhere near a 2 MB limit.
+ */
+export async function updateMySignatureAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  const file = formData.get("signature");
+  if (!(file instanceof File) || file.size === 0) {
+    profileError("Choose a signature image to upload.");
+  }
+  if (!OPS_SIGNATURE_ALLOWED_TYPES.has(file.type)) {
+    profileError("Signatures must be a PNG, WebP or JPEG image.");
+  }
+
+  const specimenName =
+    (typeof formData.get("specimen_name") === "string"
+      ? (formData.get("specimen_name") as string)
+      : ""
+    ).trim() || profile.full_name;
+
+  let result: { key: string; previousKey: string | null };
+  try {
+    result = await storeMyOpsSignatureSpecimen({
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      contentType: file.type,
+      specimenName,
+      userId: profile.id,
+    });
+  } catch (uploadError) {
+    logOpsServerError(uploadError, { module: "profile", action: "signature.upload" });
+    profileError(
+      uploadError instanceof Error
+        ? uploadError.message
+        : "The signature could not be uploaded. Try again.",
+    );
+  }
+
+  if (result.previousKey && result.previousKey !== result.key) {
+    await deleteOpsR2Object(result.previousKey).catch(() => null);
+  }
+
+  // Deliberately no metadata about the image itself in the audit trail — the
+  // fact that you updated your signature is auditable, what it looks like is
+  // not anybody's business.
+  await recordOpsAuditEvent({
+    action: "profile.signature_updated",
+    actorUserId: profile.id,
+    entityId: profile.id,
+    entityType: "user",
+    moduleKey: "profile",
+    sourceId: profile.id,
+    sourceTable: "users",
+    summary: "Updated signature specimen",
+  }).catch(() => null);
+
+  revalidatePath("/ops/profile");
+  redirect("/ops/profile?updated=signature");
+}
+
+/** Remove your signature specimen. Already-signed contracts keep their marks. */
+export async function removeMySignatureAction() {
+  const { profile } = await requireOpsUser();
+
+  const orphanedKey = await clearMyOpsSignatureSpecimen(profile.id);
+  if (orphanedKey) {
+    await deleteOpsR2Object(orphanedKey).catch(() => null);
+  }
+
+  await recordOpsAuditEvent({
+    action: "profile.signature_removed",
+    actorUserId: profile.id,
+    entityId: profile.id,
+    entityType: "user",
+    moduleKey: "profile",
+    sourceId: profile.id,
+    sourceTable: "users",
+    summary: "Removed signature specimen",
+  }).catch(() => null);
+
+  revalidatePath("/ops/profile");
+  redirect("/ops/profile?updated=signature_removed");
 }
 
 export async function updateMyPasswordAction(formData: FormData) {
