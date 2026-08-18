@@ -115,6 +115,9 @@ export type OpsContractMilestone = {
   status: OpsContractMilestoneStatus;
   certified_at: string | null;
   certified_by: string | null;
+  /** The payable raised on certification. The live money link. */
+  payment_request_id: string | null;
+  /** Superseded by payment_request_id — subcontractor_payments never reached the GL. */
   subcontractor_payment_id: string | null;
   release_due_date: string | null;
   notes: string;
@@ -215,7 +218,11 @@ export type OpsContract = {
   signed_document_id: string | null;
   terminated_at: string | null;
   termination_reason: string;
+  completed_at: string | null;
+  /** Committed cost entry raised at approval; null when there is no site to commit against. */
+  commitment_cost_entry_id: string | null;
   parent_contract_id: string | null;
+  addendum_number: number | null;
   notes: string;
   created_by: string | null;
   created_at: string;

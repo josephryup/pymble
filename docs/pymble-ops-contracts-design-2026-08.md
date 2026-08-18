@@ -288,14 +288,21 @@ The one legal caveat: whether these marks constitute a legally binding electroni
 
 ## 6. Finance integration (this is where the value is)
 
-The contract is the missing head of the subcontractor money chain:
+The contract is the missing head of the subcontractor money chain.
+
+**Correction, made during implementation.** The chain was specified as
+`milestone → subcontractor_payments → payment_requests → GL`. That middle hop is a dead end: `subcontractor_payments` has no GL posting, no cost code and no budget link — it notifies Finance and stops. Routing certified milestones through it would have meant maintaining a second payables spine beside the one that already works. A certified milestone now raises a **payment request directly**:
 
 ```
 contract (total 258,000)
    └─ contract_milestones  30% / 25% / 20% / 20% / 5% retention
-         └─ certified  ⇒  subcontractor_payments (existing table)
-               └─ payment_requests  ⇒  GL journal  ⇒  cost code / budget
+         └─ certified  ⇒  payment_requests (payment_type 'subcontractor')
+               └─ existing Finance approval  ⇒  GL journal  ⇒  cost code / budget
 ```
+
+`payment_requests` already carried the `subcontractor` type, which `opsPaymentPayableAccount` maps to **2050 Subcontractor Payable** rather than collapsing it into trade payables, and `postPaymentRequestJournalSafe` already posts it. `contract_milestones.subcontractor_payment_id` is retained but marked superseded in a column comment.
+
+Certification deliberately posts **no journal**. It creates a claim in the payables queue; the existing Finance approval decides when that becomes an accounting fact. A site engineer certifying work must not be able to move the general ledger — and for the same reason Finance roles cannot certify.
 
 - **Commitment on the budget.** On approval, post the contract total as a *commitment* against `cost_code_id` so project budgets show committed-but-unspent value. Today ~87% of spend never reaches Finance (see the project–finance spine audit); subcontract commitments are a large slice of that.
 - **Retention ledger.** `retention_percent` already lives on `subcontractors`; the 5% milestone becomes a tracked retention balance with a release date (completion + DLP months), surfaced in the Finance queue.
@@ -317,6 +324,8 @@ Standard workspace module, same shell/patterns as `/ops/subcontractors`:
 ---
 
 ## 8. Suggested phasing
+
+**All phases shipped 2026-08-18.** The table below is the plan as executed.
 
 | Phase | Content | Notes |
 | --- | --- | --- |

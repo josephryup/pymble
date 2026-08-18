@@ -105,7 +105,10 @@ const CONTRACT_SELECT = [
   "signed_document_id",
   "terminated_at",
   "termination_reason",
+  "completed_at",
+  "commitment_cost_entry_id",
   "parent_contract_id",
+  "addendum_number",
   "notes",
   "created_by",
   "created_at",
@@ -296,7 +299,7 @@ export async function fetchOpsContractById(
     supabase
       .from("contract_milestones")
       .select(
-        "id, contract_id, sort_order, label, percent, amount, trigger_description, payable_within_days, is_retention, status, certified_at, certified_by, subcontractor_payment_id, release_due_date, notes",
+        "id, contract_id, sort_order, label, percent, amount, trigger_description, payable_within_days, is_retention, status, certified_at, certified_by, payment_request_id, subcontractor_payment_id, release_due_date, notes",
       )
       .eq("contract_id", id)
       .order("sort_order", { ascending: true }),
@@ -359,6 +362,47 @@ export async function fetchOpsContractStats(): Promise<OpsContractStats> {
       0,
     ),
   };
+}
+
+export function roundOpsMoney(value: number) {
+  return Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
+}
+
+/**
+ * Derive the money from the priced lines.
+ *
+ * Totals are computed, never typed. The source instrument carried a hand-keyed
+ * total that did not agree with its own line amounts, and a "VAT (16%)" row
+ * against a blank figure — both are unrepresentable once the arithmetic is
+ * here. Pure, so it can be tested without a database.
+ */
+export function computeOpsContractTotals(input: {
+  lineAmounts: number[];
+  vatApplicable: boolean;
+  vatPercent: number;
+}) {
+  const subtotal = roundOpsMoney(
+    input.lineAmounts.reduce((sum, amount) => sum + Number(amount ?? 0), 0),
+  );
+  const vatAmount = input.vatApplicable
+    ? roundOpsMoney((subtotal * Number(input.vatPercent ?? 0)) / 100)
+    : 0;
+
+  return {
+    subtotal,
+    vatAmount,
+    total: roundOpsMoney(subtotal + vatAmount),
+  };
+}
+
+/**
+ * A milestone is a PERCENTAGE of the contract, so its cash amount has to be
+ * re-derived whenever the total moves. Storing it without recomputing is how
+ * the payment plan ends up disagreeing with the priced schedule on the same
+ * page of the same document.
+ */
+export function opsContractMilestoneAmount(total: number, percent: number) {
+  return roundOpsMoney((Number(total ?? 0) * Number(percent ?? 0)) / 100);
 }
 
 /**

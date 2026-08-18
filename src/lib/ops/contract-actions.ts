@@ -10,31 +10,47 @@ import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
   canApproveOpsContract,
+  canCertifyOpsContractMilestone,
   canDraftOpsContractKind,
   canIssueOpsContract,
   canReviewOpsContract,
   canSignOpsContractAs,
+  canTerminateOpsContract,
   canViewOpsContractKind,
   OPS_CONTRACT_INTERNAL_SIGNATORIES,
 } from "@/lib/ops/contract-permissions";
+import {
+  cancelOpsContractCommitment,
+  postOpsContractCommitment,
+  raiseOpsContractMilestonePayable,
+} from "@/lib/ops/contract-finance";
 import {
   copyOwnSpecimenForSigning,
   generateOpsSignatureVerificationCode,
   hashOpsContractContent,
 } from "@/lib/ops/contract-signatures";
 import type {
+  OpsContractDetail,
   OpsContractSignatoryRole,
   OpsContractStatus,
 } from "@/lib/ops/contract-types";
 import {
+  computeOpsContractTotals,
   fetchOpsContractById,
   fetchOpsContractTemplateClauses,
+  opsContractMilestoneAmount,
+  roundOpsMoney,
   toOpsContractSignableContent,
 } from "@/lib/ops/contracts";
 import { requirePublicEnv } from "@/lib/ops/env";
 import { logOpsServerError } from "@/lib/ops/log";
+import { fetchOpsOrganizationProfile } from "@/lib/ops/organization";
 import { fanoutToOpsAudiences } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
+import {
+  linkOpsRecordAttachment,
+  verifyOpsUploadedObject,
+} from "@/lib/ops/record-attachments";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
 const ROUTE = "/ops/contracts";
@@ -53,6 +69,56 @@ function contractError(message: string, contractId?: string): never {
 function revalidateContract(contractId?: string) {
   revalidatePath(ROUTE);
   if (contractId) revalidatePath(`${ROUTE}/${contractId}`);
+}
+
+/**
+ * Snapshot the contract before an edit lands.
+ *
+ * Full clause editing (D2) means free text on a legal instrument, and the
+ * signature hash only tells you that something changed, not what it was
+ * before. This is the "before" — cheap insurance, and the only way to answer
+ * "what did that indemnity clause say last week?".
+ *
+ * Best-effort by design: failing to write history must never block the edit
+ * itself, or a full revisions table would make the module read-only.
+ */
+async function recordOpsContractRevision(input: {
+  changedBy: string;
+  contract: OpsContractDetail;
+  changeSummary: string;
+}) {
+  try {
+    const supabase = getOpsSupabaseServiceClient();
+
+    const { data: latest } = await supabase
+      .from("contract_revisions")
+      .select("revision_no")
+      .eq("contract_id", input.contract.id)
+      .order("revision_no", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ revision_no: number }>();
+
+    await supabase.from("contract_revisions").insert({
+      contract_id: input.contract.id,
+      revision_no: (latest?.revision_no ?? 0) + 1,
+      snapshot: toOpsContractSignableContent(input.contract),
+      change_summary: input.changeSummary,
+      changed_by: input.changedBy,
+    });
+  } catch (error) {
+    logOpsServerError(error, {
+      module: MODULE,
+      action: "recordOpsContractRevision",
+      entityId: input.contract.id,
+    });
+  }
+}
+
+function formatContractMoney(amount: number, currency: string) {
+  return `${currency || "ZMW"} ${amount.toLocaleString("en-ZM", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +263,405 @@ export async function createOpsContractDraftAction(formData: FormData) {
   redirect(`${ROUTE}/${contract.id}`);
 }
 
+/**
+ * Auth + fetch + "is this actually editable" in one place.
+ *
+ * Every mutation below needs the same four checks, and repeating them was how
+ * the clause editor ended up being the only guarded path in the first pass.
+ */
+async function loadEditableContract(contractId: string) {
+  const { profile } = await requireOpsUser();
+  const contract = await fetchOpsContractById(contractId);
+
+  if (!contract) contractError("Contract not found.");
+  if (!canDraftOpsContractKind(profile.role, contract.kind)) {
+    contractError("Your role cannot edit this contract.", contract.id);
+  }
+  if (contract.status !== "draft") {
+    contractError(
+      "Only a draft can be edited. Raise an addendum to change an issued contract.",
+      contract.id,
+    );
+  }
+
+  return { contract, profile };
+}
+
+/**
+ * Recompute the money after any change to the priced lines.
+ *
+ * Totals are derived, never typed. The source instrument had a hand-keyed total
+ * that did not match its own line amounts, and a VAT row that said 16% next to
+ * a blank figure — both are impossible once the arithmetic lives here.
+ *
+ * Milestone amounts are re-derived at the same time: a milestone is a
+ * PERCENTAGE of the contract, so changing a rate has to flow through to the
+ * payment plan or the two halves of the document disagree.
+ */
+async function recomputeOpsContractTotals(contractId: string) {
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: lines } = await supabase
+    .from("contract_lines")
+    .select("amount")
+    .eq("contract_id", contractId);
+
+  const { data: contract } = await supabase
+    .from("contracts")
+    .select("vat_applicable, vat_percent")
+    .eq("id", contractId)
+    .maybeSingle<{ vat_applicable: boolean; vat_percent: number }>();
+
+  const { subtotal, vatAmount, total } = computeOpsContractTotals({
+    lineAmounts: (lines ?? []).map((line) => Number(line.amount ?? 0)),
+    vatApplicable: Boolean(contract?.vat_applicable),
+    vatPercent: Number(contract?.vat_percent ?? 0),
+  });
+
+  await supabase
+    .from("contracts")
+    .update({ subtotal, vat_amount: vatAmount, total_value: total })
+    .eq("id", contractId);
+
+  const { data: milestones } = await supabase
+    .from("contract_milestones")
+    .select("id, percent")
+    .eq("contract_id", contractId);
+
+  await Promise.all(
+    (milestones ?? []).map((milestone) =>
+      supabase
+        .from("contract_milestones")
+        .update({
+          amount: opsContractMilestoneAmount(total, Number(milestone.percent ?? 0)),
+        })
+        .eq("id", milestone.id),
+    ),
+  );
+}
+
+const termsSchema = z.object({
+  title: z.string().trim().min(2, "Give the contract a title.").max(200),
+  work_order_number: z.string().trim().max(80).default(""),
+  work_order_date: z.string().trim().default(""),
+  preamble: z.string().trim().max(4000).default(""),
+  scope_summary: z.string().trim().max(4000).default(""),
+  site_id: z.string().trim().default(""),
+  start_date: z.string().trim().default(""),
+  end_date: z.string().trim().default(""),
+  expected_start_date: z.string().trim().default(""),
+  expected_finish_date: z.string().trim().default(""),
+  duration_days: z.coerce.number().int().min(0).max(3650).default(0),
+  vat_applicable: z.coerce.boolean().default(false),
+  vat_percent: z.coerce.number().min(0).max(100).default(16),
+  retention_percent: z.coerce.number().min(0).max(50).default(5),
+  penalty_percent_per_week: z.coerce.number().min(0).max(100).default(0.3),
+  penalty_cap_percent: z.coerce.number().min(0).max(100).default(3),
+  variation_threshold_percent: z.coerce.number().min(0).max(100).default(10),
+  warranty_months: z.coerce.number().int().min(0).max(120).default(6),
+  defects_liability_months: z.coerce.number().int().min(0).max(120).default(1),
+  min_workers: z.coerce.number().int().min(0).max(10000).default(0),
+  payment_terms_days: z.coerce.number().int().min(0).max(365).default(14),
+  roe_reference: z.string().trim().max(120).default(""),
+});
+
+function nullableDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+/** Edit the commercial terms and programme of a draft. */
+export async function updateOpsContractTermsAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract, profile } = await loadEditableContract(contractId);
+
+  const parsed = termsSchema.safeParse({
+    title: field(formData, "title"),
+    work_order_number: field(formData, "work_order_number"),
+    work_order_date: field(formData, "work_order_date"),
+    preamble: field(formData, "preamble"),
+    scope_summary: field(formData, "scope_summary"),
+    site_id: field(formData, "site_id"),
+    start_date: field(formData, "start_date"),
+    end_date: field(formData, "end_date"),
+    expected_start_date: field(formData, "expected_start_date"),
+    expected_finish_date: field(formData, "expected_finish_date"),
+    duration_days: field(formData, "duration_days") || 0,
+    vat_applicable: formData.get("vat_applicable") === "on",
+    vat_percent: field(formData, "vat_percent") || 16,
+    retention_percent: field(formData, "retention_percent") || 5,
+    penalty_percent_per_week: field(formData, "penalty_percent_per_week") || 0.3,
+    penalty_cap_percent: field(formData, "penalty_cap_percent") || 3,
+    variation_threshold_percent: field(formData, "variation_threshold_percent") || 10,
+    warranty_months: field(formData, "warranty_months") || 6,
+    defects_liability_months: field(formData, "defects_liability_months") || 1,
+    min_workers: field(formData, "min_workers") || 0,
+    payment_terms_days: field(formData, "payment_terms_days") || 14,
+    roe_reference: field(formData, "roe_reference"),
+  });
+
+  if (!parsed.success) {
+    contractError(
+      parsed.error.issues[0]?.message ?? "Check the terms and try again.",
+      contract.id,
+    );
+  }
+
+  const input = parsed.data;
+  const startDate = nullableDate(input.start_date);
+  const endDate = nullableDate(input.end_date);
+
+  // Caught here rather than by the database CHECK so the user gets a sentence
+  // instead of a constraint name.
+  if (startDate && endDate && endDate < startDate) {
+    contractError("The end date cannot be before the start date.", contract.id);
+  }
+
+  await recordOpsContractRevision({
+    changedBy: profile.id,
+    contract,
+    changeSummary: "Updated the commercial terms and programme",
+  });
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("contracts")
+    .update({
+      title: input.title,
+      work_order_number: input.work_order_number,
+      work_order_date: nullableDate(input.work_order_date),
+      preamble: input.preamble,
+      scope_summary: input.scope_summary,
+      site_id: input.site_id || null,
+      start_date: startDate,
+      end_date: endDate,
+      expected_start_date: nullableDate(input.expected_start_date),
+      expected_finish_date: nullableDate(input.expected_finish_date),
+      duration_days: input.duration_days,
+      vat_applicable: input.vat_applicable,
+      vat_percent: input.vat_percent,
+      retention_percent: input.retention_percent,
+      penalty_percent_per_week: input.penalty_percent_per_week,
+      penalty_cap_percent: input.penalty_cap_percent,
+      variation_threshold_percent: input.variation_threshold_percent,
+      warranty_months: input.warranty_months,
+      defects_liability_months: input.defects_liability_months,
+      min_workers: input.min_workers,
+      payment_terms_days: input.payment_terms_days,
+      roe_reference: input.roe_reference,
+    })
+    .eq("id", contract.id);
+
+  if (error) contractError(error.message, contract.id);
+
+  // VAT applicability may have flipped, which changes the total.
+  await recomputeOpsContractTotals(contract.id);
+
+  await recordOpsAuditEvent({
+    action: "contract.terms_updated",
+    actorUserId: profile.id,
+    entityId: contract.id,
+    entityType: "contract",
+    moduleKey: MODULE,
+    sourceId: contract.id,
+    sourceTable: "contracts",
+    summary: `${profile.full_name} updated the terms of ${contract.contract_number}`,
+  }).catch(() => null);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=terms`);
+}
+
+// ---------------------------------------------------------------------------
+// Scope items
+// ---------------------------------------------------------------------------
+
+export async function addOpsContractScopeItemAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+
+  const heading = field(formData, "heading").trim();
+  if (heading.length < 2) {
+    contractError("Give the scope item a heading.", contract.id);
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase.from("contract_scope_items").insert({
+    contract_id: contract.id,
+    heading,
+    detail: field(formData, "detail").trim().slice(0, 4000),
+    sort_order: contract.scope_items.length + 1,
+  });
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=scope`);
+}
+
+export async function deleteOpsContractScopeItemAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+  const itemId = field(formData, "item_id");
+
+  // Scoped by contract_id as well as row id: without it, a crafted form could
+  // delete a scope item off a contract the caller cannot edit.
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase
+    .from("contract_scope_items")
+    .delete()
+    .eq("id", itemId)
+    .eq("contract_id", contract.id);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=scope_removed`);
+}
+
+// ---------------------------------------------------------------------------
+// Priced lines
+// ---------------------------------------------------------------------------
+
+const lineSchema = z.object({
+  description: z.string().trim().min(2, "Describe the line item.").max(500),
+  quantity: z.coerce.number().min(0).max(1_000_000).default(1),
+  uom: z.string().trim().max(40).default("Item"),
+  rate: z.coerce.number().min(0).max(1_000_000_000).default(0),
+  cost_code_id: z.string().trim().default(""),
+});
+
+export async function addOpsContractLineAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+
+  const parsed = lineSchema.safeParse({
+    description: field(formData, "description"),
+    quantity: field(formData, "quantity") || 1,
+    uom: field(formData, "uom") || "Item",
+    rate: field(formData, "rate") || 0,
+    cost_code_id: field(formData, "cost_code_id"),
+  });
+
+  if (!parsed.success) {
+    contractError(
+      parsed.error.issues[0]?.message ?? "Check the line and try again.",
+      contract.id,
+    );
+  }
+
+  const input = parsed.data;
+
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase.from("contract_lines").insert({
+    contract_id: contract.id,
+    description: input.description,
+    quantity: input.quantity,
+    uom: input.uom,
+    rate: input.rate,
+    // Amount is computed, not accepted from the form — a typed amount that
+    // disagreed with qty x rate is exactly the defect in the source document.
+    amount: roundOpsMoney(input.quantity * input.rate),
+    cost_code_id: input.cost_code_id || null,
+    sort_order: contract.lines.length + 1,
+  });
+
+  await recomputeOpsContractTotals(contract.id);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=line`);
+}
+
+export async function deleteOpsContractLineAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase
+    .from("contract_lines")
+    .delete()
+    .eq("id", field(formData, "line_id"))
+    .eq("contract_id", contract.id);
+
+  await recomputeOpsContractTotals(contract.id);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=line_removed`);
+}
+
+// ---------------------------------------------------------------------------
+// Payment milestones
+// ---------------------------------------------------------------------------
+
+const milestoneSchema = z.object({
+  label: z.string().trim().min(2, "Name the payment stage.").max(200),
+  percent: z.coerce.number().min(0).max(100),
+  trigger_description: z.string().trim().max(1000).default(""),
+  payable_within_days: z.coerce.number().int().min(0).max(365).default(14),
+  is_retention: z.boolean().default(false),
+});
+
+export async function addOpsContractMilestoneAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+
+  const parsed = milestoneSchema.safeParse({
+    label: field(formData, "label"),
+    percent: field(formData, "percent") || 0,
+    trigger_description: field(formData, "trigger_description"),
+    payable_within_days: field(formData, "payable_within_days") || 14,
+    is_retention: formData.get("is_retention") === "on",
+  });
+
+  if (!parsed.success) {
+    contractError(
+      parsed.error.issues[0]?.message ?? "Check the milestone and try again.",
+      contract.id,
+    );
+  }
+
+  const input = parsed.data;
+
+  const runningTotal = contract.milestones.reduce(
+    (sum, milestone) => sum + Number(milestone.percent ?? 0),
+    0,
+  );
+
+  // Blocked at entry rather than only at submission: discovering at the end
+  // that the plan adds to 115% means re-editing every stage.
+  if (runningTotal + input.percent > 100.01) {
+    contractError(
+      `That would take the payment plan to ${(runningTotal + input.percent).toFixed(1)}%. ${(100 - runningTotal).toFixed(1)}% is unallocated.`,
+      contract.id,
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase.from("contract_milestones").insert({
+    contract_id: contract.id,
+    label: input.label,
+    percent: input.percent,
+    amount: opsContractMilestoneAmount(Number(contract.total_value ?? 0), input.percent),
+    trigger_description: input.trigger_description,
+    payable_within_days: input.payable_within_days,
+    is_retention: input.is_retention,
+    sort_order: contract.milestones.length + 1,
+  });
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=milestone`);
+}
+
+export async function deleteOpsContractMilestoneAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract } = await loadEditableContract(contractId);
+
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase
+    .from("contract_milestones")
+    .delete()
+    .eq("id", field(formData, "milestone_id"))
+    .eq("contract_id", contract.id);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=milestone_removed`);
+}
+
 const clauseSchema = z.object({
   clause_id: z.string().uuid(),
   contract_id: z.string().uuid(),
@@ -242,6 +707,13 @@ export async function updateOpsContractClauseAction(formData: FormData) {
 
   const clause = contract.clauses.find((row) => row.id === input.clause_id);
   if (!clause) contractError("That clause is not on this contract.", contract.id);
+
+  // Snapshot BEFORE the write, so the revision holds the previous wording.
+  await recordOpsContractRevision({
+    changedBy: profile.id,
+    contract,
+    changeSummary: `Edited the "${clause.heading || clause.section_key}" clause`,
+  });
 
   const supabase = getOpsSupabaseServiceClient();
   const { error } = await supabase
@@ -392,6 +864,79 @@ export async function submitOpsContractForReviewAction(formData: FormData) {
 }
 
 /**
+ * The counterparty's details as at approval, for the "TO" panel on the PDF.
+ *
+ * Reads whichever register the contract points at. Missing fields are stored as
+ * empty strings rather than omitted, so a later reader can tell "we had no TPIN
+ * for them" apart from "this snapshot predates the TPIN field".
+ */
+async function buildCounterpartySnapshot(contract: {
+  counterparty_type: string;
+  subcontractor_id: string | null;
+  employee_id: string | null;
+  counterparty_name: string;
+}) {
+  const supabase = getOpsSupabaseServiceClient();
+
+  if (contract.counterparty_type === "subcontractor" && contract.subcontractor_id) {
+    const { data } = await supabase
+      .from("subcontractors")
+      .select(
+        "company_name, contact_name, contact_phone, contact_email, tpin, registration_number",
+      )
+      .eq("id", contract.subcontractor_id)
+      .maybeSingle();
+
+    return {
+      name: data?.company_name ?? contract.counterparty_name,
+      address: "",
+      tpin: data?.tpin ?? "",
+      contact_name: data?.contact_name ?? "",
+      contact_phone: data?.contact_phone ?? "",
+      contact_email: data?.contact_email ?? "",
+      registration_number: data?.registration_number ?? "",
+    };
+  }
+
+  if (contract.employee_id) {
+    const { data } = await supabase
+      .from("employees")
+      .select("full_name, phone, email")
+      .eq("id", contract.employee_id)
+      .maybeSingle();
+
+    return {
+      name: data?.full_name ?? contract.counterparty_name,
+      address: "",
+      tpin: "",
+      contact_name: data?.full_name ?? "",
+      contact_phone: data?.phone ?? "",
+      contact_email: data?.email ?? "",
+      registration_number: "",
+    };
+  }
+
+  return { name: contract.counterparty_name };
+}
+
+/** Our own details as at approval, for the "FROM" panel. */
+async function buildOrgSnapshot() {
+  const org = await fetchOpsOrganizationProfile().catch(() => null);
+  if (!org) return {};
+
+  return {
+    legal_name: org.legal_name,
+    trading_name: org.trading_name,
+    headquarters_address: [org.address_line, org.city, org.country]
+      .filter((part) => Boolean(part && String(part).trim()))
+      .join(", "),
+    tpin: org.tpin,
+    email: org.email,
+    phone: org.phone_primary,
+  };
+}
+
+/**
  * Approve, and open the signature slots.
  *
  * The internal panel is HR, the General Manager and the Managing Director, in
@@ -416,12 +961,23 @@ export async function approveOpsContractAction(formData: FormData) {
 
   const supabase = getOpsSupabaseServiceClient();
 
+  // Freeze the parties at approval.
+  //
+  // Until this runs the contract renders from live joins, so tidying the
+  // subcontractor register or correcting the company address would silently
+  // rewrite an executed agreement. Approval is the right moment: it is the last
+  // point before signatures attach, and the wording stops moving here anyway.
+  const counterpartySnapshot = await buildCounterpartySnapshot(contract);
+  const orgSnapshot = await buildOrgSnapshot();
+
   const { error } = await supabase
     .from("contracts")
     .update({
       status: "approved" satisfies OpsContractStatus,
       approved_at: new Date().toISOString(),
       approved_by: profile.id,
+      counterparty_snapshot: counterpartySnapshot,
+      org_snapshot: orgSnapshot,
     })
     .eq("id", contract.id);
 
@@ -445,11 +1001,43 @@ export async function approveOpsContractAction(formData: FormData) {
     });
   }
 
+  // Commit the value against the project budget. Best-effort: a contract is a
+  // valid agreement whether or not the budget line took the commitment, so a
+  // failure here logs and continues rather than blocking approval.
+  const commitment = await postOpsContractCommitment({
+    actorUserId: profile.id,
+    contract,
+  });
+
+  const signatories = await fanoutToOpsAudiences({
+    actionNeeded: ["human_resource", "hr", "general_manager", "managing_director"],
+    extraUserIds: [contract.created_by],
+    excludeUserIds: [profile.id],
+  });
+
+  await Promise.all(
+    signatories.map((recipient) =>
+      queueOpsNotification({
+        actionHref: `${ROUTE}/${contract.id}`,
+        body: "Approved and open for signature. Sign with your own signature from the contract page.",
+        moduleKey: MODULE,
+        recipientId: recipient.id,
+        sourceId: contract.id,
+        sourceTable: "contracts",
+        title: `${contract.contract_number} is ready to sign`,
+      }).catch(() => null),
+    ),
+  );
+
   await recordOpsAuditEvent({
     action: "contract.approved",
     actorUserId: profile.id,
     entityId: contract.id,
     entityType: "contract",
+    metadata: {
+      commitment_posted: commitment.ok,
+      commitment_skipped_because: commitment.ok ? null : commitment.reason,
+    },
     moduleKey: MODULE,
     sourceId: contract.id,
     sourceTable: "contracts",
@@ -458,6 +1046,416 @@ export async function approveOpsContractAction(formData: FormData) {
 
   revalidateContract(contract.id);
   redirect(`${ROUTE}/${contract.id}?updated=approved`);
+}
+
+// ---------------------------------------------------------------------------
+// Certification and completion
+// ---------------------------------------------------------------------------
+
+/**
+ * Certify a milestone as complete, which raises the payable.
+ *
+ * This is the moment a contract becomes money. It does NOT post a journal:
+ * certification creates a claim in the payables queue, and the existing Finance
+ * approval decides when it becomes an accounting fact. A site engineer
+ * certifying work should not be able to move the general ledger.
+ */
+export async function certifyOpsContractMilestoneAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const contractId = field(formData, "contract_id");
+  const milestoneId = field(formData, "milestone_id");
+
+  const contract = await fetchOpsContractById(contractId);
+  if (!contract) contractError("Contract not found.");
+
+  if (!canCertifyOpsContractMilestone(profile.role)) {
+    contractError("Your role cannot certify contract milestones.", contract.id);
+  }
+  if (!["active", "signed"].includes(contract.status)) {
+    contractError(
+      "Only a live contract can have milestones certified. Record the countersigned copy first.",
+      contract.id,
+    );
+  }
+
+  const milestone = contract.milestones.find((row) => row.id === milestoneId);
+  if (!milestone) contractError("That milestone is not on this contract.", contract.id);
+  if (milestone.status !== "pending") {
+    contractError("That milestone has already been certified.", contract.id);
+  }
+
+  // Retention is released, not certified — it falls due after the defects
+  // liability period, and releasing it early is precisely the mistake the
+  // retention exists to prevent.
+  if (milestone.is_retention && !contract.completed_at) {
+    contractError(
+      "Retention is released after completion and the defects liability period, not certified as a stage.",
+      contract.id,
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { error } = await supabase
+    .from("contract_milestones")
+    .update({
+      status: "certified",
+      certified_at: new Date().toISOString(),
+      certified_by: profile.id,
+    })
+    .eq("id", milestone.id)
+    .eq("status", "pending");
+
+  if (error) contractError("The milestone could not be certified.", contract.id);
+
+  const payable = await raiseOpsContractMilestonePayable({
+    actorUserId: profile.id,
+    contract,
+    milestone,
+  });
+
+  if (payable.ok) {
+    await supabase
+      .from("contract_milestones")
+      .update({ status: "invoiced" })
+      .eq("id", milestone.id);
+  }
+
+  const recipients = await fanoutToOpsAudiences({
+    actionNeeded: ["finance_manager", "accountant"],
+    oversight: ["managing_director", "general_manager"],
+    excludeUserIds: [profile.id],
+  });
+
+  await Promise.all(
+    recipients.map((recipient) =>
+      queueOpsNotification({
+        actionHref: payable.ok ? "/ops/payment-requests?status=submitted" : `${ROUTE}/${contract.id}`,
+        body: payable.ok
+          ? `${formatContractMoney(Number(milestone.amount ?? 0), contract.currency_code)} is now in the payables queue.`
+          : `Certified, but no payable was raised (${payable.reason}). Raise it manually.`,
+        moduleKey: MODULE,
+        recipientId: recipient.id,
+        sourceId: contract.id,
+        sourceTable: "contracts",
+        title: `${contract.contract_number} — ${milestone.label} certified`,
+      }).catch(() => null),
+    ),
+  );
+
+  await recordOpsAuditEvent({
+    action: "contract.milestone_certified",
+    actorUserId: profile.id,
+    entityId: contract.id,
+    entityType: "contract",
+    metadata: {
+      milestone: milestone.label,
+      amount: Number(milestone.amount ?? 0),
+      payable_raised: payable.ok,
+    },
+    moduleKey: MODULE,
+    sourceId: contract.id,
+    sourceTable: "contracts",
+    summary: `${profile.full_name} certified ${milestone.label} on ${contract.contract_number}`,
+  }).catch(() => null);
+
+  revalidateContract(contract.id);
+  revalidatePath("/ops/payment-requests");
+  redirect(
+    `${ROUTE}/${contract.id}?updated=${payable.ok ? "certified" : "certified_no_payable"}`,
+  );
+}
+
+/**
+ * Mark the works complete.
+ *
+ * This starts two clocks that nothing else starts: the defects liability period
+ * after which retention is released, and the warranty. Both are computed here
+ * rather than left for someone to remember, because "someone remembers" is
+ * exactly how retention goes unclaimed.
+ */
+export async function completeOpsContractAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const contractId = field(formData, "contract_id");
+
+  const contract = await fetchOpsContractById(contractId);
+  if (!contract) contractError("Contract not found.");
+  if (!canCertifyOpsContractMilestone(profile.role)) {
+    contractError("Your role cannot complete contracts.", contract.id);
+  }
+  if (contract.status !== "active") {
+    contractError("Only an active contract can be completed.", contract.id);
+  }
+
+  const completedAt = new Date();
+  const releaseDue = new Date(completedAt);
+  releaseDue.setMonth(releaseDue.getMonth() + Number(contract.defects_liability_months ?? 0));
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  await supabase
+    .from("contracts")
+    .update({
+      status: "completed" satisfies OpsContractStatus,
+      completed_at: completedAt.toISOString(),
+    })
+    .eq("id", contract.id);
+
+  // Date the retention release so the daily sweep can chase it.
+  await supabase
+    .from("contract_milestones")
+    .update({ release_due_date: releaseDue.toISOString().slice(0, 10) })
+    .eq("contract_id", contract.id)
+    .eq("is_retention", true)
+    .neq("status", "paid");
+
+  await recordOpsAuditEvent({
+    action: "contract.completed",
+    actorUserId: profile.id,
+    entityId: contract.id,
+    entityType: "contract",
+    metadata: { retention_release_due: releaseDue.toISOString().slice(0, 10) },
+    moduleKey: MODULE,
+    sourceId: contract.id,
+    sourceTable: "contracts",
+    summary: `${profile.full_name} marked ${contract.contract_number} complete`,
+  }).catch(() => null);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=completed`);
+}
+
+/**
+ * Release retention once the defects liability period has run.
+ *
+ * Deliberately separate from certification: this is the one payment that must
+ * not be raised on the same click as the work being signed off.
+ */
+export async function releaseOpsContractRetentionAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const contractId = field(formData, "contract_id");
+  const milestoneId = field(formData, "milestone_id");
+
+  const contract = await fetchOpsContractById(contractId);
+  if (!contract) contractError("Contract not found.");
+  if (!canCertifyOpsContractMilestone(profile.role)) {
+    contractError("Your role cannot release retention.", contract.id);
+  }
+  if (!contract.completed_at) {
+    contractError("Retention is released after the contract is completed.", contract.id);
+  }
+
+  const milestone = contract.milestones.find((row) => row.id === milestoneId);
+  if (!milestone || !milestone.is_retention) {
+    contractError("That is not the retention on this contract.", contract.id);
+  }
+  if (milestone.status !== "pending") {
+    contractError("That retention has already been released.", contract.id);
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  await supabase
+    .from("contract_milestones")
+    .update({
+      status: "certified",
+      certified_at: new Date().toISOString(),
+      certified_by: profile.id,
+    })
+    .eq("id", milestone.id)
+    .eq("status", "pending");
+
+  const payable = await raiseOpsContractMilestonePayable({
+    actorUserId: profile.id,
+    contract,
+    milestone,
+  });
+
+  if (payable.ok) {
+    await supabase
+      .from("contract_milestones")
+      .update({ status: "invoiced" })
+      .eq("id", milestone.id);
+  }
+
+  await recordOpsAuditEvent({
+    action: "contract.retention_released",
+    actorUserId: profile.id,
+    entityId: contract.id,
+    entityType: "contract",
+    metadata: { amount: Number(milestone.amount ?? 0), payable_raised: payable.ok },
+    moduleKey: MODULE,
+    sourceId: contract.id,
+    sourceTable: "contracts",
+    summary: `${profile.full_name} released retention on ${contract.contract_number}`,
+  }).catch(() => null);
+
+  revalidateContract(contract.id);
+  revalidatePath("/ops/payment-requests");
+  redirect(`${ROUTE}/${contract.id}?updated=retention_released`);
+}
+
+/**
+ * Raise an addendum against an issued contract.
+ *
+ * An issued contract is immutable — that is what makes a signature mean
+ * anything. A variation therefore becomes a CHILD contract rather than an edit,
+ * which is also how the parent's signatures stay valid: they still attest to
+ * the wording they were taken against.
+ *
+ * The child starts as a draft with the parent's clauses copied in, so an
+ * addendum that only changes the price still carries the terms it inherits.
+ */
+export async function createOpsContractAddendumAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const contractId = field(formData, "contract_id");
+
+  const parent = await fetchOpsContractById(contractId);
+  if (!parent) contractError("Contract not found.");
+  if (!canDraftOpsContractKind(profile.role, parent.kind)) {
+    contractError("Your role cannot raise an addendum.", parent.id);
+  }
+  if (!["issued", "signed", "active"].includes(parent.status)) {
+    contractError(
+      "An addendum varies a live contract. Edit the draft directly instead.",
+      parent.id,
+    );
+  }
+  if (parent.parent_contract_id) {
+    contractError(
+      "Raise the addendum against the original contract, not against another addendum.",
+      parent.id,
+    );
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+
+  const { data: siblings } = await supabase
+    .from("contracts")
+    .select("addendum_number")
+    .eq("parent_contract_id", parent.id)
+    .order("addendum_number", { ascending: false })
+    .limit(1);
+
+  const nextNumber = Number(siblings?.[0]?.addendum_number ?? 0) + 1;
+
+  const { data: child, error } = await supabase
+    .from("contracts")
+    .insert({
+      template_id: parent.template_id,
+      template_version: parent.template_version,
+      kind: parent.kind,
+      status: "draft" satisfies OpsContractStatus,
+      counterparty_type: parent.counterparty_type,
+      subcontractor_id: parent.subcontractor_id,
+      employee_id: parent.employee_id,
+      site_id: parent.site_id,
+      cost_code_id: parent.cost_code_id,
+      parent_contract_id: parent.id,
+      addendum_number: nextNumber,
+      title: `Addendum ${nextNumber} to ${parent.contract_number} — ${parent.title}`,
+      // Terms are inherited, then edited. Starting from the parent's numbers
+      // means an addendum that changes only the price does not silently reset
+      // the penalty regime to template defaults.
+      currency_code: parent.currency_code,
+      vat_applicable: parent.vat_applicable,
+      vat_percent: parent.vat_percent,
+      retention_percent: parent.retention_percent,
+      penalty_percent_per_week: parent.penalty_percent_per_week,
+      penalty_cap_percent: parent.penalty_cap_percent,
+      variation_threshold_percent: parent.variation_threshold_percent,
+      warranty_months: parent.warranty_months,
+      defects_liability_months: parent.defects_liability_months,
+      min_workers: parent.min_workers,
+      payment_terms_days: parent.payment_terms_days,
+      created_by: profile.id,
+    })
+    .select("id, contract_number")
+    .single<{ id: string; contract_number: string }>();
+
+  if (error || !child) {
+    logOpsServerError(error, { module: MODULE, action: "createOpsContractAddendum" });
+    contractError(error?.message ?? "The addendum could not be created.", parent.id);
+  }
+
+  if (parent.clauses.length > 0) {
+    await supabase.from("contract_clauses").insert(
+      parent.clauses.map((clause) => ({
+        contract_id: child.id,
+        section_key: clause.section_key,
+        heading: clause.heading,
+        body_markdown: clause.body_markdown,
+        sort_order: clause.sort_order,
+        is_required: clause.is_required,
+        // The parent's wording becomes this addendum's baseline, so the diff
+        // shown to an approver is "what changed from the contract being
+        // varied" rather than "what changed from the master template".
+        is_customised: false,
+        template_body_snapshot: clause.body_markdown,
+      })),
+    );
+  }
+
+  await recordOpsAuditEvent({
+    action: "contract.addendum_created",
+    actorUserId: profile.id,
+    entityId: child.id,
+    entityType: "contract",
+    metadata: { parent: parent.contract_number, addendum_number: nextNumber },
+    moduleKey: MODULE,
+    sourceId: child.id,
+    sourceTable: "contracts",
+    summary: `${profile.full_name} raised addendum ${nextNumber} to ${parent.contract_number}`,
+  }).catch(() => null);
+
+  revalidateContract(parent.id);
+  redirect(`${ROUTE}/${child.id}?updated=addendum`);
+}
+
+/** Terminate a live contract and stand down its budget commitment. */
+export async function terminateOpsContractAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  const contractId = field(formData, "contract_id");
+  const reason = field(formData, "termination_reason").trim();
+
+  const contract = await fetchOpsContractById(contractId);
+  if (!contract) contractError("Contract not found.");
+  if (!canTerminateOpsContract(profile.role)) {
+    contractError("Your role cannot terminate contracts.", contract.id);
+  }
+  if (reason.length < 4) {
+    contractError("Give a reason for terminating this contract.", contract.id);
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { error } = await supabase
+    .from("contracts")
+    .update({
+      status: "terminated" satisfies OpsContractStatus,
+      terminated_at: new Date().toISOString(),
+      termination_reason: reason,
+    })
+    .eq("id", contract.id);
+
+  if (error) contractError(error.message, contract.id);
+
+  // The promised money is no longer promised. Cancelled, not deleted, so the
+  // budget can still answer "what happened to that commitment?".
+  await cancelOpsContractCommitment(contract);
+
+  await recordOpsAuditEvent({
+    action: "contract.terminated",
+    actorUserId: profile.id,
+    entityId: contract.id,
+    entityType: "contract",
+    metadata: { reason },
+    moduleKey: MODULE,
+    sourceId: contract.id,
+    sourceTable: "contracts",
+    summary: `${profile.full_name} terminated ${contract.contract_number}`,
+  }).catch(() => null);
+
+  revalidateContract(contract.id);
+  redirect(`${ROUTE}/${contract.id}?updated=terminated`);
 }
 
 // ---------------------------------------------------------------------------
@@ -726,7 +1724,6 @@ export async function declineOpsContractSignatureAction(formData: FormData) {
 export async function recordOpsContractCountersignatureAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   const contractId = field(formData, "contract_id");
-  const documentId = field(formData, "signed_document_id").trim();
 
   const contract = await fetchOpsContractById(contractId);
   if (!contract) contractError("Contract not found.");
@@ -736,8 +1733,44 @@ export async function recordOpsContractCountersignatureAction(formData: FormData
   if (contract.status !== "issued") {
     contractError("Only an issued contract can be countersigned.", contract.id);
   }
-  if (!documentId) {
-    contractError("Attach the signed copy first.", contract.id);
+
+  // The bytes went straight to R2 from the browser; the action only ever
+  // carries the key. A Server Action body is capped at 4.5 MB on Vercel, and a
+  // scanned contract is routinely larger than that.
+  const key = field(formData, "r2_key").trim();
+  const fileName = field(formData, "file_name").trim();
+
+  if (!key) {
+    contractError("Attach the signed copy before recording it.", contract.id);
+  }
+
+  const verified = await verifyOpsUploadedObject(key, fileName);
+  if (!verified.ok) {
+    contractError("That upload could not be verified. Try again.", contract.id);
+  }
+
+  const linked = await linkOpsRecordAttachment({
+    category: "contract",
+    checksum: verified.upload.checksum,
+    contentType: verified.upload.contentType,
+    fileName: verified.upload.fileName,
+    key: verified.upload.key,
+    label: contract.contract_number,
+    moduleKey: MODULE,
+    siteId: contract.site_id,
+    size: verified.upload.size,
+    sourceId: contract.id,
+    sourceTable: "contracts",
+    title: `${contract.contract_number} — signed copy`,
+    uploadedBy: profile.id,
+    // The executed agreement is commercially sensitive: it carries rates. It
+    // follows the same tier as the contract record rather than the workspace
+    // default, which is deliberately wider.
+    visibility: "management",
+  });
+
+  if (!linked.ok) {
+    contractError(linked.message, contract.id);
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -746,7 +1779,7 @@ export async function recordOpsContractCountersignatureAction(formData: FormData
     .update({
       status: "active" satisfies OpsContractStatus,
       signed_at: new Date().toISOString(),
-      signed_document_id: documentId,
+      signed_document_id: linked.documentId,
     })
     .eq("id", contract.id);
 

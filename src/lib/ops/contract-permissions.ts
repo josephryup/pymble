@@ -143,6 +143,30 @@ export function canTerminateOpsContract(role: OpsUserRole) {
 }
 
 /**
+ * Who may certify a stage as complete, which raises the payable.
+ *
+ * The people who can judge that the work is actually done — engineering and
+ * the QS — plus leadership. Finance is absent on purpose: certifying is a
+ * statement about the work, and the same person should not both certify it and
+ * approve the payment it triggers.
+ */
+const CERTIFY_ROLES: OpsUserRole[] = [
+  "developer",
+  "managing_director",
+  "general_manager",
+  "owner",
+  "manager",
+  "operations_manager",
+  "projects_manager",
+  "engineering_manager",
+  "quantity_surveyor",
+];
+
+export function canCertifyOpsContractMilestone(role: OpsUserRole) {
+  return CERTIFY_ROLES.includes(role);
+}
+
+/**
  * Whether this workspace role may occupy this signature slot.
  *
  * This is the fallback path only. The primary check is identity: a signature

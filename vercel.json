@@ -17,6 +17,10 @@
       "schedule": "30 4 * * *"
     },
     {
+      "path": "/api/ops/cron/contract-lifecycle",
+      "schedule": "45 4 * * *"
+    },
+    {
       "path": "/api/ops/cron/archive",
       "schedule": "0 2 1 * *"
     },
