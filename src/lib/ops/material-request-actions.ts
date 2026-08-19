@@ -1165,6 +1165,27 @@ async function applyMaterialRequestPricing(formData: FormData, mode: "save" | "s
     materialRequestError("One or more line items don't belong to this request.");
   }
 
+  // ── Competitive tender gate (§8.6), BEFORE anything is written ───────────
+  // The RFQ belongs BEFORE pricing, not after approval — running it afterwards
+  // proves nothing, since Finance has already authorised the money. Because
+  // suppliers are never invited externally (audit §9), recording comparison
+  // prices costs no round-trip, so this gate adds governance without delay.
+  //
+  // It runs here, ahead of the writes, because the old placement was after
+  // them (audit F1): a blocked request had its prices saved anyway, its state
+  // left behind, and nothing on screen explaining the split. Judged at the
+  // PROPOSED prices, so the threshold test sees the figure being sent rather
+  // than the stale one. Best-effort lookup: a policy hiccup must not strand a
+  // request that is otherwise ready.
+  if (mode === "send") {
+    const tender = await fetchOpsTenderRequirement(request.id, {
+      proposedUnitCosts: new Map(updates.map((u) => [u.item_id, u.actual_unit_cost])),
+    }).catch(() => null);
+    if (tender && tender.required && !tender.satisfied) {
+      materialRequestError(`${tender.reason} ${tender.remedy}`);
+    }
+  }
+
   // Apply updates serially (small N — at most a few line items per request).
   // Attaching the supplier price REPLACES the engineer estimate on that line, so
   // the request total, the line "Estimate" column, the finance cost approval, and
@@ -1228,20 +1249,8 @@ async function applyMaterialRequestPricing(formData: FormData, mode: "save" | "s
   );
   }
 
-  // Competitive tender gate (§8.6). The RFQ belongs BEFORE pricing, not after
-  // approval — running it afterwards proves nothing, since Finance has already
-  // authorised the money. Because suppliers are never invited externally
-  // (audit §9), recording comparison prices costs no round-trip, so this gate
-  // adds governance without adding delay. Best-effort: a policy lookup failure
-  // must not strand a priced request.
-  const tender = await fetchOpsTenderRequirement(request.id).catch(() => null);
-  if (tender && tender.required && !tender.satisfied) {
-    materialRequestError(
-      `${tender.reason} Raise an RFQ against this request and record the prices you compared, then send it to Finance.`,
-    );
-  }
-
   // "Send" mode: move the request to `priced` so Finance can approve the cost.
+  // The tender gate has already run, ahead of the writes above.
   const nowIso = new Date().toISOString();
   const { error: stateError } = await supabase
     .from("material_requests")
@@ -2314,6 +2323,37 @@ export async function cancelMaterialRequestAction(formData: FormData) {
     materialRequestId: request.id,
     keepState: "released",
   }).catch(() => null);
+
+  // Cancelling the request must also withdraw the approval it raised. Without
+  // this the approval stayed open and its steps stayed `pending`, so every
+  // cancelled request left a permanent item in its approvers' queues asking
+  // them to authorise something that no longer exists — 11 dead approvals
+  // carrying 13 pending steps had accumulated by 19 Aug 2026. Same shape as
+  // the reservation ghost above: a terminal state must release everything it
+  // was holding, queues included.
+  const { data: openApprovals } = await supabase
+    .from("approval_requests")
+    .select("id")
+    .eq("source_table", "material_requests")
+    .eq("source_id", request.id)
+    .in("status", ["draft", "submitted", "in_review"]);
+
+  const openApprovalIds = ((openApprovals ?? []) as Array<{ id: string }>).map(
+    (row) => row.id,
+  );
+
+  if (openApprovalIds.length > 0) {
+    await supabase
+      .from("approval_steps")
+      .update({ status: "cancelled" })
+      .in("approval_request_id", openApprovalIds)
+      .eq("status", "pending");
+
+    await supabase
+      .from("approval_requests")
+      .update({ status: "cancelled", resolved_at: nowIso })
+      .in("id", openApprovalIds);
+  }
 
   await recordOpsAuditEvent({
     action: "material_request.cancelled",

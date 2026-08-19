@@ -467,11 +467,30 @@ export async function createRfqFromMaterialRequestAction(formData: FormData) {
     rfqError("Material request was not found.");
   }
 
-  if (materialRequest.status !== "approved") {
+  // ── Why pricing states are allowed here (audit F1) ───────────────────────
+  // This used to accept `approved` only, which deadlocked the whole pricing
+  // stage: the tender gate refuses to send a request to Finance until an RFQ
+  // exists, a request only reaches `approved` by passing that gate, and this
+  // action refused to build the RFQ until it was already `approved`. The
+  // requisition demanded by the gate could never be created. Every one of the
+  // nine requests stranded in `pricing_pending` had zero RFQs for exactly this
+  // reason.
+  //
+  // The tender policy's own design says the RFQ belongs BEFORE pricing rather
+  // than after approval, so these are the states it must be creatable from.
+  const RFQ_SOURCE_STATES: OpsMaterialRequestStatus[] = [
+    "pricing_pending",
+    "priced",
+    "md_review",
+    "approved",
+    "partially_ordered",
+  ];
+
+  if (!RFQ_SOURCE_STATES.includes(materialRequest.status)) {
     rfqError(
       materialRequest.status === "ordered" || materialRequest.status === "closed"
         ? "That material request has already been procured."
-        : "Only finance-approved material requests can be turned into a requisition.",
+        : "A requisition can only be built once Operations has approved the request.",
     );
   }
 

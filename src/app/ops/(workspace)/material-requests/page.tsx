@@ -88,6 +88,11 @@ import {
   fetchOpsRequestBudgetPositions,
   type OpsRequestBudgetPosition,
 } from "@/lib/ops/budget-availability";
+import {
+  fetchOpsTenderRequirements,
+  type TenderRequirement,
+} from "@/lib/ops/tender-policy";
+import { createRfqFromMaterialRequestAction } from "@/lib/ops/rfq-po-actions";
 import { fetchProjectBudgetLineLabels } from "@/lib/ops/finance";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { formatOpsUserName } from "@/lib/ops/roles";
@@ -706,6 +711,80 @@ function DirectPurchaseForm({
   );
 }
 
+/**
+ * What the tender gate will say, shown from the moment the request has items.
+ *
+ * Previously this rule was invisible until Procurement had typed every price
+ * and pressed "Send to Finance" — and the refusal it produced named the wrong
+ * remedy (audit F1). Surfacing it here, with the cheapest fix stated and the
+ * requisition reachable in one click, is the difference between a control and
+ * a wall.
+ */
+function TenderRequirementNotice({
+  canPrice,
+  request,
+  requirement,
+}: {
+  canPrice: boolean;
+  request: OpsMaterialRequestSummary;
+  requirement: TenderRequirement | undefined;
+}) {
+  if (!requirement || !requirement.required) {
+    return null;
+  }
+
+  // Terminal and pre-approval states cannot be sent to Finance, so the gate is
+  // not yet news the reader can act on.
+  const relevant =
+    request.status === "pricing_pending" ||
+    request.status === "priced" ||
+    request.status === "submitted" ||
+    request.status === "in_review";
+  if (!relevant) {
+    return null;
+  }
+
+  if (requirement.satisfied) {
+    return (
+      <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs leading-5 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/25 dark:text-emerald-200">
+        <p className="font-bold">
+          <Target className="mr-1.5 inline size-3.5" aria-hidden="true" />
+          Comparison prices recorded
+        </p>
+        <p className="mt-0.5">
+          {requirement.reason} A requisition is on file against this request, so it can
+          go to Finance.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+      <p className="font-bold">
+        <AlertTriangle className="mr-1.5 inline size-3.5" aria-hidden="true" />
+        {requirement.rfqIsOnlyRemedy
+          ? "Comparison prices needed before Finance"
+          : "Supplier not confirmed for Finance"}
+      </p>
+      <p className="mt-0.5">{requirement.reason}</p>
+      <p className="mt-1 font-semibold">{requirement.remedy}</p>
+      {/* Only once Operations has approved: before that the requisition
+          action rightly refuses, and offering a button that errors is worse
+          than offering none. */}
+      {canPrice && (request.status === "pricing_pending" || request.status === "priced") ? (
+        <form action={createRfqFromMaterialRequestAction} className="mt-2">
+          <input name="material_request_id" type="hidden" value={request.id} />
+          <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
+            <ClipboardList className="size-4" aria-hidden="true" />
+            Record comparison prices
+          </OpsSubmitButton>
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
 function BudgetPositionNotice({
   position,
 }: {
@@ -1247,7 +1326,12 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
   }
   // These three are all keyed off `requests` and independent of each other, so
   // they run together rather than in series (UI/UX audit §1c).
-  const [budgetLineLabelById, costCodeChoicesBySiteId, budgetPositions] = await Promise.all([
+  const [
+    budgetLineLabelById,
+    costCodeChoicesBySiteId,
+    budgetPositions,
+    tenderRequirements,
+  ] = await Promise.all([
     fetchProjectBudgetLineLabels(
       requests.flatMap((request) => [request.budget_line_id, request.transport_budget_line_id]),
     ),
@@ -1263,6 +1347,12 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
     // of decision instead of learning about an overspend afterwards (audit D8).
     fetchOpsRequestBudgetPositions(requests.map((request) => request.id)).catch(
       () => new Map<string, OpsRequestBudgetPosition>(),
+    ),
+    // What the tender gate will say, read on the LIST rather than discovered
+    // by pressing "Send to Finance" (audit F1). A requirement you can only
+    // find out about by failing at the last step is a defect, not a control.
+    fetchOpsTenderRequirements(requests.map((request) => request.id)).catch(
+      () => new Map<string, TenderRequirement>(),
     ),
   ]);
   // Labels for codes already saved on items. Only "project" choices carry a
@@ -1791,6 +1881,14 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                       approval decision rather than after it (audit D8). Spend
                       is never blocked — see business decision §7.2. */}
                   <BudgetPositionNotice position={budgetPositions.get(request.id)} />
+
+                  {/* What the tender gate will say, read here rather than
+                      discovered by pressing "Send to Finance" (audit F1). */}
+                  <TenderRequirementNotice
+                    canPrice={canAttachMaterialRequestPricing(auth.profile.role)}
+                    request={request}
+                    requirement={tenderRequirements.get(request.id)}
+                  />
 
                   {canProcure &&
                   (request.status === "approved" ||
