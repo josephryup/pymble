@@ -36,6 +36,13 @@ import {
   optionalCostCodeSelectionSchema,
   resolveOpsCostCodeSelection,
 } from "@/lib/ops/cost-code-picker";
+import {
+  deriveMaterialRequestItemCostCode,
+  ensureSiteContingencyCostCode,
+  fetchMatchableScheduleLines,
+  resolveOpsCostCentreForScope,
+} from "@/lib/ops/cost-code-derivation";
+
 import { postCostEntryToGlSafe } from "@/lib/ops/gl-cost-bridge";
 import {
   transitionMaterialRequest,
@@ -430,16 +437,23 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     materialRequestError("You can only edit draft or rejected material requests you manage.");
   }
 
-  // Spend charges a leaf, never a phase — a phase total is the roll-up of its
-  // leaves, so booking at both levels on one branch would double-count.
-  const costCode = await resolveOpsCostCodeSelection({
-    selection: parsed.data.cost_code_id,
-    siteId: request.site_id,
+  // Derive where this line charges, now — not at submit time (audit F6).
+  // Explicit choice wins; otherwise the schedule line it matches, then the
+  // request's budget line, then the site's contingency leaf. Spend charges a
+  // leaf, never a phase: a phase total is the roll-up of its leaves, so
+  // booking at both levels on one branch would double-count.
+  const derived = await deriveMaterialRequestItemCostCode({
     actorUserId: profile.id,
-    leafOnly: true,
+    explicitSelection: parsed.data.cost_code_id,
+    boqLineItemId: parsed.data.boq_line_item_id,
+    itemName: parsed.data.item_name,
+    unit: parsed.data.unit,
+    requestId: request.id,
+    scope: request.scope,
+    siteId: request.site_id,
   });
-  if (!costCode.ok) {
-    materialRequestError(costCode.message);
+  if ("error" in derived) {
+    materialRequestError(derived.error);
   }
 
   const lineNumber = await nextMaterialRequestLineNumber(request.id);
@@ -455,14 +469,17 @@ export async function addMaterialRequestItemAction(formData: FormData) {
     supplier_id: parsed.data.supplier_id,
     supplier_name_freeform: parsed.data.supplier_name_freeform || null,
     unit: parsed.data.unit,
-    cost_code_id: costCode.costCodeId,
-    boq_line_item_id: parsed.data.boq_line_item_id,
+    cost_code_id: derived.costCodeId,
+    // A name match against the site's material schedule links the line too,
+    // so planned-vs-actual has something to compare — the manual form used to
+    // link nothing at all, only the CSV importer did (audit F6).
+    boq_line_item_id: derived.boqLineItemId,
     // Only meaningful when the item is off-schedule; a linked item is by
     // definition planned, so never carries a reason.
-    off_schedule_reason: parsed.data.boq_line_item_id
+    off_schedule_reason: derived.boqLineItemId
       ? null
       : (parsed.data.off_schedule_reason ?? null),
-    off_schedule_note: parsed.data.boq_line_item_id ? "" : parsed.data.off_schedule_note,
+    off_schedule_note: derived.boqLineItemId ? "" : parsed.data.off_schedule_note,
   });
 
   if (error) {
@@ -478,11 +495,17 @@ export async function addMaterialRequestItemAction(formData: FormData) {
       item_name: parsed.data.item_name,
       line_number: lineNumber,
       request_number: request.request_number,
+      // How the charge was worked out, so a surprising cost code can always
+      // be explained rather than argued about.
+      cost_code_source: derived.source,
+      cost_code_id: derived.costCodeId,
+      cost_centre_id: derived.costCentreId,
+      boq_line_item_id: derived.boqLineItemId,
     },
     moduleKey: "material_requests",
     sourceId: request.id,
     sourceTable: "material_requests",
-    summary: `Added item to ${request.request_number}`,
+    summary: `Added item to ${request.request_number} — ${derived.note}`,
   }).catch(() => null);
 
   revalidatePath(MATERIAL_REQUEST_ROUTE);
@@ -655,31 +678,18 @@ export async function importMaterialRequestItemsAction(formData: FormData) {
   // bulk-entered items keep the planned↔actual link instead of all arriving
   // as orphans. Conservative: an unmatched row simply imports unlinked, same
   // as before.
+  // Matching now runs against `issued` OR `priced` schedules (audit F6).
+  // Requiring `issued` left exactly one usable schedule in the whole system,
+  // and it had no lines — so every imported item came out unlinked. Generating
+  // a budget still waits for issue; knowing which planned line an item is for
+  // does not have to.
   let matchScheduleLine: ReturnType<typeof buildScheduleLineMatcher> | null = null;
   if (request.scope === "site" && request.site_id) {
-    const { data: liveDocs, error: liveDocError } = await supabase
-      .from("boq_documents")
-      .select("id")
-      .eq("site_id", request.site_id)
-      .eq("status", "issued")
-      .is("superseded_at", null)
-      .is("archived_at", null)
-      .is("deleted_at", null);
-    if (liveDocError) {
-      materialRequestError(liveDocError.message);
-    }
-    const liveDocIds = ((liveDocs ?? []) as Array<{ id: string }>).map((doc) => doc.id);
-    if (liveDocIds.length > 0) {
-      const { data: scheduleLines, error: scheduleLineError } = await supabase
-        .from("boq_line_items")
-        .select("id, description, unit")
-        .in("boq_id", liveDocIds);
-      if (scheduleLineError) {
-        materialRequestError(scheduleLineError.message);
-      }
-      matchScheduleLine = buildScheduleLineMatcher(
-        (scheduleLines ?? []) as Array<{ id: string; description: string; unit: string }>,
-      );
+    const scheduleLines = await fetchMatchableScheduleLines(request.site_id).catch(
+      () => null,
+    );
+    if (scheduleLines) {
+      matchScheduleLine = buildScheduleLineMatcher(scheduleLines);
     }
   }
 
@@ -938,12 +948,30 @@ export async function submitMaterialRequestForApprovalAction(formData: FormData)
     return { budgetLineId: null, transportBudgetLineId: null };
   });
 
-  // Stamp each item's WBS leaf from the schedule line it fulfils, so the
-  // availability check at approval and the ledger both have a cost code to
-  // work with. Items with no schedule link fall back to the budget line's
-  // code, which for ad-hoc requests is the unplanned/contingency leaf — that
-  // is what makes off-schedule spend visible rather than untracked.
+  // Backstop for anything still uncoded at submit.
+  //
+  // Lines added through the form are now derived at write time, but items can
+  // also arrive by CSV import or predate this change, and a request must never
+  // reach an approver with spend that charges nowhere. So: schedule line
+  // first, then the budget line just resolved, then the site's contingency
+  // leaf. Contingency is not a good home — but it is a TRUE one, and it makes
+  // off-schedule spend visible instead of untracked (audit F6).
+  //
+  // Requests with no site take the other branch entirely: there is no project
+  // WBS to charge, so they carry a cost centre (audit F7).
   await (async () => {
+    if (!request.site_id) {
+      const costCentreId = await resolveOpsCostCentreForScope(request.scope);
+      if (costCentreId) {
+        await supabase
+          .from("material_requests")
+          .update({ cost_centre_id: costCentreId })
+          .eq("id", request.id)
+          .is("cost_centre_id", null);
+      }
+      return;
+    }
+
     const linkedItems = items.filter((item) => item.boq_line_item_id);
     if (linkedItems.length > 0) {
       const { data: scheduleLines } = await supabase
@@ -980,6 +1008,27 @@ export async function submitMaterialRequestForApprovalAction(formData: FormData)
         await supabase
           .from("material_request_items")
           .update({ cost_code_id: line.cost_code_id })
+          .eq("request_id", request.id)
+          .is("cost_code_id", null);
+      }
+    }
+
+    // Whatever is still uncoded charges contingency rather than nothing.
+    const { count: stillUncoded } = await supabase
+      .from("material_request_items")
+      .select("id", { count: "exact", head: true })
+      .eq("request_id", request.id)
+      .is("cost_code_id", null);
+
+    if ((stillUncoded ?? 0) > 0) {
+      const contingencyId = await ensureSiteContingencyCostCode(
+        request.site_id,
+        profile.id,
+      );
+      if (contingencyId) {
+        await supabase
+          .from("material_request_items")
+          .update({ cost_code_id: contingencyId })
           .eq("request_id", request.id)
           .is("cost_code_id", null);
       }

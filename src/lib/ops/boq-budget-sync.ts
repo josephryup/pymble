@@ -1,3 +1,7 @@
+import {
+  ensureSiteContingencyCostCode,
+  ensureSiteTransportCostCode,
+} from "@/lib/ops/cost-code-derivation";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsProjectBudgetStatus } from "@/lib/ops/types";
 
@@ -38,6 +42,8 @@ export type BoqLineForSync = {
   category: string;
   budgeted_total: number | string;
   estimated_transport_cost: number | string;
+  /** The WBS leaf the schedule line charges, so the budget line can inherit it. */
+  cost_code_id?: string | null;
 };
 
 type ProjectBudgetForSync = {
@@ -49,6 +55,8 @@ type BudgetLineForSync = {
   id: string;
   category: string;
   line_number: number;
+  cost_code_id: string | null;
+  boq_id: string | null;
 };
 
 function normalizeMoney(value: number | string | null | undefined) {
@@ -66,9 +74,21 @@ function normalizeMoney(value: number | string | null | undefined) {
 export function aggregateBoqBudgetTotals(lines: BoqLineForSync[]): {
   totalsByCategory: Map<string, number>;
   transportTotal: number;
+  /**
+   * The WBS leaf each category's budget line should carry — the one most of
+   * the category's schedule lines charge.
+   *
+   * Without this the generated budget line got no `cost_code_id` at all, which
+   * every control keys on: the availability bands, the roll-up and every
+   * variance report read that column and nothing else. A budget line without
+   * it is money nothing can see (audit F5).
+   */
+  costCodeByCategory: Map<string, string>;
 } {
   const totalsByCategory = new Map<string, number>();
+  const costCodeVotes = new Map<string, Map<string, number>>();
   let transportTotal = 0;
+
   for (const line of lines) {
     const category = line.category || "general";
     totalsByCategory.set(
@@ -76,8 +96,30 @@ export function aggregateBoqBudgetTotals(lines: BoqLineForSync[]): {
       (totalsByCategory.get(category) ?? 0) + normalizeMoney(line.budgeted_total),
     );
     transportTotal += normalizeMoney(line.estimated_transport_cost);
+
+    if (line.cost_code_id) {
+      const votes = costCodeVotes.get(category) ?? new Map<string, number>();
+      votes.set(line.cost_code_id, (votes.get(line.cost_code_id) ?? 0) + 1);
+      costCodeVotes.set(category, votes);
+    }
   }
-  return { totalsByCategory, transportTotal };
+
+  const costCodeByCategory = new Map<string, string>();
+  for (const [category, votes] of costCodeVotes) {
+    let winner: string | null = null;
+    let best = 0;
+    for (const [costCodeId, count] of votes) {
+      if (count > best) {
+        winner = costCodeId;
+        best = count;
+      }
+    }
+    if (winner) {
+      costCodeByCategory.set(category, winner);
+    }
+  }
+
+  return { totalsByCategory, transportTotal, costCodeByCategory };
 }
 
 function labelForCategory(category: string) {
@@ -156,8 +198,15 @@ export async function ensureBudgetLineForCategory(
   description?: string,
 ): Promise<{ budgetId: string; budgetLineId: string }> {
   const budget = await findOrCreateSiteBudget(siteId, "Unplanned spend", actorUserId);
+  // These two lazy lines are exactly where uncoded spend used to land, so they
+  // above all need a real leaf to point at (audit F5).
+  const costCodeId =
+    category === TRANSPORT_CATEGORY
+      ? await ensureSiteTransportCostCode(siteId, actorUserId).catch(() => null)
+      : await ensureSiteContingencyCostCode(siteId, actorUserId).catch(() => null);
   const lineId = await upsertBudgetLineByCategory(budget.id, category, 0, actorUserId, {
     description,
+    costCodeId,
     // Never shrink an existing line's budgeted_amount back to zero; only
     // create it if missing.
     updateAmount: false,
@@ -188,14 +237,21 @@ async function upsertBudgetLineByCategory(
   category: string,
   budgetedAmount: number,
   actorUserId: string,
-  options: { description?: string; updateAmount?: boolean } = {},
+  options: {
+    description?: string;
+    updateAmount?: boolean;
+    /** The WBS leaf this line carries. Without it the line is invisible. */
+    costCodeId?: string | null;
+    /** The schedule that generated it, so the link is traceable both ways. */
+    boqId?: string | null;
+  } = {},
 ): Promise<string> {
   const supabase = getOpsSupabaseServiceClient();
   const updateAmount = options.updateAmount ?? true;
 
   const { data: existing, error: existingError } = await supabase
     .from("project_budget_lines")
-    .select("id, category, line_number")
+    .select("id, category, line_number, cost_code_id, boq_id")
     .eq("budget_id", budgetId)
     .eq("category", category)
     .eq("source", BOQ_LINE_SOURCE)
@@ -206,10 +262,23 @@ async function upsertBudgetLineByCategory(
   }
 
   if (existing) {
+    const patch: Record<string, unknown> = {};
     if (updateAmount) {
+      patch.budgeted_amount = budgetedAmount;
+    }
+    // Fill in a code the line is missing, but never overwrite one Finance has
+    // deliberately set — re-issuing a schedule must not silently recode
+    // existing budget.
+    if (options.costCodeId && !existing.cost_code_id) {
+      patch.cost_code_id = options.costCodeId;
+    }
+    if (options.boqId && !existing.boq_id) {
+      patch.boq_id = options.boqId;
+    }
+    if (Object.keys(patch).length > 0) {
       const { error: updateError } = await supabase
         .from("project_budget_lines")
-        .update({ budgeted_amount: budgetedAmount })
+        .update(patch)
         .eq("id", existing.id);
       if (updateError) {
         throw updateError;
@@ -243,6 +312,10 @@ async function upsertBudgetLineByCategory(
       budget_id: budgetId,
       line_number: lineNumber,
       cost_code: costCodeForCategory(category),
+      // The real link. `cost_code` above is a free-text label; `cost_code_id`
+      // is what every control actually reads (audit F5).
+      cost_code_id: options.costCodeId ?? null,
+      boq_id: options.boqId ?? null,
       category,
       description,
       budgeted_amount: budgetedAmount,
@@ -309,7 +382,7 @@ export async function syncProjectBudgetFromBoq(boqId: string, actorUserId: strin
   if (liveDocIds.length > 0) {
     const { data: lineRows, error: lineError } = await supabase
       .from("boq_line_items")
-      .select("category, budgeted_total, estimated_transport_cost")
+      .select("category, budgeted_total, estimated_transport_cost, cost_code_id")
       .in("boq_id", liveDocIds);
 
     if (lineError) {
@@ -326,16 +399,34 @@ export async function syncProjectBudgetFromBoq(boqId: string, actorUserId: strin
     throw new LockedBudgetError(budget.id);
   }
 
-  const { totalsByCategory, transportTotal } = aggregateBoqBudgetTotals(lines);
+  const { totalsByCategory, transportTotal, costCodeByCategory } =
+    aggregateBoqBudgetTotals(lines);
 
   for (const [category, amount] of totalsByCategory) {
-    await upsertBudgetLineByCategory(budget.id, category, amount, actorUserId);
+    await upsertBudgetLineByCategory(budget.id, category, amount, actorUserId, {
+      // Inherited from the schedule lines the total was summed from, so the
+      // budget and the spend that charges against it agree on where the money
+      // sits without anyone typing it twice.
+      costCodeId: costCodeByCategory.get(category) ?? null,
+      boqId: document.id,
+    });
   }
 
   // Always ensure the dedicated transport line exists once a schedule has
   // been issued, even if the current estimate is zero, so material requests
   // always have somewhere to resolve transport_budget_line_id to.
-  await upsertBudgetLineByCategory(budget.id, TRANSPORT_CATEGORY, transportTotal, actorUserId);
+  await upsertBudgetLineByCategory(
+    budget.id,
+    TRANSPORT_CATEGORY,
+    transportTotal,
+    actorUserId,
+    {
+      costCodeId: await ensureSiteTransportCostCode(document.site_id, actorUserId).catch(
+        () => null,
+      ),
+      boqId: document.id,
+    },
+  );
 
   // A revision can drop a category entirely. Zero the schedule-owned lines it
   // no longer covers rather than deleting them — cost entries may already

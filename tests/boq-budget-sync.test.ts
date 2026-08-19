@@ -68,3 +68,56 @@ describe("aggregateBoqBudgetTotals", () => {
     assert.equal(transportTotal, 0);
   });
 });
+
+// ── Audit F5 ───────────────────────────────────────────────────────────────
+// The generated budget line used to carry `cost_code` (free text) and nothing
+// else. Every control — the availability bands, the per-leaf roll-up, every
+// variance report — reads `cost_code_id`, so a line without one is money
+// nothing can see. Zero budget lines in the database had ever come from a
+// schedule, so the defect had never been observed in the wild.
+describe("aggregateBoqBudgetTotals — cost code inheritance (F5)", () => {
+  it("gives each category the leaf its schedule lines charge", () => {
+    const { costCodeByCategory } = aggregateBoqBudgetTotals([
+      line({ category: "concrete_works", cost_code_id: "cc-concrete" }),
+      line({ category: "roofing", cost_code_id: "cc-roof" }),
+    ]);
+
+    assert.equal(costCodeByCategory.get("concrete_works"), "cc-concrete");
+    assert.equal(costCodeByCategory.get("roofing"), "cc-roof");
+  });
+
+  it("picks the leaf most of the category's lines charge", () => {
+    // A category spanning several leaves has to land somewhere; the majority
+    // is the only defensible pick, and the roll-up still sees the rest through
+    // the items themselves.
+    const { costCodeByCategory } = aggregateBoqBudgetTotals([
+      line({ category: "concrete_works", cost_code_id: "cc-a" }),
+      line({ category: "concrete_works", cost_code_id: "cc-a" }),
+      line({ category: "concrete_works", cost_code_id: "cc-b" }),
+    ]);
+
+    assert.equal(costCodeByCategory.get("concrete_works"), "cc-a");
+  });
+
+  it("reports nothing for a category whose lines carry no code", () => {
+    // Better an absent entry the caller can fall back from than a wrong one.
+    const { costCodeByCategory } = aggregateBoqBudgetTotals([
+      line({ category: "concrete_works", cost_code_id: null }),
+      line({ category: "roofing" }),
+    ]);
+
+    assert.equal(costCodeByCategory.has("concrete_works"), false);
+    assert.equal(costCodeByCategory.has("roofing"), false);
+  });
+
+  it("still sums the money when no line carries a code", () => {
+    // Cost-code inheritance must not disturb the arithmetic it rides along on.
+    const { totalsByCategory, transportTotal } = aggregateBoqBudgetTotals([
+      line({ category: "roofing", budgeted_total: 100, estimated_transport_cost: 10 }),
+      line({ category: "roofing", budgeted_total: 250, estimated_transport_cost: 5 }),
+    ]);
+
+    assert.equal(totalsByCategory.get("roofing"), 350);
+    assert.equal(transportTotal, 15);
+  });
+});

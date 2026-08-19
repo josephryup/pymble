@@ -207,18 +207,43 @@ The audit said two rival writers reached `ordered`. Tracing it properly found **
 
 **Verified:** 1,133 tests pass (11 new), `tsc` and `eslint` clean.
 
-### Phase 2 — Make the links derive themselves (~4 days)
+### Phase 2 — Make the links derive themselves ✅ *delivered 19 Aug 2026*
 
 This is the phase that answers *"cost codes shouldn't be fixed manually."*
 
-- **P2.1** Move cost-code resolution from submit-time to **write-time**: `addMaterialRequestItemAction` inherits from the linked schedule line, then the site's active budget line for the category, then the contingency leaf — in that order, on insert. *(F6)*
-- **P2.2** Run `buildScheduleLineMatcher` in the **manual** add-item form too, not only the CSV import, and show the proposed match inline ("matches *Cement 32.5N, bags* on Schedule S-004 — use it?"). *(F6)*
-- **P2.3** Relax schedule matching from `issued`-only to `issued` *or* `priced`, so a schedule under pricing still guides requests. Gate the *budget* on issue, not the *matching*. *(F6)*
-- **P2.4** Fix `upsertBudgetLineByCategory` to write `cost_code_id` and `boq_id`. *(F5)*
-- **P2.5** Give non-site scopes a real home: resolve `it`/`general` requests to a **cost centre** instead of a project cost code, and change the banner to name it. *(F7)*
-- **P2.6** Backfill migration: stamp cost codes on the 107 uncoded items and the 16 uncoded budget lines, using the same resolution order. Report what could not be resolved rather than leaving it null.
+- **P2.1 ✅** `cost-code-derivation.ts` resolves the code at **write time**, in specific-to-general order: an explicit pick, then the schedule line the item is linked to *or matches by name*, then the request's budget line, then the site's contingency leaf. The chain always answers — for a site-scoped request the result is never null. *(F6)*
+- **P2.2 ✅** The matcher now runs in the **manual** add-item form, not only the CSV import, and a name match links the line to the schedule as well as inheriting its code. *(F6)*
+- **P2.3 ✅** Matching accepts `issued` **or** `priced` schedules. Generating a budget still waits for issue — that is a financial commitment; knowing which planned line an item is for is not. *(F6)*
+- **P2.4 ✅** The BOQ→budget sync writes `cost_code_id` and `boq_id`. The code is inherited from the schedule lines the total was summed from (majority wins), so budget and spend agree without anyone typing it twice. An existing code is never overwritten — re-issuing a schedule must not silently recode Finance's work. *(F5)*
+- **P2.5 ✅** IT and general requests resolve to a **cost centre** (IT / Head Office), and both the banner and the per-line badge now say so instead of promising a contingency budget that cannot exist without a site. *(F7)*
+- **P2.6 ✅** Backfill applied. A SQL twin of the provisioning function (`ops_ensure_project_cost_code`) means sites with **no** WBS at all could be backfilled rather than skipped.
 
-**Exit test:** a new request on an active-budget site, built entirely through the UI with no cost-code dropdown touched, arrives at Finance fully coded and charged to the right leaf.
+**Exit test:** ✅ verified against production.
+
+| | Before | After |
+|---|---|---|
+| Budget lines with no cost code | 16 of 37 | **0** |
+| Site-scoped items with no cost code | 84 | **0** |
+| Requests with no site and no cost centre | 1 | **0** |
+| Sites with any cost-code nodes | 5 of 11 | **8 of 11** |
+| Cost-code nodes | 32 | **48** |
+
+**Verified:** 1,145 tests pass (12 new), `tsc` and `eslint` clean.
+
+#### What the backfill exposed — read this before Phase 3
+
+Coding the spine made the real position visible for the first time, and it is worse than the audit could see:
+
+| Site | Contingency budgeted | Charged to contingency |
+|---|---|---|
+| PARROGATE WAREHOUSES | **K0** | **K1,051,555** |
+| RUBIS SERVICE STATION | **K0** | **K989,531** |
+| COCA COLA DECANTING | K120,000 | K820 |
+| SIATONTOLA ROAD | K1,474,345 | K0 |
+
+**465 of 468 site-scoped line items — K2.26M — charge the unplanned/contingency leaf**, because the material schedule is empty and there is nothing to match them against. Only 3 items in the entire system charge real work (cement, PPE, labour).
+
+This is not a failure of the backfill. It is the backfill doing its job: that K2M was *always* landing nowhere, and now it lands somewhere with a number next to it — a number that is zero. The honest reading is that **cost coding cannot become meaningful until the material schedules are populated**, which is a data problem for the team, not a code problem. Phase 3 makes it impossible to miss.
 
 ### Phase 3 — Make budget activation mean something (~3 days)
 

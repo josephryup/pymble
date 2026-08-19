@@ -414,10 +414,17 @@ function MaterialRequestItems({
                     <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                       {costCodeLabelById.get(item.cost_code_id) ?? "Cost code set"}
                     </span>
-                  ) : (
+                  ) : request.site_id ? (
                     <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
                       <AlertTriangle className="size-3" aria-hidden="true" />
                       No cost code — charges unplanned
+                    </span>
+                  ) : (
+                    /* No site, so no project WBS to charge. The line belongs to
+                       a cost centre, and flagging it as "missing" a cost code
+                       was asking for something that cannot exist (audit F7). */
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                      {request.scope === "it" ? "IT" : "Head office"} cost centre
                     </span>
                   )}
                 </p>
@@ -787,11 +794,34 @@ function TenderRequirementNotice({
 
 function BudgetPositionNotice({
   position,
+  request,
 }: {
   position: OpsRequestBudgetPosition | undefined;
+  request: OpsMaterialRequestSummary;
 }) {
   if (!position) {
     return null;
+  }
+
+  // A request with no site has no project WBS to charge, so a cost code is not
+  // something it is missing — it belongs to a cost centre instead. The old
+  // banner told IT and general requests their spend would "charge the
+  // unplanned / contingency budget", a destination that cannot exist without a
+  // site, and offered a dropdown that could never be filled (audit F7).
+  if (!request.site_id) {
+    return (
+      <div className="mt-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs leading-5 text-muted-foreground">
+        <p className="font-bold">
+          <Target className="mr-1.5 inline size-3.5" aria-hidden="true" />
+          {request.scope === "it" ? "IT" : "Head office"} overhead
+        </p>
+        <p className="mt-0.5">
+          This request is not against a project, so it charges the{" "}
+          {request.scope === "it" ? "IT" : "Head Office"} cost centre rather
+          than a project cost code.
+        </p>
+      </div>
+    );
   }
 
   // No code on any item: there is no position to report, and saying nothing
@@ -1880,7 +1910,10 @@ export default async function OpsMaterialRequestsPage({ searchParams }: PageProp
                   {/* Funds available on the cost code, shown BEFORE the
                       approval decision rather than after it (audit D8). Spend
                       is never blocked — see business decision §7.2. */}
-                  <BudgetPositionNotice position={budgetPositions.get(request.id)} />
+                  <BudgetPositionNotice
+                    position={budgetPositions.get(request.id)}
+                    request={request}
+                  />
 
                   {/* What the tender gate will say, read here rather than
                       discovered by pressing "Send to Finance" (audit F1). */}
