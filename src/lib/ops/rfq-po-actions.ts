@@ -23,6 +23,7 @@ import {
 } from "@/lib/ops/rfq-po-permissions";
 import { parseCsvRows, readPdfRows, readXlsxRows } from "@/lib/ops/boq-imports";
 import { collectOpsLineItems } from "@/lib/ops/line-items";
+import { settleMaterialRequestForPurchaseOrder } from "@/lib/ops/material-request-procurement";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsMaterialRequestScope,
@@ -1042,14 +1043,42 @@ export async function issuePurchaseOrderAction(formData: FormData) {
     rfqError(error?.message ?? "This purchase order is no longer ready to issue.");
   }
 
+  // Issuing an order is a procurement event, so it settles the request the
+  // same way a procurement round does: recompute fulfilment from the live
+  // purchase order lines, advance the request through the lifecycle table,
+  // write the committed cost entry and relieve the reservation.
+  //
+  // This replaces a bare `.update({ status: "ordered" })` that recorded no
+  // money at all (audit F2). Because issuing is the ordinary route to ordered,
+  // that silent path is the one production took — which is why all eight
+  // purchase orders in the database produced zero cost entries and the
+  // `committed` station was empty company-wide.
   if (purchaseOrder.material_request_id) {
-    await (async () => {
-      await supabase
-        .from("material_requests")
-        .update({ status: "ordered" })
-        .eq("id", purchaseOrder.material_request_id)
-        .in("status", ["approved", "submitted", "in_review"]);
-    })().catch(() => null);
+    await settleMaterialRequestForPurchaseOrder({
+      actorUserId: profile.id,
+      materialRequestId: purchaseOrder.material_request_id,
+      nowIso: now,
+      auditAction: "material_request.ordered_via_purchase_order",
+      poNumber: purchaseOrder.po_number,
+    }).catch((settlementError: unknown) =>
+      recordOpsAuditEvent({
+        action: "material_request.procurement_settlement_failed",
+        actorUserId: profile.id,
+        entityId: purchaseOrder.material_request_id,
+        entityType: "material_request",
+        metadata: {
+          po_number: purchaseOrder.po_number,
+          error:
+            settlementError instanceof Error
+              ? settlementError.message
+              : String(settlementError),
+        },
+        moduleKey: "material_requests",
+        sourceId: purchaseOrder.material_request_id,
+        sourceTable: "material_requests",
+        summary: `Could not settle the request behind ${purchaseOrder.po_number} after issuing it`,
+      }).catch(() => null),
+    );
   }
 
   await recordOpsAuditEvent({
@@ -1391,16 +1420,35 @@ export async function convertRfqToPurchaseOrdersAction(formData: FormData) {
     .update({ status: "closed", closed_at: new Date().toISOString() })
     .eq("id", rfq.id);
 
-  // The requisition is complete once it has been converted into purchase
-  // orders, so close out the originating material request.
+  // ── Why this no longer closes the request (audit F10) ────────────────────
+  // It used to mark the material request `closed` here, on the reasoning that
+  // "the requisition is complete once it has been converted into purchase
+  // orders". But the orders this creates are DRAFTS — not approved, not
+  // issued, nothing ordered and nothing received. Closing on their creation
+  // declares the request finished at the exact moment the real work starts.
+  //
+  // That is not hypothetical: on 1 July four requests were closed by this line
+  // while the five orders they were closed for sat at `approval_pending` for
+  // the next seven weeks, un-actionable because their parent was closed. They
+  // had to be cancelled by hand in the Phase 0 repair.
+  //
+  // A request now advances when something actually happens to it: `ordered`
+  // when a purchase order is issued, `closed` when the goods are received.
   if (rfq.material_request_id) {
-    await (async () => {
-      await supabase
-        .from("material_requests")
-        .update({ status: "closed", closed_at: new Date().toISOString() })
-        .eq("id", rfq.material_request_id!)
-        .in("status", ["approved", "ordered"]);
-    })().catch(() => null);
+    await recordOpsAuditEvent({
+      action: "material_request.requisition_converted",
+      actorUserId: profile.id,
+      entityId: rfq.material_request_id,
+      entityType: "material_request",
+      metadata: {
+        rfq_number: rfq.rfq_number,
+        purchase_orders_created: createdPoIds.length,
+      },
+      moduleKey: "material_requests",
+      sourceId: rfq.material_request_id,
+      sourceTable: "material_requests",
+      summary: `${createdPoIds.length} draft purchase order(s) raised from ${rfq.rfq_number}; the request stays open until they are issued.`,
+    }).catch(() => null);
   }
 
   await recordOpsAuditEvent({

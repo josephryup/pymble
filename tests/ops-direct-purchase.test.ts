@@ -159,23 +159,100 @@ describe("recordDirectPurchaseAction", () => {
   });
 });
 
-describe("both doors to procured share one settlement", () => {
-  it("neither action recomputes stations for itself", () => {
+// The settlement moved to its own module in Phase 1 of the workflow audit:
+// procure-actions.ts carries "use server", so nothing could import from it
+// without turning the settlement into a public server action — which is why
+// the THIRD door, issuePurchaseOrderAction, grew its own two-line version that
+// recorded no money at all (audit F2).
+const SETTLEMENT_SOURCE = readFileSync(
+  join(
+    import.meta.dirname,
+    "..",
+    "src",
+    "lib",
+    "ops",
+    "material-request-procurement.ts",
+  ),
+  "utf8",
+);
+
+const ISSUE_SOURCE = readFileSync(
+  join(import.meta.dirname, "..", "src", "lib", "ops", "rfq-po-actions.ts"),
+  "utf8",
+);
+
+/**
+ * Source with comments removed.
+ *
+ * These invariants are about what the code DOES, and the comments explaining
+ * the bugs being guarded against quote the very patterns being banned.
+ */
+function codeOnly(source: string) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*/g, "");
+}
+
+describe("every door to procured shares one settlement", () => {
+  it("no action recomputes stations for itself", () => {
     for (const action of ["procureMaterialRequestAction", "recordDirectPurchaseAction"]) {
-      const start = SOURCE.indexOf(`export async function ${action}`);
-      assert.notEqual(start, -1, `${action} not found`);
+      assert.notEqual(
+        SOURCE.indexOf(`export async function ${action}`),
+        -1,
+        `${action} not found`,
+      );
     }
 
-    // `deriveRequestFulfilment` and the committed/reserved upserts must appear
-    // exactly once in the file — inside settleProcurementRound.
-    const derives = SOURCE.match(/deriveRequestFulfilment\(/g) ?? [];
+    // The arithmetic lives in exactly one place. Anywhere else is a path that
+    // can drift — and drift here means money silently not recorded.
+    const derives = codeOnly(SETTLEMENT_SOURCE).match(/deriveRequestFulfilment\(/g) ?? [];
     assert.equal(
       derives.length,
       1,
-      "fulfilment must be derived in one place only, or the two paths can disagree",
+      "fulfilment must be derived in one place only, or the paths can disagree",
     );
 
-    const committed = SOURCE.match(/lifecycleState:\s*"committed"/g) ?? [];
+    const committed = codeOnly(SETTLEMENT_SOURCE).match(/lifecycleState:\s*"committed"/g) ?? [];
     assert.equal(committed.length, 1, "the committed station is written in one place only");
+
+    for (const [name, source] of [
+      ["procure-actions", SOURCE],
+      ["rfq-po-actions", ISSUE_SOURCE],
+    ] as const) {
+      assert.equal(
+        (codeOnly(source).match(/deriveRequestFulfilment\(/g) ?? []).length,
+        0,
+        `${name} must call the shared settlement, not derive fulfilment itself`,
+      );
+      assert.equal(
+        (codeOnly(source).match(/lifecycleState:\s*"committed"/g) ?? []).length,
+        0,
+        `${name} must not write the committed station directly`,
+      );
+    }
+  });
+
+  it("issuing a purchase order settles the request (F2)", () => {
+    // The regression this replaces: `.update({ status: "ordered" })` with no
+    // cost entry and no reservation relief. Because issuing is the ordinary
+    // route to ordered, that silent path is the one production took — all 8
+    // purchase orders in the database produced zero cost entries.
+    assert.match(codeOnly(ISSUE_SOURCE), /settleMaterialRequestForPurchaseOrder\(/);
+    assert.doesNotMatch(codeOnly(ISSUE_SOURCE), /\.update\(\{\s*status:\s*"ordered"\s*\}\)/);
+  });
+
+  it("no path writes the request status without the lifecycle table", () => {
+    // Audit F2/F9/F10: ten scattered writers, most with no prior-state guard.
+    for (const [name, source] of [
+      ["procure-actions", SOURCE],
+      ["rfq-po-actions", ISSUE_SOURCE],
+      ["settlement", SETTLEMENT_SOURCE],
+    ] as const) {
+      const directStatusWrites =
+        codeOnly(source).match(/from\("material_requests"\)[\s\S]{0,200}?status:/g) ?? [];
+      assert.equal(
+        directStatusWrites.length,
+        0,
+        `${name} writes material_requests.status directly; use transitionMaterialRequest()`,
+      );
+    }
   });
 });

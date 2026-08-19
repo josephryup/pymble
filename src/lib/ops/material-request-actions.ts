@@ -37,6 +37,12 @@ import {
   resolveOpsCostCodeSelection,
 } from "@/lib/ops/cost-code-picker";
 import { postCostEntryToGlSafe } from "@/lib/ops/gl-cost-bridge";
+import {
+  transitionMaterialRequest,
+  withdrawOpenMaterialRequestApprovals,
+  type MaterialRequestEdge,
+} from "@/lib/ops/material-request-lifecycle";
+
 import { buildScheduleLineMatcher } from "@/lib/ops/material-schedule-match";
 import { fetchOpsTenderRequirement } from "@/lib/ops/tender-policy";
 import { resolveMaterialRequestBudgetLine } from "@/lib/ops/material-requests";
@@ -1252,12 +1258,17 @@ async function applyMaterialRequestPricing(formData: FormData, mode: "save" | "s
   // "Send" mode: move the request to `priced` so Finance can approve the cost.
   // The tender gate has already run, ahead of the writes above.
   const nowIso = new Date().toISOString();
-  const { error: stateError } = await supabase
-    .from("material_requests")
-    .update({ status: "priced", priced_at: nowIso, priced_by: profile.id })
-    .eq("id", request.id);
-  if (stateError) {
-    materialRequestError(stateError.message);
+  const priceTransition = await transitionMaterialRequest({
+    requestId: request.id,
+    edge: "priced",
+    actorUserId: profile.id,
+    patch: { priced_at: nowIso, priced_by: profile.id },
+    reason: "procurement sent prices to Finance",
+  });
+  if (!priceTransition.applied) {
+    materialRequestError(
+      "This request has moved on since you opened it — refresh to see where it is now.",
+    );
   }
 
   await recordOpsAuditEvent({
@@ -1399,34 +1410,40 @@ export async function decideMaterialRequestCostAction(formData: FormData) {
     decisionIsApprove && request.status === "priced" && request.scope === "it";
   const isFinalApproval = decisionIsApprove && !movesToMdReview;
 
-  const update: {
-    status: OpsMaterialRequestStatus;
-    approved_at?: string | null;
-    cost_approved_at?: string | null;
-    cost_approved_by?: string | null;
-    rejected_at?: string | null;
-  } = {
-    status: decisionIsApprove ? (movesToMdReview ? "md_review" : "approved") : "rejected",
-  };
+  const costEdge: MaterialRequestEdge = decisionIsApprove
+    ? movesToMdReview
+      ? "cost_md_review"
+      : "cost_approved"
+    : "cost_rejected";
+
+  const patch: Record<string, unknown> = {};
   if (isFinalApproval) {
-    update.approved_at = nowIso;
+    patch.approved_at = nowIso;
     // The authority to spend, in its own column. `approved_at` is also written
     // when the Operations chain completes, so on its own it cannot say whether
     // Finance has decided — a report reading it counted requests still out for
     // pricing as approved spend.
-    update.cost_approved_at = nowIso;
-    update.cost_approved_by = profile.id;
-    update.rejected_at = null;
+    patch.cost_approved_at = nowIso;
+    patch.cost_approved_by = profile.id;
+    patch.rejected_at = null;
   } else if (!decisionIsApprove) {
-    update.rejected_at = nowIso;
+    patch.rejected_at = nowIso;
   }
 
-  const { error: stateError } = await supabase
-    .from("material_requests")
-    .update(update)
-    .eq("id", request.id);
-  if (stateError) {
-    materialRequestError(stateError.message);
+  // Restricted to the stage this decision was actually taken on, so a decision
+  // read from a stale screen cannot approve a request that has since moved.
+  const costTransition = await transitionMaterialRequest({
+    requestId: request.id,
+    edge: costEdge,
+    actorUserId: profile.id,
+    patch,
+    restrictFrom: [request.status],
+    reason: `${request.status === "md_review" ? "MD" : "Finance"} ${decisionParsed.data.decision}`,
+  });
+  if (!costTransition.applied) {
+    materialRequestError(
+      "This request has moved on since you opened it — refresh to see where it is now.",
+    );
   }
 
   // Final approval RESERVES the spend against the project budget: funds are
@@ -1765,36 +1782,30 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
   const nowIso = new Date().toISOString();
   const receivedInFull = parsed.data.received_in_full;
 
-  const update: {
-    status: OpsMaterialRequestStatus;
-    delivered_at: string;
-    delivered_by: string;
-    delivery_notes: string;
-    closed_at?: string;
-  } = {
-    status: receivedInFull ? "closed" : "delivered",
+  const deliveryPatch: Record<string, unknown> = {
     delivered_at: deliveredAt,
     delivered_by: profile.id,
     delivery_notes: parsed.data.notes,
   };
   if (receivedInFull) {
-    update.closed_at = nowIso;
+    deliveryPatch.closed_at = nowIso;
   }
 
   const supabase = getOpsSupabaseServiceClient();
-  const { data: updated, error } = await supabase
-    .from("material_requests")
-    .update(update)
-    .eq("id", request.id)
-    // Partially-ordered requests can receive their procured goods before the
-    // outstanding items are sourced — see canConfirmMaterialRequestDelivery.
-    .in("status", ["ordered", "partially_ordered"])
-    .select("id")
-    .maybeSingle<{ id: string }>();
-  if (error || !updated) {
+  // Partially-ordered requests can receive their procured goods before the
+  // outstanding items are sourced — see canConfirmMaterialRequestDelivery — so
+  // both are legal prior states for this edge.
+  const deliveryTransition = await transitionMaterialRequest({
+    requestId: request.id,
+    edge: receivedInFull ? "closed" : "delivered",
+    actorUserId: profile.id,
+    patch: deliveryPatch,
+    restrictFrom: ["ordered", "partially_ordered"],
+    reason: receivedInFull ? "received in full" : "partial delivery confirmed",
+  });
+  if (!deliveryTransition.applied) {
     materialRequestError(
-      error?.message ??
-        "This request is no longer awaiting delivery confirmation. Refresh and try again.",
+      "This request is no longer awaiting delivery confirmation. Refresh and try again.",
     );
   }
 
@@ -2299,18 +2310,18 @@ export async function cancelMaterialRequestAction(formData: FormData) {
     );
   }
 
-  const supabase = getOpsSupabaseServiceClient();
   const nowIso = new Date().toISOString();
-  const { error } = await supabase
-    .from("material_requests")
-    .update({
-      status: "cancelled",
-      cancelled_at: nowIso,
-      cancelled_by: profile.id,
-    })
-    .eq("id", parsed.data.request_id);
-  if (error) {
-    materialRequestError(error.message);
+  const cancelTransition = await transitionMaterialRequest({
+    requestId: request.id,
+    edge: "cancelled",
+    actorUserId: profile.id,
+    patch: { cancelled_at: nowIso, cancelled_by: profile.id },
+    reason: parsed.data.reason || "cancelled by user",
+  });
+  if (!cancelTransition.applied) {
+    materialRequestError(
+      "This material request can no longer be cancelled — it has already been ordered or closed.",
+    );
   }
 
   // Cancelling releases every station the request was holding, so the funds
@@ -2331,29 +2342,10 @@ export async function cancelMaterialRequestAction(formData: FormData) {
   // carrying 13 pending steps had accumulated by 19 Aug 2026. Same shape as
   // the reservation ghost above: a terminal state must release everything it
   // was holding, queues included.
-  const { data: openApprovals } = await supabase
-    .from("approval_requests")
-    .select("id")
-    .eq("source_table", "material_requests")
-    .eq("source_id", request.id)
-    .in("status", ["draft", "submitted", "in_review"]);
-
-  const openApprovalIds = ((openApprovals ?? []) as Array<{ id: string }>).map(
-    (row) => row.id,
-  );
-
-  if (openApprovalIds.length > 0) {
-    await supabase
-      .from("approval_steps")
-      .update({ status: "cancelled" })
-      .in("approval_request_id", openApprovalIds)
-      .eq("status", "pending");
-
-    await supabase
-      .from("approval_requests")
-      .update({ status: "cancelled", resolved_at: nowIso })
-      .in("id", openApprovalIds);
-  }
+  await withdrawOpenMaterialRequestApprovals({
+    requestId: request.id,
+    resolvedAtIso: nowIso,
+  }).catch(() => 0);
 
   await recordOpsAuditEvent({
     action: "material_request.cancelled",

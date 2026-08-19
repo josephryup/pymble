@@ -14,10 +14,13 @@ import {
 import { fanoutToOpsRoles } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
 import { formatOpsRole } from "@/lib/ops/roles";
+import {
+  transitionMaterialRequest,
+  type MaterialRequestEdge,
+} from "@/lib/ops/material-request-lifecycle";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsApprovalStatus,
-  OpsMaterialRequestStatus,
   OpsPurchaseOrderStatus,
   OpsUserRole,
 } from "@/lib/ops/types";
@@ -116,40 +119,45 @@ async function syncMaterialRequestApprovalStatus(
   // request enters `pricing_pending` (waiting for procurement to attach supplier
   // prices). The legacy "approved" terminal state is now reached later, when
   // Finance approves the cost via approveMaterialRequestCostAction.
-  let mappedStatus: OpsMaterialRequestStatus;
-  if (status === "approved") {
-    mappedStatus = "pricing_pending";
-  } else {
-    mappedStatus = status as OpsMaterialRequestStatus;
-  }
+  //
+  // ── Why this goes through the lifecycle table (audit F9) ─────────────────
+  // This used to write the status with `.eq("id", sourceId)` and no filter on
+  // the CURRENT status at all — while its purchase-order twin twelve lines
+  // below correctly guarded on `approval_pending`. A stale tab, a double
+  // submit or a re-decided approval could therefore throw a request that had
+  // already been priced, cost-approved or ordered all the way back to
+  // `pricing_pending`, wiping the meaning of its timestamps on the way.
+  //
+  // `transitionMaterialRequest` only writes when the request is somewhere the
+  // edge accepts, so a late decision on a superseded approval is now a
+  // recorded no-op instead of silent corruption.
+  const edge: MaterialRequestEdge =
+    status === "approved"
+      ? "operations_approved"
+      : status === "rejected"
+        ? "operations_rejected"
+        : "operations_review";
 
-  const update: {
-    approved_at?: string | null;
-    rejected_at?: string | null;
-    status: OpsMaterialRequestStatus;
-  } = {
-    status: mappedStatus,
-  };
-
+  const patch: Record<string, unknown> = {};
   if (status === "approved") {
     // The ops step is what's been approved here — record that this is when
     // operations gave the green light. The "fully approved" timestamp is set
     // by the finance cost approval action.
-    update.approved_at = decidedAt;
-    update.rejected_at = null;
+    patch.approved_at = decidedAt;
+    patch.rejected_at = null;
   }
-
   if (status === "rejected") {
-    update.approved_at = null;
-    update.rejected_at = decidedAt;
+    patch.approved_at = null;
+    patch.rejected_at = decidedAt;
   }
 
-  const supabase = getOpsSupabaseServiceClient();
-  const { error } = await supabase.from("material_requests").update(update).eq("id", sourceId);
-
-  if (error) {
-    throw error;
-  }
+  await transitionMaterialRequest({
+    requestId: sourceId,
+    edge,
+    actorUserId: null,
+    patch,
+    reason: `approval decision: ${status}`,
+  });
 }
 
 async function syncPurchaseOrderApprovalStatus(

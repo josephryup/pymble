@@ -15,6 +15,7 @@ import {
   canRecordOpsGoodsReceived,
   canTransferOpsStock,
 } from "@/lib/ops/stores-inventory-permissions";
+import { transitionMaterialRequest } from "@/lib/ops/material-request-lifecycle";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsInventoryLocationType,
@@ -450,7 +451,10 @@ async function applyStockReceipt(input: {
   });
 }
 
-async function syncPurchaseOrderReceiptStatus(purchaseOrder: PurchaseOrderForReceipt) {
+async function syncPurchaseOrderReceiptStatus(
+  purchaseOrder: PurchaseOrderForReceipt,
+  actorUserId: string,
+) {
   const supabase = getOpsSupabaseServiceClient();
   const { data: items, error: itemError } = await supabase
     .from("purchase_order_items")
@@ -506,16 +510,21 @@ async function syncPurchaseOrderReceiptStatus(purchaseOrder: PurchaseOrderForRec
   }
 
   if (isClosed && purchaseOrder.material_request_id) {
-    await (async () => {
-      // Stores receipt is the fallback close path (Option A). It closes a request
-      // whether or not the requester has confirmed delivery — including one that
-      // is resting in `delivered` after a partial confirmation.
-      await supabase
-        .from("material_requests")
-        .update({ status: "closed", closed_at: now })
-        .eq("id", purchaseOrder.material_request_id)
-        .in("status", ["approved", "ordered", "delivered"]);
-    })().catch(() => null);
+    // Stores receipt is the fallback close path (Option A). It closes a request
+    // whether or not the requester has confirmed delivery — including one that
+    // is resting in `delivered` after a partial confirmation.
+    //
+    // `approved` is no longer accepted here (audit F10): a request that was
+    // never ordered has nothing to receive against, and allowing it was part
+    // of how requests came to be closed while their purchase orders sat
+    // unissued. The lifecycle table now owns that rule.
+    await transitionMaterialRequest({
+      requestId: purchaseOrder.material_request_id,
+      edge: "closed",
+      actorUserId: actorUserId,
+      patch: { closed_at: now },
+      reason: "goods received in full at stores",
+    }).catch(() => null);
   }
 }
 
@@ -1017,7 +1026,7 @@ export async function recordGoodsReceivedAction(formData: FormData) {
     storesError(error instanceof Error ? error.message : "Could not post inventory movement.");
   }
 
-  await syncPurchaseOrderReceiptStatus(purchaseOrder).catch((error: unknown) =>
+  await syncPurchaseOrderReceiptStatus(purchaseOrder, profile.id).catch((error: unknown) =>
     recordOpsAuditEvent({
       action: "goods_received.po_status_sync_failed",
       actorUserId: profile.id,

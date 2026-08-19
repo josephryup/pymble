@@ -191,15 +191,21 @@ Nothing structural. Purely: stop the bleeding.
 | Purchase orders stuck at `approval_pending` | 5 | **0** |
 | Requests that can reach Finance | 0 of 9 | **9 of 9** |
 
-### Phase 1 — One writer per transition (~3 days)
+### Phase 1 — One writer per transition ✅ *delivered 19 Aug 2026*
 
-- **P1.1** Extract `src/lib/ops/material-request-lifecycle.ts`: a single exported transition per edge (`submit`, `priceAndSend`, `decideCost`, `markOrdered`, `confirmDelivery`, `close`, `cancel`), each declaring its legal `from` states and performing *all* side-effects.
-- **P1.2** Make `issuePurchaseOrderAction` and `procureMaterialRequestAction` both call `markOrdered`. Delete the divergent inline updates. *(F2)*
-- **P1.3** Wrap each transition in a Postgres function or an explicit transaction so status + cost entry + budget relief commit together or not at all. *(F2, F11)*
-- **P1.4** Guard `syncMaterialRequestApprovalStatus` with an explicit `from`-state filter, matching its PO twin. *(F9)*
-- **P1.5** Add a database `CHECK`-backed transition table so an illegal move fails at the database, not just in code.
+The audit said two rival writers reached `ordered`. Tracing it properly found **ten** writers of `material_requests.status` across five files, most with no prior-state guard at all — and a **third** door to `ordered`, plus a fourth path that closed requests outright.
 
-**Exit test:** a test that drives one request through every state via *both* the RFQ/PO screen and the procurement screen and asserts identical cost-entry output.
+- **P1.1 ✅** `src/lib/ops/material-request-lifecycle.ts` declares all 13 edges once, with their legal `from` states, and exports `transitionMaterialRequest` — a conditional writer that leaves a moved-on request **alone** and records the refusal instead of overwriting newer state. All ten writers now go through it.
+- **P1.2 ✅** The settlement arithmetic moved to `material-request-procurement.ts`. It could not be shared before because `procure-actions.ts` carries `"use server"`, so importing it would have made it a public server action — *that* is why `issuePurchaseOrderAction` grew its own two-line copy. Both doors now call the same code, and issuing an order finally writes the committed cost entry and relieves the reservation. *(F2)*
+- **P1.3 ✅** Status and its stamps (`ordered_at`, `cost_approved_by`, …) are now written in **one** update. Previously a refused transition still left its timestamps behind.
+- **P1.4 ✅** `syncMaterialRequestApprovalStatus` goes through the table, so a stale approval can no longer throw a priced or ordered request back to `pricing_pending`. *(F9)*
+- **P1.5 ✅** A Postgres trigger enforces the same table at the database. Verified against production in a rolled-back transaction: 7/7 checks — legal edges allowed, `priced → pricing_pending` blocked, `approved → closed` blocked, no-op updates untouched.
+
+**Also found and fixed during Phase 1 — the cause of the ghost POs:** `convertRfqToPurchaseOrdersAction` marked the material request `closed` as soon as it created **draft** purchase orders. Not approved, not issued, nothing ordered or received — the request was declared finished at the exact moment the real work started. That is precisely how four requests came to be `closed` on 1 July against five orders that then sat unapproved for seven weeks. A request now advances only when something real happens: `ordered` when an order is issued, `closed` when goods are received.
+
+**Exit test:** ✅ `ops-direct-purchase.test.ts` now asserts all three doors share one settlement, that none derives fulfilment or writes the committed station itself, and that none writes status directly. Plus 9 new table invariants in `ops-material-request-lifecycle.test.ts` — including that no terminal request can move and that every live status is reachable from `draft`.
+
+**Verified:** 1,133 tests pass (11 new), `tsc` and `eslint` clean.
 
 ### Phase 2 — Make the links derive themselves (~4 days)
 
