@@ -62,6 +62,10 @@ import {
 } from "@/lib/ops/cost-code-picker";
 import { OpsCostCodePicker } from "@/components/ops/OpsCostCodePicker";
 import { parseOpsListState } from "@/lib/ops/listing";
+import {
+  fetchOpsBudgetHealth,
+  type BudgetHealthIssue,
+} from "@/lib/ops/budget-health";
 import { canAccessOpsHref } from "@/lib/ops/permissions";
 import { fetchOpsProjectPnl } from "@/lib/ops/project-pnl";
 import { fetchActiveSiteOptions } from "@/lib/ops/sites";
@@ -122,12 +126,20 @@ function projectBudgetNotice(params: OpsSearchParams) {
     locked: "Project budget locked.",
   };
 
-  return updated && messages[updated]
-    ? {
-        message: messages[updated],
-        tone: "success" as const,
-      }
-    : null;
+  if (!updated || !messages[updated]) {
+    return null;
+  }
+
+  // Activation reports what it actually linked (audit F3). A budget going live
+  // now rewrites every open request on the site, and "Project budget
+  // activated." on its own is exactly the uninformative confirmation that made
+  // the step look like it did nothing.
+  const detail = firstParam(params.detail);
+
+  return {
+    message: detail ? `${detail}` : messages[updated],
+    tone: "success" as const,
+  };
 }
 
 /**
@@ -389,6 +401,54 @@ function AddBudgetLineForm({
   );
 }
 
+/**
+ * The budget-health strip.
+ *
+ * Deliberately a short list of specific facts with a named next step, not a
+ * chart. Every issue here was true in production and invisible: K59,720 spent
+ * against a draft budget on RUBIS, K137,550 on PARROGATE, K1.4M of budget with
+ * no cost code, and K2.26M charging contingency because the material schedules
+ * are empty. A number nobody can act on is decoration.
+ */
+function BudgetHealthStrip({ issues }: { issues: BudgetHealthIssue[] }) {
+  if (issues.length === 0) {
+    return null;
+  }
+
+  const critical = issues.filter((issue) => issue.severity === "critical").length;
+
+  return (
+    <section
+      aria-label="Budget health"
+      className="rounded-md border border-amber-300/60 bg-amber-50/70 p-4 dark:border-amber-900/50 dark:bg-amber-950/25"
+    >
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-amber-900 dark:text-amber-200">
+        <AlertTriangle className="mr-1.5 inline size-3.5" aria-hidden="true" />
+        Budget health — {issues.length} thing{issues.length === 1 ? "" : "s"} to fix
+        {critical > 0 ? `, ${critical} urgent` : ""}
+      </p>
+      <ul className="mt-3 grid gap-2">
+        {issues.map((issue, index) => (
+          <li
+            key={`${issue.kind}-${issue.siteId ?? index}`}
+            className="rounded-md border border-border bg-card px-3 py-2"
+          >
+            <p className="text-sm font-bold text-foreground">
+              {issue.severity === "critical" ? (
+                <span className="mr-2 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                  Urgent
+                </span>
+              ) : null}
+              {issue.headline}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{issue.action}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default async function OpsProjectBudgetsPage({ searchParams }: PageProps) {
   const [params, auth] = await Promise.all([
     searchParams ?? Promise.resolve({} as OpsSearchParams),
@@ -401,7 +461,8 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
 
   const listState = parseOpsListState(params, { defaultPageSize: 8 });
   const status = statusFromParam(firstParam(params.status));
-  const [budgetPage, stats, varianceDashboard, siteOptions, projectPnl] = await Promise.all([
+  const [budgetPage, stats, varianceDashboard, siteOptions, projectPnl, budgetHealth] =
+    await Promise.all([
     fetchPaginatedOpsProjectBudgets({
       listState,
       query: listState.query,
@@ -411,6 +472,9 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
     fetchOpsBudgetVarianceDashboard(),
     fetchActiveSiteOptions(),
     fetchOpsProjectPnl(),
+    // Why a budget is not governing anything, stated plainly. The reason this
+    // audit was needed is that nothing was watching (audit F3, F4, F6).
+    fetchOpsBudgetHealth().catch(() => [] as BudgetHealthIssue[]),
   ]);
   const budgetSiteIds = [
     ...new Set(
@@ -486,6 +550,8 @@ export default async function OpsProjectBudgetsPage({ searchParams }: PageProps)
           {notice.message}
         </div>
       ) : null}
+
+      <BudgetHealthStrip issues={budgetHealth} />
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <OpsKpiCard

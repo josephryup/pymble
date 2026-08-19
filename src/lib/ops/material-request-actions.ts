@@ -1915,12 +1915,70 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
         : null,
     ].filter((id): id is string => Boolean(id));
 
-    await Promise.all(
-      entryIds.map((costEntryId) =>
-        postCostEntryToGlSafe({ actorUserId: profile.id, costEntryId }).catch(() => null),
-      ),
+    // Non-blocking by intent — a ledger hiccup must never stop a site
+    // confirming a delivery. But "must not block" is NOT "is discarded"
+    // (audit F8): every failure now leaves an audit row, and the entry keeps
+    // `journal_entry_id = null`, which the GL reconciliation on /ops/finance
+    // reports as a break with a Repair button beside it.
+    const glResults = await Promise.all(
+      entryIds.map(async (costEntryId) => {
+        try {
+          return await postCostEntryToGlSafe({ actorUserId: profile.id, costEntryId });
+        } catch (glError: unknown) {
+          return {
+            posted: false,
+            reason: glError instanceof Error ? glError.message : "threw",
+          };
+        }
+      }),
     );
+
+    const glFailures = glResults.filter((result) => !result.posted && result.reason !== "already_posted");
+    if (glFailures.length > 0) {
+      await recordOpsAuditEvent({
+        action: "material_request.gl_posting_failed",
+        actorUserId: profile.id,
+        entityId: request.id,
+        entityType: "material_request",
+        metadata: {
+          request_number: request.request_number,
+          failed: glFailures.length,
+          reasons: glFailures.map((failure) => failure.reason ?? "unknown"),
+        },
+        moduleKey: "material_requests",
+        sourceId: request.id,
+        sourceTable: "material_requests",
+        summary: `${glFailures.length} cost entr${glFailures.length === 1 ? "y" : "ies"} on ${request.request_number} did not reach the general ledger`,
+      }).catch(() => null);
+    }
   }
+
+  // ── Receipt evidence (audit F10) ─────────────────────────────────────────
+  // Confirming delivery books the cost as `actual`, which is the company
+  // saying the goods arrived. A goods received note is the evidence for that,
+  // and the three-way match (order ⇄ receipt ⇄ invoice) is built on it — but
+  // there are ZERO goods received notes in the system, so the match has never
+  // had anything to work with.
+  //
+  // Deliberately RECORDED, not required. Making a GRN mandatory today would
+  // block every delivery the site can currently confirm, which is a worse
+  // outcome than a documented gap. Recording it means the gap is countable,
+  // and the company can turn it into a rule once Stores is actually using the
+  // receipt screen.
+  const { count: grnCount } = await supabase
+    .from("goods_received_notes")
+    .select("id", { count: "exact", head: true })
+    .in(
+      "purchase_order_id",
+      (
+        (
+          await supabase
+            .from("purchase_orders")
+            .select("id")
+            .eq("material_request_id", request.id)
+        ).data ?? ([] as Array<{ id: string }>)
+      ).map((row) => (row as { id: string }).id),
+    );
 
   await recordOpsAuditEvent({
     action: receivedInFull
@@ -1934,6 +1992,9 @@ export async function confirmMaterialRequestDeliveryAction(formData: FormData) {
       delivered_at: deliveredAt,
       received_in_full: receivedInFull,
       notes: parsed.data.notes,
+      // False means the cost was booked as actual on somebody's word alone.
+      backed_by_goods_received_note: (grnCount ?? 0) > 0,
+      goods_received_notes: grnCount ?? 0,
     },
     moduleKey: "material_requests",
     sourceId: request.id,

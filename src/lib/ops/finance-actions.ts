@@ -24,6 +24,7 @@ import {
   canCancelOpsPaymentRequest,
   canCreateOpsPaymentRequest,
   canCreateOpsProjectBudget,
+  canManageOpsProjectBudget,
   canDeleteOpsPaymentRequest,
   canEditOpsProjectBudget,
   canEditOpsPaymentRequest,
@@ -40,6 +41,11 @@ import {
   statusForLifecycleState,
   upsertProjectCostEntry,
 } from "@/lib/ops/project-cost-entries";
+import {
+  describeBudgetActivation,
+  reconcileSiteToActivatedBudget,
+} from "@/lib/ops/budget-activation";
+import { retryOpsUnpostedCostEntries } from "@/lib/ops/gl-cost-bridge";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type {
   OpsPaymentRequestStatus,
@@ -49,6 +55,8 @@ import type {
 } from "@/lib/ops/types";
 
 const PROJECT_BUDGETS_ROUTE = "/ops/project-budgets";
+// Activation now rewrites requests, so their screen has to be revalidated too.
+const MATERIAL_REQUEST_ROUTE_FOR_BUDGETS = "/ops/material-requests";
 const PAYMENT_REQUESTS_ROUTE = "/ops/payment-requests";
 
 const projectBudgetSchema = z.object({
@@ -934,6 +942,32 @@ export async function activateProjectBudgetAction(formData: FormData) {
     );
   }
 
+  // A budget line with no cost code funds nothing: the availability bands, the
+  // per-leaf roll-up and every variance report read `cost_code_id` and nothing
+  // else. Activating one is announcing governance the system cannot deliver,
+  // so it is refused here rather than discovered later as a silent gap (audit
+  // F4 — 16 of 37 lines were in this state, including two budgets that were
+  // 100% uncoded).
+  const { data: uncodedLines } = await supabase
+    .from("project_budget_lines")
+    .select("line_number, description")
+    .eq("budget_id", budget.id)
+    .is("cost_code_id", null)
+    .order("line_number", { ascending: true });
+
+  const uncoded = (uncodedLines ?? []) as Array<{
+    line_number: number;
+    description: string;
+  }>;
+  if (uncoded.length > 0) {
+    budgetError(
+      `${uncoded.length} line${uncoded.length === 1 ? "" : "s"} on this budget ${uncoded.length === 1 ? "has" : "have"} no cost code (line ${uncoded
+        .slice(0, 3)
+        .map((line) => line.line_number)
+        .join(", ")}${uncoded.length > 3 ? "…" : ""}), so ${uncoded.length === 1 ? "it" : "they"} would fund nothing. Set a cost code on each line, then activate.`,
+    );
+  }
+
   const { error } = await supabase
     .from("project_budgets")
     .update({ active_at: now, active_by: profile.id, status: "active" })
@@ -944,12 +978,39 @@ export async function activateProjectBudgetAction(formData: FormData) {
     budgetError(error.message);
   }
 
+  // Activation is a reconciliation, not a flag (audit F3): every request
+  // already open on this site is attached to the budget now going live, so it
+  // governs the work that is actually happening rather than only what is
+  // booked after it. Best-effort — the budget IS active either way, and a
+  // linking hiccup must not leave it half-activated.
+  const reconciliation = await reconcileSiteToActivatedBudget({
+    budgetId: budget.id,
+    siteId: budget.site_id,
+    actorUserId: profile.id,
+  }).catch((reconcileError: unknown) => {
+    void recordOpsAuditEvent({
+      action: "project_budget.reconcile_on_activation_failed",
+      actorUserId: profile.id,
+      entityId: budget.id,
+      entityType: "project_budget",
+      metadata: {
+        error:
+          reconcileError instanceof Error ? reconcileError.message : String(reconcileError),
+      },
+      moduleKey: "project_budgets",
+      sourceId: budget.id,
+      sourceTable: "project_budgets",
+      summary: `Could not link open requests to the newly activated budget ${budget.title}`,
+    }).catch(() => null);
+    return null;
+  });
+
   await recordOpsAuditEvent({
     action: "project_budget.activated",
     actorUserId: profile.id,
     entityId: budget.id,
     entityType: "project_budget",
-    metadata: { activated_at: now },
+    metadata: { activated_at: now, reconciliation },
     moduleKey: "project_budgets",
     sourceId: budget.id,
     sourceTable: "project_budgets",
@@ -957,11 +1018,17 @@ export async function activateProjectBudgetAction(formData: FormData) {
   }).catch(() => null);
 
   revalidatePath(PROJECT_BUDGETS_ROUTE);
+  revalidatePath(MATERIAL_REQUEST_ROUTE_FOR_BUDGETS);
   redirect(
     opsReturnTo({
       returnTo: field(formData, "return_to"),
       fallback: PROJECT_BUDGETS_ROUTE,
-      params: { updated: "activated" },
+      params: {
+        updated: "activated",
+        // What it actually did, so activation reads as an event rather than a
+        // checkbox nobody can see the effect of.
+        detail: reconciliation ? describeBudgetActivation(reconciliation) : "",
+      },
     }),
   );
 }
@@ -1929,4 +1996,48 @@ export async function deletePaymentRequestAction(formData: FormData) {
 
   revalidatePath(PAYMENT_REQUESTS_ROUTE);
   redirect(`${PAYMENT_REQUESTS_ROUTE}?updated=deleted`);
+}
+
+/**
+ * Post cost entries that should be in the general ledger and are not.
+ *
+ * The reconciliation panel on /ops/finance has always been able to SEE these
+ * breaks; there was no way to act on one (audit F8). Posting is non-blocking by
+ * design — a ledger hiccup must never stop a site confirming a delivery — but a
+ * non-blocking failure needs a way back, or "non-blocking" quietly becomes
+ * "never happens": all nine postable entries in the database were unposted
+ * while the whole ledger held four journals.
+ *
+ * Idempotent, so pressing it twice is harmless.
+ */
+export async function repairOpsUnpostedCostEntriesAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+
+  if (!canManageOpsProjectBudget(profile.role)) {
+    budgetError("Only Finance and leadership can post cost entries to the ledger.");
+  }
+
+  const result = await retryOpsUnpostedCostEntries({ actorUserId: profile.id }).catch(
+    (error: unknown) => {
+      budgetError(
+        error instanceof Error ? error.message : "Could not post the outstanding cost entries.",
+      );
+    },
+  );
+
+  revalidatePath("/ops/finance");
+  revalidatePath(PROJECT_BUDGETS_ROUTE);
+  redirect(
+    opsReturnTo({
+      returnTo: field(formData, "return_to"),
+      fallback: "/ops/finance",
+      params: {
+        updated: "gl_repaired",
+        detail:
+          result.failed > 0
+            ? `Posted ${result.posted} of ${result.attempted} outstanding cost entries. ${result.failed} still cannot post — check that their cost code has a GL account.`
+            : `Posted ${result.posted} outstanding cost entr${result.posted === 1 ? "y" : "ies"} to the general ledger.`,
+      },
+    }),
+  );
 }

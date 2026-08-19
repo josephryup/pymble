@@ -1,3 +1,4 @@
+import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import {
   CONTINGENCY_LIBRARY_CODE,
   TRANSPORT_LIBRARY_CODE,
@@ -328,5 +329,164 @@ export async function deriveMaterialRequestItemCostCode(input: {
     note: contingencyId
       ? "Not on the material schedule and not on a budget line, so it charges the site's unplanned / contingency budget."
       : "This site has no cost codes yet, so the spend is uncharged.",
+  };
+}
+
+/**
+ * Re-run the derivation chain over items that are already in the system.
+ *
+ * ── Why this is needed (workflow audit, Phase 2 follow-up) ────────────────
+ * Derivation happens when a line is WRITTEN, which is the right moment — but
+ * it means the chain never reaches backwards. On 19 Aug 2026 that mattered a
+ * great deal: 465 of 468 site line items charge the contingency leaf, not
+ * because they belong there but because the material schedules are empty and
+ * there was nothing to match them against.
+ *
+ * When the schedules are populated, those items will still be sitting on
+ * contingency unless something re-asks the question. This is that something.
+ *
+ * Deliberately narrow: it only moves items that are currently on the
+ * CONTINGENCY leaf, and only when the chain now finds a real schedule line.
+ * An item somebody coded deliberately is never touched, and an item the chain
+ * still cannot place is left where it is rather than shuffled sideways.
+ */
+export async function rederiveContingencyCodedItems(input: {
+  actorUserId: string;
+  siteId?: string;
+  /** Report what would change without changing it. */
+  dryRun?: boolean;
+}): Promise<{
+  examined: number;
+  moved: number;
+  unchanged: number;
+  moves: Array<{ itemName: string; requestNumber: string; to: string }>;
+}> {
+  const supabase = getOpsSupabaseServiceClient();
+
+  const contingencyIds = new Set<string>();
+  const siteByCostCode = new Map<string, string>();
+
+  const { data: nodes } = await supabase
+    .from("project_cost_codes")
+    .select("id, site_id, library:cost_code_library!project_cost_codes_library_code_id_fkey(code)");
+
+  for (const row of (nodes ?? []) as unknown as Array<{
+    id: string;
+    site_id: string;
+    library: { code: string } | { code: string }[] | null;
+  }>) {
+    const library = Array.isArray(row.library) ? (row.library[0] ?? null) : row.library;
+    if (library?.code === CONTINGENCY_LIBRARY_CODE) {
+      contingencyIds.add(row.id);
+      siteByCostCode.set(row.id, row.site_id);
+    }
+  }
+
+  if (contingencyIds.size === 0) {
+    return { examined: 0, moved: 0, unchanged: 0, moves: [] };
+  }
+
+  let query = supabase
+    .from("material_request_items")
+    .select(
+      "id, item_name, unit, cost_code_id, boq_line_item_id, request:material_requests!inner(id, request_number, site_id, scope, status)",
+    )
+    .in("cost_code_id", Array.from(contingencyIds))
+    .is("boq_line_item_id", null);
+
+  if (input.siteId) {
+    query = query.eq("request.site_id", input.siteId);
+  }
+
+  const { data: items } = await query;
+
+  type Row = {
+    id: string;
+    item_name: string;
+    unit: string;
+    cost_code_id: string | null;
+    request: {
+      id: string;
+      request_number: string;
+      site_id: string | null;
+      scope: OpsMaterialRequestScope;
+      status: string;
+    };
+  };
+
+  const rows = (items ?? []) as unknown as Row[];
+  const moves: Array<{ itemName: string; requestNumber: string; to: string }> = [];
+  let moved = 0;
+
+  // Matchers are per site and expensive to build, so build each once.
+  const matcherBySite = new Map<
+    string,
+    ReturnType<typeof buildScheduleLineMatcher> | null
+  >();
+
+  for (const row of rows) {
+    const siteId = row.request.site_id;
+    if (!siteId) {
+      continue;
+    }
+
+    if (!matcherBySite.has(siteId)) {
+      const lines = await fetchMatchableScheduleLines(siteId).catch(() => null);
+      matcherBySite.set(siteId, lines ? buildScheduleLineMatcher(lines) : null);
+    }
+    const matcher = matcherBySite.get(siteId);
+    if (!matcher) {
+      continue;
+    }
+
+    const match = matcher({ itemName: row.item_name, unit: row.unit });
+    if (!match) {
+      continue;
+    }
+
+    const { data: line } = await supabase
+      .from("boq_line_items")
+      .select("cost_code_id, description")
+      .eq("id", match.lineId)
+      .maybeSingle<{ cost_code_id: string | null; description: string }>();
+
+    if (!line?.cost_code_id || line.cost_code_id === row.cost_code_id) {
+      continue;
+    }
+
+    moves.push({
+      itemName: row.item_name,
+      requestNumber: row.request.request_number,
+      to: line.description,
+    });
+
+    if (!input.dryRun) {
+      await supabase
+        .from("material_request_items")
+        .update({ cost_code_id: line.cost_code_id, boq_line_item_id: match.lineId })
+        .eq("id", row.id);
+    }
+    moved += 1;
+  }
+
+  if (!input.dryRun && moved > 0) {
+    await recordOpsAuditEvent({
+      action: "cost_code.rederived_from_schedule",
+      actorUserId: input.actorUserId,
+      entityId: null,
+      entityType: "project_cost_code",
+      metadata: { examined: rows.length, moved, site_id: input.siteId ?? null },
+      moduleKey: "material_requests",
+      sourceId: null,
+      sourceTable: "material_request_items",
+      summary: `Re-derived ${moved} contingency-coded item(s) onto their material schedule lines`,
+    }).catch(() => null);
+  }
+
+  return {
+    examined: rows.length,
+    moved,
+    unchanged: rows.length - moved,
+    moves: moves.slice(0, 20),
   };
 }

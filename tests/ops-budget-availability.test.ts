@@ -126,7 +126,7 @@ describe("decideBudgetControl", () => {
 
     assert.equal(decision.band, "escalate");
     assert.equal(decision.escalateToLeadership, true);
-    assert.match(decision.message, /no budget/);
+    assert.match(decision.message, /no live budget/);
   });
 
   it("does not escalate a zero-amount check on an unfunded code", () => {
@@ -241,5 +241,75 @@ describe("decideBudgetControl — contingency codes", () => {
       });
       assert.equal(decision.allowed, true);
     }
+  });
+});
+
+// ── Audit F3 ───────────────────────────────────────────────────────────────
+// Activating a project budget used to change nothing: `fetchOpsCostCodePosition`
+// funded a cost code from budgets in `draft`, `active` OR `locked` equally, so
+// the activation step was a no-op for every control in the system. Draft money
+// is now reported as `planned` and never counted.
+describe("draft budgets are a plan, not a control (F3)", () => {
+  it("does not fund a cost code from a draft budget", () => {
+    const result = decideBudgetControl({
+      position: position({ budgeted: 0, planned: 904_672 }),
+      amount: 50_000,
+    });
+
+    // Unfunded despite K904,672 sitting in draft — that is the point.
+    assert.equal(result.projected.budgeted, 0);
+    assert.equal(result.band, "escalate");
+  });
+
+  it("keeps the draft figure visible rather than hiding it", () => {
+    // Nothing should vanish from a screen because a rule got stricter.
+    const result = decideBudgetControl({
+      position: position({ budgeted: 0, planned: 904_672 }),
+      amount: 50_000,
+    });
+
+    assert.equal(result.projected.planned, 904_672);
+  });
+
+  it("names activation as the fix when a draft budget exists", () => {
+    // Telling someone staring at a K900,000 draft that there is "no budget" is
+    // how the activation step came to look pointless.
+    const withDraft = decideBudgetControl({
+      position: position({ budgeted: 0, planned: 904_672 }),
+      amount: 50_000,
+    });
+    assert.match(withDraft.message, /draft budget/);
+    assert.match(withDraft.message, /activate it/);
+
+    const withoutDraft = decideBudgetControl({
+      position: position({ budgeted: 0 }),
+      amount: 50_000,
+    });
+    assert.doesNotMatch(withoutDraft.message, /draft budget/);
+    assert.match(withoutDraft.message, /Set a budget/);
+  });
+
+  it("governs normally once the budget is active", () => {
+    // The same money, now live: measured, not escalated.
+    const result = decideBudgetControl({
+      position: position({ budgeted: 904_672, planned: 0 }),
+      amount: 50_000,
+    });
+
+    assert.equal(result.band, "ok");
+    assert.equal(result.projected.available, 854_672);
+  });
+
+  it("still spares the MD on an unfunded contingency leaf", () => {
+    // The contingency exception must survive the stricter funding rule, or
+    // every off-schedule request on a draft-budget site escalates.
+    const result = decideBudgetControl({
+      position: position({ budgeted: 0, planned: 904_672 }),
+      amount: 50_000,
+      isContingencyCode: true,
+    });
+
+    assert.equal(result.band, "reason_required");
+    assert.equal(result.escalateToLeadership, false);
   });
 });

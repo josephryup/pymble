@@ -250,6 +250,15 @@ export type GlReconciliationReport = {
   unmappedCostCodeLabels: string[];
   subledgerTotal: number;
   postedTotal: number;
+  /**
+   * Completed payroll runs that never reached the ledger.
+   *
+   * A different break from an unposted cost entry, and previously invisible:
+   * this report only ever looked at `project_cost_entries`, so a payroll run
+   * that disbursed money and posted no journal did not appear anywhere. One
+   * such run — completed 28 July 2026 — was sitting in production (audit F8).
+   */
+  unpostedPayrollRunCount: number;
   /** Zero means the subledger and the ledger agree. */
   variance: number;
   clean: boolean;
@@ -326,6 +335,32 @@ export async function fetchOpsGlReconciliation(): Promise<GlReconciliationReport
     .eq("source_table", "project_cost_entries")
     .not("source_id", "in", `(${entries.map((e) => e.id).join(",") || "null"})`);
 
+  // Completed payroll runs with no journal behind them. Posting is wired into
+  // the completion action now, but a run completed before that stays silently
+  // unposted unless something looks for it.
+  const { data: completedRuns } = await supabase
+    .from("staff_payroll_runs")
+    .select("id")
+    .eq("status", "completed");
+
+  const completedRunIds = ((completedRuns ?? []) as Array<{ id: string }>).map(
+    (row) => row.id,
+  );
+
+  let unpostedPayrollRunCount = 0;
+  if (completedRunIds.length > 0) {
+    const { data: payrollJournals } = await supabase
+      .from("journal_entries")
+      .select("source_id")
+      .eq("source_table", "staff_payroll_runs")
+      .in("source_id", completedRunIds);
+
+    const posted = new Set(
+      ((payrollJournals ?? []) as Array<{ source_id: string }>).map((row) => row.source_id),
+    );
+    unpostedPayrollRunCount = completedRunIds.filter((id) => !posted.has(id)).length;
+  }
+
   const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
   return {
@@ -336,10 +371,92 @@ export async function fetchOpsGlReconciliation(): Promise<GlReconciliationReport
     unmappedCostCodeLabels: unmappedLabels.slice(0, 5),
     subledgerTotal: round(subledgerTotal),
     postedTotal: round(postedTotal),
+    unpostedPayrollRunCount,
     variance: round(subledgerTotal - postedTotal),
     clean:
       unpostedCount === 0 &&
       (orphanJournalCount ?? 0) === 0 &&
-      unmappedLabels.length === 0,
+      unmappedLabels.length === 0 &&
+      unpostedPayrollRunCount === 0,
   };
+}
+
+/**
+ * Post every cost entry that should be in the general ledger and is not.
+ *
+ * ── Why this exists (workflow audit F8) ───────────────────────────────────
+ * GL posting is called under `.catch(() => null)` from the operational
+ * transitions, which is right: a ledger hiccup must not stop a site confirming
+ * a delivery. But "must not block" was implemented as "is discarded", and the
+ * result was that all nine postable cost entries in the database carried
+ * `journal_entry_id = null` while the whole general ledger held four journals.
+ * All 53 library codes have a GL account mapped, so nothing was misconfigured
+ * — the postings simply never happened and nobody could tell.
+ *
+ * A non-blocking failure needs a way back. This is it: idempotent (an entry
+ * that already has a journal is skipped by `postCostEntryToGlSafe`), safe to
+ * run repeatedly, and it reports what it could not do rather than stopping.
+ */
+export async function retryOpsUnpostedCostEntries(input: {
+  actorUserId: string;
+  limit?: number;
+}): Promise<{
+  attempted: number;
+  posted: number;
+  failed: number;
+  reasons: Record<string, number>;
+}> {
+  const supabase = getOpsSupabaseServiceClient();
+  const limit = input.limit ?? 500;
+
+  const { data, error } = await supabase
+    .from("project_cost_entries")
+    .select("id, lifecycle_state")
+    .is("journal_entry_id", null)
+    .in("lifecycle_state", ["accrued", "actual"])
+    .order("cost_date", { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as Array<{ id: string; lifecycle_state: string }>;
+  const reasons: Record<string, number> = {};
+  let posted = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    try {
+      const result = await postCostEntryToGlSafe({
+        actorUserId: input.actorUserId,
+        costEntryId: row.id,
+      });
+      if (result.posted) {
+        posted += 1;
+      } else {
+        failed += 1;
+        const reason = result.reason ?? "unknown";
+        reasons[reason] = (reasons[reason] ?? 0) + 1;
+      }
+    } catch (postError: unknown) {
+      failed += 1;
+      const reason = postError instanceof Error ? postError.message : "threw";
+      reasons[reason] = (reasons[reason] ?? 0) + 1;
+    }
+  }
+
+  await recordOpsAuditEvent({
+    action: "gl.unposted_cost_entries_retried",
+    actorUserId: input.actorUserId,
+    entityId: null,
+    entityType: "journal_entry",
+    metadata: { attempted: rows.length, posted, failed, reasons },
+    moduleKey: "finance",
+    sourceId: null,
+    sourceTable: "project_cost_entries",
+    summary: `Retried ${rows.length} unposted cost entr${rows.length === 1 ? "y" : "ies"}: ${posted} posted, ${failed} still outstanding`,
+  }).catch(() => null);
+
+  return { attempted: rows.length, posted, failed, reasons };
 }

@@ -51,6 +51,16 @@ export type OpsCostLifecycleState = (typeof LIVE_LIFECYCLE_STATES)[number] | "re
 
 export type BudgetPositionInput = {
   budgeted: number;
+  /**
+   * Money on DRAFT budget lines for the same code.
+   *
+   * Reported, never counted (audit F3). A draft budget is a plan somebody is
+   * still writing; treating it as a control meant activation changed nothing,
+   * because `draft`, `active` and `locked` all funded a cost code equally.
+   * Keeping the figure visible means activating a budget is the moment a plan
+   * starts governing, and nothing disappears from a screen in the meantime.
+   */
+  planned?: number;
   reserved: number;
   committed: number;
   accrued: number;
@@ -60,6 +70,7 @@ export type BudgetPositionInput = {
 
 export const EMPTY_BUDGET_POSITION: BudgetPositionInput = {
   budgeted: 0,
+  planned: 0,
   reserved: 0,
   committed: 0,
   accrued: 0,
@@ -69,6 +80,8 @@ export const EMPTY_BUDGET_POSITION: BudgetPositionInput = {
 
 export type BudgetAvailability = {
   budgeted: number;
+  /** Draft-budget money for the same code. Shown, not counted. */
+  planned: number;
   /**
    * Everything the budget is already answering for, across every live station.
    * Because advancing a station relieves the prior one, these never
@@ -127,6 +140,7 @@ export function computeBudgetAvailability(
 
   return {
     budgeted,
+    planned: roundMoney(position.planned ?? 0),
     consumed,
     available: roundMoney(budgeted - consumed),
     usedPercent:
@@ -188,12 +202,23 @@ export function decideBudgetControl(input: {
   }
 
   let message: string;
+  // A site whose budget is still in draft is a different problem from one
+  // with no budget at all, and it has a different fix — activate it, don't
+  // write it. Saying "no budget" to someone looking at a K900,000 draft is
+  // how the activation step came to be seen as pointless (audit F3).
+  const draftHint =
+    projected.planned > 0
+      ? ` There is a draft budget of ${formatZmw(projected.planned)} for this code — activate it and this is measured against a real figure.`
+      : "";
+
   if ((unfunded || usedPercent === null) && isContingency) {
     message =
-      "This is off-schedule spend and the contingency allowance is not set, so there is nothing to measure it against. Record why it is needed, and set a contingency amount on the budget so the next one can be judged.";
+      "This is off-schedule spend and the contingency allowance is not set, so there is nothing to measure it against. Record why it is needed, and set a contingency amount on the budget so the next one can be judged." +
+      draftHint;
   } else if (unfunded || usedPercent === null) {
     message =
-      "This cost code has no budget. The spend is allowed but will be reported to the Managing Director — set a budget for this code to clear the flag.";
+      "This cost code has no live budget. The spend is allowed but will be reported to the Managing Director." +
+      (draftHint || " Set a budget for this code to clear the flag.");
   } else if (band === "ok") {
     message = `${formatZmw(projected.available)} would remain on this cost code (${usedPercent}% used).`;
   } else if (band === "warn") {
@@ -279,7 +304,8 @@ async function fetchContingencyAllowance(costCodeId: string): Promise<number> {
     .from("project_budgets")
     .select("contingency_amount")
     .eq("site_id", row.site_id)
-    .in("status", ["draft", "active", "locked"]);
+    // Same rule as the budget lines: only a live budget funds anything.
+    .in("status", ["active", "locked"]);
 
   if (budgetError) {
     throw budgetError;
@@ -301,12 +327,23 @@ export async function fetchOpsCostCodePosition(
 ): Promise<BudgetPositionInput> {
   const supabase = getOpsSupabaseServiceClient();
 
-  const [budgetResult, entriesResult, contingencyAllowance] = await Promise.all([
+  const [budgetResult, plannedResult, entriesResult, contingencyAllowance] = await Promise.all([
+    // ── Only a LIVE budget funds a cost code (audit F3) ──────────────────
+    // This used to accept `draft` alongside `active` and `locked`, which meant
+    // activating a budget changed nothing at all for any control in the
+    // system — the exact symptom reported as "budgets when activated are not
+    // linking". A draft is a plan being written; it is reported below as
+    // `planned` so the figure stays visible, but it does not govern.
     supabase
       .from("project_budget_lines")
       .select("budgeted_amount, budget:project_budgets!inner(status)")
       .eq("cost_code_id", costCodeId)
-      .in("budget.status", ["draft", "active", "locked"]),
+      .in("budget.status", ["active", "locked"]),
+    supabase
+      .from("project_budget_lines")
+      .select("budgeted_amount, budget:project_budgets!inner(status)")
+      .eq("cost_code_id", costCodeId)
+      .eq("budget.status", "draft"),
     supabase
       .from("project_cost_entries")
       .select("amount, lifecycle_state")
@@ -317,6 +354,9 @@ export async function fetchOpsCostCodePosition(
 
   if (budgetResult.error) {
     throw budgetResult.error;
+  }
+  if (plannedResult.error) {
+    throw plannedResult.error;
   }
   if (entriesResult.error) {
     throw entriesResult.error;
@@ -329,6 +369,12 @@ export async function fetchOpsCostCodePosition(
     budgeted_amount: number | string | null;
   }>) {
     position.budgeted = roundMoney(position.budgeted + toNumber(row.budgeted_amount));
+  }
+
+  for (const row of (plannedResult.data ?? []) as Array<{
+    budgeted_amount: number | string | null;
+  }>) {
+    position.planned = roundMoney((position.planned ?? 0) + toNumber(row.budgeted_amount));
   }
 
   for (const row of (entriesResult.data ?? []) as Array<{

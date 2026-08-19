@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  RefreshCw,
   Banknote,
   BookOpen,
   CheckCircle2,
@@ -54,6 +55,10 @@ import {
 } from "@/lib/ops/finance-kpis";
 import { fetchOpsFinanceLeakReport } from "@/lib/ops/finance-leaks";
 import { fetchOpsGlReconciliation } from "@/lib/ops/gl-cost-bridge";
+import { repairOpsUnpostedCostEntriesAction } from "@/lib/ops/finance-actions";
+import { canManageOpsProjectBudget } from "@/lib/ops/finance-permissions";
+import { OpsReturnToField } from "@/components/ops/OpsReturnToField";
+import { OpsSubmitButton } from "@/components/ops/OpsSubmitButton";
 import { fetchOpsGlMonthlyTrend } from "@/lib/ops/gl-trends";
 import {
   fetchOpsStaleReservations,
@@ -134,6 +139,8 @@ export default async function OpsFinanceOverviewPage() {
   );
 
   const showAccountsLink = canViewOpsChartOfAccounts(profile.role);
+  // Posting to the ledger is a Finance act, so the repair is too.
+  const canRepairLedger = canManageOpsProjectBudget(profile.role);
 
   return (
     <div className="w-full max-w-none space-y-6">
@@ -334,6 +341,27 @@ export default async function OpsFinanceOverviewPage() {
             <p className="mt-3 text-xs leading-5 text-muted-foreground">
               Unmapped: {glReconciliation.unmappedCostCodeLabels.join(", ")}
             </p>
+          ) : null}
+          {glReconciliation.unpostedPayrollRunCount > 0 ? (
+            <p className="mt-3 text-xs leading-5 text-amber-700 dark:text-amber-300">
+              {glReconciliation.unpostedPayrollRunCount} completed payroll run
+              {glReconciliation.unpostedPayrollRunCount === 1 ? "" : "s"} never reached the
+              ledger. Runs completed from now on post automatically; open the run and
+              complete it again to post an older one.
+            </p>
+          ) : null}
+          {/* This panel could always SEE the break; there was no way to act on
+              one (audit F8). Posting is non-blocking by design, so it needs a
+              way back — or "non-blocking" quietly becomes "never happens". */}
+          {glReconciliation.unpostedCount > 0 && canRepairLedger ? (
+            <form action={repairOpsUnpostedCostEntriesAction} className="mt-4">
+              <OpsReturnToField />
+              <OpsSubmitButton className={OPS_SECONDARY_BUTTON_CLASS}>
+                <RefreshCw className="size-4" aria-hidden="true" />
+                Post the {glReconciliation.unpostedCount} outstanding entr
+                {glReconciliation.unpostedCount === 1 ? "y" : "ies"}
+              </OpsSubmitButton>
+            </form>
           ) : null}
         </OpsDashboardPanel>
       ) : null}

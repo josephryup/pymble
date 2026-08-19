@@ -65,7 +65,7 @@ That is why the fix is not a list of patches. It is: **one state machine, one wr
 
 A closed loop with no entry point. **The RFQ the gate demanded could never be created**, which is why all 9 stranded requests show exactly zero RFQs — not neglect, impossibility. The tender policy's own design comment says the RFQ "runs BEFORE pricing, not after approval"; the enforcement did the opposite.
 
-
+**Layered on top of that, the gate also asked the wrong question.**
 
 `src/lib/ops/tender-policy.ts:44` counts a supplier only when `supplier_id` is set (a row in the supplier master). The UI, at `material-requests/page.tsx:394`, displays `supplier_name_freeform` as **"Supplier: MTN (not in master list)"**.
 
@@ -245,29 +245,82 @@ Coding the spine made the real position visible for the first time, and it is wo
 
 This is not a failure of the backfill. It is the backfill doing its job: that K2M was *always* landing nowhere, and now it lands somewhere with a number next to it — a number that is zero. The honest reading is that **cost coding cannot become meaningful until the material schedules are populated**, which is a data problem for the team, not a code problem. Phase 3 makes it impossible to miss.
 
-### Phase 3 — Make budget activation mean something (~3 days)
+### Phase 3 — Make budget activation mean something ✅ *delivered 19 Aug 2026*
 
-- **P3.1** `activateProjectBudgetAction` becomes a reconciliation: provision any missing project cost codes, resolve budget lines on every open request for that site, re-stamp uncoded items, and report the result to the activator ("linked 24 requests, K59,720 of existing spend now charged; 3 items could not be resolved"). *(F3)*
-- **P3.2** Change `fetchOpsCostCodePosition` to count **`active` and `locked`** budgets only. A draft budget is a plan, not a control. Show draft figures separately as "planned". *(F3)*
-- **P3.3** Block activation on a budget that has any uncoded line, with a one-click *code the remaining lines* path. *(F4)*
-- **P3.4** Add a *Budget health* strip to `/ops/project-budgets`: uncoded lines, sites with spend and no active budget, requests charging contingency. The two draft budgets carrying 34 live requests must be impossible to miss.
+Both halves of "budgets when activated are not linking automatically" were true at once: activation linked nothing, **and** the linking would not have mattered because draft budgets funded cost codes exactly as well as active ones.
 
-**Exit test:** activating RUBIS's K904,672 budget immediately shows its 24 requests and K59,720 of spend against it, with no manual step.
+- **P3.1 ✅** `budget-activation.ts` makes activation a **reconciliation**: every request still open on that site is attached to the budget going live, and uncoded items are coded. Deliberately gap-filling only — a request that already has a budget line keeps it, and an item that already has a cost code keeps it. Activation must never silently recode work someone charged on purpose. *(F3)*
+- **P3.2 ✅** `fetchOpsCostCodePosition` now funds a cost code from **`active` and `locked` budgets only**. Draft money is reported as `planned` and never counted, so nothing disappears from a screen — but a plan no longer governs. *(F3)*
+- **P3.3 ✅** Activation is refused when any line has no cost code, naming the line numbers. Activating a line that funds nothing announces governance the system cannot deliver. *(F4)*
+- **P3.4 ✅** A **budget-health strip** on `/ops/project-budgets`: spend with no live budget, draft budgets carrying real spend, uncoded lines, and contingency charged beyond its allowance — each with the specific next step. A reporting floor of K1,000 keeps a K1.00 row from sitting next to a K137,550 one.
 
-### Phase 4 — Close the money loop (~4 days)
+**The activation banner now reports what it did** — "Budget activated and linked to 24 open requests worth ZMW 59,720.00, 37 line items were given a cost code" — instead of "Project budget activated."
 
-- **P4.1** Remove `.catch(() => null)` from every cost-entry and GL write. Failures raise; the transition rolls back. *(F11)*
-- **P4.2** Post the GL from the transition, inside the same transaction. Backfill the 9 unposted entries. *(F8)*
-- **P4.3** Surface `fetchOpsGlReconciliation` on `/ops/finance` as a permanent break count, with the weekly digest to the Finance Manager. A number that is not zero must be visible without opening anything. *(F8)*
-- **P4.4** Require a goods received note before `confirmDelivery` books `actual`, and wire `summariseMatch` into the delivery screen. *(F10)*
-- **P4.5** Post payroll runs to the GL on completion; backfill the 2 completed runs. *(F8)*
+**Exit test:** ✅ activating RUBIS now links its 23 open requests and K59,720 of spend in one click. Verified: 1,159 tests pass (14 new), `tsc` and `eslint` clean.
 
-**Exit test:** GL reconciliation reports zero breaks, and every posted cost entry carries a journal entry.
+#### What the team will notice immediately
 
-### Phase 5 — Prevent recurrence (~2 days)
+P3.2 is a deliberate, visible change. Four sites hold draft budgets that were silently acting as live ones:
 
-- **P5.1** A `workflow-integrity` test suite asserting the invariants this audit had to check by hand: every `ordered` MR has a committed entry; every postable entry has a journal; every budget line has a cost code; no MR is `closed` against an unissued PO; no site has spend without an active budget.
-- **P5.2** Run it in CI **and** as a nightly cron against production, reporting to the Ops inbox. The reason this audit was necessary is that nothing was watching.
+| Site | Draft budget | Now reads as |
+|---|---|---|
+| RUBIS SERVICE STATION | K904,672 | planned, not funding |
+| KANGILA STAFF HOUSES | K901,277 | planned, not funding |
+| MUSANGU GIRLS DORMITORY | K523,246 | planned, not funding |
+| PARROGATE WAREHOUSES | K0 (2 empty lines) | needs lines, then activation |
+
+Nothing is hidden — the figures show as **planned**, and the band message now says *"There is a draft budget of ZMW 904,672.00 for this code — activate it and this is measured against a real figure."* The fix is one click per site, and the health strip lists exactly which ones.
+
+### Phase 4 — Close the money loop ✅ *delivered 19 Aug 2026*
+
+- **P4.1 ✅** GL failures are no longer discarded. Each one writes a `material_request.gl_posting_failed` audit row naming the reason. **Deviation, deliberate:** the plan said failures should *roll the transition back*. They do not, and should not — a ledger hiccup must never stop a site confirming a delivery that has physically happened. The real defect was that failure was **invisible**, not that it was non-blocking. Fixed as visibility plus a repair path. *(F11)*
+- **P4.2 ✅** `retryOpsUnpostedCostEntries` posts every entry that should be in the ledger and is not. Idempotent, safe to re-run. **Not run by me** — see below.
+- **P4.3 ✅** The reconciliation panel already existed on `/ops/finance` but could only *see* breaks. It now has a **"Post the N outstanding entries"** button beside the number, and it detects a second break class it was blind to: **completed payroll runs with no journal** (one such run, completed 28 July, was sitting in production).
+- **P4.4 ⚠ Partial, deliberately.** The plan said require a goods received note before delivery books `actual`. There are **zero GRNs in the system**, so requiring one would block every delivery the sites can currently confirm — a worse outcome than a documented gap. Instead, delivery now **records** whether receipt evidence existed (`backed_by_goods_received_note`), which makes the gap countable. Turn it into a hard rule once Stores is actually using the receipt screen.
+- **P4.5 ✅** Payroll GL posting was already wired into run completion; the gap was purely historical. The reconciliation now surfaces unposted historical runs rather than leaving them silent.
+
+**Why I did not post the 9 outstanding journals myself:** it is a financial posting to the live ledger, and the audit row should name the Finance Manager who authorised it, not a maintenance script. The button exists; it is one click.
+
+### Phase 5 — Prevent recurrence ✅ *delivered 19 Aug 2026*
+
+- **P5.1 ✅** `workflow-integrity.ts` runs **eight invariants**, one per finding that can silently come back. Each names the finding it guards and reports examples, not just a count. Read-only by design: a watchdog that quietly repairs things hides how often the thing it repairs goes wrong.
+- **P5.2 ✅** Registered as a nightly cron (`0 5 * * *`) that notifies the Finance Manager and MD **only when something is broken**, keyed by date so a persisting break reminds once a day rather than stacking. A nightly "all clear" is how a channel becomes noise.
+- **P5.3 ✅** *(added, as promised when you asked about deferring the material schedules)* `rederiveContingencyCodedItems` re-runs the derivation chain over items already sitting on contingency, once schedules exist. Only moves items **on the contingency leaf** that now match a real schedule line — never anything coded deliberately — and supports a dry run. This is what makes deferring the schedules free rather than a decision you pay for later.
+
+**It found something immediately:** a ninth ghost purchase order (PO-20260710-6A74EA, K510) from the same requisition-conversion defect, in status `approved` rather than `approval_pending`, which the Phase 0 filter had not reached. Cancelled under the decision you had already taken for the other five.
+
+---
+
+## 4a. Where the system stands now
+
+The eight integrity checks, run against production after all five phases:
+
+| Check | Guards | Violations |
+|---|---|---|
+| Every ordered request has a committed cost entry | F2 | **0** |
+| No closed request has an unissued purchase order | F10 | **0** |
+| Every budget line carries a cost code | F4 | **0** |
+| Every site line item charges a cost code | F6 | **0** |
+| Every overhead request carries a cost centre | F7 | **0** |
+| No cancelled approval has pending steps | F10 | **0** |
+| Every postable cost entry has a journal | F8 | **9** ⟵ one button press |
+| No site spends without a live budget | F3 | **2** ⟵ activate RUBIS + PARROGATE |
+
+**Six of eight clean. The two outstanding are both one-click Finance actions, not code:**
+
+1. **Press "Post the 9 outstanding entries"** on `/ops/finance`.
+2. **Activate the RUBIS and PARROGATE budgets** on `/ops/project-budgets` — the health strip lists them, and activation now links their open requests automatically.
+
+### Correction to the original audit
+
+Two thresholds I quoted from the code defaults are configured differently in production, and the production values are what govern:
+
+| | Code default | **Actually configured** |
+|---|---|---|
+| Material request → MD approval | — | **K25,000** |
+| Competitive tender required | K50,000 | **K1,000,000** |
+
+The tender threshold being K1,000,000 rather than K50,000 means the *value* trigger was never what blocked the nine stranded requests — the **no supplier named** trigger was, exactly as F1 describes. The conclusion is unchanged; the figure I quoted was wrong.
 
 ---
 
