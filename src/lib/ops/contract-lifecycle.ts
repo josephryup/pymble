@@ -1,4 +1,8 @@
-import { opsContractHref } from "@/lib/ops/contract-types";
+import { opsContractSignatoryRoles } from "@/lib/ops/contract-permissions";
+import {
+  opsContractHref,
+  type OpsContractSignatoryRole,
+} from "@/lib/ops/contract-types";
 import { logOpsServerError } from "@/lib/ops/log";
 import { fanoutToOpsAudiences } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
@@ -30,11 +34,19 @@ const MODULE = "contracts";
 /** Warn this far ahead, so there is time to act rather than just be informed. */
 const EXPIRY_WARNING_DAYS = 14;
 const WARRANTY_WARNING_DAYS = 30;
+/** How long an approved contract may sit unsigned before anyone is nudged. */
+const SIGNATURE_REMINDER_DAYS = 7;
 
 function isoDaysFromNow(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function isoDaysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString();
 }
 
 function today() {
@@ -45,6 +57,7 @@ export type OpsContractSweepResult = {
   expiring: number;
   retentionDue: number;
   warrantyExpiring: number;
+  awaitingSignature: number;
 };
 
 export async function runOpsContractLifecycleSweep(): Promise<OpsContractSweepResult> {
@@ -53,6 +66,7 @@ export async function runOpsContractLifecycleSweep(): Promise<OpsContractSweepRe
     expiring: 0,
     retentionDue: 0,
     warrantyExpiring: 0,
+    awaitingSignature: 0,
   };
 
   // Commercial + leadership get contract dates; Finance gets the money ones.
@@ -204,6 +218,103 @@ export async function runOpsContractLifecycleSweep(): Promise<OpsContractSweepRe
     }
   } catch (error) {
     logOpsServerError(error, { module: MODULE, action: "sweep.warranty" });
+  }
+
+  // -------------------------------------------------------------------------
+  // Contracts waiting too long on a signature
+  // -------------------------------------------------------------------------
+  //
+  // Approval sends one notification and nothing follows it, so an approved
+  // contract could sit unsigned indefinitely (audit F7). The standing chase is
+  // the My Queue entry; this is the nudge, sent once per contract and stamped
+  // so the sweep does not re-send every morning.
+  //
+  // Aimed at the people who actually hold the pending slots — by name where a
+  // slot names someone, by office otherwise — rather than broadcast to a
+  // department. A reminder that reaches nine people who cannot act on it is
+  // how a channel stops being read.
+  try {
+    const { data: awaitingSignature } = await supabase
+      .from("contracts")
+      .select("id, contract_number, title, kind, status, approved_at")
+      .in("status", ["approved", "issued"])
+      .is("archived_at", null)
+      .is("signature_reminder_notified_at", null)
+      .not("approved_at", "is", null)
+      .lte("approved_at", isoDaysAgo(SIGNATURE_REMINDER_DAYS));
+
+    for (const contract of awaitingSignature ?? []) {
+      const { data: slots } = await supabase
+        .from("contract_signatures")
+        .select("signatory_role, assigned_user_id, status, is_required")
+        .eq("contract_id", contract.id)
+        .eq("status", "pending")
+        .eq("is_required", true);
+
+      const pending = (slots ?? []) as Array<{
+        signatory_role: OpsContractSignatoryRole;
+        assigned_user_id: string | null;
+      }>;
+
+      // Nothing outstanding — the contract is waiting on the counterparty's ink,
+      // not on us. Stamp it anyway so it stops being examined every morning.
+      if (pending.length === 0) {
+        await supabase
+          .from("contracts")
+          .update({ signature_reminder_notified_at: new Date().toISOString() })
+          .eq("id", contract.id);
+        continue;
+      }
+
+      // Named signatories first; the offices behind any unassigned slot after.
+      const namedUserIds = pending
+        .map((slot) => slot.assigned_user_id)
+        .filter((id): id is string => Boolean(id));
+      const unassignedRoles = pending
+        .filter((slot) => !slot.assigned_user_id)
+        .flatMap((slot) => opsContractSignatoryRoles(slot.signatory_role));
+
+      const recipients =
+        unassignedRoles.length > 0
+          ? await fanoutToOpsAudiences({
+              actionNeeded: unassignedRoles,
+              extraUserIds: namedUserIds,
+            })
+          : await fanoutToOpsAudiences({ actionNeeded: [], extraUserIds: namedUserIds });
+
+      const waitingDays = contract.approved_at
+        ? Math.floor(
+            (Date.now() - new Date(contract.approved_at).getTime()) / 86_400_000,
+          )
+        : SIGNATURE_REMINDER_DAYS;
+
+      await Promise.all(
+        recipients.map((recipient) =>
+          queueOpsNotification({
+            actionHref: opsContractHref(contract.kind, contract.id),
+            body: `Approved ${waitingDays} days ago and still unsigned. Sign it from the contract page, or terminate it if it is no longer going ahead.`,
+            // Keyed on the contract, never on the date. A dated key regenerates
+            // every day and re-notifies — 88% of notifications were duplicates
+            // once before, for exactly that reason.
+            idempotencyKey: `contract-signature:${contract.id}:${recipient.id}`,
+            moduleKey: MODULE,
+            recipientId: recipient.id,
+            sourceId: contract.id,
+            sourceTable: "contracts",
+            title: `${contract.contract_number} is waiting for signature`,
+          }).catch(() => null),
+        ),
+      );
+
+      await supabase
+        .from("contracts")
+        .update({ signature_reminder_notified_at: new Date().toISOString() })
+        .eq("id", contract.id);
+
+      result.awaitingSignature += 1;
+    }
+  } catch (error) {
+    logOpsServerError(error, { module: MODULE, action: "sweep.awaitingSignature" });
   }
 
   return result;

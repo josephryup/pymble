@@ -1,3 +1,8 @@
+import {
+  canViewOpsContractSubject,
+  opsContractSignatorySlotForRole,
+} from "@/lib/ops/contract-permissions";
+import { opsContractHref, type OpsContractKind } from "@/lib/ops/contract-types";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 import type { OpsUserRole } from "@/lib/ops/types";
 
@@ -107,6 +112,84 @@ async function countActionableApprovals(
   return actionableRequestIds.size;
 }
 
+/**
+ * Contracts waiting on THIS person's signature, split by which register they
+ * live on.
+ *
+ * Contracts queue no standing work anywhere else: approval fires a one-time
+ * notification, and a notification that is read once and dismissed is not a
+ * chase. An approved contract could sit unsigned indefinitely with nothing
+ * asking after it (2026-08 HR contracts audit, F7).
+ *
+ * Actionable mirrors the rule the contract page renders and the signing action
+ * re-checks: the slot is still pending, the contract is in a signable state,
+ * and the slot is either assigned to me by name or unassigned and fillable by
+ * virtue of my office.
+ */
+async function countContractsAwaitingMySignature(
+  supabase: ReturnType<typeof getOpsSupabaseServiceClient>,
+  role: OpsUserRole,
+  userId: string,
+): Promise<Record<OpsContractKind, number>> {
+  const empty = { subcontract: 0, employment: 0 };
+
+  // Which slot this role fills by office, if any. Null for everyone outside the
+  // HR / GM / MD panel — they can still be named on a slot individually, which
+  // the assigned_user_id half of the filter below covers.
+  const officeSlot = opsContractSignatorySlotForRole(role);
+
+  const filters = [`assigned_user_id.eq.${userId}`];
+  if (officeSlot) {
+    filters.push(`and(assigned_user_id.is.null,signatory_role.eq.${officeSlot})`);
+  }
+
+  const { data, error } = await supabase
+    .from("contract_signatures")
+    .select(
+      "contract_id, contract:contracts!contract_signatures_contract_id_fkey(kind, counterparty_type, status, archived_at)",
+    )
+    .eq("status", "pending")
+    .or(filters.join(","))
+    .limit(500);
+
+  if (error || !data) return empty;
+
+  type Row = {
+    contract_id: string;
+    contract:
+      | { kind: OpsContractKind; counterparty_type: string; status: string; archived_at: string | null }
+      | Array<{ kind: OpsContractKind; counterparty_type: string; status: string; archived_at: string | null }>
+      | null;
+  };
+
+  // Count contracts, not slots — three pending slots on one contract is one
+  // thing to go and do.
+  const seen = new Map<string, OpsContractKind>();
+  for (const row of data as Row[]) {
+    const contract = Array.isArray(row.contract) ? row.contract[0] : row.contract;
+    if (!contract) continue;
+    if (contract.archived_at) continue;
+    // Signing opens at approval and closes once countersigned.
+    if (!["approved", "issued"].includes(contract.status)) continue;
+    // The subject gate, applied here too. Every signatory role can see pay
+    // today, so this changes nothing now — but a queue that reads a table
+    // directly is exactly where a future widening would leak silently.
+    if (
+      !canViewOpsContractSubject(role, {
+        kind: contract.kind,
+        counterparty_type: contract.counterparty_type as "subcontractor" | "employee",
+      })
+    ) {
+      continue;
+    }
+    seen.set(row.contract_id, contract.kind);
+  }
+
+  const counts = { ...empty };
+  for (const kind of seen.values()) counts[kind] += 1;
+  return counts;
+}
+
 export async function fetchOpsMyQueue(role: OpsUserRole, userId: string): Promise<OpsQueueItem[]> {
   const supabase = getOpsSupabaseServiceClient();
   const count = (builder: PromiseLike<{ count: number | null }>) =>
@@ -115,6 +198,30 @@ export async function fetchOpsMyQueue(role: OpsUserRole, userId: string): Promis
       .catch(() => 0);
 
   const tasks: QueueTask[] = [];
+
+  // Contracts awaiting this person's signature. Not role-gated up front: a slot
+  // can be assigned to someone by name as well as by office, so the query
+  // decides rather than a role list. Counted once and split by register,
+  // because the two live on different routes now.
+  const awaitingSignature = await countContractsAwaitingMySignature(
+    supabase,
+    role,
+    userId,
+  ).catch(() => ({ subcontract: 0, employment: 0 }));
+
+  for (const kind of ["employment", "subcontract"] as const) {
+    if (awaitingSignature[kind] === 0) continue;
+    tasks.push({
+      key: `contracts_awaiting_signature_${kind}`,
+      label:
+        kind === "employment"
+          ? "Employment contracts awaiting your signature"
+          : "Subcontracts awaiting your signature",
+      href: opsContractHref(kind),
+      tone: "warn",
+      run: Promise.resolve(awaitingSignature[kind]),
+    });
+  }
 
   if (APPROVERS.includes(role)) {
     tasks.push({

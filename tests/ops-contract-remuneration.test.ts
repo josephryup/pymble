@@ -191,12 +191,17 @@ describe("the statutory basis", () => {
       periodDate: PERIOD,
     });
 
-    // The 2026 ZRA rates are not loaded yet, so resolveZambianTaxYear falls
-    // back to the last confirmed year AND says so in the citation. The contract
-    // prints that citation verbatim, which is the point: a schedule computed on
-    // provisional bands must admit it on the page rather than look settled.
-    assert.equal(schedule.tax_year, 2025);
-    assert.match(schedule.citation, /rates for 2026 not yet confirmed; using 2025/);
+    // The 2026 rates were loaded on 2026-08-25. Before that this schedule
+    // resolved to 2025 and carried a "not yet confirmed" disclaimer, which the
+    // contract printed verbatim — correct behaviour, but not a state to leave a
+    // signed instrument in.
+    assert.equal(schedule.tax_year, 2026);
+    assert.equal(
+      /not yet confirmed/.test(schedule.citation),
+      false,
+      "an approved contract must not carry a provisional-rates disclaimer",
+    );
+    assert.match(schedule.citation, /ZRA 2026 charge year/);
   });
 });
 

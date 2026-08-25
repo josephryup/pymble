@@ -111,6 +111,49 @@ export const ZAMBIAN_TAX_YEARS: Record<string, ZambianTaxYearRates> = {
     citation:
       "PAYE per ZRA 2025 budget (top band 37%); NAPSA 5/5 capped at K1,342; NHIMA 1/1 on basic pay; WCF construction 2%; VAT 16%.",
   },
+  "2026": {
+    year: 2026,
+    // 2026 charge year: the PAYE bands are UNCHANGED from 2025. Confirmed
+    // against PwC Worldwide Tax Summaries, which lists the 2026 annual bands as
+    // 0–61,200 at 0%, 61,201–85,200 at 20%, 85,201–110,400 at 30% and above
+    // 110,400 at 37% — exactly the 2025 monthly figures below (61,200/12 =
+    // 5,100; 85,200/12 = 7,100; 110,400/12 = 9,200).
+    //
+    // Several public "Zambia PAYE calculator 2026" sites claim a 25% second
+    // band, a 9,900 third threshold and a 37.5% top rate. They disagree with
+    // PwC and with each other; they were NOT used. If ZRA publishes something
+    // different, that is the source to follow — not an aggregator.
+    payeMonthlyBands: [
+      { from: 0, to: 5_100, rate: 0 },
+      { from: 5_100, to: 7_100, rate: 0.2 },
+      { from: 7_100, to: 9_200, rate: 0.3 },
+      { from: 9_200, to: Number.POSITIVE_INFINITY, rate: 0.37 },
+    ],
+    napsaEmployeeRate: 0.05,
+    napsaEmployerRate: 0.05,
+    // THE ONE THING THAT MOVED. NAPSA revised the contribution ceiling from
+    // 1 January 2026 after the Zambia Statistics Agency adjusted National
+    // Average Earnings: the insurable-earnings cap rose from K26,840 to
+    // K37,236 per month, so 5% of it is K1,861.80 per side (K3,723.60 total).
+    //
+    // That is a 38.7% jump, which is large enough to be worth a second look
+    // before the first live run — but it is what NAPSA's own notice says and
+    // what payroll vendors have implemented. It only affects anyone earning
+    // above K26,840 a month; below that the contribution is 5% of gross and
+    // the ceiling never binds.
+    napsaMonthlyCeiling: 1_861.8,
+    // Unchanged. NHIMA remains 1% each side. Note this codebase applies it to
+    // BASIC pay rather than gross — a Pymble policy decision recorded when the
+    // module was built, deliberately left alone here.
+    nhimaEmployeeRate: 0.01,
+    nhimaEmployerRate: 0.01,
+    // Unchanged, and industry-assessed per employer rather than set nationally.
+    // Revisit only if a WCF reassessment moves Pymble into a different band.
+    wcfEmployerRate: 0.02,
+    vatRate: 0.16,
+    citation:
+      "PAYE per ZRA 2026 charge year (bands unchanged from 2025, top band 37%); NAPSA 5/5 capped at K1,861.80 (ceiling K37,236 from 1 January 2026); NHIMA 1/1 on basic pay; WCF construction 2%; VAT 16%.",
+  },
 };
 
 /**

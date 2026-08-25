@@ -213,6 +213,19 @@ export function canSignOpsContractAs(
   return SIGNATORY_ROLE_MATRIX[signatoryRole].includes(role);
 }
 
+/**
+ * The workspace roles that fill a given signature slot.
+ *
+ * The inverse of canSignOpsContractAs, for the places that start from the slot
+ * rather than the person — the outstanding-signature reminder needs to know who
+ * to chase for an unassigned slot.
+ */
+export function opsContractSignatoryRoles(
+  signatoryRole: OpsContractSignatoryRole,
+): OpsUserRole[] {
+  return [...SIGNATORY_ROLE_MATRIX[signatoryRole]];
+}
+
 /** Which slot, if any, this role would fill by virtue of office. */
 export function opsContractSignatorySlotForRole(
   role: OpsUserRole,

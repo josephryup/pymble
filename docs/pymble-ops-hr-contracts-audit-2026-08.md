@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-25
 **Scope:** moving Contracts from Operations to HR; kind-aware contract forms; remuneration on the contract; Operations Manager access; linking contracts to individual employees.
-**Status:** COMPLETE — Phases 0–5 shipped 2026-08-25. **All five migrations applied and verified** against `zuezxgyhhrhklrhqsvvs`. 1,278 tests pass.
+**Status:** COMPLETE — Phases 0–5 plus F7 shipped 2026-08-25, and the 2026 ZRA/NAPSA rates loaded. **All six migrations applied and verified** against `zuezxgyhhrhklrhqsvvs`. 1,302 tests pass.
 
 ---
 
@@ -185,12 +185,49 @@ So this ask needs a new gate, not an addition to an existing list.
 
 ---
 
-### F7 — Contracts are not wired into notifications or the activity feed (minor)
+### F7 — Contracts are not wired into notifications or the activity feed — FIXED 2026-08-25
 
-`record-activity.ts` has no `contracts` source table and `inbox-routes.ts` has no
-contracts entry. An employment contract sitting on someone's signature raises no
-inbox item and appears in no activity feed. Out of scope for this change, but it
-is why nobody chases an unsigned contract.
+`record-activity.ts` had no `contracts` source table and `inbox-routes.ts` had no
+contracts entry. An employment contract sitting on someone's signature raised no
+inbox item and appeared in no activity feed — which is why nobody chased an
+unsigned contract.
+
+**What shipped.** Approval fired a one-time notification and nothing followed it,
+so the fix is two chases rather than one more ping:
+
+- **A standing My Queue entry** — "Employment contracts / Subcontracts awaiting
+  your signature", one per register, linking to the right one. Counts a slot
+  assigned to you **by name** as well as one you fill **by office**, counts
+  contracts rather than slots (three pending slots on one contract is one thing
+  to go and do), and only counts a contract actually open for signature. It
+  applies the subject gate too — every signatory role can see pay today, so that
+  changes nothing now, but a queue reading a table directly is exactly where a
+  future widening would leak silently.
+- **A single nudge from the daily sweep** after 7 days, aimed at the people
+  holding the pending slots — by name where a slot names someone, by office
+  otherwise — rather than broadcast at a department. Stamped in
+  `signature_reminder_notified_at` so it sends once, keyed on the contract and
+  never on the date (a dated key regenerates daily and re-notifies — that is how
+  88% of notifications became duplicates once before).
+- `opsContractSignatoryRoles()` exported to read the signature matrix the other
+  way round, returning a copy so a caller cannot edit it.
+- `contracts` added to the inbox route and label maps, so a contract
+  notification links somewhere real.
+
+> ⚠️ **Deliberately NOT done: comments and attachments on contracts.** Adding
+> `contracts` to `OPS_RECORD_ACTIVITY_SOURCE_TABLES` would have closed the
+> literal wording of this finding, but the gate in
+> `record-activity-actions.ts` is `canManageOps(role)` — a broad role check with
+> **no per-record test**. Registering contracts there would give every "manage"
+> role a path to attach to an employment contract, which is the opposite of
+> everything else in this workstream. Closing that half properly means giving
+> the record-activity module a per-record gate; that is its own piece of work,
+> in its own module, and is now the open item behind this finding.
+
+**Verified:** the sweep's queries were exercised read-only against production —
+one live subcontract, approved 18 August, with three unassigned pending slots
+(hr, general_manager, managing_director) — without sending anything or stamping
+anything. The sweep will nudge on it when the cron next runs.
 
 ---
 
@@ -564,6 +601,48 @@ Register list columns become kind-aware (Value → Monthly gross for employment)
    an omission.
 5. **Module group `hr`,** so an IT Manager cannot widen access to employment
    contracts.
+
+---
+
+## The 2026 ZRA rates — loaded 2026-08-25
+
+`ZAMBIAN_TAX_YEARS` stopped at 2025, so every payslip run this year fell back to
+the 2025 bands with "rates for 2026 not yet confirmed" appended to the citation.
+Correct behaviour, but not a state to leave a signed contract schedule in.
+
+**PAYE bands for the 2026 charge year are UNCHANGED from 2025.** Confirmed
+against PwC Worldwide Tax Summaries: 0–61,200 at 0%, 61,201–85,200 at 20%,
+85,201–110,400 at 30%, above 110,400 at 37% — the same monthly figures already
+in the table.
+
+> ⚠️ Several public "Zambia PAYE calculator 2026" sites claim a **25%** second
+> band, a **K9,900** third threshold and a **37.5%** top rate. They disagree with
+> PwC and with each other. They were not used. Had they been trusted, every
+> payslip would have over-withheld.
+
+**The one thing that moved is the NAPSA ceiling.** The insurable-earnings cap
+rose from K26,840 to **K37,236** a month from 1 January 2026 following a ZamStats
+adjustment to National Average Earnings, so 5% of it is **K1,861.80** per side
+(K3,723.60 total). That is a 38.7% jump — large enough to be worth confirming
+with your accountant before the first live January run, though NAPSA's own notice
+and the payroll vendors agree on it.
+
+**Who this affects:** only people earning above K26,840 a month. Below that the
+contribution is 5% of gross and the ceiling never binds — tests assert that
+everyone under the old cap is penny-identical year on year.
+
+Unchanged and deliberately left alone: NHIMA at 1%/1% (this codebase applies it
+to **basic** pay rather than gross — a Pymble policy decision recorded when the
+module was built), WCF construction 2% (industry-assessed per employer, not set
+nationally), VAT 16%.
+
+> 📌 **Not added, worth a decision:** the Skills Development Levy, 0.5%,
+> employer-only. It is not an employee deduction and it is not a 2026 change, but
+> it is a real employer cost that `employerTotalCost` does not currently include.
+
+Sources: [PwC Worldwide Tax Summaries — Zambia](https://taxsummaries.pwc.com/zambia/individual/taxes-on-personal-income),
+[Sage — NAPSA ceiling for 2026](https://communityhub.sage.com/za/sage-vip-payroll-hr/f/announcements/261227/zambia-national-pension-scheme-authority-napsa-ceiling-for-2026),
+[ZRA](https://www.zra.org.zm/).
 
 ---
 

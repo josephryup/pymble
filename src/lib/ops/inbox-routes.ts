@@ -31,6 +31,11 @@ const SOURCE_TABLE_ROUTE: Record<string, string> = {
   invoices: "/ops/invoices",
   workers: "/ops/workers",
   attendance_records: "/ops/attendance",
+  // Contracts carry notifications (approval, signature reminders, lifecycle
+  // dates) whose sourceTable is `contracts`. The subcontract register is the
+  // base; an employment contract's own notification carries a direct
+  // actionHref to /ops/hr/contracts/{id}, so it never falls through to here.
+  contracts: "/ops/contracts",
 };
 
 export function getOpsInboxRecordRoute(sourceTable: string, sourceId: string) {
@@ -70,6 +75,7 @@ export function getOpsRecordLabel(sourceTable: string) {
     invoices: "Invoice",
     workers: "Worker",
     attendance_records: "Attendance record",
+    contracts: "Contract",
   };
   return map[sourceTable] ?? "Record";
 }
