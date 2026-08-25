@@ -49,6 +49,17 @@ export type OpsEmployeeDocumentMutationTarget = {
   status: OpsEmployeeDocumentStatus;
 };
 
+/**
+ * The Operations Manager appears in all three lists below by explicit decision
+ * (2026-08-25): the OM runs HR admin day to day — approving leave, maintaining
+ * employee records, drawing up employment contracts.
+ *
+ * These three, OPS_HR_ROLES in constants.ts and
+ * private.can_access_hr_maturity() in the database must stay in step. The
+ * standing finding in this codebase is that RLS drifts WIDER than the code
+ * reading through it; here the risk runs the other way too, since every
+ * fetcher in hr.ts gates on canViewOpsHr alone.
+ */
 const HR_VIEW_ROLES: OpsUserRole[] = [
   "developer",
   "managing_director",
@@ -58,6 +69,7 @@ const HR_VIEW_ROLES: OpsUserRole[] = [
   "admin_receptionist",
   "owner",
   "manager",
+  "operations_manager",
 ];
 
 const HR_MANAGE_ROLES: OpsUserRole[] = [
@@ -68,6 +80,7 @@ const HR_MANAGE_ROLES: OpsUserRole[] = [
   "hr",
   "owner",
   "manager",
+  "operations_manager",
 ];
 
 const LEAVE_DECISION_ROLES: OpsUserRole[] = [
@@ -78,6 +91,7 @@ const LEAVE_DECISION_ROLES: OpsUserRole[] = [
   "hr",
   "owner",
   "manager",
+  "operations_manager",
 ];
 
 export function canViewOpsHr(role: OpsUserRole) {
@@ -105,6 +119,11 @@ export function canUpdateOpsEmployeeStatus(role: OpsUserRole) {
  * So: HR (who own the employee record), the Managing Director and Owner (who
  * carry the accountability), and the developer. Nobody else — including people
  * who can otherwise edit every other field on the same form.
+ *
+ * The Operations Manager was added to HR_VIEW_ROLES, HR_MANAGE_ROLES and
+ * LEAVE_DECISION_ROLES on 2026-08-25 and is DELIBERATELY absent here. Widening
+ * HR admin is a workload decision; deciding whose payslip an account can open
+ * is not. Do not "tidy" this list into line with the others.
  */
 const EMPLOYEE_ACCOUNT_LINK_ROLES: OpsUserRole[] = [
   "developer",

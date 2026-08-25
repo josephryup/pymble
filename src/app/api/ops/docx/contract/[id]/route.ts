@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { requireOpsUser } from "@/lib/ops/auth";
-import { canViewOpsContractKind } from "@/lib/ops/contract-permissions";
+import { canViewOpsContractSubject } from "@/lib/ops/contract-permissions";
 import { buildOpsContractDocx } from "@/lib/ops/contract-docx";
 import {
   buildOpsContractMergeValues,
@@ -35,7 +35,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Contract not found." }, { status: 404 });
     }
 
-    if (!canViewOpsContractKind(profile.role, contract.kind)) {
+    if (!canViewOpsContractSubject(profile.role, contract)) {
       return NextResponse.json(
         { error: "Your role cannot download this contract." },
         { status: 403 },
@@ -63,6 +63,11 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const mergeValues = buildOpsContractMergeValues({
       contract,
       orgLegalName: org.legal_name ?? "Pymble Construction Limited",
+      // fetchOpsContractById attaches this only after the visibility gate, so
+      // by the time it reaches the merge it is already cleared for this reader.
+      // The pay tokens render "—" when it is null rather than an empty string,
+      // so a missing schedule reads as missing rather than as zero.
+      remuneration: contract.remuneration,
     });
 
     const clauses = contract.clauses.map((clause) => ({

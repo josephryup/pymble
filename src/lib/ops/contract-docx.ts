@@ -159,6 +159,56 @@ export async function buildOpsContractDocx(input: {
     });
   }
 
+  // The remuneration schedule, for the employment kind. Same figures and same
+  // order as the PDF — the two documents are the same instrument in different
+  // wrappers, and a reader comparing them must not find a discrepancy.
+  const remuneration = contract.remuneration;
+  if (remuneration) {
+    blocks.push(heading("Schedule — remuneration"));
+
+    const scheduleRows: Array<[string, number]> = [
+      ["Basic salary", remuneration.basic],
+      ["Housing allowance", remuneration.housing],
+      ...remuneration.allowance_items.map(
+        (allowance) => [allowance.label, allowance.amount] as [string, number],
+      ),
+      ["Gross monthly remuneration", remuneration.gross],
+      ...(remuneration.statutory_applies
+        ? ([
+            ["Less: PAYE", remuneration.paye],
+            ["Less: NAPSA (employee)", remuneration.napsa_employee],
+            ["Less: NHIMA (employee)", remuneration.nhima_employee],
+          ] as Array<[string, number]>)
+        : []),
+      ["Net monthly pay", remuneration.net],
+    ];
+
+    blocks.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: [cell("Item", true), cell("Amount per month", true)],
+          }),
+          ...scheduleRows.map(
+            ([label, amount]) =>
+              new TableRow({
+                children: [cell(label), cell(money(amount, currency))],
+              }),
+          ),
+        ],
+      }),
+    );
+
+    blocks.push(
+      ...body(
+        remuneration.statutory_applies
+          ? `Deductions are computed under ${remuneration.citation}. Statutory rates change from time to time and the deductions above change with them; the gross salary does not.`
+          : `The Employee is paid gross and is responsible for their own tax and statutory contributions. No PAYE is withheld and no NAPSA, NHIMA or Workers' Compensation contributions are made by either party. Rates reference: ${remuneration.citation}.`,
+      ),
+    );
+  }
+
   if (contract.lines.length > 0) {
     blocks.push(heading("Value of works"));
     blocks.push(

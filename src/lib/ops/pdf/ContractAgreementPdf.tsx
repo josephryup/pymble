@@ -548,6 +548,36 @@ export function ContractAgreementPdf({
     `${milestone.payable_within_days} days`,
   ]);
 
+  // The remuneration schedule the employment clauses point at. Earnings first,
+  // then the statutory deductions, then net — the order a payslip reads in, so
+  // the person signing recognises the shape.
+  const remuneration = contract.remuneration;
+  const remunerationRows: Array<Array<string | number>> = remuneration
+    ? [
+        ["Basic salary", formatPdfMoney(remuneration.basic, currency)],
+        ["Housing allowance", formatPdfMoney(remuneration.housing, currency)],
+        ...remuneration.allowance_items.map((allowance) => [
+          allowance.label,
+          formatPdfMoney(allowance.amount, currency),
+        ]),
+        ["Gross monthly remuneration", formatPdfMoney(remuneration.gross, currency)],
+        ...(remuneration.statutory_applies
+          ? [
+              ["Less: PAYE", formatPdfMoney(remuneration.paye, currency)],
+              [
+                "Less: NAPSA (employee)",
+                formatPdfMoney(remuneration.napsa_employee, currency),
+              ],
+              [
+                "Less: NHIMA (employee)",
+                formatPdfMoney(remuneration.nhima_employee, currency),
+              ],
+            ]
+          : []),
+        ["Net monthly pay", formatPdfMoney(remuneration.net, currency)],
+      ]
+    : [];
+
   return (
     <Document
       author={resolvedOrg.legal_name ?? "Pymble Construction Limited"}
@@ -686,9 +716,27 @@ export function ContractAgreementPdf({
       {/* ---------------------------------------------------------------- */}
       {/* Page 2 — the money                                                */}
       {/* ---------------------------------------------------------------- */}
-      {lineRows.length > 0 || milestoneRows.length > 0 ? (
+      {lineRows.length > 0 || milestoneRows.length > 0 || remunerationRows.length > 0 ? (
         <Page size="A4" style={styles.page}>
           <Letterhead contract={contract} documentKind={documentKind} org={resolvedOrg} />
+
+          {remunerationRows.length > 0 && remuneration ? (
+            <>
+              <SectionHead>Schedule — remuneration</SectionHead>
+              <Table
+                columns={[
+                  { label: "Item", widthPct: 62 },
+                  { label: "Amount per month", widthPct: 38, align: "right" },
+                ]}
+                rows={remunerationRows}
+              />
+              <Text style={styles.note}>
+                {remuneration.statutory_applies
+                  ? `Deductions are computed under ${remuneration.citation}. Statutory rates change from time to time and the deductions above change with them; the gross salary does not.`
+                  : `The Employee is paid gross and is responsible for their own tax and statutory contributions. No PAYE is withheld and no NAPSA, NHIMA or Workers' Compensation contributions are made by either party. Rates reference: ${remuneration.citation}.`}
+              </Text>
+            </>
+          ) : null}
 
           {lineRows.length > 0 ? (
             <>

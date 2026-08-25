@@ -1,3 +1,4 @@
+import { opsContractHref } from "@/lib/ops/contract-types";
 import { logOpsServerError } from "@/lib/ops/log";
 import { fanoutToOpsAudiences } from "@/lib/ops/notification-fanout";
 import { queueOpsNotification } from "@/lib/ops/notifications";
@@ -23,7 +24,7 @@ import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
  * how people learn to ignore a notification channel entirely.
  */
 
-const ROUTE = "/ops/contracts";
+
 const MODULE = "contracts";
 
 /** Warn this far ahead, so there is time to act rather than just be informed. */
@@ -70,7 +71,7 @@ export async function runOpsContractLifecycleSweep(): Promise<OpsContractSweepRe
   try {
     const { data: expiring } = await supabase
       .from("contracts")
-      .select("id, contract_number, title, end_date")
+      .select("id, contract_number, title, end_date, kind")
       .in("status", ["active", "signed"])
       .is("archived_at", null)
       .is("expiry_notified_at", null)
@@ -81,7 +82,7 @@ export async function runOpsContractLifecycleSweep(): Promise<OpsContractSweepRe
       await Promise.all(
         commercialAudience.map((recipient) =>
           queueOpsNotification({
-            actionHref: `${ROUTE}/${contract.id}`,
+            actionHref: opsContractHref(contract.kind, contract.id),
             body: `The contract period ends on ${contract.end_date}. Extend it by addendum or move it to completion.`,
             // Keyed on the contract, not on the date: a dated key regenerates
             // every day and re-notifies, which is how 88% of notifications
@@ -130,7 +131,7 @@ export async function runOpsContractLifecycleSweep(): Promise<OpsContractSweepRe
       await Promise.all(
         financeAudience.map((recipient) =>
           queueOpsNotification({
-            actionHref: `${ROUTE}/${milestone.contract_id}`,
+            actionHref: opsContractHref("subcontract", milestone.contract_id),
             body: `${parent?.currency_code ?? "ZMW"} ${Number(milestone.amount ?? 0).toLocaleString("en-ZM")} has been held since completion and the defects liability period has now run.`,
             idempotencyKey: `contract-retention:${milestone.id}:${recipient.id}`,
             moduleKey: MODULE,
@@ -163,7 +164,7 @@ export async function runOpsContractLifecycleSweep(): Promise<OpsContractSweepRe
   try {
     const { data: completed } = await supabase
       .from("contracts")
-      .select("id, contract_number, title, completed_at, warranty_months")
+      .select("id, contract_number, title, completed_at, warranty_months, kind")
       .eq("status", "completed")
       .is("archived_at", null)
       .is("warranty_notified_at", null)
@@ -182,7 +183,7 @@ export async function runOpsContractLifecycleSweep(): Promise<OpsContractSweepRe
       await Promise.all(
         commercialAudience.map((recipient) =>
           queueOpsNotification({
-            actionHref: `${ROUTE}/${contract.id}`,
+            actionHref: opsContractHref(contract.kind, contract.id),
             body: `Workmanship warranty ends on ${expiryDate}. Raise any outstanding defects before it lapses.`,
             idempotencyKey: `contract-warranty:${contract.id}:${recipient.id}`,
             moduleKey: MODULE,

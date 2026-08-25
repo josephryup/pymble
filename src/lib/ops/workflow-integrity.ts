@@ -232,6 +232,86 @@ export async function runOpsWorkflowIntegrityChecks(): Promise<IntegrityReport> 
     },
   });
 
+  // ── Contracts: the subject gate (2026-08-25 leak) ───────────────────────
+  //
+  // A subcontract-kind row naming an employee was readable by every commercial
+  // role, because all four privacy gates read `kind` alone. The database now
+  // refuses the row outright; this watches for it anyway. A CHECK constraint
+  // can be dropped by a migration, and the whole point of this file is that
+  // nothing was watching the last time an invariant quietly stopped holding.
+  const { data: mismatchedSubjects } = await supabase
+    .from("contracts")
+    .select("contract_number, kind, counterparty_type")
+    .or(
+      "and(kind.eq.employment,counterparty_type.neq.employee),and(kind.neq.employment,counterparty_type.eq.employee)",
+    );
+  add({
+    key: "contract_kind_matches_counterparty",
+    invariant:
+      "Every employment contract is with an employee, and every subcontract with a subcontractor.",
+    finding:
+      "2026-08 HR contracts audit F2 — the privacy gates read `kind`, so a works order could name an employee and expose their details to the commercial roles.",
+    severity: "critical",
+    rows: (mismatchedSubjects ?? []) as Array<Record<string, unknown>>,
+    label: (row) => `${row.contract_number} (${row.kind} → ${row.counterparty_type})`,
+  });
+
+  // ── Contracts: no executed employment contract without its schedule ─────
+  const { data: unpricedEmployment } = await supabase
+    .from("contracts")
+    .select("contract_number, status, remuneration_snapshot")
+    .eq("kind", "employment")
+    .not("status", "in", "(draft,in_review,cancelled)");
+  const missingSchedule = (
+    (unpricedEmployment ?? []) as Array<{
+      contract_number: string;
+      status: string;
+      remuneration_snapshot: Record<string, unknown> | null;
+    }>
+  ).filter((row) => !row.remuneration_snapshot || !("net" in row.remuneration_snapshot));
+  add({
+    key: "employment_contracts_carry_their_schedule",
+    invariant:
+      "No employment contract past draft is missing the remuneration schedule frozen at approval.",
+    finding:
+      "2026-08 HR contracts audit F4 — the Remuneration clause promised a schedule the record could not hold.",
+    severity: "critical",
+    rows: missingSchedule,
+    label: (row) => `${row.contract_number} (${row.status})`,
+  });
+
+  // ── Contracts: a pay record belongs to the person it is quoted at ───────
+  //
+  // employee_contract_id is free to point at any pay record; only the action
+  // layer checks that it belongs to this contract's employee. If that check is
+  // ever bypassed, a contract quotes a colleague's salary — and nothing about
+  // the row looks wrong.
+  const { data: linkedContracts } = await supabase
+    .from("contracts")
+    .select(
+      "contract_number, employee_id, pay_record:employee_contracts!contracts_employee_contract_id_fkey(employee_id)",
+    )
+    .not("employee_contract_id", "is", null);
+  const crossedPayRecords = (
+    (linkedContracts ?? []) as Array<{
+      contract_number: string;
+      employee_id: string | null;
+      pay_record: { employee_id: string } | { employee_id: string }[] | null;
+    }>
+  ).filter((row) => {
+    const record = Array.isArray(row.pay_record) ? row.pay_record[0] : row.pay_record;
+    return Boolean(record) && record?.employee_id !== row.employee_id;
+  });
+  add({
+    key: "contract_pay_record_matches_employee",
+    invariant: "No contract draws its pay schedule from another employee's record.",
+    finding:
+      "2026-08 HR contracts audit D1 — employee_contract_id can point anywhere; only the action layer checks whose record it is.",
+    severity: "critical",
+    rows: crossedPayRecords,
+    label: (row) => String(row.contract_number),
+  });
+
   const failing = checks.filter((check) => check.violations > 0).length;
 
   return {

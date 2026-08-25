@@ -1,4 +1,4 @@
-import { FileSignature, PenLine, Plus, ShieldAlert, ShieldCheck } from "lucide-react";
+import { FileSignature, PenLine, Plus, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,10 +11,15 @@ import {
 } from "@/lib/ops/contract-actions";
 import {
   canApproveOpsContract,
-  canDraftOpsContractKind,
+  canDraftOpsContractSubject,
   canViewOpsContracts,
+  canViewOpsPersonalContracts,
 } from "@/lib/ops/contract-permissions";
-import { OPS_CONTRACT_STATUS_LABELS } from "@/lib/ops/contract-types";
+import {
+  opsContractHref,
+  OPS_CONTRACT_STATUS_LABELS,
+  type OpsContractKind,
+} from "@/lib/ops/contract-types";
 import {
   fetchOpsContracts,
   fetchOpsContractStats,
@@ -48,45 +53,60 @@ import {
   type OpsSearchParams,
 } from "@/lib/ops/ui";
 
-export const dynamic = "force-dynamic";
-
-type PageProps = {
+type RegisterProps = {
+  /**
+   * Locked by the route, never chosen in the form. This is what makes a
+   * mismatched kind/counterparty pair unconstructible from the UI — the leak of
+   * 2026-08-25 depended on those being two independent dropdowns.
+   */
+  kind: OpsContractKind;
   searchParams?: Promise<OpsSearchParams>;
 };
 
-export default async function OpsContractsPage({ searchParams }: PageProps) {
+export async function OpsContractRegisterPage({ kind, searchParams }: RegisterProps) {
   const search = (await (searchParams ?? Promise.resolve({} as OpsSearchParams))) ?? {};
   const { profile } = await requireOpsUser();
 
+  const isEmployment = kind === "employment";
+  const counterpartyType = isEmployment ? "employee" : "subcontractor";
+
   if (
-    !canAccessOpsHref(profile.role, "/ops/contracts", await fetchOpsModuleAccessOverrides())
+    !canAccessOpsHref(
+      profile.role,
+      opsContractHref(kind),
+      await fetchOpsModuleAccessOverrides(),
+    )
   ) {
     notFound();
   }
   if (!canViewOpsContracts(profile.role)) notFound();
+  // The register-level half of the privacy gate. fetchOpsContracts applies it
+  // again per row; this stops the page rendering its furniture at all.
+  if (isEmployment && !canViewOpsPersonalContracts(profile.role)) notFound();
 
-  const canDraftSubcontract = canDraftOpsContractKind(profile.role, "subcontract");
-  const canDraftEmployment = canDraftOpsContractKind(profile.role, "employment");
-  const canDraft = canDraftSubcontract || canDraftEmployment;
+  const canDraft = canDraftOpsContractSubject(profile.role, {
+    kind,
+    counterparty_type: counterpartyType,
+  });
 
   const [contracts, stats, allTemplates, subcontractors, sites, employees] =
     await Promise.all([
-      fetchOpsContracts({ limit: 200 }),
+      fetchOpsContracts({ kind, limit: 200 }),
       fetchOpsContractStats(),
-      fetchOpsContractTemplates(),
-      canDraft ? fetchOpsSubcontractors() : Promise.resolve([]),
+      fetchOpsContractTemplates(kind),
+      canDraft && !isEmployment ? fetchOpsSubcontractors() : Promise.resolve([]),
       canDraft ? fetchOpsSites() : Promise.resolve([]),
-      // Only loaded for someone who can actually draft an employment contract —
-      // the staff list is not incidental data to hand to a quantity surveyor.
-      canDraftEmployment ? fetchActiveEmployeeOptions() : Promise.resolve([]),
+      // Only loaded on the employment route, and only for someone who can draft
+      // there — the staff list is not incidental data to hand to a QS.
+      canDraft && isEmployment ? fetchActiveEmployeeOptions() : Promise.resolve([]),
     ]);
 
   const notice = noticeFromParams(search, "contract", "Contract created.");
   const error = firstParam(search.error);
 
-  const visibleTemplates = allTemplates.filter((template) =>
-    template.kind === "employment" ? canDraftEmployment : canDraftSubcontract,
-  );
+  // fetchOpsContractTemplates already filtered to this kind; nothing further to
+  // decide, and nothing from the other kind is in the list to leak into it.
+  const visibleTemplates = allTemplates;
 
   const canRecordReview = canApproveOpsContract(profile.role);
   // Always fetched, not gated on canDraft: a reviewer needs to see the blocked
@@ -98,9 +118,13 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
   return (
     <div className="w-full max-w-none space-y-6">
       <OpsPageHeader
-        eyebrow="Contracts"
-        title="Contract register"
-        description="Generate subcontractor works orders and employment contracts from the standard templates, edit clauses per contract, route them for approval, and sign them with your own signature."
+        eyebrow={isEmployment ? "Human Resources" : "Commercial"}
+        title={isEmployment ? "Employment contracts" : "Subcontract register"}
+        description={
+          isEmployment
+            ? "Draw up employment contracts from the standard template against each employee's pay record, edit clauses per contract, route them for approval, and sign them with your own signature."
+            : "Generate subcontractor works orders from the standard template, edit clauses per contract, route them for approval, and sign them with your own signature."
+        }
       />
 
       {error ? (
@@ -110,7 +134,11 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
       ) : null}
       {notice ? <div className={OPS_NOTICE_SUCCESS_CLASS}>{notice.message}</div> : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section
+        className={`grid gap-3 sm:grid-cols-2 ${
+          isEmployment ? "lg:grid-cols-3" : "lg:grid-cols-4"
+        }`}
+      >
         <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Drafts
@@ -127,28 +155,45 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
             {stats.awaiting_signature}
           </p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Active value
-          </p>
-          <p className="mt-1 font-heading text-2xl font-bold tabular-nums text-foreground">
-            {formatZmw(stats.active_value)}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {stats.active} live contract{stats.active === 1 ? "" : "s"}
-          </p>
-        </div>
-        <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Retention held
-          </p>
-          <p className="mt-1 font-heading text-2xl font-bold tabular-nums text-foreground">
-            {formatZmw(stats.retention_held)}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Computed from contract terms, not yet certified
-          </p>
-        </div>
+        {isEmployment ? (
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Live contracts
+            </p>
+            <p className="mt-1 font-heading text-2xl font-bold tabular-nums text-foreground">
+              {stats.active_employment}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Signed and in force
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Active value
+              </p>
+              <p className="mt-1 font-heading text-2xl font-bold tabular-nums text-foreground">
+                {formatZmw(stats.active_value)}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {stats.active_subcontracts} live subcontract
+                {stats.active_subcontracts === 1 ? "" : "s"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Retention held
+              </p>
+              <p className="mt-1 font-heading text-2xl font-bold tabular-nums text-foreground">
+                {formatZmw(stats.retention_held)}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Computed from contract terms, not yet certified
+              </p>
+            </div>
+          </>
+        )}
       </section>
 
       {unreviewedTemplates.length > 0 ? (
@@ -254,62 +299,24 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
                 </select>
               </div>
 
-              <div>
-                <label className={OPS_LABEL_CLASS} htmlFor="kind">
-                  Kind
-                </label>
-                <select className={OPS_INPUT_CLASS} id="kind" name="kind" required>
-                  {canDraftSubcontract ? (
-                    <option value="subcontract">Subcontract / works order</option>
-                  ) : null}
-                  {canDraftEmployment ? (
-                    <option value="employment">Employment contract</option>
-                  ) : null}
-                </select>
-              </div>
+              {/* The kind is the route, not a choice. A hidden field rather
+                  than a dropdown is what makes the mismatched pair that leaked
+                  employee details unconstructible from the UI; the action
+                  derives counterparty_type from it and refuses a posted one
+                  that disagrees. */}
+              <input type="hidden" name="kind" value={kind} />
 
-              <div>
-                <label className={OPS_LABEL_CLASS} htmlFor="counterparty_type">
-                  Counterparty type
-                </label>
-                <select
-                  className={OPS_INPUT_CLASS}
-                  id="counterparty_type"
-                  name="counterparty_type"
-                  required
-                >
-                  <option value="subcontractor">Subcontractor</option>
-                  {canDraftEmployment ? (
-                    <option value="employee">Employee</option>
-                  ) : null}
-                </select>
-              </div>
-
-              <div>
-                <label className={OPS_LABEL_CLASS} htmlFor="subcontractor_id">
-                  Subcontractor
-                </label>
-                <select
-                  className={OPS_INPUT_CLASS}
-                  id="subcontractor_id"
-                  name="subcontractor_id"
-                >
-                  <option value="">—</option>
-                  {subcontractors.map((sub) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.company_name}
-                      {sub.kind === "general" ? " (individual)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {canDraftEmployment ? (
+              {isEmployment ? (
                 <div>
                   <label className={OPS_LABEL_CLASS} htmlFor="employee_id">
                     Employee
                   </label>
-                  <select className={OPS_INPUT_CLASS} id="employee_id" name="employee_id">
+                  <select
+                    className={OPS_INPUT_CLASS}
+                    id="employee_id"
+                    name="employee_id"
+                    required
+                  >
                     <option value="">—</option>
                     {employees.map((employee) => (
                       <option key={employee.id} value={employee.id}>
@@ -318,7 +325,27 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
                     ))}
                   </select>
                 </div>
-              ) : null}
+              ) : (
+                <div>
+                  <label className={OPS_LABEL_CLASS} htmlFor="subcontractor_id">
+                    Subcontractor
+                  </label>
+                  <select
+                    className={OPS_INPUT_CLASS}
+                    id="subcontractor_id"
+                    name="subcontractor_id"
+                    required
+                  >
+                    <option value="">—</option>
+                    {subcontractors.map((sub) => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.company_name}
+                        {sub.kind === "general" ? " (individual)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className={OPS_LABEL_CLASS} htmlFor="site_id">
@@ -343,7 +370,11 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
                   id="title"
                   name="title"
                   maxLength={200}
-                  placeholder="e.g. 30 x 78 and 30 x 18 warehouses — structural works to slab level"
+                  placeholder={
+                    isEmployment
+                      ? "e.g. Contract of employment — Site Foreman"
+                      : "e.g. 30 x 78 and 30 x 18 warehouses — structural works to slab level"
+                  }
                   required
                 />
               </div>
@@ -388,9 +419,18 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
                   <th className={OPS_TH_CLASS}>Number</th>
                   <th className={OPS_TH_CLASS}>Counterparty</th>
                   <th className={OPS_TH_CLASS}>Title</th>
-                  <th className={OPS_TH_CLASS}>Kind</th>
-                  <th className={OPS_TH_CLASS}>Site</th>
-                  <th className={OPS_TH_NUM_CLASS}>Value</th>
+                  <th className={OPS_TH_CLASS}>
+                    {isEmployment ? "Place of work" : "Site"}
+                  </th>
+                  {/* Every row on this register is the same kind, so a Kind
+                      column would repeat itself. Value is a subcontract
+                      concept; the employment register shows the start date,
+                      which is what HR actually looks for. */}
+                  {isEmployment ? (
+                    <th className={OPS_TH_CLASS}>Starts</th>
+                  ) : (
+                    <th className={OPS_TH_NUM_CLASS}>Value</th>
+                  )}
                   <th className={OPS_TH_CLASS}>Status</th>
                   <th className={OPS_TH_CLASS}>Created</th>
                 </tr>
@@ -401,7 +441,7 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
                     <td className={OPS_TD_CLASS}>
                       <Link
                         className="font-semibold text-primary-blue underline-offset-2 hover:underline"
-                        href={`/ops/contracts/${contract.id}`}
+                        href={opsContractHref(contract.kind, contract.id)}
                       >
                         {contract.contract_number}
                       </Link>
@@ -409,19 +449,19 @@ export default async function OpsContractsPage({ searchParams }: PageProps) {
                     <td className={OPS_TD_CLASS}>{contract.counterparty_name}</td>
                     <td className={OPS_TD_CLASS}>{contract.title || "—"}</td>
                     <td className={OPS_TD_CLASS}>
-                      {contract.kind === "employment" ? (
-                        <span className="inline-flex items-center gap-1">
-                          <ShieldCheck className="size-3.5" aria-hidden="true" />
-                          Employment
-                        </span>
-                      ) : (
-                        "Subcontract"
-                      )}
+                      {(isEmployment ? contract.place_of_work : "") ||
+                        contract.site?.name ||
+                        "—"}
                     </td>
-                    <td className={OPS_TD_CLASS}>{contract.site?.name ?? "—"}</td>
-                    <td className={OPS_TD_NUM_CLASS}>
-                      {formatZmw(Number(contract.total_value ?? 0))}
-                    </td>
+                    {isEmployment ? (
+                      <td className={OPS_TD_CLASS}>
+                        {formatOpsDate(contract.start_date)}
+                      </td>
+                    ) : (
+                      <td className={OPS_TD_NUM_CLASS}>
+                        {formatZmw(Number(contract.total_value ?? 0))}
+                      </td>
+                    )}
                     <td className={OPS_TD_CLASS}>
                       <span className={opsStatusBadgeClass(contract.status)}>
                         {OPS_CONTRACT_STATUS_LABELS[contract.status]}

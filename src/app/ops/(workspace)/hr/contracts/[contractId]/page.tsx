@@ -2,9 +2,8 @@ import { OpsContractDetailPage } from "@/components/ops/OpsContractDetailPage";
 import type { OpsSearchParams } from "@/lib/ops/ui";
 
 /**
- * A subcontract. An employment contract reaching this route is forwarded to
- * /ops/hr/contracts/[id] with its query string intact, so older links and the
- * action error redirects that fire before a kind is known still arrive.
+ * An employment contract. A subcontract reaching this route is forwarded to
+ * /ops/contracts/[id] rather than 404ing.
  */
 export const dynamic = "force-dynamic";
 
@@ -17,7 +16,7 @@ export default function Page({
 }) {
   return (
     <OpsContractDetailPage
-      kind="subcontract"
+      kind="employment"
       params={params}
       searchParams={searchParams}
     />

@@ -242,6 +242,30 @@ const OPS_HR_ROLES: OpsUserRole[] = [
   "human_resource",
   "hr",
   "admin_receptionist",
+  // Operations Manager, added 2026-08-25 by explicit decision: the OM runs HR
+  // admin day to day — approving leave, maintaining employee records and
+  // drawing up employment contracts. Kept in step with HR_VIEW_ROLES and
+  // HR_MANAGE_ROLES in hr-permissions.ts and with
+  // private.can_access_hr_maturity() in the database; all four must agree.
+  //
+  // NOT added to EMPLOYEE_ACCOUNT_LINK_ROLES — see the note there.
+  "operations_manager",
+];
+
+/**
+ * Who reaches the employment contract register.
+ *
+ * HR minus the Admin/Receptionist: employment contracts carry pay, and the
+ * receptionist sits in OPS_HR_ROLES for the directory and leave diary rather
+ * than for salaries. Matches PERSONAL_CONTRACT_VIEWER_ROLES in
+ * contract-permissions.ts, which is the gate that actually runs.
+ */
+const OPS_HR_CONTRACT_ROLES: OpsUserRole[] = [
+  ...OPS_LEADERSHIP_ROLES,
+  "manager",
+  "human_resource",
+  "hr",
+  "operations_manager",
 ];
 
 const OPS_FLEET_LOGISTICS_ROLES: OpsUserRole[] = [
@@ -1051,14 +1075,15 @@ export const OPS_MODULES: OpsModule[] = [
   },
   {
     description:
-      "Generate subcontractor works orders and employment contracts from the standard templates, edit clauses per contract, route them for approval, and sign them with your own signature.",
+      "Generate subcontractor works orders from the standard template, edit clauses per contract, route them for approval, and sign them with your own signature.",
     group: "operations",
     href: "/ops/contracts",
     id: "contracts",
+    // HR roles removed: employment contracts moved to /ops/hr/contracts, and a
+    // works-order register is not an HR tool. The commercial roles stay,
+    // because pricing a subcontract is exactly their job.
     navigationRoles: [
       ...OPS_LEADERSHIP_ROLES,
-      "human_resource",
-      "hr",
       "operations_manager",
       "projects_manager",
       "procurement_manager",
@@ -1068,7 +1093,26 @@ export const OPS_MODULES: OpsModule[] = [
     phase: "Phase 12",
     roles: OPS_OPERATIONAL_ROLES,
     status: "ready",
-    title: "Contracts",
+    title: "Subcontracts",
+  },
+  {
+    description:
+      "Draw up employment contracts from the standard template against each employee's pay record, edit clauses per contract, route them for approval, and sign them with your own signature.",
+    // Group "hr" is load-bearing, not cosmetic: SENSITIVE_MODULE_GROUPS
+    // includes it, so isSensitiveOpsModule() is true and an IT Manager can no
+    // longer widen access to employment contracts from the module-access
+    // screen. Only the Managing Director can. Under "operations" they could.
+    group: "hr",
+    href: "/ops/hr/contracts",
+    id: "hr-contracts",
+    // The same set that can already see salaries elsewhere in HR. The page
+    // itself re-checks canViewOpsPersonalContracts, so this list is the nav and
+    // module gate rather than the privacy gate.
+    navigationRoles: OPS_HR_CONTRACT_ROLES,
+    roles: OPS_HR_CONTRACT_ROLES,
+    phase: "Phase 12",
+    status: "ready",
+    title: "Employment contracts",
   },
   {
     description: "All department reports routed up for leadership review. Departments with pending reviews are surfaced first; drill into any department from here.",

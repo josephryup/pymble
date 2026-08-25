@@ -84,6 +84,7 @@ export const OPS_NAV_ICONS: Record<string, LucideIcon> = {
   "/ops/inbox": MessageSquare,
   "/ops/subcontractors": Handshake,
   "/ops/contracts": FileSignature,
+  "/ops/hr/contracts": FileSignature,
 
   // Engineering
   "/ops/daily-site-reports": ClipboardList,

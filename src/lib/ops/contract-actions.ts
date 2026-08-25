@@ -11,12 +11,12 @@ import { requireOpsUser } from "@/lib/ops/auth";
 import {
   canApproveOpsContract,
   canCertifyOpsContractMilestone,
-  canDraftOpsContractKind,
+  canDraftOpsContractSubject,
   canIssueOpsContract,
   canReviewOpsContract,
   canSignOpsContractAs,
   canTerminateOpsContract,
-  canViewOpsContractKind,
+  canViewOpsContractSubject,
   OPS_CONTRACT_INTERNAL_SIGNATORIES,
 } from "@/lib/ops/contract-permissions";
 import {
@@ -29,11 +29,19 @@ import {
   generateOpsSignatureVerificationCode,
   hashOpsContractContent,
 } from "@/lib/ops/contract-signatures";
-import type {
-  OpsContractDetail,
-  OpsContractSignatoryRole,
-  OpsContractStatus,
+import {
+  isOpsContractSubjectConsistent,
+  opsContractHasSection,
+  opsContractHref,
+  opsContractSectionForField,
+  OPS_CONTRACT_ROUTES,
+  type OpsContractCounterpartyType,
+  type OpsContractDetail,
+  type OpsContractKind,
+  type OpsContractSignatoryRole,
+  type OpsContractStatus,
 } from "@/lib/ops/contract-types";
+import { buildOpsContractRemunerationSnapshot } from "@/lib/ops/contract-remuneration";
 import {
   computeOpsContractTotals,
   fetchOpsContractById,
@@ -53,7 +61,8 @@ import {
 } from "@/lib/ops/record-attachments";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
-const ROUTE = "/ops/contracts";
+/** Fallback base for the handful of paths that fail before a kind is known. */
+const ROUTE = OPS_CONTRACT_ROUTES.subcontract;
 const MODULE = "contracts";
 
 function field(formData: FormData, name: string) {
@@ -61,14 +70,40 @@ function field(formData: FormData, name: string) {
   return typeof value === "string" ? value : "";
 }
 
-function contractError(message: string, contractId?: string): never {
-  const base = contractId ? `${ROUTE}/${contractId}` : ROUTE;
+/**
+ * Redirect back to the contract with an error on it.
+ *
+ * Takes the contract rather than its id wherever one is in hand, because the
+ * two kinds now live on different routes. Given only an id — the paths that
+ * fail before the row is loaded — it falls back to the subcontract route, and
+ * that page forwards to the HR one for an employment contract, carrying the
+ * query string with it. So the message survives either way.
+ */
+function contractError(
+  message: string,
+  target?: string | { id: string; kind: OpsContractKind },
+): never {
+  const base =
+    typeof target === "string"
+      ? `${ROUTE}/${target}`
+      : target
+        ? opsContractHref(target.kind, target.id)
+        : ROUTE;
+
   redirect(`${base}?error=${encodeURIComponent(safeOpsActionErrorMessage(message))}`);
 }
 
+/**
+ * Revalidate both registers.
+ *
+ * Cheap, and it removes a whole class of "the list is stale on the other route"
+ * bug that threading the kind through every call site would only mostly fix.
+ */
 function revalidateContract(contractId?: string) {
-  revalidatePath(ROUTE);
-  if (contractId) revalidatePath(`${ROUTE}/${contractId}`);
+  for (const base of Object.values(OPS_CONTRACT_ROUTES)) {
+    revalidatePath(base);
+    if (contractId) revalidatePath(`${base}/${contractId}`);
+  }
 }
 
 /**
@@ -125,15 +160,43 @@ function formatContractMoney(amount: number, currency: string) {
 // Drafting
 // ---------------------------------------------------------------------------
 
-const createSchema = z.object({
-  template_id: z.string().uuid("Choose a template."),
-  kind: z.enum(["subcontract", "employment"]),
-  counterparty_type: z.enum(["subcontractor", "employee"]),
-  subcontractor_id: z.string().trim().default(""),
-  employee_id: z.string().trim().default(""),
-  title: z.string().trim().min(2, "Give the contract a title.").max(200),
-  site_id: z.string().trim().default(""),
-});
+const createSchema = z
+  .object({
+    template_id: z.string().uuid("Choose a template."),
+    kind: z.enum(["subcontract", "employment"]),
+    // Optional: the form no longer asks. The kind decides it (see below), and a
+    // field the browser never sends is a field nobody can tamper with. It stays
+    // in the schema so an explicit post is REFUSED rather than silently
+    // corrected — a rejected attempt leaves an error the reviewer can see.
+    counterparty_type: z.enum(["subcontractor", "employee"]).optional(),
+    subcontractor_id: z.string().trim().default(""),
+    employee_id: z.string().trim().default(""),
+    title: z.string().trim().min(2, "Give the contract a title.").max(200),
+    site_id: z.string().trim().default(""),
+  })
+  // The two halves of the subject must agree. Without this, a subcontract-kind
+  // contract could name an employee — and every privacy gate in the module used
+  // to read only `kind`, so that row was readable by the whole commercial side.
+  // The database carries the same rule as contracts_kind_matches_counterparty;
+  // this refine exists so the user gets a sentence instead of a 23514.
+  .refine(
+    (value) =>
+      value.counterparty_type === undefined ||
+      isOpsContractSubjectConsistent({
+        kind: value.kind,
+        counterparty_type: value.counterparty_type,
+      }),
+    {
+      message:
+        "An employment contract must be with an employee, and a subcontract with a subcontractor.",
+      path: ["counterparty_type"],
+    },
+  );
+
+/** The counterparty a contract of this kind is, by definition, with. */
+function counterpartyTypeForKind(kind: OpsContractKind): OpsContractCounterpartyType {
+  return kind === "employment" ? "employee" : "subcontractor";
+}
 
 /**
  * Start a draft from a template.
@@ -149,7 +212,7 @@ export async function createOpsContractDraftAction(formData: FormData) {
   const parsed = createSchema.safeParse({
     template_id: field(formData, "template_id"),
     kind: field(formData, "kind") || "subcontract",
-    counterparty_type: field(formData, "counterparty_type") || "subcontractor",
+    counterparty_type: field(formData, "counterparty_type") || undefined,
     subcontractor_id: field(formData, "subcontractor_id"),
     employee_id: field(formData, "employee_id"),
     title: field(formData, "title"),
@@ -161,16 +224,32 @@ export async function createOpsContractDraftAction(formData: FormData) {
   }
 
   const input = parsed.data;
+  // Derived, never taken from the request. The refine above has already
+  // refused a posted value that disagrees with the kind, so this cannot be
+  // silently overriding an explicit choice.
+  const counterpartyType = counterpartyTypeForKind(input.kind);
+  const subject = { kind: input.kind, counterparty_type: counterpartyType };
 
-  if (!canDraftOpsContractKind(profile.role, input.kind)) {
+  if (!canDraftOpsContractSubject(profile.role, subject)) {
     contractError("Your role cannot draft this kind of contract.");
   }
 
-  if (input.counterparty_type === "subcontractor" && !input.subcontractor_id) {
+  if (counterpartyType === "subcontractor" && !input.subcontractor_id) {
     contractError("Choose the subcontractor this contract is with.");
   }
-  if (input.counterparty_type === "employee" && !input.employee_id) {
+  if (counterpartyType === "employee" && !input.employee_id) {
     contractError("Choose the employee this contract is with.");
+  }
+
+  // Refuse a stray id rather than nulling it out quietly. The employee
+  // <select> is hidden from a role that cannot draft for a person, but a Server
+  // Action takes whatever FormData is posted to it — hiding a field is not a
+  // gate, and a silent null would hide the attempt from the reviewer too.
+  if (input.employee_id && counterpartyType !== "employee") {
+    contractError("An employee can only be named on an employment contract.");
+  }
+  if (input.subcontractor_id && counterpartyType !== "subcontractor") {
+    contractError("A subcontractor can only be named on a subcontract.");
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -198,10 +277,10 @@ export async function createOpsContractDraftAction(formData: FormData) {
       template_version: template.version,
       kind: input.kind,
       status: "draft" satisfies OpsContractStatus,
-      counterparty_type: input.counterparty_type,
+      counterparty_type: counterpartyType,
       subcontractor_id:
-        input.counterparty_type === "subcontractor" ? input.subcontractor_id : null,
-      employee_id: input.counterparty_type === "employee" ? input.employee_id : null,
+        counterpartyType === "subcontractor" ? input.subcontractor_id : null,
+      employee_id: counterpartyType === "employee" ? input.employee_id : null,
       site_id: input.site_id || null,
       title: input.title,
       vat_percent: template.default_vat_percent,
@@ -260,7 +339,7 @@ export async function createOpsContractDraftAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}`);
+  redirect(opsContractHref(input.kind, contract.id));
 }
 
 /**
@@ -274,8 +353,8 @@ async function loadEditableContract(contractId: string) {
   const contract = await fetchOpsContractById(contractId);
 
   if (!contract) contractError("Contract not found.");
-  if (!canDraftOpsContractKind(profile.role, contract.kind)) {
-    contractError("Your role cannot edit this contract.", contract.id);
+  if (!canDraftOpsContractSubject(profile.role, contract)) {
+    contractError("Your role cannot edit this contract.", contract);
   }
   if (contract.status !== "draft") {
     contractError(
@@ -340,6 +419,35 @@ async function recomputeOpsContractTotals(contractId: string) {
   );
 }
 
+/**
+ * Refuse a posted field the contract's kind does not own.
+ *
+ * The form stopped rendering these inputs in Phase 2, but a Server Action takes
+ * whatever FormData reaches it — a stale tab, a replayed request or a hand-made
+ * POST all arrive the same way. Hiding an input is a presentation decision;
+ * this is the gate.
+ *
+ * Only fields actually PRESENT in the request are checked. A field the form
+ * never sends is simply absent, and absent is not an attempt.
+ */
+function assertOpsContractSectionAllowed(
+  contract: { id: string; kind: OpsContractKind },
+  formData: FormData,
+) {
+  for (const key of new Set(formData.keys())) {
+    const section = opsContractSectionForField(key);
+    if (!section) continue;
+    if (opsContractHasSection(contract.kind, section)) continue;
+
+    contractError(
+      contract.kind === "employment"
+        ? "An employment contract has no retention, penalties or priced works. Reload the page and try again."
+        : "A subcontract has no employment terms or pay schedule. Reload the page and try again.",
+      contract.id,
+    );
+  }
+}
+
 const termsSchema = z.object({
   title: z.string().trim().min(2, "Give the contract a title.").max(200),
   work_order_number: z.string().trim().max(80).default(""),
@@ -363,6 +471,14 @@ const termsSchema = z.object({
   min_workers: z.coerce.number().int().min(0).max(10000).default(0),
   payment_terms_days: z.coerce.number().int().min(0).max(365).default(14),
   roe_reference: z.string().trim().max(120).default(""),
+  // Employment terms. Bounds mirror the database CHECKs so the user gets a
+  // sentence rather than a constraint name.
+  job_title: z.string().trim().max(160).default(""),
+  place_of_work: z.string().trim().max(200).default(""),
+  probation_months: z.coerce.number().int().min(0).max(12).default(0),
+  notice_period_days: z.coerce.number().int().min(0).max(365).default(0),
+  annual_leave_days: z.coerce.number().min(0).max(365).default(0),
+  hours_per_week: z.coerce.number().min(0).max(168).default(0),
 });
 
 function nullableDate(value: string) {
@@ -373,6 +489,8 @@ function nullableDate(value: string) {
 export async function updateOpsContractTermsAction(formData: FormData) {
   const contractId = field(formData, "contract_id");
   const { contract, profile } = await loadEditableContract(contractId);
+
+  assertOpsContractSectionAllowed(contract, formData);
 
   const parsed = termsSchema.safeParse({
     title: field(formData, "title"),
@@ -397,6 +515,12 @@ export async function updateOpsContractTermsAction(formData: FormData) {
     min_workers: field(formData, "min_workers") || 0,
     payment_terms_days: field(formData, "payment_terms_days") || 14,
     roe_reference: field(formData, "roe_reference"),
+    job_title: field(formData, "job_title"),
+    place_of_work: field(formData, "place_of_work"),
+    probation_months: field(formData, "probation_months") || 0,
+    notice_period_days: field(formData, "notice_period_days") || 0,
+    annual_leave_days: field(formData, "annual_leave_days") || 0,
+    hours_per_week: field(formData, "hours_per_week") || 0,
   });
 
   if (!parsed.success) {
@@ -413,7 +537,7 @@ export async function updateOpsContractTermsAction(formData: FormData) {
   // Caught here rather than by the database CHECK so the user gets a sentence
   // instead of a constraint name.
   if (startDate && endDate && endDate < startDate) {
-    contractError("The end date cannot be before the start date.", contract.id);
+    contractError("The end date cannot be before the start date.", contract);
   }
 
   await recordOpsContractRevision({
@@ -422,36 +546,59 @@ export async function updateOpsContractTermsAction(formData: FormData) {
     changeSummary: "Updated the commercial terms and programme",
   });
 
+  // Built section by section from the same registry the page renders from, so
+  // an employment contract cannot be written a retention percentage even if one
+  // somehow survived the guard above. The two rules are one table.
+  const patch: Record<string, unknown> = {
+    title: input.title,
+    preamble: input.preamble,
+    site_id: input.site_id || null,
+    start_date: startDate,
+    end_date: endDate,
+    expected_start_date: nullableDate(input.expected_start_date),
+    expected_finish_date: nullableDate(input.expected_finish_date),
+    duration_days: input.duration_days,
+  };
+
+  if (opsContractHasSection(contract.kind, "scope_of_works")) {
+    patch.scope_summary = input.scope_summary;
+  }
+
+  if (opsContractHasSection(contract.kind, "commercial_terms")) {
+    patch.work_order_number = input.work_order_number;
+    patch.work_order_date = nullableDate(input.work_order_date);
+    patch.vat_applicable = input.vat_applicable;
+    patch.vat_percent = input.vat_percent;
+    patch.retention_percent = input.retention_percent;
+    patch.penalty_percent_per_week = input.penalty_percent_per_week;
+    patch.penalty_cap_percent = input.penalty_cap_percent;
+    patch.variation_threshold_percent = input.variation_threshold_percent;
+    patch.warranty_months = input.warranty_months;
+    patch.defects_liability_months = input.defects_liability_months;
+    patch.payment_terms_days = input.payment_terms_days;
+    patch.roe_reference = input.roe_reference;
+  }
+
+  if (opsContractHasSection(contract.kind, "min_workers")) {
+    patch.min_workers = input.min_workers;
+  }
+
+  if (opsContractHasSection(contract.kind, "employment_terms")) {
+    patch.job_title = input.job_title;
+    patch.place_of_work = input.place_of_work;
+    patch.probation_months = input.probation_months;
+    patch.notice_period_days = input.notice_period_days;
+    patch.annual_leave_days = input.annual_leave_days;
+    patch.hours_per_week = input.hours_per_week;
+  }
+
   const supabase = getOpsSupabaseServiceClient();
   const { error } = await supabase
     .from("contracts")
-    .update({
-      title: input.title,
-      work_order_number: input.work_order_number,
-      work_order_date: nullableDate(input.work_order_date),
-      preamble: input.preamble,
-      scope_summary: input.scope_summary,
-      site_id: input.site_id || null,
-      start_date: startDate,
-      end_date: endDate,
-      expected_start_date: nullableDate(input.expected_start_date),
-      expected_finish_date: nullableDate(input.expected_finish_date),
-      duration_days: input.duration_days,
-      vat_applicable: input.vat_applicable,
-      vat_percent: input.vat_percent,
-      retention_percent: input.retention_percent,
-      penalty_percent_per_week: input.penalty_percent_per_week,
-      penalty_cap_percent: input.penalty_cap_percent,
-      variation_threshold_percent: input.variation_threshold_percent,
-      warranty_months: input.warranty_months,
-      defects_liability_months: input.defects_liability_months,
-      min_workers: input.min_workers,
-      payment_terms_days: input.payment_terms_days,
-      roe_reference: input.roe_reference,
-    })
+    .update(patch)
     .eq("id", contract.id);
 
-  if (error) contractError(error.message, contract.id);
+  if (error) contractError(error.message, contract);
 
   // VAT applicability may have flipped, which changes the total.
   await recomputeOpsContractTotals(contract.id);
@@ -468,7 +615,116 @@ export async function updateOpsContractTermsAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=terms`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=terms`);
+}
+
+// ---------------------------------------------------------------------------
+// Remuneration
+// ---------------------------------------------------------------------------
+
+const remunerationSchema = z.object({
+  employee_contract_id: z.string().trim().default(""),
+  /** "inherit" keeps the employee's standing setting rather than pinning it. */
+  statutory_basis: z.enum(["inherit", "apply", "exempt"]).default("inherit"),
+});
+
+/**
+ * Point an employment contract at the pay record it is drawn from.
+ *
+ * The figures are NOT copied here. The contract stores the link and computes
+ * live while it is a draft, so a correction to the pay record shows up on the
+ * contract instead of leaving two numbers to reconcile. Copying happens once,
+ * at approval, into remuneration_snapshot.
+ */
+export async function updateOpsContractRemunerationAction(formData: FormData) {
+  const contractId = field(formData, "contract_id");
+  const { contract, profile } = await loadEditableContract(contractId);
+
+  if (!opsContractHasSection(contract.kind, "remuneration")) {
+    contractError("A subcontract has no pay schedule.", contract);
+  }
+
+  const parsed = remunerationSchema.safeParse({
+    employee_contract_id: field(formData, "employee_contract_id"),
+    statutory_basis: field(formData, "statutory_basis") || "inherit",
+  });
+
+  if (!parsed.success) {
+    contractError(
+      parsed.error.issues[0]?.message ?? "Check the pay schedule and try again.",
+      contract.id,
+    );
+  }
+
+  const input = parsed.data;
+  const supabase = getOpsSupabaseServiceClient();
+
+  // The pay record must belong to the person this contract is with. Without
+  // this check a contract could quote a colleague's salary — the employee_id is
+  // on the contract and the employee_contract_id would be free to point
+  // anywhere.
+  if (input.employee_contract_id) {
+    const { data: payRecord } = await supabase
+      .from("employee_contracts")
+      .select("id, employee_id, status")
+      .eq("id", input.employee_contract_id)
+      .maybeSingle<{ id: string; employee_id: string; status: string }>();
+
+    if (!payRecord) {
+      contractError("That pay record could not be found.", contract);
+    }
+    if (payRecord.employee_id !== contract.employee_id) {
+      contractError(
+        "That pay record belongs to a different employee.",
+        contract.id,
+      );
+    }
+    if (!["draft", "active"].includes(payRecord.status)) {
+      contractError(
+        "That pay record is no longer current. Pick a draft or active one.",
+        contract.id,
+      );
+    }
+  }
+
+  await recordOpsContractRevision({
+    changedBy: profile.id,
+    contract,
+    changeSummary: "Updated the remuneration schedule",
+  });
+
+  const { error } = await supabase
+    .from("contracts")
+    .update({
+      employee_contract_id: input.employee_contract_id || null,
+      statutory_contributions_apply:
+        input.statutory_basis === "inherit"
+          ? null
+          : input.statutory_basis === "apply",
+    })
+    .eq("id", contract);
+
+  if (error) contractError(error.message, contract);
+
+  await recordOpsAuditEvent({
+    action: "contract.remuneration_updated",
+    actorUserId: profile.id,
+    entityId: contract.id,
+    entityType: "contract",
+    // The link and the basis, never the figures. An audit row is read by more
+    // people than the contract is.
+    metadata: {
+      employee_contract_id: input.employee_contract_id || null,
+      statutory_basis: input.statutory_basis,
+    },
+    moduleKey: MODULE,
+    sourceId: contract.id,
+    sourceTable: "contracts",
+    summary: `${profile.full_name} updated the pay schedule on ${contract.contract_number}`,
+  }).catch(() => null);
+
+  revalidateContract(contract.id);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=remuneration`);
 }
 
 // ---------------------------------------------------------------------------
@@ -481,7 +737,7 @@ export async function addOpsContractScopeItemAction(formData: FormData) {
 
   const heading = field(formData, "heading").trim();
   if (heading.length < 2) {
-    contractError("Give the scope item a heading.", contract.id);
+    contractError("Give the scope item a heading.", contract);
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -493,7 +749,7 @@ export async function addOpsContractScopeItemAction(formData: FormData) {
   });
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=scope`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=scope`);
 }
 
 export async function updateOpsContractScopeItemAction(formData: FormData) {
@@ -503,7 +759,7 @@ export async function updateOpsContractScopeItemAction(formData: FormData) {
 
   const heading = field(formData, "heading").trim();
   if (heading.length < 2) {
-    contractError("Give the scope item a heading.", contract.id);
+    contractError("Give the scope item a heading.", contract);
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -514,7 +770,7 @@ export async function updateOpsContractScopeItemAction(formData: FormData) {
     .eq("contract_id", contract.id);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=scope`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=scope`);
 }
 
 /**
@@ -585,7 +841,7 @@ export async function moveOpsContractScopeItemAction(formData: FormData) {
   });
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=scope`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=scope`);
 }
 
 export async function deleteOpsContractScopeItemAction(formData: FormData) {
@@ -603,7 +859,7 @@ export async function deleteOpsContractScopeItemAction(formData: FormData) {
     .eq("contract_id", contract.id);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=scope_removed`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=scope_removed`);
 }
 
 // ---------------------------------------------------------------------------
@@ -656,7 +912,7 @@ export async function addOpsContractLineAction(formData: FormData) {
   await recomputeOpsContractTotals(contract.id);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=line`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=line`);
 }
 
 export async function updateOpsContractLineAction(formData: FormData) {
@@ -693,12 +949,12 @@ export async function updateOpsContractLineAction(formData: FormData) {
       amount: roundOpsMoney(input.quantity * input.rate),
     })
     .eq("id", lineId)
-    .eq("contract_id", contract.id);
+    .eq("contract_id", contract);
 
   await recomputeOpsContractTotals(contract.id);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=line`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=line`);
 }
 
 export async function moveOpsContractLineAction(formData: FormData) {
@@ -713,7 +969,7 @@ export async function moveOpsContractLineAction(formData: FormData) {
   });
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=line`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=line`);
 }
 
 export async function deleteOpsContractLineAction(formData: FormData) {
@@ -730,7 +986,7 @@ export async function deleteOpsContractLineAction(formData: FormData) {
   await recomputeOpsContractTotals(contract.id);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=line_removed`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=line_removed`);
 }
 
 // ---------------------------------------------------------------------------
@@ -793,7 +1049,7 @@ export async function addOpsContractMilestoneAction(formData: FormData) {
   });
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=milestone`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=milestone`);
 }
 
 export async function updateOpsContractMilestoneAction(formData: FormData) {
@@ -802,7 +1058,7 @@ export async function updateOpsContractMilestoneAction(formData: FormData) {
   const milestoneId = field(formData, "milestone_id");
 
   const existing = contract.milestones.find((row) => row.id === milestoneId);
-  if (!existing) contractError("That milestone is not on this contract.", contract.id);
+  if (!existing) contractError("That milestone is not on this contract.", contract);
 
   const parsed = milestoneSchema.safeParse({
     label: field(formData, "label"),
@@ -846,10 +1102,10 @@ export async function updateOpsContractMilestoneAction(formData: FormData) {
       is_retention: input.is_retention,
     })
     .eq("id", milestoneId)
-    .eq("contract_id", contract.id);
+    .eq("contract_id", contract);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=milestone`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=milestone`);
 }
 
 export async function moveOpsContractMilestoneAction(formData: FormData) {
@@ -864,7 +1120,7 @@ export async function moveOpsContractMilestoneAction(formData: FormData) {
   });
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=milestone`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=milestone`);
 }
 
 export async function deleteOpsContractMilestoneAction(formData: FormData) {
@@ -879,7 +1135,7 @@ export async function deleteOpsContractMilestoneAction(formData: FormData) {
     .eq("contract_id", contract.id);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=milestone_removed`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=milestone_removed`);
 }
 
 const clauseSchema = z.object({
@@ -915,8 +1171,8 @@ export async function updateOpsContractClauseAction(formData: FormData) {
   const contract = await fetchOpsContractById(input.contract_id);
 
   if (!contract) contractError("Contract not found.");
-  if (!canDraftOpsContractKind(profile.role, contract.kind)) {
-    contractError("Your role cannot edit this contract.", contract.id);
+  if (!canDraftOpsContractSubject(profile.role, contract)) {
+    contractError("Your role cannot edit this contract.", contract);
   }
   if (contract.status !== "draft") {
     contractError(
@@ -926,7 +1182,7 @@ export async function updateOpsContractClauseAction(formData: FormData) {
   }
 
   const clause = contract.clauses.find((row) => row.id === input.clause_id);
-  if (!clause) contractError("That clause is not on this contract.", contract.id);
+  if (!clause) contractError("That clause is not on this contract.", contract);
 
   // Snapshot BEFORE the write, so the revision holds the previous wording.
   await recordOpsContractRevision({
@@ -951,7 +1207,7 @@ export async function updateOpsContractClauseAction(formData: FormData) {
       action: "updateOpsContractClause",
       entityId: contract.id,
     });
-    contractError(error.message, contract.id);
+    contractError(error.message, contract);
   }
 
   await recordOpsAuditEvent({
@@ -967,7 +1223,7 @@ export async function updateOpsContractClauseAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=clause`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=clause`);
 }
 
 /** Put a clause back to the template wording. */
@@ -978,15 +1234,15 @@ export async function resetOpsContractClauseAction(formData: FormData) {
 
   const contract = await fetchOpsContractById(contractId);
   if (!contract) contractError("Contract not found.");
-  if (!canDraftOpsContractKind(profile.role, contract.kind)) {
-    contractError("Your role cannot edit this contract.", contract.id);
+  if (!canDraftOpsContractSubject(profile.role, contract)) {
+    contractError("Your role cannot edit this contract.", contract);
   }
   if (contract.status !== "draft") {
-    contractError("Only a draft can be edited.", contract.id);
+    contractError("Only a draft can be edited.", contract);
   }
 
   const clause = contract.clauses.find((row) => row.id === clauseId);
-  if (!clause) contractError("That clause is not on this contract.", contract.id);
+  if (!clause) contractError("That clause is not on this contract.", contract);
 
   const supabase = getOpsSupabaseServiceClient();
   await supabase
@@ -998,7 +1254,7 @@ export async function resetOpsContractClauseAction(formData: FormData) {
     .eq("id", clause.id);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=clause_reset`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=clause_reset`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1011,11 +1267,11 @@ export async function submitOpsContractForReviewAction(formData: FormData) {
 
   const contract = await fetchOpsContractById(contractId);
   if (!contract) contractError("Contract not found.");
-  if (!canDraftOpsContractKind(profile.role, contract.kind)) {
-    contractError("Your role cannot submit this contract.", contract.id);
+  if (!canDraftOpsContractSubject(profile.role, contract)) {
+    contractError("Your role cannot submit this contract.", contract);
   }
   if (contract.status !== "draft") {
-    contractError("Only a draft can be submitted for review.", contract.id);
+    contractError("Only a draft can be submitted for review.", contract);
   }
 
   // Milestone percentages are checked here rather than by a database
@@ -1038,9 +1294,9 @@ export async function submitOpsContractForReviewAction(formData: FormData) {
   const { error } = await supabase
     .from("contracts")
     .update({ status: "in_review" satisfies OpsContractStatus })
-    .eq("id", contract.id);
+    .eq("id", contract);
 
-  if (error) contractError(error.message, contract.id);
+  if (error) contractError(error.message, contract);
 
   const customised = contract.clauses.filter((clause) => clause.is_customised);
 
@@ -1080,7 +1336,7 @@ export async function submitOpsContractForReviewAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=submitted`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=submitted`);
 }
 
 /**
@@ -1170,13 +1426,13 @@ export async function approveOpsContractAction(formData: FormData) {
   const contract = await fetchOpsContractById(contractId);
   if (!contract) contractError("Contract not found.");
   if (!canApproveOpsContract(profile.role)) {
-    contractError("Your role cannot approve contracts.", contract.id);
+    contractError("Your role cannot approve contracts.", contract);
   }
   if (!canReviewOpsContract(profile.role)) {
-    contractError("Your role cannot review contracts.", contract.id);
+    contractError("Your role cannot review contracts.", contract);
   }
   if (contract.status !== "in_review") {
-    contractError("Only a contract in review can be approved.", contract.id);
+    contractError("Only a contract in review can be approved.", contract);
   }
 
   // The hard gate. Approval is the last door before signature, so an
@@ -1199,6 +1455,20 @@ export async function approveOpsContractAction(formData: FormData) {
   // point before signatures attach, and the wording stops moving here anyway.
   const counterpartySnapshot = await buildCounterpartySnapshot(contract);
   const orgSnapshot = await buildOrgSnapshot();
+  // Pay freezes at the same moment as the parties, for the same reason: a
+  // salary review next year must not rewrite a contract signed this year.
+  const remunerationSnapshot = await buildOpsContractRemunerationSnapshot(contract);
+
+  // An employment contract with no figures would reach signature carrying a
+  // Remuneration clause that promises a schedule it does not have. The database
+  // CHECK contracts_employment_approved_has_remuneration refuses the same row;
+  // this is here so the refusal arrives as a sentence and names the fix.
+  if (contract.kind === "employment" && !("net" in remunerationSnapshot)) {
+    contractError(
+      "This employment contract has no pay schedule. Link it to the employee's pay record before approving.",
+      contract.id,
+    );
+  }
 
   const { error } = await supabase
     .from("contracts")
@@ -1208,10 +1478,11 @@ export async function approveOpsContractAction(formData: FormData) {
       approved_by: profile.id,
       counterparty_snapshot: counterpartySnapshot,
       org_snapshot: orgSnapshot,
+      remuneration_snapshot: remunerationSnapshot,
     })
-    .eq("id", contract.id);
+    .eq("id", contract);
 
-  if (error) contractError(error.message, contract.id);
+  if (error) contractError(error.message, contract);
 
   const { error: slotError } = await supabase.from("contract_signatures").upsert(
     OPS_CONTRACT_INTERNAL_SIGNATORIES.map((role, index) => ({
@@ -1275,7 +1546,7 @@ export async function approveOpsContractAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=approved`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=approved`);
 }
 
 /**
@@ -1353,7 +1624,7 @@ export async function certifyOpsContractMilestoneAction(formData: FormData) {
   if (!contract) contractError("Contract not found.");
 
   if (!canCertifyOpsContractMilestone(profile.role)) {
-    contractError("Your role cannot certify contract milestones.", contract.id);
+    contractError("Your role cannot certify contract milestones.", contract);
   }
   if (!["active", "signed"].includes(contract.status)) {
     contractError(
@@ -1363,9 +1634,9 @@ export async function certifyOpsContractMilestoneAction(formData: FormData) {
   }
 
   const milestone = contract.milestones.find((row) => row.id === milestoneId);
-  if (!milestone) contractError("That milestone is not on this contract.", contract.id);
+  if (!milestone) contractError("That milestone is not on this contract.", contract);
   if (milestone.status !== "pending") {
-    contractError("That milestone has already been certified.", contract.id);
+    contractError("That milestone has already been certified.", contract);
   }
 
   // Retention is released, not certified — it falls due after the defects
@@ -1390,7 +1661,7 @@ export async function certifyOpsContractMilestoneAction(formData: FormData) {
     .eq("id", milestone.id)
     .eq("status", "pending");
 
-  if (error) contractError("The milestone could not be certified.", contract.id);
+  if (error) contractError("The milestone could not be certified.", contract);
 
   const payable = await raiseOpsContractMilestonePayable({
     actorUserId: profile.id,
@@ -1465,10 +1736,10 @@ export async function completeOpsContractAction(formData: FormData) {
   const contract = await fetchOpsContractById(contractId);
   if (!contract) contractError("Contract not found.");
   if (!canCertifyOpsContractMilestone(profile.role)) {
-    contractError("Your role cannot complete contracts.", contract.id);
+    contractError("Your role cannot complete contracts.", contract);
   }
   if (contract.status !== "active") {
-    contractError("Only an active contract can be completed.", contract.id);
+    contractError("Only an active contract can be completed.", contract);
   }
 
   const completedAt = new Date();
@@ -1506,7 +1777,7 @@ export async function completeOpsContractAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=completed`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=completed`);
 }
 
 /**
@@ -1523,18 +1794,18 @@ export async function releaseOpsContractRetentionAction(formData: FormData) {
   const contract = await fetchOpsContractById(contractId);
   if (!contract) contractError("Contract not found.");
   if (!canCertifyOpsContractMilestone(profile.role)) {
-    contractError("Your role cannot release retention.", contract.id);
+    contractError("Your role cannot release retention.", contract);
   }
   if (!contract.completed_at) {
-    contractError("Retention is released after the contract is completed.", contract.id);
+    contractError("Retention is released after the contract is completed.", contract);
   }
 
   const milestone = contract.milestones.find((row) => row.id === milestoneId);
   if (!milestone || !milestone.is_retention) {
-    contractError("That is not the retention on this contract.", contract.id);
+    contractError("That is not the retention on this contract.", contract);
   }
   if (milestone.status !== "pending") {
-    contractError("That retention has already been released.", contract.id);
+    contractError("That retention has already been released.", contract);
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -1575,7 +1846,7 @@ export async function releaseOpsContractRetentionAction(formData: FormData) {
 
   revalidateContract(contract.id);
   revalidatePath("/ops/payment-requests");
-  redirect(`${ROUTE}/${contract.id}?updated=retention_released`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=retention_released`);
 }
 
 /**
@@ -1595,8 +1866,8 @@ export async function createOpsContractAddendumAction(formData: FormData) {
 
   const parent = await fetchOpsContractById(contractId);
   if (!parent) contractError("Contract not found.");
-  if (!canDraftOpsContractKind(profile.role, parent.kind)) {
-    contractError("Your role cannot raise an addendum.", parent.id);
+  if (!canDraftOpsContractSubject(profile.role, parent)) {
+    contractError("Your role cannot raise an addendum.", parent);
   }
   if (!["issued", "signed", "active"].includes(parent.status)) {
     contractError(
@@ -1616,7 +1887,7 @@ export async function createOpsContractAddendumAction(formData: FormData) {
   const { data: siblings } = await supabase
     .from("contracts")
     .select("addendum_number")
-    .eq("parent_contract_id", parent.id)
+    .eq("parent_contract_id", parent)
     .order("addendum_number", { ascending: false })
     .limit(1);
 
@@ -1658,7 +1929,7 @@ export async function createOpsContractAddendumAction(formData: FormData) {
 
   if (error || !child) {
     logOpsServerError(error, { module: MODULE, action: "createOpsContractAddendum" });
-    contractError(error?.message ?? "The addendum could not be created.", parent.id);
+    contractError(error?.message ?? "The addendum could not be created.", parent);
   }
 
   if (parent.clauses.length > 0) {
@@ -1692,7 +1963,7 @@ export async function createOpsContractAddendumAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(parent.id);
-  redirect(`${ROUTE}/${child.id}?updated=addendum`);
+  redirect(`${opsContractHref(parent.kind, child.id)}?updated=addendum`);
 }
 
 /** Terminate a live contract and stand down its budget commitment. */
@@ -1704,10 +1975,10 @@ export async function terminateOpsContractAction(formData: FormData) {
   const contract = await fetchOpsContractById(contractId);
   if (!contract) contractError("Contract not found.");
   if (!canTerminateOpsContract(profile.role)) {
-    contractError("Your role cannot terminate contracts.", contract.id);
+    contractError("Your role cannot terminate contracts.", contract);
   }
   if (reason.length < 4) {
-    contractError("Give a reason for terminating this contract.", contract.id);
+    contractError("Give a reason for terminating this contract.", contract);
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -1720,7 +1991,7 @@ export async function terminateOpsContractAction(formData: FormData) {
     })
     .eq("id", contract.id);
 
-  if (error) contractError(error.message, contract.id);
+  if (error) contractError(error.message, contract);
 
   // The promised money is no longer promised. Cancelled, not deleted, so the
   // budget can still answer "what happened to that commitment?".
@@ -1739,7 +2010,7 @@ export async function terminateOpsContractAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=terminated`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=terminated`);
 }
 
 // ---------------------------------------------------------------------------
@@ -1796,18 +2067,18 @@ export async function signOpsContractAction(formData: FormData) {
   const contract = await fetchOpsContractById(contractId);
   if (!contract) contractError("Contract not found.");
 
-  if (!canViewOpsContractKind(profile.role, contract.kind)) {
+  if (!canViewOpsContractSubject(profile.role, contract)) {
     contractError("Contract not found.");
   }
 
   if (!["approved", "issued"].includes(contract.status)) {
-    contractError("This contract is not open for signature.", contract.id);
+    contractError("This contract is not open for signature.", contract);
   }
 
   const signature = contract.signatures.find((row) => row.id === signatureId);
-  if (!signature) contractError("That signature slot is not on this contract.", contract.id);
+  if (!signature) contractError("That signature slot is not on this contract.", contract);
   if (signature.status !== "pending") {
-    contractError("That signature slot has already been actioned.", contract.id);
+    contractError("That signature slot has already been actioned.", contract);
   }
 
   const slotIsMine =
@@ -1816,17 +2087,17 @@ export async function signOpsContractAction(formData: FormData) {
       canSignOpsContractAs(profile.role, signature.signatory_role as OpsContractSignatoryRole));
 
   if (!slotIsMine) {
-    contractError("That signature slot is not yours to sign.", contract.id);
+    contractError("That signature slot is not yours to sign.", contract);
   }
 
   if (!profile.email) {
-    contractError("Your account has no email address, so you cannot be re-verified.", contract.id);
+    contractError("Your account has no email address, so you cannot be re-verified.", contract);
   }
   if (!password) {
-    contractError("Enter your password to sign.", contract.id);
+    contractError("Enter your password to sign.", contract);
   }
   if (!(await verifyOwnPassword(profile.email, password))) {
-    contractError("That password was not correct.", contract.id);
+    contractError("That password was not correct.", contract);
   }
 
   const mark = await copyOwnSpecimenForSigning({
@@ -1869,7 +2140,7 @@ export async function signOpsContractAction(formData: FormData) {
       action: "signOpsContract",
       entityId: contract.id,
     });
-    contractError("The signature could not be recorded.", contract.id);
+    contractError("The signature could not be recorded.", contract);
   }
 
   // All required internal marks in place moves the contract on to issued.
@@ -1905,7 +2176,7 @@ export async function signOpsContractAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=signed`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=signed`);
 }
 
 /**
@@ -1932,9 +2203,9 @@ export async function declineOpsContractSignatureAction(formData: FormData) {
   if (!contract) contractError("Contract not found.");
 
   const signature = contract.signatures.find((row) => row.id === signatureId);
-  if (!signature) contractError("That signature slot is not on this contract.", contract.id);
+  if (!signature) contractError("That signature slot is not on this contract.", contract);
   if (signature.status !== "pending") {
-    contractError("That signature slot has already been actioned.", contract.id);
+    contractError("That signature slot has already been actioned.", contract);
   }
 
   const slotIsMine =
@@ -1943,7 +2214,7 @@ export async function declineOpsContractSignatureAction(formData: FormData) {
       canSignOpsContractAs(profile.role, signature.signatory_role as OpsContractSignatoryRole));
 
   if (!slotIsMine) {
-    contractError("That signature slot is not yours to action.", contract.id);
+    contractError("That signature slot is not yours to action.", contract);
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -1954,7 +2225,7 @@ export async function declineOpsContractSignatureAction(formData: FormData) {
     .eq("id", signature.id)
     .eq("status", "pending");
 
-  if (error) contractError("The decline could not be recorded.", contract.id);
+  if (error) contractError("The decline could not be recorded.", contract);
 
   await supabase
     .from("contracts")
@@ -1995,7 +2266,7 @@ export async function declineOpsContractSignatureAction(formData: FormData) {
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=declined`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=declined`);
 }
 
 /**
@@ -2012,10 +2283,10 @@ export async function recordOpsContractCountersignatureAction(formData: FormData
   const contract = await fetchOpsContractById(contractId);
   if (!contract) contractError("Contract not found.");
   if (!canIssueOpsContract(profile.role)) {
-    contractError("Your role cannot record a countersignature.", contract.id);
+    contractError("Your role cannot record a countersignature.", contract);
   }
   if (contract.status !== "issued") {
-    contractError("Only an issued contract can be countersigned.", contract.id);
+    contractError("Only an issued contract can be countersigned.", contract);
   }
 
   // The bytes went straight to R2 from the browser; the action only ever
@@ -2025,12 +2296,12 @@ export async function recordOpsContractCountersignatureAction(formData: FormData
   const fileName = field(formData, "file_name").trim();
 
   if (!key) {
-    contractError("Attach the signed copy before recording it.", contract.id);
+    contractError("Attach the signed copy before recording it.", contract);
   }
 
   const verified = await verifyOpsUploadedObject(key, fileName);
   if (!verified.ok) {
-    contractError("That upload could not be verified. Try again.", contract.id);
+    contractError("That upload could not be verified. Try again.", contract);
   }
 
   const linked = await linkOpsRecordAttachment({
@@ -2054,7 +2325,7 @@ export async function recordOpsContractCountersignatureAction(formData: FormData
   });
 
   if (!linked.ok) {
-    contractError(linked.message, contract.id);
+    contractError(linked.message, contract);
   }
 
   const supabase = getOpsSupabaseServiceClient();
@@ -2067,7 +2338,7 @@ export async function recordOpsContractCountersignatureAction(formData: FormData
     })
     .eq("id", contract.id);
 
-  if (error) contractError(error.message, contract.id);
+  if (error) contractError(error.message, contract);
 
   await recordOpsAuditEvent({
     action: "contract.countersigned",
@@ -2081,5 +2352,5 @@ export async function recordOpsContractCountersignatureAction(formData: FormData
   }).catch(() => null);
 
   revalidateContract(contract.id);
-  redirect(`${ROUTE}/${contract.id}?updated=countersigned`);
+  redirect(`${opsContractHref(contract.kind, contract.id)}?updated=countersigned`);
 }

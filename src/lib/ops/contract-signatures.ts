@@ -323,6 +323,27 @@ export type OpsContractSignableContent = {
   payment_terms_days: number;
   start_date: string | null;
   end_date: string | null;
+  /** Employment terms. Zero/empty on a subcontract. */
+  job_title: string;
+  place_of_work: string;
+  probation_months: number;
+  notice_period_days: number;
+  annual_leave_days: number;
+  hours_per_week: number;
+  /**
+   * The pay figures as printed. Part of the hash because a signature attests to
+   * a DOCUMENT, and on an employment contract the schedule is the substance of
+   * it — a signature over a hash that omitted the salary would verify nothing
+   * anyone actually cared about. Null on a subcontract, which has no schedule.
+   */
+  remuneration: {
+    basic: number;
+    housing: number;
+    other_allowances: number;
+    gross: number;
+    statutory_applies: boolean;
+    net: number;
+  } | null;
   scope_items: Array<{ sort_order: number; heading: string; detail: string }>;
   lines: Array<{
     sort_order: number;

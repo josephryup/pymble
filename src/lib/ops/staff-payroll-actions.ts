@@ -7,6 +7,7 @@ import { safeOpsActionErrorMessage } from "@/lib/ops/action-errors";
 import { recordOpsAuditEvent } from "@/lib/ops/audit";
 import { notifyOpsWorkflowEvent } from "@/lib/ops/workflow-notifications";
 import { requireOpsUser } from "@/lib/ops/auth";
+import { sumOpsOtherAllowances } from "@/lib/ops/employee-pay";
 import { postStaffPayrollRunJournalSafe } from "@/lib/ops/gl-posting";
 import { logOpsServerError, swallowOpsError } from "@/lib/ops/log";
 import { writeStaffPayrollCostEntry } from "@/lib/ops/payroll-cost-entries";
@@ -95,18 +96,6 @@ type EmployeeForPayroll = {
     | null;
 };
 
-function sumOtherAllowances(value: unknown): number {
-  if (!Array.isArray(value)) return 0;
-  let total = 0;
-  for (const entry of value as Array<{ amount?: number | string }>) {
-    const amount = Number(entry?.amount ?? 0);
-    if (Number.isFinite(amount) && amount > 0) {
-      total += amount;
-    }
-  }
-  return total;
-}
-
 function pickRelation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
 }
@@ -188,7 +177,7 @@ export async function createStaffPayrollRunAction(formData: FormData) {
     const totalPay =
       Number(contract.basic_pay) +
       Number(contract.housing_allowance) +
-      sumOtherAllowances(contract.other_allowances);
+      sumOpsOtherAllowances(contract.other_allowances);
     if (totalPay <= 0) {
       skippedZeroPay.push(employee.full_name || employee.employee_number);
       return false;
@@ -275,7 +264,7 @@ export async function createStaffPayrollRunAction(formData: FormData) {
     const slip = computeStaffPayslip({
       basic: Number(contract.basic_pay),
       housing: Number(contract.housing_allowance),
-      otherAllowances: sumOtherAllowances(contract.other_allowances),
+      otherAllowances: sumOpsOtherAllowances(contract.other_allowances),
       advanceDeduction: advanceTotal,
       periodDate: parsed.data.period_end,
       statutoryContributionsEnabled: statutoryByEmployeeId.get(employee.id) !== false,

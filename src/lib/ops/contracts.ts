@@ -1,7 +1,8 @@
 import { requireOpsUser } from "@/lib/ops/auth";
 import {
-  canViewOpsContractKind,
+  canViewOpsContractSubject,
   canViewOpsContracts,
+  canViewOpsPersonalContracts,
 } from "@/lib/ops/contract-permissions";
 import {
   toClientOpsContractSignature,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/ops/contract-signatures";
 import type {
   OpsContract,
+  OpsContractRemuneration,
   OpsContractClause,
   OpsContractDetail,
   OpsContractKind,
@@ -20,6 +22,7 @@ import type {
   OpsContractTemplate,
   OpsContractTemplateClause,
 } from "@/lib/ops/contract-types";
+import { resolveOpsContractRemuneration } from "@/lib/ops/contract-remuneration";
 import { logOpsServerError } from "@/lib/ops/log";
 import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
 
@@ -27,8 +30,8 @@ import { getOpsSupabaseServiceClient } from "@/lib/ops/supabase-server";
  * Reads for the contracts module.
  *
  * Everything here goes through the service-role client, which bypasses RLS —
- * the house pattern, but it means the kind gate (employment contracts expose
- * pay) has to be enforced in this file rather than left to the database policy.
+ * the house pattern, but it means the subject gate (a contract with a person
+ * exposes pay) is enforced in this file rather than left to the database policy.
  * Both layers exist; only this one actually runs for app reads.
  */
 
@@ -95,6 +98,14 @@ const CONTRACT_SELECT = [
   "defects_liability_months",
   "min_workers",
   "payment_terms_days",
+  "job_title",
+  "place_of_work",
+  "probation_months",
+  "notice_period_days",
+  "annual_leave_days",
+  "hours_per_week",
+  "employee_contract_id",
+  "statutory_contributions_apply",
   "start_date",
   "end_date",
   "duration_days",
@@ -132,6 +143,25 @@ type RawContract = Omit<
   subcontractor: Relation<{ id: string; company_name: string }>;
   employee: Relation<{ id: string; full_name: string }>;
 };
+
+/**
+ * Read just the frozen schedule, by id.
+ *
+ * Separate from CONTRACT_SELECT so the list query cannot pick it up: a column
+ * that is never selected on the list path is a column no list read can leak.
+ */
+async function fetchRemunerationSnapshot(
+  supabase: ReturnType<typeof getOpsSupabaseServiceClient>,
+  contractId: string,
+) {
+  const { data } = await supabase
+    .from("contracts")
+    .select("remuneration_snapshot")
+    .eq("id", contractId)
+    .maybeSingle<{ remuneration_snapshot: unknown }>();
+
+  return data?.remuneration_snapshot ?? {};
+}
 
 function mapContract(row: RawContract): OpsContract {
   const subcontractor = pickRel(row.subcontractor);
@@ -241,11 +271,14 @@ export async function fetchOpsContracts(filters: OpsContractFilters = {}) {
     query = query.or(`contract_number.ilike.${term},title.ilike.${term}`);
   }
 
-  // The kind gate, applied in the query rather than after it, so a role that
-  // cannot see pay never has employment rows in memory to begin with — and the
-  // register's counts stay consistent with what the list shows.
-  if (!canViewOpsContractKind(profile.role, "employment")) {
-    query = query.neq("kind", "employment");
+  // The personal-contract gate, applied in the query rather than after it, so a
+  // role that cannot see pay never has those rows in memory to begin with — and
+  // the register's counts stay consistent with what the list shows.
+  //
+  // BOTH columns are filtered. Filtering only on kind was the leak: a
+  // subcontract-kind row pointing at an employee slipped straight through.
+  if (!canViewOpsPersonalContracts(profile.role)) {
+    query = query.neq("kind", "employment").neq("counterparty_type", "employee");
   }
 
   const { data, error } = await query;
@@ -292,7 +325,25 @@ export async function fetchOpsContractById(
   // Not a 403 with a body — a role that cannot see employment contracts is told
   // the record does not exist, so the register cannot be probed for who is on
   // what package.
-  if (!canViewOpsContractKind(profile.role, contract.kind)) return null;
+  if (!canViewOpsContractSubject(profile.role, contract)) return null;
+
+  // Only now — past the gate — does anything read pay. The snapshot column is
+  // absent from CONTRACT_SELECT on purpose, so the LIST shape has nowhere to
+  // put a salary even by accident; it is fetched here, for one contract, after
+  // the caller has been cleared to see it.
+  const remuneration =
+    contract.kind === "employment"
+      ? await resolveOpsContractRemuneration({
+          id: contract.id,
+          kind: contract.kind,
+          status: contract.status,
+          employee_id: contract.employee_id,
+          employee_contract_id: contract.employee_contract_id,
+          statutory_contributions_apply: contract.statutory_contributions_apply,
+          remuneration_snapshot: await fetchRemunerationSnapshot(supabase, id),
+          approved_at: contract.approved_at,
+        })
+      : null;
 
   const [scopeItems, lines, milestones, clauses, signatures] = await Promise.all([
     supabase
@@ -332,6 +383,7 @@ export async function fetchOpsContractById(
 
   return {
     ...contract,
+    remuneration,
     scope_items: (scopeItems.data ?? []) as OpsContractScopeItem[],
     lines: (lines.data ?? []) as OpsContractLine[],
     milestones: (milestones.data ?? []) as OpsContractMilestone[],
@@ -349,6 +401,9 @@ export type OpsContractStats = {
   draft: number;
   awaiting_signature: number;
   active: number;
+  /** Split out because value and retention only apply to the subcontract kind. */
+  active_subcontracts: number;
+  active_employment: number;
   active_value: number;
   retention_held: number;
 };
@@ -360,14 +415,25 @@ export async function fetchOpsContractStats(): Promise<OpsContractStats> {
     ["active", "signed"].includes(c.status),
   );
 
+  // Value and retention are subcontract concepts. An employment contract has
+  // total_value 0 and retention_percent 0, so including it did not change the
+  // sums — but it DID inflate the "live contracts" count that sits beneath the
+  // active-value tile, so the tile read as an average nobody could reconcile.
+  const activeSubcontracts = active.filter((c) => c.kind === "subcontract");
+
   return {
     draft: contracts.filter((c) => c.status === "draft").length,
     awaiting_signature: contracts.filter((c) =>
       ["approved", "issued"].includes(c.status),
     ).length,
     active: active.length,
-    active_value: active.reduce((sum, c) => sum + Number(c.total_value ?? 0), 0),
-    retention_held: active.reduce(
+    active_subcontracts: activeSubcontracts.length,
+    active_employment: active.length - activeSubcontracts.length,
+    active_value: activeSubcontracts.reduce(
+      (sum, c) => sum + Number(c.total_value ?? 0),
+      0,
+    ),
+    retention_held: activeSubcontracts.reduce(
       (sum, c) =>
         sum + (Number(c.total_value ?? 0) * Number(c.retention_percent ?? 0)) / 100,
       0,
@@ -446,6 +512,26 @@ export function toOpsContractSignableContent(
     payment_terms_days: detail.payment_terms_days,
     start_date: detail.start_date,
     end_date: detail.end_date,
+    job_title: detail.job_title,
+    place_of_work: detail.place_of_work,
+    probation_months: detail.probation_months,
+    notice_period_days: detail.notice_period_days,
+    annual_leave_days: Number(detail.annual_leave_days ?? 0),
+    hours_per_week: Number(detail.hours_per_week ?? 0),
+    // Only the figures that appear on the document. `frozen`, `computed_at` and
+    // the source ids are metadata about the read, not terms of the agreement —
+    // hashing them would make a signature go stale for no reason a reader could
+    // see on the page.
+    remuneration: detail.remuneration
+      ? {
+          basic: Number(detail.remuneration.basic ?? 0),
+          housing: Number(detail.remuneration.housing ?? 0),
+          other_allowances: Number(detail.remuneration.other_allowances ?? 0),
+          gross: Number(detail.remuneration.gross ?? 0),
+          statutory_applies: detail.remuneration.statutory_applies,
+          net: Number(detail.remuneration.net ?? 0),
+        }
+      : null,
     scope_items: detail.scope_items.map((item) => ({
       sort_order: item.sort_order,
       heading: item.heading,
@@ -499,10 +585,39 @@ export function buildOpsContractMergeValues(input: {
   contract: OpsContract;
   orgLegalName: string;
   siteName?: string | null;
+  /**
+   * Only supplied for an employment contract, and only by a caller that has
+   * already passed the visibility gate. Absent means the pay tokens render as
+   * "—" rather than as a number nobody was cleared to see.
+   */
+  remuneration?: OpsContractRemuneration | null;
 }): Record<string, string | number> {
-  const { contract } = input;
+  const { contract, remuneration } = input;
+
+  const money = (amount: number | null | undefined) =>
+    amount === null || amount === undefined
+      ? "—"
+      : `${contract.currency_code} ${Number(amount).toLocaleString("en-ZM", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
 
   return {
+    job_title: contract.job_title,
+    place_of_work: contract.place_of_work || contract.site?.name || "",
+    probation_months: contract.probation_months,
+    notice_period_days: contract.notice_period_days,
+    annual_leave_days: contract.annual_leave_days,
+    hours_per_week: contract.hours_per_week,
+    basic_pay: remuneration ? money(remuneration.basic) : "—",
+    housing_allowance: remuneration ? money(remuneration.housing) : "—",
+    gross_pay: remuneration ? money(remuneration.gross) : "—",
+    net_pay: remuneration ? money(remuneration.net) : "—",
+    statutory_basis: remuneration
+      ? remuneration.statutory_applies
+        ? "subject to PAYE, NAPSA and NHIMA in accordance with Zambian law"
+        : "paid gross, with the Employee responsible for their own tax and statutory contributions"
+      : "—",
     org_legal_name: input.orgLegalName,
     counterparty_name: contract.counterparty_name,
     contract_total: `${contract.currency_code} ${Number(
@@ -522,4 +637,114 @@ export function buildOpsContractMergeValues(input: {
     defects_liability_months: contract.defects_liability_months,
     site_name: input.siteName ?? contract.site?.name ?? "",
   };
+}
+
+/**
+ * The signed instruments on file for one employee.
+ *
+ * Deliberately NOT the pay records — those are `employee_contracts` and the HR
+ * page already lists them. This is the other half of the pair: the documents
+ * that were drawn up FROM those records, so the employee page can show what was
+ * actually signed next to what payroll pays.
+ *
+ * Returns [] rather than throwing for a role that cannot see pay. The employee
+ * page is reachable by the Admin/Receptionist, who belongs in HR for the
+ * directory and the leave diary but has no business reading salaries — an empty
+ * list is the honest answer for them, not an error.
+ */
+export type OpsEmployeeContractDocument = {
+  id: string;
+  contract_number: string;
+  title: string;
+  status: OpsContractStatus;
+  job_title: string;
+  start_date: string | null;
+  end_date: string | null;
+  signed_at: string | null;
+  issued_at: string | null;
+  /** How far through the signature panel it is, without exposing who signed. */
+  signatures_total: number;
+  signatures_signed: number;
+};
+
+export async function fetchOpsEmployeeContractDocuments(
+  employeeIds: readonly string[],
+): Promise<Map<string, OpsEmployeeContractDocument[]>> {
+  const empty = new Map<string, OpsEmployeeContractDocument[]>();
+  if (employeeIds.length === 0) return empty;
+
+  const { profile } = await requireOpsUser();
+  if (!canViewOpsContracts(profile.role)) return empty;
+  if (!canViewOpsPersonalContracts(profile.role)) return empty;
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("contracts")
+    .select(
+      "id, employee_id, contract_number, title, status, job_title, start_date, end_date, signed_at, issued_at",
+    )
+    .eq("kind", "employment")
+    .in("employee_id", employeeIds as string[])
+    .is("archived_at", null)
+    .order("start_date", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    logOpsServerError(error, {
+      module: "contracts",
+      action: "fetchOpsEmployeeContractDocuments",
+    });
+    return empty;
+  }
+
+  const rows = (data ?? []) as Array<
+    Omit<OpsEmployeeContractDocument, "signatures_total" | "signatures_signed"> & {
+      employee_id: string;
+    }
+  >;
+  if (rows.length === 0) return empty;
+
+  // Counts only. Who signed and when is on the contract page, behind its own
+  // gate; the employee record needs to answer "is this executed yet?" and
+  // nothing more.
+  const { data: signatureRows } = await supabase
+    .from("contract_signatures")
+    .select("contract_id, status")
+    .in(
+      "contract_id",
+      rows.map((row) => row.id),
+    );
+
+  const tally = new Map<string, { total: number; signed: number }>();
+  for (const row of (signatureRows ?? []) as Array<{
+    contract_id: string;
+    status: string;
+  }>) {
+    const current = tally.get(row.contract_id) ?? { total: 0, signed: 0 };
+    current.total += 1;
+    if (row.status === "signed") current.signed += 1;
+    tally.set(row.contract_id, current);
+  }
+
+  const byEmployee = new Map<string, OpsEmployeeContractDocument[]>();
+  for (const row of rows) {
+    const counts = tally.get(row.id) ?? { total: 0, signed: 0 };
+    const list = byEmployee.get(row.employee_id) ?? [];
+    list.push({
+      id: row.id,
+      contract_number: row.contract_number,
+      title: row.title,
+      status: row.status,
+      job_title: row.job_title,
+      start_date: row.start_date,
+      end_date: row.end_date,
+      signed_at: row.signed_at,
+      issued_at: row.issued_at,
+      signatures_total: counts.total,
+      signatures_signed: counts.signed,
+    });
+    byEmployee.set(row.employee_id, list);
+  }
+
+  return byEmployee;
 }

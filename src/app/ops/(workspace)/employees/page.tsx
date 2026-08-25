@@ -27,6 +27,11 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { opsContractHref } from "@/lib/ops/contract-types";
+import {
+  fetchOpsEmployeeContractDocuments,
+  type OpsEmployeeContractDocument,
+} from "@/lib/ops/contracts";
 import { notFound } from "next/navigation";
 import { OpsInlineEmpty } from "@/components/ops/OpsInlineEmpty";
 import { OpsConfirmSubmitButton } from "@/components/ops/OpsConfirmSubmitButton";
@@ -618,6 +623,76 @@ function EmployeeDocumentReviewControls({
           </OpsConfirmSubmitButton>
         </form>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The signed instruments on file for this employee.
+ *
+ * Separate from EmployeeContractsPanel above, which lists the PAY RECORDS
+ * (employee_contracts) that payroll runs against. These are the documents drawn
+ * up from those records — number, status, and how far through signature they
+ * are. Deliberately no pay figures: the schedule lives on the contract page,
+ * behind its own gate and its own audit trail.
+ *
+ * Renders nothing when the list is empty, which is also what a role that cannot
+ * see pay receives — the fetcher returns an empty map for them rather than
+ * throwing, so there is no "you may not see this" panel to probe.
+ */
+function EmployeeContractDocumentsPanel({
+  documents,
+}: {
+  documents: OpsEmployeeContractDocument[];
+}) {
+  if (documents.length === 0) return null;
+
+  return (
+    <div className="mt-4">
+      <h3 className="font-heading text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
+        Signed contracts
+      </h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        The instruments drawn up from the pay records above. Open one to see its
+        clauses, remuneration schedule and signatures.
+      </p>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        {documents.map((document) => (
+          <article className="rounded-md border border-border p-4" key={document.id}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary-blue">
+                  <Link
+                    className="underline-offset-2 hover:underline"
+                    href={opsContractHref("employment", document.id)}
+                  >
+                    {document.contract_number}
+                  </Link>
+                </p>
+                <h4 className="mt-1 font-bold text-foreground">
+                  {document.title || document.job_title || "Contract of employment"}
+                </h4>
+              </div>
+              <span className={`w-fit ${opsStatusBadgeClass(document.status)}`}>
+                {formatLabel(document.status)}
+              </span>
+            </div>
+            <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+              <HrMetric label="Position" value={document.job_title || "Not stated"} />
+              <HrMetric
+                label="Signatures"
+                value={
+                  document.signatures_total === 0
+                    ? "Not yet routed"
+                    : `${document.signatures_signed} of ${document.signatures_total} signed`
+                }
+              />
+              <HrMetric label="Start" value={formatDate(document.start_date)} />
+              <HrMetric label="End" value={formatDate(document.end_date)} />
+            </dl>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1264,6 +1339,14 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
   // Which account each unlinked employee probably belongs to, and how big the
   // gap is in both directions. Suggestions are pre-selected but never applied
   // automatically — a wrong link shows one person another's payslip.
+  // The signed instruments, alongside the pay records already on each row.
+  // Gated inside the fetcher on the pay-visibility rule, so the
+  // Admin/Receptionist — who belongs in HR for the directory and the leave
+  // diary — gets an empty map rather than a list of everyone's contracts.
+  const contractDocumentsByEmployeeId = await fetchOpsEmployeeContractDocuments(
+    employeePage.items.map((employee) => employee.id),
+  );
+
   const employeesForMatching = employeePage.items.map((employee) => ({
     id: employee.id,
     employeeNumber: employee.employee_number,
@@ -2733,14 +2816,22 @@ export default async function OpsEmployeesPage({ searchParams }: PageProps) {
                 {canViewContracts ? (
                   <div className="mt-4">
                     <h3 className="font-heading text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      Employment contracts
+                      Pay records
                     </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      What payroll pays against. The signed contract below is
+                      drawn from whichever of these it is linked to.
+                    </p>
                     <EmployeeContractsPanel
                       canManage={canViewContracts}
                       contracts={employee.contracts}
                     />
                   </div>
                 ) : null}
+
+                <EmployeeContractDocumentsPanel
+                  documents={contractDocumentsByEmployeeId.get(employee.id) ?? []}
+                />
 
                 {canManageHrCategory ? (
                   <EmployeeDocumentsPanel

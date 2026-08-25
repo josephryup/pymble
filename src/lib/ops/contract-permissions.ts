@@ -1,4 +1,8 @@
-import type { OpsContractKind, OpsContractSignatoryRole } from "@/lib/ops/contract-types";
+import {
+  isOpsPersonalContract,
+  type OpsContractSignatoryRole,
+  type OpsContractSubject,
+} from "@/lib/ops/contract-types";
 import type { OpsUserRole } from "@/lib/ops/types";
 
 /**
@@ -52,6 +56,7 @@ const ISSUE_ROLES: OpsUserRole[] = [
   "owner",
   "human_resource",
   "hr",
+  "operations_manager",
 ];
 
 const VIEWER_ROLES: OpsUserRole[] = [
@@ -61,12 +66,16 @@ const VIEWER_ROLES: OpsUserRole[] = [
 ];
 
 /**
- * Employment contracts carry pay. They are visible only to the roles that can
- * already see salaries elsewhere in HR — the same set behind
- * private.can_access_hr_maturity(). A quantity surveyor can price a
- * subcontract; they have no business reading a colleague's salary.
+ * Contracts with a PERSON carry pay and personal contact details. They are
+ * visible only to the roles that can already see salaries elsewhere in HR — the
+ * same set behind private.can_access_hr_maturity(). A quantity surveyor can
+ * price a subcontract; they have no business reading a colleague's salary, or
+ * their mobile number.
+ *
+ * Note the name: this is about the COUNTERPARTY, not the kind. Gating on kind
+ * alone was the 2026-08-25 leak — see OpsContractSubject.
  */
-const EMPLOYMENT_VIEWER_ROLES: OpsUserRole[] = [
+const PERSONAL_CONTRACT_VIEWER_ROLES: OpsUserRole[] = [
   "developer",
   "managing_director",
   "general_manager",
@@ -74,6 +83,11 @@ const EMPLOYMENT_VIEWER_ROLES: OpsUserRole[] = [
   "manager",
   "human_resource",
   "hr",
+  // Operations Manager, 2026-08-25. Kept in step with HR_VIEW_ROLES in
+  // hr-permissions.ts and private.can_access_hr_maturity() in the database —
+  // the RLS policy on contracts calls that function, so the two lists must
+  // agree or the OM sees a register the database would refuse them.
+  "operations_manager",
 ];
 
 /**
@@ -106,12 +120,27 @@ export function canViewOpsContracts(role: OpsUserRole) {
 }
 
 /**
- * View gate for one contract. Kind-aware because the employment kind exposes
- * pay — the same split the `contracts_select_ops` RLS policy makes.
+ * Whether this role may see contracts whose counterparty is a person at all.
+ *
+ * Split out from the per-contract gate below so a list query can filter in SQL
+ * rather than in memory, and so the two can never disagree.
  */
-export function canViewOpsContractKind(role: OpsUserRole, kind: OpsContractKind) {
+export function canViewOpsPersonalContracts(role: OpsUserRole) {
+  return PERSONAL_CONTRACT_VIEWER_ROLES.includes(role);
+}
+
+/**
+ * View gate for one contract. Takes the kind AND the counterparty type — the
+ * same split `contracts_select_ops` now makes. Passing only the kind is what
+ * let an employee's details sit on a subcontract-kind row in plain sight of
+ * every commercial role.
+ */
+export function canViewOpsContractSubject(
+  role: OpsUserRole,
+  subject: OpsContractSubject,
+) {
   if (!canViewOpsContracts(role)) return false;
-  if (kind === "employment") return EMPLOYMENT_VIEWER_ROLES.includes(role);
+  if (isOpsPersonalContract(subject)) return canViewOpsPersonalContracts(role);
   return true;
 }
 
@@ -119,10 +148,13 @@ export function canDraftOpsContract(role: OpsUserRole) {
   return DRAFT_ROLES.includes(role);
 }
 
-/** Employment contracts may only be drafted by people who can see pay. */
-export function canDraftOpsContractKind(role: OpsUserRole, kind: OpsContractKind) {
+/** A contract with a person may only be drafted by people who can see pay. */
+export function canDraftOpsContractSubject(
+  role: OpsUserRole,
+  subject: OpsContractSubject,
+) {
   if (!canDraftOpsContract(role)) return false;
-  if (kind === "employment") return EMPLOYMENT_VIEWER_ROLES.includes(role);
+  if (isOpsPersonalContract(subject)) return canViewOpsPersonalContracts(role);
   return true;
 }
 
