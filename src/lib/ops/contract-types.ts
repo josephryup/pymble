@@ -295,6 +295,11 @@ export type OpsContract = {
   /** Employment terms. Zero/empty on a subcontract, which does not own them. */
   job_title: string;
   place_of_work: string;
+  /** Draft-level employee party details, frozen into the snapshot at approval. */
+  employee_address: string;
+  employee_tpin: string;
+  employee_phone: string;
+  employee_email: string;
   probation_months: number;
   notice_period_days: number;
   annual_leave_days: number;
@@ -511,6 +516,10 @@ export const OPS_CONTRACT_SECTION_FIELDS: Record<
   employment_terms: [
     "job_title",
     "place_of_work",
+    "employee_address",
+    "employee_tpin",
+    "employee_phone",
+    "employee_email",
     "probation_months",
     "notice_period_days",
     "annual_leave_days",

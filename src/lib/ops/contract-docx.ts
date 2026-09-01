@@ -135,7 +135,14 @@ export async function buildOpsContractDocx(input: {
       spacing: { after: 120 },
       children: [
         new TextRun({
-          text: `TPIN: ${counterparty.tpin || "—"}   ·   Contact: ${counterparty.contact_name || "—"} ${counterparty.contact_phone || ""}`,
+          text: [
+            counterparty.address ? `Address: ${counterparty.address}` : null,
+            `TPIN: ${counterparty.tpin || "—"}`,
+            `Contact: ${counterparty.contact_name || "—"}${counterparty.contact_phone ? ` ${counterparty.contact_phone}` : ""}`,
+            `Email: ${counterparty.contact_email || "—"}`,
+          ]
+            .filter(Boolean)
+            .join("   ·   "),
         }),
       ],
     }),

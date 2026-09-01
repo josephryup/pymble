@@ -717,6 +717,38 @@ export async function OpsContractDetailPage({ kind, params, searchParams }: Page
                       placeholder="Defaults to the site above"
                     />
                   </div>
+                  <div className="md:col-span-2 lg:col-span-3">
+                    <p className="text-sm font-semibold text-foreground">Employee contact details</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Phone, email and TPIN are prefilled from the employee record where available. Complete or edit these fields for the contract when needed.
+                    </p>
+                  </div>
+                  <div className="md:col-span-2 lg:col-span-3">
+                    <label className={OPS_LABEL_CLASS} htmlFor="employee_address">
+                      Employee address
+                    </label>
+                    <textarea
+                      className={OPS_INPUT_CLASS}
+                      defaultValue={contract.employee_address}
+                      id="employee_address"
+                      maxLength={400}
+                      name="employee_address"
+                      placeholder="Enter residential or postal address"
+                      rows={2}
+                    />
+                  </div>
+                  <div>
+                    <label className={OPS_LABEL_CLASS} htmlFor="employee_tpin">Employee TPIN</label>
+                    <input className={OPS_INPUT_CLASS} defaultValue={contract.employee_tpin} id="employee_tpin" maxLength={32} name="employee_tpin" />
+                  </div>
+                  <div>
+                    <label className={OPS_LABEL_CLASS} htmlFor="employee_phone">Employee phone</label>
+                    <input className={OPS_INPUT_CLASS} defaultValue={contract.employee_phone} id="employee_phone" maxLength={80} name="employee_phone" />
+                  </div>
+                  <div>
+                    <label className={OPS_LABEL_CLASS} htmlFor="employee_email">Employee email</label>
+                    <input className={OPS_INPUT_CLASS} defaultValue={contract.employee_email} id="employee_email" maxLength={160} name="employee_email" type="email" />
+                  </div>
                   <div>
                     <label className={OPS_LABEL_CLASS} htmlFor="probation_months">
                       Probation (months)

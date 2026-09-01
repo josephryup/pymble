@@ -475,6 +475,15 @@ const termsSchema = z.object({
   // sentence rather than a constraint name.
   job_title: z.string().trim().max(160).default(""),
   place_of_work: z.string().trim().max(200).default(""),
+  employee_address: z.string().trim().max(400).default(""),
+  employee_tpin: z.string().trim().max(32).default(""),
+  employee_phone: z.string().trim().max(80).default(""),
+  employee_email: z
+    .string()
+    .trim()
+    .email("Enter a valid employee email.")
+    .or(z.literal(""))
+    .default(""),
   probation_months: z.coerce.number().int().min(0).max(12).default(0),
   notice_period_days: z.coerce.number().int().min(0).max(365).default(0),
   annual_leave_days: z.coerce.number().min(0).max(365).default(0),
@@ -517,6 +526,10 @@ export async function updateOpsContractTermsAction(formData: FormData) {
     roe_reference: field(formData, "roe_reference"),
     job_title: field(formData, "job_title"),
     place_of_work: field(formData, "place_of_work"),
+    employee_address: field(formData, "employee_address"),
+    employee_tpin: field(formData, "employee_tpin"),
+    employee_phone: field(formData, "employee_phone"),
+    employee_email: field(formData, "employee_email"),
     probation_months: field(formData, "probation_months") || 0,
     notice_period_days: field(formData, "notice_period_days") || 0,
     annual_leave_days: field(formData, "annual_leave_days") || 0,
@@ -586,6 +599,10 @@ export async function updateOpsContractTermsAction(formData: FormData) {
   if (opsContractHasSection(contract.kind, "employment_terms")) {
     patch.job_title = input.job_title;
     patch.place_of_work = input.place_of_work;
+    patch.employee_address = input.employee_address;
+    patch.employee_tpin = input.employee_tpin;
+    patch.employee_phone = input.employee_phone;
+    patch.employee_email = input.employee_email;
     patch.probation_months = input.probation_months;
     patch.notice_period_days = input.notice_period_days;
     patch.annual_leave_days = input.annual_leave_days;
@@ -1351,6 +1368,10 @@ async function buildCounterpartySnapshot(contract: {
   subcontractor_id: string | null;
   employee_id: string | null;
   counterparty_name: string;
+  employee_address: string;
+  employee_tpin: string;
+  employee_phone: string;
+  employee_email: string;
 }) {
   const supabase = getOpsSupabaseServiceClient();
 
@@ -1377,17 +1398,17 @@ async function buildCounterpartySnapshot(contract: {
   if (contract.employee_id) {
     const { data } = await supabase
       .from("employees")
-      .select("full_name, phone, email")
+      .select("full_name, phone, email, tpin")
       .eq("id", contract.employee_id)
       .maybeSingle();
 
     return {
       name: data?.full_name ?? contract.counterparty_name,
-      address: "",
-      tpin: "",
+      address: contract.employee_address || "",
+      tpin: contract.employee_tpin || data?.tpin || "",
       contact_name: data?.full_name ?? "",
-      contact_phone: data?.phone ?? "",
-      contact_email: data?.email ?? "",
+      contact_phone: contract.employee_phone || data?.phone || "",
+      contact_email: contract.employee_email || data?.email || "",
       registration_number: "",
     };
   }

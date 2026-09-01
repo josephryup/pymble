@@ -100,6 +100,10 @@ const CONTRACT_SELECT = [
   "payment_terms_days",
   "job_title",
   "place_of_work",
+  "employee_address",
+  "employee_tpin",
+  "employee_phone",
+  "employee_email",
   "probation_months",
   "notice_period_days",
   "annual_leave_days",
@@ -327,6 +331,25 @@ export async function fetchOpsContractById(
   // what package.
   if (!canViewOpsContractSubject(profile.role, contract)) return null;
 
+  // Contact fields on the contract are optional overrides. For a draft, make
+  // the employee register values visible in the edit form so HR only needs to
+  // fill gaps; approval snapshots the final values.
+  let employeeContact: { phone: string; email: string; tpin: string } | null = null;
+  if (contract.kind === "employment" && contract.employee_id) {
+    const { data: employee } = await supabase
+      .from("employees")
+      .select("phone, email, tpin")
+      .eq("id", contract.employee_id)
+      .maybeSingle<{ phone: string | null; email: string | null; tpin: string | null }>();
+    employeeContact = employee
+      ? {
+          phone: employee.phone ?? "",
+          email: employee.email ?? "",
+          tpin: employee.tpin ?? "",
+        }
+      : null;
+  }
+
   // Only now — past the gate — does anything read pay. The snapshot column is
   // absent from CONTRACT_SELECT on purpose, so the LIST shape has nowhere to
   // put a salary even by accident; it is fetched here, for one contract, after
@@ -383,6 +406,9 @@ export async function fetchOpsContractById(
 
   return {
     ...contract,
+    employee_tpin: contract.employee_tpin || employeeContact?.tpin || "",
+    employee_phone: contract.employee_phone || employeeContact?.phone || "",
+    employee_email: contract.employee_email || employeeContact?.email || "",
     remuneration,
     scope_items: (scopeItems.data ?? []) as OpsContractScopeItem[],
     lines: (lines.data ?? []) as OpsContractLine[],
