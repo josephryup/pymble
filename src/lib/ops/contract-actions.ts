@@ -702,7 +702,7 @@ export async function updateOpsContractRemunerationAction(formData: FormData) {
           ? null
           : input.statutory_basis === "apply",
     })
-    .eq("id", contract);
+    .eq("id", contract.id);
 
   if (error) contractError(error.message, contract);
 
