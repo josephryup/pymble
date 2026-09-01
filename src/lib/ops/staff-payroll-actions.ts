@@ -35,6 +35,13 @@ const createRunSchema = z
 
 const runIdSchema = z.object({ id: z.string().uuid("Select a payroll run.") });
 
+const staffPayrollItemEditSchema = z.object({
+  item_id: z.string().uuid("Select a payroll item."),
+  basic_pay: z.coerce.number().min(0, "Basic pay cannot be negative."),
+  housing_allowance: z.coerce.number().min(0, "Housing allowance cannot be negative."),
+  other_allowances: z.coerce.number().min(0, "Other allowances cannot be negative."),
+});
+
 const advanceSchema = z.object({
   employee_id: z.string().uuid("Select an employee."),
   amount: z.coerce.number().positive("Amount must be greater than zero."),
@@ -733,11 +740,11 @@ export async function completeStaffPayrollRunAction(formData: FormData) {
   redirect(`${STAFF_PAYROLL_ROUTE}?updated=completed`);
 }
 
-/** Archive a draft run only. Approved and paid payroll must remain on record. */
-export async function archiveStaffPayrollRunAction(formData: FormData) {
+/** Delete an unpaid run. Paid payroll is immutable and cannot be deleted. */
+export async function deleteStaffPayrollRunAction(formData: FormData) {
   const { profile } = await requireOpsUser();
   if (!canManageOpsStaffPayroll(profile.role)) {
-    staffPayrollError("Your role cannot archive staff payroll runs.");
+    staffPayrollError("Your role cannot delete staff payroll runs.");
   }
   const parsed = runIdSchema.safeParse({ id: field(formData, "id") });
   if (!parsed.success) {
@@ -749,12 +756,12 @@ export async function archiveStaffPayrollRunAction(formData: FormData) {
     .from("staff_payroll_runs")
     .update({ archived_at: new Date().toISOString(), archived_by: profile.id })
     .eq("id", parsed.data.id)
-    .eq("status", "draft")
+    .in("status", ["draft", "approved"])
     .is("archived_at", null)
     .select("id")
     .maybeSingle<{ id: string }>();
   if (error || !archivedRun) {
-    staffPayrollError(error?.message ?? "Only an unapproved draft payroll run can be archived.");
+    staffPayrollError(error?.message ?? "Only an unpaid payroll run can be deleted.");
   }
 
   // A draft's advances have not been paid, so make them available to the next run.
@@ -767,18 +774,159 @@ export async function archiveStaffPayrollRunAction(formData: FormData) {
   }
 
   await recordOpsAuditEvent({
-    action: "staff_payroll_run.archived",
+    action: "staff_payroll_run.deleted",
     actorUserId: profile.id,
     entityId: parsed.data.id,
     entityType: "staff_payroll_run",
     moduleKey: "staff_payroll",
     sourceId: parsed.data.id,
     sourceTable: "staff_payroll_runs",
-    summary: "Archived draft staff payroll run and released its advances",
+    summary: "Deleted unpaid staff payroll run and released its advances",
   }).catch(() => null);
 
   revalidatePath(STAFF_PAYROLL_ROUTE);
-  redirect(`${STAFF_PAYROLL_ROUTE}?updated=archived`);
+  redirect(`${STAFF_PAYROLL_ROUTE}?updated=deleted`);
+}
+
+// Keep the old server-action name available for any callers outside the page.
+export const archiveStaffPayrollRunAction = deleteStaffPayrollRunAction;
+
+/** Edit one line of an approved run. Paid runs are intentionally immutable. */
+export async function editStaffPayrollItemAction(formData: FormData) {
+  const { profile } = await requireOpsUser();
+  if (!canManageOpsStaffPayroll(profile.role)) {
+    staffPayrollError("Your role cannot edit staff payroll runs.");
+  }
+
+  const parsed = staffPayrollItemEditSchema.safeParse({
+    item_id: field(formData, "item_id"),
+    basic_pay: field(formData, "basic_pay"),
+    housing_allowance: field(formData, "housing_allowance"),
+    other_allowances: field(formData, "other_allowances"),
+  });
+  if (!parsed.success) {
+    staffPayrollError(parsed.error.issues[0]?.message ?? "Check the payroll item.");
+  }
+
+  const supabase = getOpsSupabaseServiceClient();
+  const { data: item, error: itemError } = await supabase
+    .from("staff_payroll_items")
+    .select("id, staff_payroll_run_id, employee_id, advance_deduction")
+    .eq("id", parsed.data.item_id)
+    .maybeSingle<{
+      id: string;
+      staff_payroll_run_id: string;
+      employee_id: string;
+      advance_deduction: number | string | null;
+    }>();
+  if (itemError || !item) {
+    staffPayrollError(itemError?.message ?? "That payroll item no longer exists.");
+  }
+
+  const { data: run, error: runError } = await supabase
+    .from("staff_payroll_runs")
+    .select("id, status, period_end")
+    .eq("id", item.staff_payroll_run_id)
+    .maybeSingle<{ id: string; status: string; period_end: string }>();
+  if (runError || !run) {
+    staffPayrollError(runError?.message ?? "That payroll run no longer exists.");
+  }
+  if (run.status !== "approved") {
+    staffPayrollError("Only an approved, unpaid payroll run can be edited.");
+  }
+
+  const { data: employee, error: employeeError } = await supabase
+    .from("employees")
+    .select("statutory_contributions_enabled")
+    .eq("id", item.employee_id)
+    .maybeSingle<{ statutory_contributions_enabled: boolean | null }>();
+  if (employeeError) {
+    staffPayrollError(employeeError.message);
+  }
+
+  const slip = computeStaffPayslip({
+    basic: parsed.data.basic_pay,
+    housing: parsed.data.housing_allowance,
+    otherAllowances: parsed.data.other_allowances,
+    // Preserve any advance already attached to this run. Editing pay must not
+    // silently forgive an advance that was already deducted.
+    advanceDeduction: Number(item.advance_deduction ?? 0),
+    periodDate: run.period_end,
+    statutoryContributionsEnabled: employee?.statutory_contributions_enabled !== false,
+  });
+
+  const { error: updateError } = await supabase
+    .from("staff_payroll_items")
+    .update({
+      basic_pay: slip.basic,
+      housing_allowance: slip.housing,
+      other_allowances: slip.otherAllowances,
+      gross_pay: slip.gross,
+      paye_amount: slip.paye,
+      napsa_employee: slip.napsaEmployee,
+      napsa_employer: slip.napsaEmployer,
+      nhima_employee: slip.nhimaEmployee,
+      nhima_employer: slip.nhimaEmployer,
+      wcf_employer: slip.wcfEmployer,
+      net_pay: slip.net,
+      tax_year: slip.taxYear,
+      statutory_citation: slip.citation,
+    })
+    .eq("id", item.id)
+    .eq("staff_payroll_run_id", run.id);
+  if (updateError) {
+    staffPayrollError(updateError.message);
+  }
+
+  const { data: items, error: totalsError } = await supabase
+    .from("staff_payroll_items")
+    .select("basic_pay, gross_pay, advance_deduction, net_pay")
+    .eq("staff_payroll_run_id", run.id);
+  if (totalsError) {
+    staffPayrollError(totalsError.message);
+  }
+  const totals = ((items ?? []) as Array<Record<string, number | string | null>>).reduce<{
+    basic: number;
+    gross: number;
+    advances: number;
+    net: number;
+  }>(
+    (sum, row) => ({
+      basic: sum.basic + Number(row.basic_pay ?? 0),
+      gross: sum.gross + Number(row.gross_pay ?? 0),
+      advances: sum.advances + Number(row.advance_deduction ?? 0),
+      net: sum.net + Number(row.net_pay ?? 0),
+    }),
+    { basic: 0, gross: 0, advances: 0, net: 0 },
+  );
+  const { error: totalsUpdateError } = await supabase
+    .from("staff_payroll_runs")
+    .update({
+      total_basic: totals.basic,
+      total_gross: totals.gross,
+      total_advances: totals.advances,
+      total_net: totals.net,
+    })
+    .eq("id", run.id)
+    .eq("status", "approved");
+  if (totalsUpdateError) {
+    staffPayrollError(totalsUpdateError.message);
+  }
+
+  await recordOpsAuditEvent({
+    action: "staff_payroll_item.edited",
+    actorUserId: profile.id,
+    entityId: item.id,
+    entityType: "staff_payroll_item",
+    metadata: { staff_payroll_run_id: run.id },
+    moduleKey: "staff_payroll",
+    sourceId: run.id,
+    sourceTable: "staff_payroll_runs",
+    summary: "Edited an approved staff payroll item",
+  }).catch(() => null);
+
+  revalidatePath(STAFF_PAYROLL_ROUTE);
+  redirect(`${STAFF_PAYROLL_ROUTE}?updated=edited`);
 }
 
 export async function createStaffAdvanceAction(formData: FormData) {

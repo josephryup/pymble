@@ -46,6 +46,8 @@ export type OpsStaffPayrollItem = {
 
 export type OpsStaffPayrollRun = {
   id: string;
+  created_by: string | null;
+  created_by_user: { full_name: string } | null;
   period_label: string;
   period_start: string;
   period_end: string;
@@ -180,6 +182,8 @@ export async function fetchOpsStaffPayrollRuns(): Promise<OpsStaffPayrollRun[]> 
     .select(
       [
         "id",
+        "created_by",
+        "created_by_user:users!staff_payroll_runs_created_by_fkey(full_name)",
         "period_label",
         "period_start",
         "period_end",
@@ -210,6 +214,9 @@ export async function fetchOpsStaffPayrollRuns(): Promise<OpsStaffPayrollRun[]> 
 
   return runs.map((row) => ({
     ...(row as unknown as OpsStaffPayrollRun),
+    created_by_user: normalizeRelation(
+      row.created_by_user as OpsStaffPayrollRun["created_by_user"] | Array<{ full_name: string }> | null,
+    ),
     total_basic: num(row.total_basic),
     total_gross: num(row.total_gross),
     total_advances: num(row.total_advances),
