@@ -80,25 +80,16 @@ type EmployeeForPayroll = {
   bank_branch: string;
   bank_account_number: string;
   status: string;
-  current_contract:
-    | {
-        basic_pay: number | string;
-        housing_allowance: number | string;
-        other_allowances: unknown;
-        status: string;
-      }
-    | Array<{
-        basic_pay: number | string;
-        housing_allowance: number | string;
-        other_allowances: unknown;
-        status: string;
-      }>
-    | null;
 };
 
-function pickRelation<T>(value: T | T[] | null): T | null {
-  return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
-}
+type ActiveContractForPayroll = {
+  employee_id: string;
+  basic_pay: number | string;
+  housing_allowance: number | string;
+  other_allowances: unknown;
+  status: string;
+  start_date: string;
+};
 
 /**
  * Create a staff payroll run and compute one item per active employee that has
@@ -125,7 +116,9 @@ export async function createStaffPayrollRunAction(formData: FormData) {
 
   const supabase = getOpsSupabaseServiceClient();
 
-  // Active employees with their current active contract (pay structure).
+  // Active employees. Contracts are fetched separately below so an older
+  // expired/draft contract cannot be returned ahead of the active contract
+  // by PostgREST's relationship ordering.
   const { data: employeesData, error: employeesError } = await supabase
     .from("employees")
     .select(
@@ -142,7 +135,6 @@ export async function createStaffPayrollRunAction(formData: FormData) {
         "bank_branch",
         "bank_account_number",
         "status",
-        "current_contract:employee_contracts!employee_contracts_employee_id_fkey(basic_pay, housing_allowance, other_allowances, status)",
       ].join(", "),
     )
     .eq("status", "active")
@@ -156,12 +148,33 @@ export async function createStaffPayrollRunAction(formData: FormData) {
   if (employees.length !== parsed.data.employee_ids.length) {
     staffPayrollError("One or more selected employees are no longer active.");
   }
+
+  const { data: contractsData, error: contractsError } = await supabase
+    .from("employee_contracts")
+    .select("employee_id, basic_pay, housing_allowance, other_allowances, status, start_date")
+    .in("employee_id", parsed.data.employee_ids)
+    .eq("status", "active")
+    .order("start_date", { ascending: false });
+
+  if (contractsError) {
+    staffPayrollError(contractsError.message);
+  }
+
+  // If data contains overlapping active contracts, use the latest-starting
+  // one consistently for this run.
+  const activeContractByEmployeeId = new Map<string, ActiveContractForPayroll>();
+  for (const contract of (contractsData ?? []) as ActiveContractForPayroll[]) {
+    if (!activeContractByEmployeeId.has(contract.employee_id)) {
+      activeContractByEmployeeId.set(contract.employee_id, contract);
+    }
+  }
+
   const withActiveContract = employees
     .map((employee) => ({
       employee,
-      contract: pickRelation(employee.current_contract),
+      contract: activeContractByEmployeeId.get(employee.id) ?? null,
     }))
-    .filter((row) => row.contract && row.contract.status === "active");
+    .filter((row) => row.contract);
 
   if (withActiveContract.length === 0) {
     staffPayrollError(
