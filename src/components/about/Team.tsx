@@ -66,13 +66,6 @@ const teamMembers = [
         image: "/images/team/victor-nyalazi.jpeg",
     },
     {
-        id: 9,
-        name: "Mateo Chalwe",
-        role: "Engineer",
-        credentials: "B.Eng. (Hons) Civil Engineering",
-        image: "/images/team/mateo.jpeg",
-    },
-    {
         id: 10,
         name: "Ishmael Mutale",
         role: "Engineer",
