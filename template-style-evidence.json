@@ -1,0 +1,168 @@
+{
+  "input": "C:\\Users\\PG\\Downloads\\09_IT_Pymble_Ops_Development_REALIGNED (1).docx",
+  "fonts_by_char_count": {},
+  "direct_run_formatting_runs": 134,
+  "direct_paragraph_formatting_paragraphs": 47,
+  "heading_like_paragraphs_not_heading_style": [
+    {
+      "para_index": 1,
+      "text": "IT MANAGER \u2013 PYMBLE OPS DEVELOPMENT, DIGITAL INFRASTRUCTURE & IT SUPPORT",
+      "style": ""
+    },
+    {
+      "para_index": 3,
+      "text": "1. Pymble 2026\u20132030 Strategic Objectives",
+      "style": ""
+    },
+    {
+      "para_index": 5,
+      "text": "2. Departmental Strategic Mandate",
+      "style": ""
+    },
+    {
+      "para_index": 9,
+      "text": "3. Strategic Questions",
+      "style": ""
+    },
+    {
+      "para_index": 21,
+      "text": "4. Recommended 2026\u20132030 Priorities",
+      "style": ""
+    },
+    {
+      "para_index": 22,
+      "text": "5. Resource & Investment Requirements",
+      "style": ""
+    },
+    {
+      "para_index": 23,
+      "text": "6. Proposed KPIs & Targets",
+      "style": ""
+    },
+    {
+      "para_index": 24,
+      "text": "7. Key Risks & Constraints",
+      "style": ""
+    },
+    {
+      "para_index": 25,
+      "text": "8. Decisions Required From Management",
+      "style": ""
+    },
+    {
+      "para_index": 26,
+      "text": "9. Executive Recommendation",
+      "style": ""
+    },
+    {
+      "para_index": 28,
+      "text": "Pymble Ops Module Roadmap",
+      "style": ""
+    },
+    {
+      "para_index": 30,
+      "text": "IT / Pymble Ops Deliverables",
+      "style": ""
+    },
+    {
+      "para_index": 42,
+      "text": "Organizational Objective",
+      "style": ""
+    },
+    {
+      "para_index": 61,
+      "text": "Current Position",
+      "style": ""
+    },
+    {
+      "para_index": 64,
+      "text": "Role Boundaries",
+      "style": ""
+    },
+    {
+      "para_index": 68,
+      "text": "Priority",
+      "style": ""
+    },
+    {
+      "para_index": 69,
+      "text": "Initiative / Action",
+      "style": ""
+    },
+    {
+      "para_index": 70,
+      "text": "Objective Supported",
+      "style": ""
+    },
+    {
+      "para_index": 71,
+      "text": "Why It Matters",
+      "style": ""
+    },
+    {
+      "para_index": 72,
+      "text": "Target Year",
+      "style": ""
+    }
+  ],
+  "examples": {
+    "direct_paragraph_formatting": [
+      {
+        "para_index": 1,
+        "text": "IT MANAGER \u2013 PYMBLE OPS DEVELOPMENT, DIGITAL INFRASTRUCTURE & IT SUPPORT",
+        "style": ""
+      },
+      {
+        "para_index": 2,
+        "text": "2026\u20132030 Strategic Management Workbook (new \u2014 reflects the existing IT function, not previously given its own workbook)",
+        "style": ""
+      },
+      {
+        "para_index": 3,
+        "text": "1. Pymble 2026\u20132030 Strategic Objectives",
+        "style": ""
+      },
+      {
+        "para_index": 4,
+        "text": "Management instruction: Develop your departmental strategy in direct support of these objectives. Focus on what must cha",
+        "style": ""
+      },
+      {
+        "para_index": 5,
+        "text": "2. Departmental Strategic Mandate",
+        "style": ""
+      }
+    ],
+    "direct_run_formatting": [
+      {
+        "para_index": 1,
+        "run_text": "IT MANAGER \u2013 PYMBLE OPS DEVELOPMENT, DIGITAL INFRASTRUCTURE & IT SUPPORT",
+        "style": ""
+      },
+      {
+        "para_index": 2,
+        "run_text": "2026\u20132030 Strategic Management Workbook (new \u2014 reflects the existing IT function",
+        "style": ""
+      },
+      {
+        "para_index": 3,
+        "run_text": "1. Pymble 2026\u20132030 Strategic Objectives",
+        "style": ""
+      },
+      {
+        "para_index": 4,
+        "run_text": "Management instruction: Develop your departmental strategy in direct support of ",
+        "style": ""
+      },
+      {
+        "para_index": 5,
+        "run_text": "2. Departmental Strategic Mandate",
+        "style": ""
+      }
+    ]
+  },
+  "notes": [
+    "Direct formatting is not always wrong, but it often causes inconsistent output when templates change.",
+    "Heading-like paragraphs not using Heading styles can break TOC and accessibility."
+  ]
+}

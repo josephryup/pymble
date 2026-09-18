@@ -46,10 +46,10 @@ const teamMembers = [
     },
     {
         id: 6,
-        name: "Asher Mulenga",
+        name: "Kaumba Chilombo Kaleji",
         role: "Quality Surveyor",
-        credentials: "BSc Quantity Surveying, MZIQS, MSc Project Management",
-        image: "/images/team/Asher Mulenga- Quantity Surveyor.jpeg",
+        credentials: "",
+        image: COMPANY_LOGO,
     },
     {
         id: 7,
